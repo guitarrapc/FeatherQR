@@ -7,41 +7,41 @@ using System.Runtime.Intrinsics.Arm;
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
-/// ARM64 / NEON syndrome kernel: all ≤30 syndrome accumulators live in two 128-bit registers, and every group of eight data bytes updates every syndrome with two PMULL pairs plus six table reads (measured 11-61x the scalar log-domain kernel as a four-byte step; the eight-byte tree below is a further 2.3x on version 40 blocks).
+/// ARM64 / NEON syndrome kernel: all ≤30 syndrome accumulators live in two 128-bit registers, and every group of eight data bytes updates every syndrome with two PMULL pairs plus six table reads (measured 11-61x the scalar log-domain kernel as a four-byte step, and the eight-byte tree below is a further 2.3x on version 40 blocks).
 /// </summary>
 /// <remarks>
 /// This is deliberately NOT a transliteration of the GFNI kernel in EccBinaryDecoder.X86.cs.
 /// GF2P8MULB multiplies every lane by a per-lane constant in one instruction but is hardwired to the AES polynomial, so the x64 kernel spends its design on a field isomorphism to borrow it.
-/// NEON has no such instruction, but PMULL/PMUL carry no fixed modulus — so ARM needs no isomorphism at all and instead pays for the reduction mod 0x11D itself.
+/// NEON has no such instruction, but PMULL/PMUL carry no fixed modulus, so ARM needs no isomorphism at all and instead pays for the reduction mod 0x11D itself.
 /// The force applies at the opposite end, and the resulting kernel shape is different:
 /// <code>
 /// D(c0..c3) = T3[c0] ^ T2[c1] ^ T1[c2] ^ broadcast(c3)
 /// acc'      = Reduce(PMULL(acc, α^8i)) ^ Reduce(PMULL(D(c0..c3), α^4i)) ^ D(c4..c7)
 /// </code>
 /// <para>
-/// Four design points, each of which was measured against its alternative rather than assumed; the number that decided each one is quoted with it:
+/// Four design points, each of which was measured against its alternative rather than assumed, and the number that decided each one is quoted with it:
 /// </para>
 /// <para>
 /// <b>Table reads, not multiplies, for the data terms.</b> <c>c·α^(k·i)</c> depends only on the byte c and the step k, so <see cref="AlphaTables"/> holds it as a ready-made 32-byte vector: three loads + three XORs replace six PMULL + six EOR.
 /// The tables cost 24 KB.
-/// A 3 KB nibble-split alternative was measured and lost by 20-78%, so the footprint is buying real work — but that verdict is from a core with a 128 KB L1D, which is also why the scalar fallback is kept fast.
+/// A 3 KB nibble-split alternative was measured and lost by 20-78%, so the footprint is buying real work. But that verdict is from a core with a 128 KB L1D, which is also why the scalar fallback is kept fast.
 /// </para>
 /// <para>
 /// <b>Reduction by table lookup.</b> The high half of a PMULL product has degree ≤ 6, so splitting it into nibbles indexes two 16-entry tables holding the already reduced contribution: <c>UZP → AND → TBL → EOR</c> instead of <c>UZP → PMULL → UZP → PMUL → EOR</c>.
 /// The reduction sits on the carried dependency chain, and every change that shortened that chain won.
 /// </para>
 /// <para>
-/// <b>The reduction tables are hoisted into locals.</b> This is load-bearing, not style: the JIT does not CSE <c>Vector128.Create</c> over a static array across the loop body, so leaving them inline makes every reduction pay two extra loads — worth up to 20% of the kernel.
+/// <b>The reduction tables are hoisted into locals.</b> This is load-bearing, not style: the JIT does not CSE <c>Vector128.Create</c> over a static array across the loop body, so leaving them inline makes every reduction pay two extra loads, worth up to 20% of the kernel.
 /// </para>
 /// <para>
-/// <b>Eight bytes a step, as a tree.</b> With a four-byte step the loop was bound by the carried chain (acc → PMULL → UZP → TBL → EOR, about 14 cycles a step on Apple M2), not by throughput; the second accumulator group ran mostly in the first group's stall slots, which is why halving the vector work bought only about 20%.
+/// <b>Eight bytes a step, as a tree.</b> With a four-byte step the loop was bound by the carried chain (acc → PMULL → UZP → TBL → EOR, about 14 cycles a step on Apple M2), not by throughput. The second accumulator group ran mostly in the first group's stall slots, which is why halving the vector work bought only about 20%.
 /// Horner re-associates: the multiply that joins two four-byte data terms depends on data alone and falls off the chain, so eight bytes cost one carried reduce instead of two. Measured 0.44x of the four-byte step on the syndrome pass alone at version 40-L blocks (148 bytes, 30 ECC) and 0.59x at 40-H (45 bytes), and through <see cref="TryCorrect"/> on a clean block 0.53x to 0.54x at 145 to 153 bytes, 0.75x to 0.83x over rMQR's 25 to 68 byte blocks, 0.76x to 0.81x at Micro QR M3 and M4, level at M2 and 1.07x (5 ns) at M1's five-byte block, Apple M2.
 /// A sixteen-byte tree (three off-chain multiplies a step) measured the same at 148 bytes and 10% slower at 45, so the loop is now throughput-bound at about 100 instructions per eight bytes, and two throughput hypotheses did not move it: pairing the two half-row loads through immediate offsets lost 10%, and pre-splitting the multiplier halves to remove the per-PMULL register copy tied.
 /// </para>
 /// </remarks>
 internal static partial class EccBinaryDecoder
 {
-    /// <summary>Lane i = α^i — the one-step Horner multipliers for the scalar tail.</summary>
+    /// <summary>Lane i = α^i, the one-step Horner multipliers for the scalar tail.</summary>
     internal static ReadOnlySpan<byte> AdvSimdAlpha1 =>
     [
         0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,
@@ -50,7 +50,7 @@ internal static partial class EccBinaryDecoder
         0x8F, 0x03, 0x06, 0x0C, 0x18, 0x30, 0x60, 0xC0,
     ];
 
-    /// <summary>Lane i = α^(4i) — the multiplier that joins the two four-byte data terms of a step, and the one-step multiplier of the four-byte remainder.</summary>
+    /// <summary>Lane i = α^(4i), the multiplier that joins the two four-byte data terms of a step, and the one-step multiplier of the four-byte remainder.</summary>
     internal static ReadOnlySpan<byte> AdvSimdAlpha4 =>
     [
         0x01, 0x10, 0x1D, 0xCD, 0x4C, 0xB4, 0x8F, 0x18,
@@ -59,7 +59,7 @@ internal static partial class EccBinaryDecoder
         0xD9, 0x11, 0x0D, 0xD0, 0x81, 0xF8, 0x3B, 0x97,
     ];
 
-    /// <summary>Lane i = α^(8i) — the carried Horner multiplier of the eight-byte step.</summary>
+    /// <summary>Lane i = α^(8i), the carried Horner multiplier of the eight-byte step.</summary>
     internal static ReadOnlySpan<byte> AdvSimdAlpha8 =>
     [
         0x01, 0x1D, 0x4C, 0x8F, 0x9D, 0x6A, 0x46, 0x5D,
@@ -103,7 +103,7 @@ internal static partial class EccBinaryDecoder
 
     private static byte[] BuildAlphaTables()
     {
-        // Benign race: two threads may build identical tables; the release store
+        // Benign race: two threads may build identical tables. The release store
         // guarantees a reader never observes a partially filled array.
         var tables = new byte[3 * StepTableStride];
         var exp = GaloisField.Exp;
@@ -121,7 +121,7 @@ internal static partial class EccBinaryDecoder
                 var exponent = 0;
                 for (var i = 0; i < SyndromeLanes; i++)
                 {
-                    // c · α^(k·i); lane 0 is c itself and α^0 = 1.
+                    // c · α^(k·i). Lane 0 is c itself and α^0 = 1.
                     tables[row + i] = exp[logC + exponent];
                     exponent += k;
                     if (exponent >= 255)
@@ -150,7 +150,7 @@ internal static partial class EccBinaryDecoder
 
     /// <summary>
     /// Computes the syndromes for one block.
-    /// <paramref name="syndromes"/> must have room for <see cref="SyndromeLanes"/> bytes; lanes past <paramref name="eccCount"/> receive syndromes of roots the code does not use and must not be read.
+    /// <paramref name="syndromes"/> must have room for <see cref="SyndromeLanes"/> bytes. Lanes past <paramref name="eccCount"/> receive syndromes of roots the code does not use and must not be read.
     /// </summary>
     internal static bool ComputeSyndromesAdvSimd(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)
     {

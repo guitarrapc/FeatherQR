@@ -19,7 +19,7 @@ namespace FeatherQR.Tests;
 /// The load-bearing case is a rotated symbol with a second finder-like pattern in the
 /// frame. Rotation narrows the band of rows that survives the cross-checks, and a
 /// second pattern removes any image-wide "we found something" signal that a fallback
-/// could key on — so this is where the stride has to stand on its own. It is also the
+/// could key on, so this is where the stride has to stand on its own. It is also the
 /// exact shape that a confirmation-triggered fallback got wrong: the decoy confirmed
 /// on its own and suppressed the pass the real symbol needed.
 /// </para>
@@ -234,8 +234,8 @@ public class FinderCandidatesStrideTest
     /// decodes alone must still decode with other finder patterns in frame.
     /// </summary>
     /// <remarks>
-    /// The sharp detector for a too-coarse stride is the candidate-level test above —
-    /// this one stays green at stride 6 even with the retry disabled, because these
+    /// The sharp detector for a too-coarse stride is the candidate-level test above.
+    /// This one stays green at stride 6 even with the retry disabled, because these
     /// particular renders happen to decode anyway. It is here so the public path has
     /// coverage of the decoy scenario at all, not as the stride's regression pin.
     /// </remarks>
@@ -256,7 +256,7 @@ public class FinderCandidatesStrideTest
             var decodesAlone = RmQRCodeDecoder.TryDecodeImage(lumA, wA, hA, buffer, out var aloneChars, out _);
 
             if (!decodesAlone)
-                continue; // outside what this render can express at all; nothing to preserve
+                continue; // outside what this render can express at all, so nothing to preserve
 
             using var mixed = RenderRotated(data, modulePixelSize, degrees, withDecoys: true);
             var (lumB, wB, hB, _, _) = ToLuminance(mixed);

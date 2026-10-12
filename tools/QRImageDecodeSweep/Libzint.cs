@@ -6,7 +6,7 @@ namespace QRImageDecodeSweep;
 
 /// <summary>
 /// libzint through the pinned ZXingCpp package's creator.
-/// A managed process cannot catch a fault in native code, so the creator runs in a worker process that appends each finished case to a file; when the worker dies the case it died on is tried again, and only after eight deaths in a row is it given up.
+/// A managed process cannot catch a fault in native code, so the creator runs in a worker process that appends each finished case to a file. When the worker dies the case it died on is tried again, and only after eight deaths in a row is it given up.
 /// The access violations it was built for stopped once the creator was held through its call (qrcode-test-fixtures.md, Lessons learned), so it is a guard now.
 /// Eight makes a dropped case rare, not impossible, so a drop is never silent: the case gets a row of its own saying so, and the run ends with a failing exit code, because its row set is no longer the one other runs have.
 /// </summary>

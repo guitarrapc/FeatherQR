@@ -31,7 +31,7 @@ public class FinderWholePatternTest
     }
 
     /// <summary>
-    /// A finder with one module of its light ring dark, at a corner of the ring or beside one. Every line through the centre reads as a finder's, and rows repeat; only reading the whole pattern tells it from one.
+    /// A finder with one module of its light ring dark, at a corner of the ring or beside one. Every line through the centre reads as a finder's, and rows repeat, so only reading the whole pattern tells it from one.
     /// At 1.25 px/module, where these renders fail the ratio: a render that passes it is accepted on three lines through the centre, which never cross these modules.
     /// </summary>
     [Test]

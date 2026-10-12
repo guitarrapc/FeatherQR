@@ -345,7 +345,7 @@ public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCode
     /// <summary>
     /// Narrows the versions the generator may choose from, for a Micro QR code that has to reach or stay under a physical size.
     /// </summary>
-    /// <param name="versionRange">The versions to choose from; the smallest that holds the content wins.</param>
+    /// <param name="versionRange">The versions to choose from. The smallest that holds the content wins.</param>
     /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made Micro QR code.</exception>
     public MicroQRCodeImageBuilder WithVersion(MicroQRVersionRange versionRange)
     {
@@ -357,7 +357,7 @@ public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCode
     }
 
     /// <summary>
-    /// Pin one of the four Micro QR data mask patterns (0-3) instead of the automatic edge-score selection; see <see cref="MicroQRCodeGeneratorOptions.MaskPattern"/>.
+    /// Pin one of the four Micro QR data mask patterns (0-3) instead of the automatic edge-score selection. See <see cref="MicroQRCodeGeneratorOptions.MaskPattern"/>.
     /// </summary>
     /// <param name="maskPattern">Mask pattern (0-3), or null for automatic selection.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-3 or null.</exception>
@@ -406,6 +406,6 @@ public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCode
         SymbolRenderer.Render(canvas, contentRect, (MicroQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
     }
 
-    /// <summary>Only a custom finder shape needs antialiasing here; Micro QR has no icon overlays.</summary>
+    /// <summary>Only a custom finder shape needs antialiasing here, since Micro QR has no icon overlays.</summary>
     private protected override bool UseCrispEdgesCore() => _finderPatternShape?.RequiresAntialiasing != true;
 }

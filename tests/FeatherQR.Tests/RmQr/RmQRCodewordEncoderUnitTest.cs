@@ -128,7 +128,7 @@ public class RmQRCodewordEncoderUnitTest
         // it never writes the last h - 10 modules of the walk (column 1, rows 8..h-3), so on
         // versions 11 modules high or taller the final ECC codeword loses its lowest
         // (h - 10 - remainderBits) bits (zxing-cpp corrects it as one codeword error). Every
-        // other byte, including the remainder tail, must still match; libzint symbols match exactly.
+        // other byte, including the remainder tail, must still match, and libzint symbols match exactly.
         var totalCodewords = RmQRConstants.GetTotalCodewordCount(version);
         var allowedLowBits = manifest.Generator == "qrtool" ? Math.Max(0, height - 10 - RmQRConstants.GetRemainderBitCount(version)) : 0;
         for (var i = 0; i < ours.Length; i++)

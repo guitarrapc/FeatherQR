@@ -44,7 +44,7 @@ internal static class MicroQRFormatInformationDecoder
     /// <summary>As <see cref="TryDecode(ushort, out MicroQRVersion, out MicroQREccLevel, out int)"/>, with the number of bits the copy differs from the candidate it decoded to.</summary>
     public static bool TryDecode(ushort raw, out MicroQRVersion version, out MicroQREccLevel eccLevel, out int maskPattern, out int distance)
     {
-        // Every copy the matrix decoder reads is 15 bits; a wider word takes the search
+        // Every copy the matrix decoder reads is 15 bits, and a wider word takes the search
         if (raw < nearest.Length)
         {
             var entry = nearest[raw];

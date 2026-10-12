@@ -8,7 +8,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// </summary>
 /// <remarks>
 /// All tables are flat arrays indexed by <c>(version - 1) * 4 + eccLevel</c> where eccLevel follows <see cref="MicroQREccLevel"/> ordering (ErrorDetectionOnly, L, M, Q).
-/// A zero (or negative symbol number) marks an invalid version/ECC combination — the valid set is: M1 detection-only, M2/M3 L+M, M4 L+M+Q.
+/// A zero (or negative symbol number) marks an invalid version/ECC combination. The valid set is: M1 detection-only, M2/M3 L+M, M4 L+M+Q.
 /// </remarks>
 internal static class MicroQRConstants
 {
@@ -90,7 +90,7 @@ internal static class MicroQRConstants
         => eccCodewordCounts[TableIndex(version, eccLevel)];
 
     /// <summary>
-    /// Maximum number of codeword errors a decoder may correct (ISO/IEC 18004 Table 9); 0 for M1 (error detection only).
+    /// Maximum number of codeword errors a decoder may correct (ISO/IEC 18004 Table 9), 0 for M1 (error detection only).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetErrorCorrectionCapacity(MicroQRVersion version, MicroQREccLevel eccLevel)
@@ -120,7 +120,7 @@ internal static class MicroQRConstants
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int SizeFromVersion(MicroQRVersion version) => 9 + 2 * (int)version;
 
-    /// <summary>Inverse of <see cref="SizeFromVersion"/>; 0 when the size is not a Micro QR size.</summary>
+    /// <summary>Inverse of <see cref="SizeFromVersion"/>, or 0 when the size is not a Micro QR size.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static MicroQRVersion VersionFromSize(int size)
         => size is 11 or 13 or 15 or 17 ? (MicroQRVersion)((size - 9) / 2) : 0;
@@ -179,7 +179,7 @@ internal static class MicroQRConstants
         return (int)version;
     }
 
-    // Outlined so the inlined body above stays a compare and a move; the interpolated
+    // Outlined so the inlined body above stays a compare and a move. The interpolated
     // message would otherwise be built into every call site.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowKanjiNotDefined(MicroQRVersion version)
@@ -190,7 +190,7 @@ internal static class MicroQRConstants
     public static int GetTerminatorLength(MicroQRVersion version) => 2 * (int)version + 1;
 
     /// <summary>
-    /// Computes the 15 format information bits for the given version, ECC level and mask pattern: 5 data bits (3-bit symbol number + 2-bit mask) protected by BCH(15,5) with generator polynomial 0x537, XOR-masked with 0x4445 (ISO/IEC 18004 Micro QR format information; Standard QR uses XOR 0x5412).
+    /// Computes the 15 format information bits for the given version, ECC level and mask pattern: 5 data bits (3-bit symbol number + 2-bit mask) protected by BCH(15,5) with generator polynomial 0x537, XOR-masked with 0x4445 (ISO/IEC 18004 Micro QR format information). Standard QR uses XOR 0x5412.
     /// </summary>
     public static ushort GetFormatBits(MicroQRVersion version, MicroQREccLevel eccLevel, int maskPattern)
     {

@@ -14,7 +14,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class EccBlockDecoderTest
 {
-    /// <summary>Every block structure of the two capacity tables, and a few outside them, by name; a test takes the name, since <see cref="ECCInfo"/> is internal.</summary>
+    /// <summary>Every block structure of the two capacity tables, and a few outside them, by name. A test takes the name, since <see cref="ECCInfo"/> is internal.</summary>
     private static readonly Dictionary<string, ECCInfo> Structures = BuildStructures();
 
     public static IEnumerable<string> EveryBlockStructure() => Structures.Keys;
@@ -140,7 +140,7 @@ public class EccBlockDecoderTest
 
     /// <summary>
     /// A block Reed-Solomon corrects but with more errors than the capacity allows is refused, and its errors are
-    /// reported with the ones before it, the rule the capacity cap has in rMQR's and Micro QR's decoders; the blocks after
+    /// reported with the ones before it, the rule the capacity cap has in rMQR's and Micro QR's decoders. The blocks after
     /// it, each with an error it could correct, are not reached.
     /// </summary>
     [Test]

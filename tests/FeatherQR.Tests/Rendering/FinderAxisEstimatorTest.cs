@@ -46,8 +46,8 @@ public class FinderAxisEstimatorTest
     /// <summary>
     /// One direction of the walk from the centre of a pixel-aligned finder: the dark ring's inner
     /// edge 2.5 modules out and its outer edge 3.5. The module size pairs a forward walk with a
-    /// backward one, so a probe half a pixel off shifts the two the opposite way and cancels there;
-    /// each walk on its own does not.
+    /// backward one, so a probe half a pixel off shifts the two the opposite way and cancels there.
+    /// Each walk on its own does not.
     /// </summary>
     [Test]
     [Arguments(1)]

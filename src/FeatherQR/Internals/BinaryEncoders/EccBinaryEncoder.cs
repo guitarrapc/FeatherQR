@@ -9,7 +9,7 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// <remarks>
 /// This encoder implements the Reed-Solomon error correction algorithm as specified in ISO/IEC 18004 Section 8.5.
 /// The public entry point dispatches to the fastest kernel the runtime supports: GFNI (net10.0+, ~64x over the naive form), SSSE3 (net8.0+, ~52x), NEON (net8.0+ ARM64, ~21-36x), the NEON kernel on WebAssembly's swizzle (net8.0+, 1.5-9x the scalar kernel), or a portable scalar kernel (~4.4x) used on netstandard and pre-SSSE3 x86.
-/// All kernels produce byte-identical output; see the kernel parity tests.
+/// All kernels produce byte-identical output. See the kernel parity tests.
 /// </remarks>
 internal static partial class EccBinaryEncoder
 {
@@ -46,7 +46,7 @@ internal static partial class EccBinaryEncoder
 #if NET8_0_OR_GREATER
         // QR codes use at most 30 ECC codewords per block, so the vectorized kernels
         // (which keep the remainder register in one or two vector registers) cover
-        // every real input; the <= 32 guard is a safety net for non-QR callers.
+        // every real input. The <= 32 guard is a safety net for non-QR callers.
         if (eccCount <= 32)
         {
             if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
@@ -78,7 +78,7 @@ internal static partial class EccBinaryEncoder
     /// and the blocks of a group have one length and one generator, so the x86 kernels advance two or four blocks' chains in one loop, where they overlap.
     /// A symbol with no group of two or more blocks goes block by block to <see cref="CalculateECC"/> from this inlined entry. With that test inside a
     /// call of its own, the codeword assembly of a one-block rMQR symbol (R7x43) read 0.038 to 0.044 µs against 0.035 to 0.036 on the SSSE3 kernel,
-    /// and 0.035 to 0.037 inlined (2026-10-07). The argument checks belong to the other path; on this one a bad argument raises what
+    /// and 0.035 to 0.037 inlined (2026-10-07). The argument checks belong to the other path. On this one a bad argument raises what
     /// slicing the spans or <see cref="CalculateECC"/> throws.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -101,7 +101,7 @@ internal static partial class EccBinaryEncoder
     }
 
     // The fields go on as integers. Given the ECCInfo by reference, the JIT stopped inlining this method into the stage harness's
-    // Reed-Solomon row, where it is inlined with integers; the encoders' Tier1 code calls it out of line with integers (.NET 10).
+    // Reed-Solomon row, where it is inlined with integers. The encoders' Tier1 code calls it out of line with integers (.NET 10).
     private static void CalculateEccGroups(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks1, int length1, int blocks2, int length2)
     {
         if (eccCount < 1 || eccCount > 255)
@@ -156,13 +156,13 @@ internal static partial class EccBinaryEncoder
         if (logGen is null)
         {
             // eccCount == 255 degenerates to G(x) = x^255 + 1, which has zero coefficients
-            // and therefore no log-domain representation. Never produced by QR; handled by
+            // and therefore no log-domain representation. Never produced by QR, but handled by
             // the naive kernel so every documented eccCount stays correct.
             CalculateEccNaive(data, ecc, eccCount);
             return;
         }
 
-        // Message polynomial: data followed by eccCount zero bytes; the division
+        // Message polynomial: data followed by eccCount zero bytes. The division
         // remainder accumulates in the zero tail.
         Span<byte> message = stackalloc byte[data.Length + eccCount];
         data.CopyTo(message);
@@ -219,7 +219,7 @@ internal static partial class EccBinaryEncoder
     // Log-domain generator polynomial cache, indexed by eccCount (1..255).
     // logGen[j] = Log[generator[j + 1]] (the leading 1 coefficient is implicit).
     // A sentinel empty array marks counts whose generator cannot be represented in
-    // log domain. Benign race: concurrent builds produce identical arrays; published
+    // log domain. Benign race: concurrent builds produce identical arrays, published
     // with Volatile.Write so readers on weakly-ordered runtimes never observe a
     // partially initialized array.
     private static readonly byte[]?[] _logGenCache = new byte[]?[256];
@@ -229,7 +229,7 @@ internal static partial class EccBinaryEncoder
     /// Returns the cached log-domain generator polynomial, or null when it has no log-domain representation.
     /// </summary>
     /// <remarks>
-    /// Reed-Solomon generator polynomials have all-nonzero coefficients for eccCount ≤ 254: G(x) is itself a codeword of the length-255 RS code with minimum distance eccCount + 1 (MDS), so its weight must be ≥ eccCount + 1 — every one of its eccCount + 1 coefficients.
+    /// Reed-Solomon generator polynomials have all-nonzero coefficients for eccCount ≤ 254: G(x) is itself a codeword of the length-255 RS code with minimum distance eccCount + 1 (MDS), so its weight must be ≥ eccCount + 1, which is every one of its eccCount + 1 coefficients.
     /// The single exception is eccCount == 255, where G(x) = Π(x - α^i) over all nonzero field elements collapses to x^255 + 1 (254 zero coefficients).
     /// Verified by exhaustive scan over eccCount 1..255.
     /// </remarks>

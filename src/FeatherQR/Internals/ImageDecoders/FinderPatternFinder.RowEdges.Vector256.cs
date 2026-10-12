@@ -62,7 +62,7 @@ internal static partial class FinderPatternFinder
         var d2 = Vector256.Abs(total3 - r2 * seven);
         var d3 = Vector256.Abs(total - r3 * seven);
         var d4 = Vector256.Abs(total - r4 * seven);
-        // Seven modules need seven pixels at least; both scalar checks refuse a shorter window first
+        // Seven modules need seven pixels at least. Both scalar checks refuse a shorter window first.
         var enough = Vector256.GreaterThanOrEqual(total, seven);
         var halfTotal = (total + one) >> 1;
         var halfTotal3 = (total3 + one) >> 1;

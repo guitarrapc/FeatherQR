@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 /// Verifies that the x64 text analysis tiers (TextAnalyzer.AnalyzeAvx2, 16 chars per
 /// step, and TextAnalyzer.AnalyzeSse2, 8 chars per step) return the same
 /// TextAnalysisResult as the scalar reference. The ARM64 counterpart lives in
-/// TextAnalyzerAdvSimdParityTest; both call the tier entry points directly rather than
+/// TextAnalyzerAdvSimdParityTest. Both call the tier entry points directly rather than
 /// through Analyze, because Analyze picks exactly one tier per machine and the SSE2 tier
 /// is unreachable on any CPU that also has AVX2.
 /// </summary>
@@ -98,7 +98,7 @@ public class TextAnalyzerX64ParityTest
             return;
         }
 
-        // Lengths crossing the 8/16-char vector grain; the char alone, repeated,
+        // Lengths crossing the 8/16-char vector grain. The char alone, repeated,
         // leading a digit run, and trailing a digit run (tail-only flag flips).
         foreach (var length in new[] { 1, 7, 8, 9, 15, 16, 17, 24 })
         {

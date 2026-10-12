@@ -65,7 +65,7 @@ public class MicroQRSegmentationTest
         var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         if (optimal.Version != single.Version)
-            return; // a genuine gain; the round-trip test covers it
+            return; // a genuine gain, and the round-trip test covers it
 
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
@@ -101,7 +101,7 @@ public class MicroQRSegmentationTest
     public async Task Optimal_TooLongForEverySingleMode_StillEncodesWhenMixedFits()
     {
         // 21 Byte-mode characters overflow M4-L (15 bytes), but a Byte run plus a
-        // Numeric run fit; this is the case Optimal accepts input Single rejects.
+        // Numeric run fit. This is the case Optimal accepts input Single rejects.
         var content = "a" + new string('1', 20);
 
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, MicroQRCodeGeneratorOptions.Default)).IsFalse();
@@ -134,9 +134,9 @@ public class MicroQRSegmentationTest
     [Test]
     public async Task Optimal_PlansAtM2_WhereByteModeDoesNotExist()
     {
-        // M2 offers only Numeric and Alphanumeric; the plan must respect that mode
+        // M2 offers only Numeric and Alphanumeric. The plan must respect that mode
         // set. "A" + 7 digits: single Alphanumeric is 8 chars = 44 + 4 header = 48
-        // bits > M2-L's 40, landing on M3; split Alnum(1) + Numeric(7) =
+        // bits > M2-L's 40, landing on M3. Split Alnum(1) + Numeric(7) =
         // (1+3+6) + (1+4+24) = 39 bits fits M2-L exactly under the cap.
         var content = "A1234567";
         var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
@@ -267,7 +267,7 @@ public class MicroQRSegmentationTest
     [Test]
     public async Task Optimal_EccM_RescuesContentNoSingleModeFits()
     {
-        // 19 alphanumeric characters cost 113 bits, over M4-M's 112; split into
+        // 19 alphanumeric characters cost 113 bits, over M4-M's 112. Split into
         // Alnum(2) + Numeric(17) they cost 85 and fit M4-M.
         var content = "AB12345678901234567";
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.M, out _)).IsFalse();
@@ -323,8 +323,8 @@ public class MicroQRSegmentationTest
     [Test]
     public async Task Optimal_VersionRange_RescuesWhereNoSingleModeInRangeFits()
     {
-        // 19 alphanumeric characters need M4 in a single mode, outside the range;
-        // the mixed plan fits M3 inside it.
+        // 19 alphanumeric characters need M4 in a single mode, outside the range.
+        // The mixed plan fits M3 inside it.
         var content = "AB12345678901234567";
         var range = MicroQRVersionRange.Between(MicroQRVersion.M2, MicroQRVersion.M3);
         var options = new MicroQRCodeGeneratorOptions { Version = range, Segmentation = MicroQRSegmentation.Optimal };
@@ -340,8 +340,8 @@ public class MicroQRSegmentationTest
     [Test]
     public async Task Optimal_ContentBeyondEveryPlan_FailsLikeSingle()
     {
-        // 41 characters exceed even the all-Numeric maximum (35), so no plan exists;
-        // both surfaces report it the single-mode way.
+        // 41 characters exceed even the all-Numeric maximum (35), so no plan exists.
+        // Both surfaces report it the single-mode way.
         var content = "a" + new string('1', 40);
         var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
 
@@ -353,7 +353,7 @@ public class MicroQRSegmentationTest
     public async Task Optimal_Latin1RunThatLooksLikeUtf8_EmitsTheSingleModeStream()
     {
         // "Ã©" narrows to C3 A9, which alone is valid UTF-8 for "é". Micro QR has no
-        // ECI, so the decoder resolves each byte run's charset heuristically; a split
+        // ECI, so the decoder resolves each byte run's charset heuristically. A split
         // that isolates C3 A9 from the disambiguating trailing E9 would be misread.
         // The planner must refuse such a plan and emit the single-mode stream, which
         // round-trips (the whole payload is invalid UTF-8 thanks to the lone E9).
@@ -416,7 +416,7 @@ public class MicroQRSegmentationTest
     public async Task Optimal_TrailingBomNoSingleModeHolds_IsPlannedBehindTheDigitBeforeIt()
     {
         // 23 UTF-8 bytes fit no single mode. The unconstrained minimum opens a Byte
-        // run at the trailing U+FEFF, where the decoder would consume it; the plan
+        // run at the trailing U+FEFF, where the decoder would consume it. The plan
         // takes the last digit into that run instead.
         var content = new string('1', 20) + "\uFEFF";
         var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
@@ -431,7 +431,7 @@ public class MicroQRSegmentationTest
 
 #if !DEBUG
     /// <summary>
-    /// The span destination is the library's zero-allocation path; the mixed-mode
+    /// The span destination is the library's zero-allocation path. The mixed-mode
     /// planner must keep it that way (Micro QR plans are all-stackalloc). Debug
     /// builds are excluded per repo notes.
     /// </summary>
@@ -476,7 +476,7 @@ public class MicroQRSegmentationTest
     public async Task Optimal_LeadingBom_DecodesLikeSingle()
     {
         // A content-leading U+FEFF is stream-initial under Single too, so both arms
-        // drop it on decode; the run-at-offset-0 exemption keeps the split allowed
+        // drop it on decode. The run-at-offset-0 exemption keeps the split allowed
         // and the two must decode identically (not necessarily to the input). The
         // version assertion is strict: the split genuinely wins here, so losing the
         // exemption (which silently falls back to the identical single-mode

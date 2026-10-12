@@ -15,7 +15,7 @@ namespace QRImageDecodeSweep;
 /// <remarks>
 /// Two sets a symbology. The random renders are the ones the cost figures of the single-finder candidate scan were measured on
 /// (qrcode-symbologies.md): a random version, level and text, turned at random, each pixel the mean of 2 × 2 point samples,
-/// with uniform noise, from a fixed seed, so two trees draw the same images; a draw whose text no length fits the symbol is
+/// with uniform noise, from a fixed seed, so two trees draw the same images. A draw whose text no length fits the symbol is
 /// skipped, so a set has fewer renders than draws. The known renders are the ones whose scan ranks a finder-like pattern inside the symbol after its
 /// finder, which the skip exists for (the destination contract test draws the same ones).
 /// </remarks>
@@ -23,7 +23,7 @@ internal static class Destination
 {
     public const int DefaultCount = 600;
 
-    /// <summary>Rounds of the three calls; each call's time is its fastest.</summary>
+    /// <summary>Rounds of the three calls. Each call's time is its fastest.</summary>
     private const int Rounds = 5;
 
     private const string Alphanumeric = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
@@ -42,7 +42,7 @@ internal static class Destination
 
         public double TinyRatio => TinyUs / SizedUs;
 
-        /// <summary>Whether 2 characters are too few for the text; a text of 2 fits them, and that call is a sized one.</summary>
+        /// <summary>Whether 2 characters are too few for the text. A text of 2 fits them, and that call is a sized one.</summary>
         public bool TinyTooShort => Text.Length > 2;
     }
 
@@ -185,7 +185,7 @@ internal static class Destination
             {
                 return create(content);
             }
-            // A text the symbol does not hold; anything else, an out-of-range version among them, is a defect of the draw
+            // A text the symbol does not hold. Anything else, an out-of-range version among them, is a defect of the draw.
             catch (ArgumentException ex) when (ex is not ArgumentOutOfRangeException)
             {
             }
@@ -195,7 +195,7 @@ internal static class Destination
 
     /// <summary>
     /// The symbol turned about the centre of a square image, each pixel the mean of 2 × 2 point samples (dark 20, light 235), then
-    /// uniform noise; mirrored, transposed.
+    /// uniform noise. Mirrored, it is transposed.
     /// </summary>
     private static (byte[] Luminance, int Side) Turned(Func<int, int, bool> isDark, int columns, int rows, double ppm, double angle, double noise, Random random, int side, bool mirrored)
     {
@@ -264,7 +264,7 @@ internal static class Destination
             writer.WriteLine(string.Join(',', r.Render, r.Kind, r.Ppm, r.Angle, r.Noise, r.Image, r.Sized, r.SizedVersion, Quote(r.Text), r.Short, r.ShortVersion, r.Tiny, r.TinyVersion, F(r.SizedUs), F(r.ShortUs), F(r.TinyUs)));
     }
 
-    /// <summary>A result file; one written before the pixel digest was a column (2026-10-01) is read with an empty digest.</summary>
+    /// <summary>A result file. One written before the pixel digest was a column (2026-10-01) is read with an empty digest.</summary>
     public static List<Row> Read(string path)
     {
         var lines = File.ReadAllLines(path);
@@ -283,7 +283,7 @@ internal static class Destination
     /// <summary>
     /// Per set: the renders, those a sized destination reads, whether a short destination reports what the rules say (one
     /// character short and 2 characters, <see cref="DecodeStatus.DestinationTooSmall"/> with the sized call's version), and the
-    /// cost of each against the sized call; then each known render.
+    /// cost of each against the sized call. Then each known render.
     /// </summary>
     public static string Summary(string symbology, IReadOnlyList<Row> rows)
     {
@@ -314,7 +314,7 @@ internal static class Destination
     /// <summary>
     /// Two result files of the same set from two trees, render for render: every status, version or text that moved, and the cost
     /// before and after over the pairs of one image. The render names pair the rows whatever the decoder does, and the pixel digest
-    /// says whether a pair is one image; a file from before the digest falls back on how the render was made (kind, ppm, angle and
+    /// says whether a pair is one image. A file from before the digest falls back on how the render was made (kind, ppm, angle and
     /// noise), which tells a redrawn set but not a renderer that changed. A pair that is not one image (an encoder, a renderer or
     /// the draws changed) is listed apart, since what moved there says nothing about the decoder, and so is a render in only one of
     /// the files.

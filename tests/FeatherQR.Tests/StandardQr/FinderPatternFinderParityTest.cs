@@ -6,8 +6,8 @@ namespace FeatherQR.Tests;
 /// Parity test for the finder-pattern row-scan kernels: the SIMD mask walk
 /// (net8.0+, AVX2) evaluates the 1:1:3:1:1 window at exactly the positions the
 /// scalar walk does, so <see cref="FinderPatternFinder.TryFind"/> and
-/// <see cref="FinderPatternFinder.TryFindScalar"/> must agree bit-for-bit —
-/// found flag, centers and module sizes — across synthetic QR-like scenes
+/// <see cref="FinderPatternFinder.TryFindScalar"/> must agree bit-for-bit
+/// (found flag, centers and module sizes) across synthetic QR-like scenes
 /// (finder patterns + timing lines + random data modules, 3/2/0 patterns).
 /// </summary>
 public class FinderPatternFinderParityTest
@@ -18,7 +18,7 @@ public class FinderPatternFinderParityTest
     public async Task SimdAndScalarKernels_AgreeBitForBit()
     {
         // (dimension, ppm, finderCount): both benchmark shapes, a 2-finder scene
-        // (found only if noise fakes a third candidate — kernels must agree either
+        // (found only if noise fakes a third candidate, but kernels must agree either
         // way), and a no-pattern scene.
         var configs = new (int Dimension, int Ppm, int FinderCount)[]
         {

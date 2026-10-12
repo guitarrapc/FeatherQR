@@ -20,7 +20,7 @@ namespace FeatherQR.Tests;
 /// <para>
 /// The one place the options surface does <em>more</em> than the released one did is
 /// Standard QR sizing. The released <c>GetRequiredBufferSize</c> never had a version parameter,
-/// so an ignored <c>Version</c> would have been a silent trap; sizing honours it and
+/// so an ignored <c>Version</c> would have been a silent trap. Sizing honours it and
 /// reports a version that cannot hold the content the same way Micro QR and rMQR
 /// already do.
 /// </para>
@@ -100,7 +100,7 @@ public class GeneratorOptionsTest
     // size, and the SHA-256 of both the serialized matrix and the destination buffer, all
     // captured from the released overloads on 2026-09-06 immediately before the removal.
     // A difference now is an encoder change rather than a disagreement between two
-    // spellings, which is the stronger of the two guarantees; the three entry points
+    // spellings, which is the stronger of the two guarantees. The three entry points
     // (string, span, destination) are still cross-checked on every row.
 
     public readonly record struct StandardQrCase(

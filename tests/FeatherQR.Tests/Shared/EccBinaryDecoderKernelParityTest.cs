@@ -37,7 +37,7 @@ public class EccBinaryDecoderKernelParityTest
 #if NET10_0_OR_GREATER
     /// <summary>
     /// The GFNI kernel stores its accumulator register whole, so its destination is
-    /// SyndromeLanes bytes; lanes at or past eccCount hold syndromes of unused roots
+    /// SyndromeLanes bytes. Lanes at or past eccCount hold syndromes of unused roots
     /// and are not compared.
     /// </summary>
     [Test]
@@ -114,7 +114,7 @@ public class EccBinaryDecoderKernelParityTest
     {
         // Rebuild the GF(0x11D) → GF(0x11B) isomorphism from scratch and verify the
         // constants baked into EccBinaryDecoder.X86.cs. β is the first root of
-        // x^8+x^4+x^3+x^2+1 in GF(0x11B); φ maps by linearity over the β^i basis.
+        // x^8+x^4+x^3+x^2+1 in GF(0x11B), and φ maps by linearity over the β^i basis.
         var beta = 0;
         for (var cand = 2; cand < 256; cand++)
         {
@@ -196,7 +196,7 @@ public class EccBinaryDecoderKernelParityTest
 #if NET8_0_OR_GREATER
     /// <summary>
     /// The AdvSimd kernel stores both 16-lane accumulator groups whole, so its
-    /// destination must be SyndromeLanes bytes; lanes at or past eccCount hold
+    /// destination must be SyndromeLanes bytes. Lanes at or past eccCount hold
     /// syndromes of unused roots and are not compared.
     /// </summary>
     [Test]
@@ -402,7 +402,7 @@ public class EccBinaryDecoderKernelParityTest
 
     /// <summary>
     /// Rebuilds the baked AdvSimd constants from first principles. The lane vectors are
-    /// the Horner multipliers; the two nibble tables are the reduction of a product's
+    /// the Horner multipliers. The two nibble tables are the reduction of a product's
     /// high byte, which is only valid because that byte has degree at most 6.
     /// </summary>
     [Test]
@@ -416,7 +416,7 @@ public class EccBinaryDecoderKernelParityTest
         }
 
         // x^8 = 0x1D in GF(2^8)/0x11D, so reducing a high byte h means multiplying it
-        // by 0x1D; splitting h into nibbles makes that two 16-entry lookups.
+        // by 0x1D. Splitting h into nibbles makes that two 16-entry lookups.
         for (var n = 0; n < 16; n++)
         {
             await Assert.That(EccBinaryDecoder.AdvSimdReduceLow[n]).IsEquivalentTo(MulPoly((byte)n, 0x1D, 0x11d));

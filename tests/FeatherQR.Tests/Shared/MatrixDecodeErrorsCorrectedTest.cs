@@ -12,7 +12,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// A symbol is built from random data codewords, each block's ECC computed on them, then the data codewords of each block
-/// changed as the case says; a block marked uncorrectable has every codeword changed, data and ECC, past what its ECC
+/// changed as the case says. A block marked uncorrectable has every codeword changed, data and ECC, past what its ECC
 /// codewords locate. The data is never parsed, since the decode stops at Reed-Solomon.
 /// </remarks>
 public class MatrixDecodeErrorsCorrectedTest

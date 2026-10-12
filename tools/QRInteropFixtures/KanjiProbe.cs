@@ -14,7 +14,7 @@ namespace QRInteropFixtures;
 /// encoder lineages can actually emit ISO/IEC 18004 Kanji mode (mode indicator
 /// 1000 / rMQR 100 / Micro QR M3-M4 11) for each symbology, and what the
 /// zxing-cpp reader reports for those symbols. Findings are recorded in
-/// .github/docs/specs/qrcode-test-fixtures.md; nothing here runs in CI.
+/// .github/docs/specs/qrcode-test-fixtures.md. Nothing here runs in CI.
 /// </summary>
 public static class KanjiProbe
 {

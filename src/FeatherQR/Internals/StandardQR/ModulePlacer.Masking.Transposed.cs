@@ -204,7 +204,7 @@ internal static partial class ModulePlacer
     /// </summary>
     private sealed class StreamPlacement
     {
-        /// <summary>[k * Stride + x]: column x's function modules and version information, rows 64k..; zero past the symbol.</summary>
+        /// <summary>[k * Stride + x]: column x's function modules and version information, rows 64k.., zero past the symbol.</summary>
         public readonly ulong[] TemplateC;
         public readonly StreamOp[] Ops;
         /// <summary>The scattered modules' places, one per stream bit of a scatter op: word index in the planes &lt;&lt; 6 | bit.</summary>
@@ -222,7 +222,7 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// A walk segment of <see cref="StreamPlacement"/>. A run takes 2 * Count stream bits from Start, the right column X and the left X - 1
-    /// in turn, from row Y up or down; a scatter op takes Count bits from Start to <see cref="StreamPlacement.Targets"/> from Offset.
+    /// in turn, from row Y up or down. A scatter op takes Count bits from Start to <see cref="StreamPlacement.Targets"/> from Offset.
     /// </summary>
     private readonly struct StreamOp
     {
@@ -395,7 +395,7 @@ internal static partial class ModulePlacer
             Unsafe.Add(ref c, (k + 1) * stride + x) |= field >> (64 - shift);
     }
 
-    /// <summary>64 stream bits from bit <paramref name="bit"/>, the first in the top bit; bits past the stream are zero.</summary>
+    /// <summary>64 stream bits from bit <paramref name="bit"/>, the first in the top bit. Bits past the stream are zero.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static ulong ReadStreamBits(ReadOnlySpan<byte> stream, int bit)
     {

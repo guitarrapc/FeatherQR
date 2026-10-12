@@ -72,7 +72,7 @@ internal static partial class ModeSegmenter
                 if (TBytes.Utf8)
                 {
                     var chars = Vector256.Create((int)c0, c1, c2, c3, c4, c5, c6, c7);
-                    // A lane at a byte order mark only continues its Byte run; past its first character it has one.
+                    // A lane at a byte order mark only continues its Byte run. Past its first character it has one.
                     noOpen = Vector256.Equals(chars, Vector256.Create((int)ByteOrderMark)) & Vector256.Create(U);
                     if (Vector256.EqualsAny(chars & Vector256.Create(0xF800), Vector256.Create(0xD800)))
                     {
@@ -83,7 +83,7 @@ internal static partial class ModeSegmenter
                     }
                     else
                     {
-                        // One byte, one more above U+007F, one more above U+07FF; a compare is all ones, so it takes one off.
+                        // One byte, one more above U+007F, one more above U+07FF. A compare is all ones, so it takes one off.
                         byteBits = (Vector256.Create(1) - Vector256.GreaterThan(chars, Vector256.Create(0x7F)) - Vector256.GreaterThan(chars, Vector256.Create(0x7FF))) << 6;
                     }
                 }

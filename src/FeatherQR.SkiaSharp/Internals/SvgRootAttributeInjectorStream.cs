@@ -8,9 +8,9 @@ namespace FeatherQR.SkiaSharp.Internals;
 /// </summary>
 /// <remarks>
 /// <see cref="SKSvgCanvas"/> writes <c>width</c>/<c>height</c> on the root element but no <c>viewBox</c>, and offers no hook to add attributes.
-/// Only the document head is buffered, and only until the marker is complete (it appears within the first bytes of the document); everything after streams straight through, so the document is never held in memory as a whole.
+/// Only the document head is buffered, and only until the marker is complete (it appears within the first bytes of the document). Everything after streams straight through, so the document is never held in memory as a whole.
 /// If the marker does not appear within the first <see cref="MaxHeaderScan"/> bytes (unexpected upstream format change), the document is forwarded unmodified.
-/// The inner stream is not disposed; dispose this wrapper (after the SVG canvas) to flush any pending header bytes.
+/// The inner stream is not disposed. Dispose this wrapper (after the SVG canvas) to flush any pending header bytes.
 /// </remarks>
 internal sealed class SvgRootAttributeInjectorStream : Stream
 {
@@ -48,7 +48,7 @@ internal sealed class SvgRootAttributeInjectorStream : Stream
             return;
         }
 
-        // Accumulate into the header window; a write may split the marker at any
+        // Accumulate into the header window. A write may split the marker at any
         // position, so the search always runs over the accumulated prefix.
         _header ??= new byte[MaxHeaderScan];
         while (count > 0)

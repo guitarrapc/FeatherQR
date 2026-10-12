@@ -14,7 +14,7 @@ namespace FeatherQR;
 /// The default <see cref="RmQRFitStrategy.MinimizeArea"/> takes the fewest modules, which can mean a taller and narrower code: 12 digits at level M give R11x27 (297 modules) rather than R7x43 (301).
 /// Use <see cref="RmQRFitStrategy.MinimizeHeight"/> or a fixed <see cref="RmQRHeight"/> when you want the flattest code instead.
 /// Writes Numeric, Alphanumeric and Byte mode, the last with ECI assignment 3 for ISO-8859-1 or 26 for UTF-8, and Kanji mode.
-/// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header; it is written only when the caller sets <see cref="RmQRCodeGeneratorOptions.AllowKanji"/> and the charset is left at <see cref="EciMode.Default"/>.
+/// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header. It is written only when the caller sets <see cref="RmQRCodeGeneratorOptions.AllowKanji"/> and the charset is left at <see cref="EciMode.Default"/>.
 /// Under <see cref="RmQRSegmentation.Optimal"/> such text with ASCII in it can be written as Kanji runs beside Numeric, Alphanumeric and Byte runs of the ASCII, where that is the smaller symbol.
 /// The quiet zone defaults to the 2 modules ISO/IEC 23941 asks for.
 /// </remarks>
@@ -86,7 +86,7 @@ public static class RmQRCodeGenerator
 
         var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
-        // One compare on the default path; validation of the value itself lives in the
+        // One compare on the default path. Validation of the value itself lives in the
         // cold method so Single costs a predicted not-taken branch and nothing else.
         if (options.Segmentation != RmQRSegmentation.Single)
             return CreateOptimal(textSpan, eccLevel, options.EciMode, options.AllowKanji, options.Version, options.FitStrategy, options.Height, quietZoneSize, options.Segmentation);
@@ -149,7 +149,7 @@ public static class RmQRCodeGenerator
             return requiredSize;
         }
 
-        // Quiet zone: light rows above and below, light margins on every core row; the
+        // Quiet zone: light rows above and below, light margins on every core row. The
         // placer writes the core straight into the strided window in between (no
         // intermediate core buffer, no row copies).
         QuietZoneWindow.ClearMargins(target, coreWidth, coreHeight, quietZoneSize);
@@ -168,7 +168,7 @@ public static class RmQRCodeGenerator
     /// <returns><c>true</c> when the content fits.</returns>
     /// <remarks>
     /// <para>
-    /// <c>false</c> means that and only that; bad arguments still throw. rMQR holds 5 to 150 bytes, so not fitting is an ordinary answer here, which is why sizing is only offered in this form.
+    /// <c>false</c> means that and only that. Bad arguments still throw. rMQR holds 5 to 150 bytes, so not fitting is an ordinary answer here, which is why sizing is only offered in this form.
     /// </para>
     /// <para>
     /// Pass the options you will encode with, since segmentation and ECI can pick different versions and a buffer sized for one can be too small for the other.
@@ -228,7 +228,7 @@ public static class RmQRCodeGenerator
 
     private static void ValidateQuietZone(int quietZoneSize)
     {
-        // (139 + 2·qz) × (17 + 2·qz) must stay far below int.MaxValue; 10000 modules of
+        // (139 + 2·qz) × (17 + 2·qz) must stay far below int.MaxValue. 10000 modules of
         // quiet zone is already absurd, so a simple hard cap keeps the math safe.
         if (quietZoneSize < 0 || quietZoneSize > 10_000)
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
@@ -269,7 +269,7 @@ public static class RmQRCodeGenerator
     }
 
     /// <summary>
-    /// Runs encode → ECC + interleave → placement into a byte-per-module core window (width × height, rows <paramref name="stride"/> bytes apart, every core module written; stride == width for a packed core).
+    /// Runs encode → ECC + interleave → placement into a byte-per-module core window (width × height, rows <paramref name="stride"/> bytes apart, every core module written, and stride == width for a packed core).
     /// Allocation-free: fixed stack budgets.
     /// </summary>
     private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, Span<byte> core, int stride)
@@ -387,11 +387,11 @@ public static class RmQRCodeGenerator
         {
             // The plan for this version could not be built: it needed more runs
             // than the buffer holds, the decoder would misread it, the exact
-            // re-cost disagreed with the dynamic program, or — for a requested
-            // version, which the scan accepts unpriced — the content is unplannable
+            // re-cost disagreed with the dynamic program, or, for a requested
+            // version, which the scan accepts unpriced, the content is unplannable
             // or the stream simply does not fit it. Fall back to the single-mode
             // fit, which throws the ordinary "content is too long" error when there
-            // is no such fit — the honest outcome, because with the plan gone
+            // is no such fit, the honest outcome, because with the plan gone
             // nothing else can be emitted.
             segmentCount = 0;
             version = RmQRSegmentPlanner.SelectSingle(in analysis, eccLevel, requestedVersion, fitStrategy, height);

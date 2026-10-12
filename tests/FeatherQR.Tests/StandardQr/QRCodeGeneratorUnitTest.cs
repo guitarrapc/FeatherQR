@@ -416,7 +416,7 @@ public class QRCodeGeneratorUnitTest
     [Arguments(QREccLevel.H, 424)]  // V40-H byte max
     public async Task Create_MaxByte_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
-        // All-kana text goes out in Kanji mode at the default charset; this one is about Byte mode.
+        // All-kana text goes out in Kanji mode at the default charset. This one is about Byte mode.
         var text = new string('\u3042', maxChars);
 
         var qr = QRCodeGenerator.Create(text, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
@@ -430,7 +430,7 @@ public class QRCodeGeneratorUnitTest
     [Arguments(QREccLevel.H, 424)]  // V40-H byte max
     public async Task Create_Span_MaxByte_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
-        // All-kana text goes out in Kanji mode at the default charset; this one is about Byte mode.
+        // All-kana text goes out in Kanji mode at the default charset. This one is about Byte mode.
         var text = new string('\u3042', maxChars);
 
         var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
@@ -508,7 +508,7 @@ public class QRCodeGeneratorUnitTest
     [Arguments("0123456789", QREccLevel.H, 5)]
     public async Task Create_Binary_MatchesTextImplementation(string text, QREccLevel level, int version)
     {
-        // -1 was the released parameter list's "pick a version"; the range spells it Any
+        // -1 was the released parameter list's "pick a version". The range spells it Any
         // and rejects -1, so a defaulted field cannot pass for automatic selection.
         var options = new QRCodeGeneratorOptions
         {
@@ -534,7 +534,7 @@ public class QRCodeGeneratorUnitTest
     }
 
     // Sizing tests. The throwing GetRequiredBufferSize these were written against was
-    // removed in 2.0.0 (specs/qrcode-symbologies.md, Public API direction); they now go
+    // removed in 2.0.0 (specs/qrcode-symbologies.md, Public API direction). They now go
     // through TryGetRequiredBufferSize, via the Sizing helper where the fit is a
     // precondition rather than the subject.
 
@@ -801,7 +801,7 @@ public class QRCodeGeneratorUnitTest
                 await Assert.That(dirty[i]).IsEqualTo(fill);
         }
 
-        // Class API: its pooled work buffer is deliberately not cleared; the result must
+        // Class API: its pooled work buffer is deliberately not cleared. The result must
         // agree with the span path module for module. Poison the pool bucket the generator
         // will rent (same length, returned dirty) so a fresh pool cannot hide an unwritten
         // module.
@@ -837,7 +837,7 @@ public class QRCodeGeneratorUnitTest
 
 #if !DEBUG
     // Release-only: unoptimized (Debug) JIT allocates small temporaries inside the
-    // SIMD ECC kernel that the optimizing JIT eliminates; the zero-allocation
+    // SIMD ECC kernel that the optimizing JIT eliminates. The zero-allocation
     // guarantee applies to shipped (Release) binaries.
     [Test]
     public async Task Create_SpanDestination_DoesNotAllocate()
@@ -983,7 +983,7 @@ public class QRCodeGeneratorUnitTest
     /// <summary>
     /// The three sizing numbers as a tuple. <see cref="QRCodeCalculatedSize"/> is a plain
     /// readonly struct since 2.0.0 (one value kind across the three symbologies), so it no
-    /// longer deconstructs; these tests read all three at once and say so once here.
+    /// longer deconstructs. These tests read all three at once and say so once here.
     /// </summary>
     private static (int BufferSize, int Size, int Version) Read(QRCodeCalculatedSize size)
         => (size.BufferSize, size.Size, size.Version);

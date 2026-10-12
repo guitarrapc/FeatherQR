@@ -149,7 +149,7 @@ public class FinderRowEdgesTest
 
         public void Add(ReadOnlySpan<int> vector)
         {
-            // three dark runs and the two gaps between them; the gap before the next vector is one pixel
+            // three dark runs and the two gaps between them, and the gap before the next vector is one pixel
             if (_darkRuns + 3 > FinderPatternFinder.ClassifyWindowLanes + 2 || _position + vector[0] + vector[1] + vector[2] + vector[3] + vector[4] + 1 >= FinderPatternFinder.EdgeListWidthLimit)
                 Flush();
             for (var i = 0; i < 5; i += 2)
@@ -209,7 +209,7 @@ public class FinderRowEdgesTest
                 row.AsSpan().Fill(255);
                 break;
             default:
-                // runs of 1 to 9 pixels; "dark ends" makes the first and the last run dark, "edges at the threshold" takes its levels from next to it
+                // Runs of 1 to 9 pixels. "dark ends" makes the first and the last run dark, "edges at the threshold" takes its levels from next to it.
                 var dark = kind == "dark ends" || random.Next(2) == 0;
                 for (var x = 0; x < length;)
                 {

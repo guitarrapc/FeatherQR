@@ -30,7 +30,7 @@ internal static class FinderAxisEstimator
 
     /// <summary>
     /// Maximum angular-sweep ray length relative to the row-scan module estimate.
-    /// A finder center-to-edge ray is at most 3.5√2 modules; the extra margin tolerates pixel quantization and mild perspective.
+    /// A finder center-to-edge ray is at most 3.5√2 modules. The extra margin tolerates pixel quantization and mild perspective.
     /// </summary>
     private const float MaxAngularSweepRunModules = 8f;
 
@@ -89,7 +89,7 @@ internal static class FinderAxisEstimator
 
         // First candidate: the axis fitted to the whole sweep. Near the axis the span
         // grows only as 1/cos, so its minimum is flat and pixel noise picks it (measured
-        // 5-11 degrees off at 3 px/module); toward the corners it peaks sharply, and a
+        // 5-11 degrees off at 3 px/module). Toward the corners it peaks sharply, and a
         // fit of every direction uses both.
         if (destination.Length > 0 && TryFitAxis(uSizes, vSizes, out var fittedDegrees, out var fittedSize))
         {
@@ -162,7 +162,7 @@ internal static class FinderAxisEstimator
     private const int FitStepsPerDegree = 4;
 
     /// <summary>
-    /// Span shape of a unit square crossed through its center at a quarter-degree offset from its axis, 1 / max(|cos|, |sin|); it repeats every 90 degrees.
+    /// Span shape of a unit square crossed through its center at a quarter-degree offset from its axis, 1 / max(|cos|, |sin|). It repeats every 90 degrees.
     /// </summary>
     private static readonly float[] SquareSpanShape = CreateSquareSpanShape();
 
@@ -329,7 +329,7 @@ internal static class FinderAxisEstimator
                 return false;
 
             var value = LuminanceSampler.Bilinear(luminance, width, height, x, y);
-            // Out of the light ring the edge is light to dark (the dark ring's inner edge); the other two are dark to light
+            // Out of the light ring the edge is light to dark (the dark ring's inner edge). The other two are dark to light.
             var crossed = phase == 1 ? value < level : value >= level;
             if (crossed)
             {

@@ -7,7 +7,7 @@ namespace FeatherQR.SkiaSharp;
 
 /// <summary>
 /// Decodes Micro QR codes from SkiaSharp bitmaps.
-/// Extends <see cref="MicroQRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>MicroQRCodeDecoder.TryDecode(bitmap, ...)</c>; on older language versions call them on this class.
+/// Extends <see cref="MicroQRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>MicroQRCodeDecoder.TryDecode(bitmap, ...)</c>. On older language versions call them on this class.
 /// </summary>
 public static class MicroQRCodeImageDecoder
 {

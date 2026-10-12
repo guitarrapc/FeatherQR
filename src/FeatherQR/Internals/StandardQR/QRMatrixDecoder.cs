@@ -31,7 +31,7 @@ internal static partial class QRMatrixDecoder
     /// <param name="modules">Core module matrix, one byte per module (0 = light, non-zero = dark), row-major, no quiet zone.</param>
     /// <param name="size">Matrix size in modules per side.</param>
     /// <param name="destination">Destination buffer for decoded characters.</param>
-    /// <param name="charsWritten">Number of characters written; 0 unless the decode succeeds, whatever the segments before a failure wrote.</param>
+    /// <param name="charsWritten">Number of characters written. It is 0 unless the decode succeeds, whatever the segments before a failure wrote.</param>
     /// <param name="info">Diagnostic information (version, ECC level, mask, corrected errors).</param>
     public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
@@ -69,13 +69,13 @@ internal static partial class QRMatrixDecoder
             var interleaved = work.Slice(0, totalCodewords);
             var blocks = work.Slice(totalCodewords, totalCodewords);
 
-            // 3. Extract codewords (inverse zigzag + unmask); writes every byte, so no clear
+            // 3. Extract codewords (inverse zigzag + unmask). This writes every byte, so no clear.
             var layout = ModulePlacer.GetLayout(version);
             Debug.Assert(totalCodewords == layout.FreeModules / 8, "a version's codewords fill its free modules up to the remainder bits");
             ExtractCodewords(modules, layout, maskPattern, interleaved);
 
-            // 4-5. Deinterleave into Reed-Solomon blocks and correct each to the code's full strength (ISO/IEC 18004 Table 9's misdecode protection is not applied);
-            // the corrected data codewords are gathered over the front of the stream, in the encoder's block order.
+            // 4-5. Deinterleave into Reed-Solomon blocks and correct each to the code's full strength (ISO/IEC 18004 Table 9's misdecode protection is not applied).
+            // The corrected data codewords are gathered over the front of the stream, in the encoder's block order.
             if (!EccBlockDecoder.TryCorrect(interleaved, blocks, eccInfo, eccInfo.ECCPerBlock / 2, out var errorsCorrected))
             {
                 info = new QRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
@@ -103,7 +103,7 @@ internal static partial class QRMatrixDecoder
     /// Upper bound of decoded characters for a version, across all ECC levels and modes.
     /// </summary>
     /// <remarks>
-    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound.
+    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters. 3× codewords is a safe bound.
     /// </remarks>
     public static int GetMaxCharCount(int version)
         => QRCodeConstants.GetEccInfo(version, QREccLevel.L).TotalDataCodewords * 3;

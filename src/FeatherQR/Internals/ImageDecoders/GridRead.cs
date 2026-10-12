@@ -47,11 +47,11 @@ internal static class GridRead
     /// Decodes the grid sampled into <paramref name="modules"/> and, when the gate holds, reads it again by coverage into the same
     /// modules.
     /// </summary>
-    /// <typeparam name="TGrid">The decoder's grid; a struct, so the calls are direct.</typeparam>
+    /// <typeparam name="TGrid">The decoder's grid. It is a struct, so the calls are direct.</typeparam>
     /// <typeparam name="TInfo">The decoder's diagnostic record.</typeparam>
     /// <param name="grid">The grid sampled, which the decode records its orientations' results in.</param>
     /// <param name="image">The image the grid was sampled from, its grey levels the re-read's split.</param>
-    /// <param name="modules">The grid as sampled, <see cref="IGridRead{TInfo}.Columns"/> a row; the re-read writes over it.</param>
+    /// <param name="modules">The grid as sampled, <see cref="IGridRead{TInfo}.Columns"/> a row. The re-read writes over it.</param>
     /// <param name="destination">Where a read writes its characters.</param>
     /// <param name="charsWritten">The characters the returned decode wrote.</param>
     /// <param name="info">The returned decode's diagnostics.</param>

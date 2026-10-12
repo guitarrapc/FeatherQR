@@ -6,7 +6,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
 /// The run measurement of the cross-checks: from a supposed centre outwards along one line, the five runs of a 1:1:3:1:1 cross section and where the walk ended.
-/// The verdict on the runs stays with the cross-checks; what is here is only the walk, which is where a refused cross-check spends its time, and 97 to 98 % of cross-checks on a large symbol are refusals.
+/// The verdict on the runs stays with the cross-checks. What is here is only the walk, which is where a refused cross-check spends its time, and 97 to 98 % of cross-checks on a large symbol are refusals.
 /// </summary>
 internal static partial class FinderPatternFinder
 {
@@ -116,7 +116,7 @@ internal static partial class FinderPatternFinder
     /// Each line has passed its own 1:1:3:1:1 by then, so this is only how the two lines may differ in scale, and that depends on which line it is.
     /// The row again (<paramref name="acrossAxes"/> false) is the row scan's own line through a refined centre: the same cross section, within 40 %.
     /// The column is the other axis, and a symbol in perspective draws a finder longer along one axis than the other: at keystone k the finder at the wide edge is stretched 1/(1 − k), 2 at 50 %.
-    /// Stretched along its own axes, a finder's column is at most that factor from its row whatever the turn; stretched off them, as a tilt about both axes draws every finder and a one-axis keystone the corner ones, it can be further, up to 2.31 at a stretch of 2.
+    /// Stretched along its own axes, a finder's column is at most that factor from its row whatever the turn. Stretched off them, as a tilt about both axes draws every finder and a one-axis keystone the corner ones, it can be further, up to 2.31 at a stretch of 2.
     /// A card tilted steeply away is drawn further still, one axis at the cosine of the tilt. The window is 2/7 to 7/2, a tilt of 73°.
     /// </remarks>
     internal static bool IsTotalInWindow(int total, int expectedTotal, bool acrossAxes)
@@ -130,7 +130,7 @@ internal static partial class FinderPatternFinder
     /// <remarks>
     /// Every bound is a consequence of the cross-check's own accept conditions and of nothing else: the total inside the window of <see cref="IsTotalInWindow"/>, and either the strict ratio (each side run within half a module of one module, the centre within a module and a half of three) or the near-miss one (each run within ten sevenths of a pixel), which is also the only door to the grey second look, or, in the mode that hands its runs back, the small crisp runs, which turn out to lie inside the same bounds, or, with a total inside the row's own window, the like-edge distances (<see cref="IsFinderRatioByLikeEdges"/>).
     /// The strict ratio puts every side run below the centre run, and the near-miss one ties it to a third of the centre, so the bound on a side run is known as soon as the centre has been measured.
-    /// Like edges need no centre bound of their own, since their centres lie inside the ratio's; their side runs are bounded by the centre and the row's window.
+    /// Like edges need no centre bound of their own, since their centres lie inside the ratio's. Their side runs are bounded by the centre and the row's window.
     /// A walk that stops at these bounds can therefore only stop where the verdict would have been a refusal. <c>FinderRunBoundsTest</c> holds each bound against the checks themselves.
     /// </remarks>
     internal readonly struct AxisRunBounds
@@ -143,13 +143,13 @@ internal static partial class FinderPatternFinder
 
         private readonly int _totalHigh;
 
-        /// <summary>The largest total the like-edge check may take, the row window's; 0 when it takes none.</summary>
+        /// <summary>The largest total the like-edge check may take, the row window's, or 0 when it takes none.</summary>
         private readonly int _likeTotalHigh;
 
         /// <summary>Shortest centre run of an acceptable cross section.</summary>
         public readonly int CentreLow;
 
-        /// <summary>Longest centre run of an acceptable cross section; below <see cref="CentreLow"/> when nothing is acceptable.</summary>
+        /// <summary>Longest centre run of an acceptable cross section. It is below <see cref="CentreLow"/> when nothing is acceptable.</summary>
         public readonly int CentreHigh;
 
         private AxisRunBounds(int totalHigh, int likeTotalHigh, int centreLow, int centreHigh)
@@ -199,10 +199,10 @@ internal static partial class FinderPatternFinder
     /// <see cref="MeasureRuns"/> for an axis cross-check, given up the moment no cross section the cross-check could accept is left.
     /// </summary>
     /// <returns>
-    /// True with the runs and the end <see cref="MeasureRuns"/> gives under a cap of <paramref name="expectedTotal"/>; false when the cross-check is certain to refuse, with nothing written.
+    /// True with the runs and the end <see cref="MeasureRuns"/> gives under a cap of <paramref name="expectedTotal"/>. False when the cross-check is certain to refuse, with nothing written.
     /// </returns>
     /// <remarks>
-    /// The centre run is measured first, in both directions, because every other bound follows from it; the pixels read are the ones <see cref="MeasureRuns"/> reads, in another order, and fewer of them.
+    /// The centre run is measured first, in both directions, because every other bound follows from it. The pixels read are the ones <see cref="MeasureRuns"/> reads, in another order, and fewer of them.
     /// Each side run is then allowed what is left of two budgets: the longest side run this centre admits, and the largest total it admits less what has been measured and one pixel for each side run still to come, since an empty side run is refused too.
     /// Both are at most the expected total, so a walk that finishes never stopped a run where the reference's cap would not have.
     /// On a large symbol a refused cross-check reads 0.55 to 0.60 of the pixels it used to.
@@ -246,7 +246,7 @@ internal static partial class FinderPatternFinder
         if (leftForward == 0)
             return false;
 
-        // A column is checked against the row, the other axis; a row against the row
+        // A column is checked against the row, the other axis, and a row against the row
         var bounds = AxisRunBounds.From(expectedTotal, acrossAxes: stepX == 0);
         if (r2 < bounds.CentreLow || r2 > bounds.CentreHigh)
             return false;
@@ -254,7 +254,7 @@ internal static partial class FinderPatternFinder
         var sideCap = bounds.SideCap(r2);
         var budget = bounds.TotalCap(r2) - r2;
 
-        // Light then dark, back; light then dark, forward. A run about to pass its cap ends the walk.
+        // Light then dark, back. Light then dark, forward. A run about to pass its cap ends the walk.
         int r0 = 0, r1 = 0, r3 = 0, r4 = 0;
         var cap = Math.Min(sideCap, budget - 3);
         while (leftBack > 0 && Unsafe.Add(ref origin, back) >= threshold)

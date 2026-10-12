@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity test for the run measurement of the finder cross-checks.
-/// <see cref="FinderPatternFinder.MeasureRuns"/> walks a stepped reference with the runs in locals; <see cref="FinderPatternFinder.MeasureAxisRunsReference"/> and <see cref="FinderPatternFinder.MeasureDiagonalRunsReference"/> are the loops it replaced, kept verbatim, and <see cref="FinderPatternFinder.MeasureRisingDiagonalRunsReference"/> is the falling one written for the other diagonal.
+/// <see cref="FinderPatternFinder.MeasureRuns"/> walks a stepped reference with the runs in locals. <see cref="FinderPatternFinder.MeasureAxisRunsReference"/> and <see cref="FinderPatternFinder.MeasureDiagonalRunsReference"/> are the loops it replaced, kept verbatim, and <see cref="FinderPatternFinder.MeasureRisingDiagonalRunsReference"/> is the falling one written for the other diagonal.
 /// The verdict on the runs is shared code, and on most centres it is a refusal whatever the runs were, so the walkers are compared on the runs themselves: the five lengths and where the walk ended.
 /// </summary>
 public class FinderRunWalkParityTest
@@ -122,7 +122,7 @@ public class FinderRunWalkParityTest
                         var referenceFound = FinderPatternFinder.TryFindScalar(scene, width, height, threshold, reference, grey);
 
                         var label = $"version={version}, ppm={ppm}, pad=({padX},{padY}), blurred={blurred}";
-                        // A 3 x 3 blur at 2 px a module is below what the finder reads; the two still have to agree on that
+                        // A 3 x 3 blur at 2 px a module is below what the finder reads, but the two still have to agree on that
                         if (!blurred || ppm >= 3)
                             await Assert.That(referenceFound).IsTrue().Because($"{label}: the scene is not a symbol the finder reads");
                         await Assert.That(fastFound).IsEqualTo(referenceFound).Because(label);
@@ -150,7 +150,7 @@ public class FinderRunWalkParityTest
             {
                 foreach (var (stepX, stepY) in new[] { (0, 1), (1, 0), (1, 1), (1, -1) })
                 {
-                    // The diagonal checks have no cap; the axis checks cap each side run at the expected total, which is 7 or more in a decode and anything here
+                    // The diagonal checks have no cap, and the axis checks cap each side run at the expected total, which is 7 or more in a decode and anything here
                     var caps = stepX != 0 && stepY != 0 ? new[] { FinderPatternFinder.NoRunCap } : new[] { 0, 1, 2, 5, 21, 1000 };
                     foreach (var cap in caps)
                     {

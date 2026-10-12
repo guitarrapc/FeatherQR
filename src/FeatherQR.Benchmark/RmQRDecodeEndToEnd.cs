@@ -1,6 +1,6 @@
 /// <summary>
 /// End-to-end rMQR matrix decoding through the public API (RmQRCodeDecoder): module matrix (no quiet zone) → text.
-/// Baseline for the reference-shaped decoder; span-destination variants must stay allocation-free.
+/// Baseline for the reference-shaped decoder. Span-destination variants must stay allocation-free.
 ///
 /// Scenarios (same payloads and symbols as RmQREncodeEndToEnd, level M):
 ///   Numeric_R11x27      : smallest symbol, single RS block

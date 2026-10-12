@@ -73,7 +73,7 @@ public static class MicroQRCodeGenerator
         //    - Select the version that holds the content (a narrowed range is resolved
         //      in ResolveConfiguration instead, from the same single analysis)
         //    - Reject combinations the version does not offer (M1 is Numeric at
-        //      ErrorDetectionOnly only; level Q needs M4)
+        //      ErrorDetectionOnly only, and level Q needs M4)
         // 3. Encode data codewords:
         //    - Write mode indicator (version - 1 bits) and character count indicator
         //    - Write the data bits
@@ -86,7 +86,7 @@ public static class MicroQRCodeGenerator
         //    - Place data and ECC codewords in the two-column zigzag
         //    - Apply a mask (4 patterns, 0-3, chosen by edge score rather than
         //      Standard QR's 8 patterns and penalty score)
-        //    - Place format information (a single 15-bit copy; Standard QR has two)
+        //    - Place format information (a single 15-bit copy, where Standard QR has two)
         //    - No version information block: the size alone identifies M1-M4
         // 6. Return MicroQRCodeData (quiet zone handled by MicroQRCodeData class)
 
@@ -112,7 +112,7 @@ public static class MicroQRCodeGenerator
         return result;
     }
 
-    /// <summary>The default path into <paramref name="destination"/>; see <see cref="CreateAutomatic(ReadOnlySpan{char}, MicroQREccLevel, bool, int, int)"/>.</summary>
+    /// <summary>The default path into <paramref name="destination"/>. See <see cref="CreateAutomatic(ReadOnlySpan{char}, MicroQREccLevel, bool, int, int)"/>.</summary>
     private static int CreateAutomatic(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, bool allowKanji, int quietZoneSize, int maskPattern)
     {
         ValidateQuietZone(quietZoneSize);
@@ -182,7 +182,7 @@ public static class MicroQRCodeGenerator
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     public static MicroQRCodeData Create(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options = default)
     {
-        // One compare on the default path; validation of the value itself lives in
+        // One compare on the default path. Validation of the value itself lives in
         // the cold method so Single costs a predicted not-taken branch and nothing else.
         if (options.Segmentation != MicroQRSegmentation.Single)
             return CreateOptimal(textSpan, eccLevel, in options);
@@ -227,7 +227,7 @@ public static class MicroQRCodeGenerator
     /// <returns><c>true</c> when the content fits.</returns>
     /// <remarks>
     /// <para>
-    /// <c>false</c> means that and only that; bad arguments still throw.
+    /// <c>false</c> means that and only that. Bad arguments still throw.
     /// Since the text picks the mode, it also covers a mode the version or level does not offer, and M1 holds 5 digits, so not fitting is an ordinary answer here.
     /// </para>
     /// <para>
@@ -246,7 +246,7 @@ public static class MicroQRCodeGenerator
 
     private static void ValidateQuietZone(int quietZoneSize)
     {
-        // 17 + 2·qz squared must stay far below int.MaxValue; 10000 modules of
+        // 17 + 2·qz squared must stay far below int.MaxValue. 10000 modules of
         // quiet zone is already absurd, so a simple hard cap keeps the math safe.
         if (quietZoneSize < 0 || quietZoneSize > 10_000)
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
@@ -258,7 +258,7 @@ public static class MicroQRCodeGenerator
     private static MicroQRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, bool allowKanji)
     {
         // Micro QR has no ECI, so analysis runs with the default charset rules,
-        // Kanji mode included when the caller asked for it; for Byte mode the analyzer's DataLength is already
+        // Kanji mode included when the caller asked for it. For Byte mode the analyzer's DataLength is already
         // the encoded byte count (ISO-8859-1 char count or UTF-8 byte count), for
         // Kanji mode the character count.
         var analysis = Analyze(textSpan, allowKanji);
@@ -337,7 +337,7 @@ public static class MicroQRCodeGenerator
 
     /// <summary>
     /// The smallest version inside <paramref name="range"/> that holds the content, or <c>false</c> when none does.
-    /// A range offering <paramref name="eccLevel"/> nowhere is a contradiction and throws; one whose versions cannot carry the required mode, or are too short, is an ordinary "does not fit".
+    /// A range offering <paramref name="eccLevel"/> nowhere is a contradiction and throws. One whose versions cannot carry the required mode, or are too short, is an ordinary "does not fit".
     /// </summary>
     internal static bool TrySelectVersionInRange(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected)
     {
@@ -483,7 +483,7 @@ public static class MicroQRCodeGenerator
         }
 
         // No version supports this mode/ECC combination at any length, a constraint
-        // problem, not a length problem; say which constraint binds.
+        // problem, not a length problem, so say which constraint binds.
         if (bestMax < 0)
         {
             return new ArgumentException(
@@ -521,14 +521,14 @@ public static class MicroQRCodeGenerator
         {
             case EncodingMode.Numeric:
                 {
-                    // 10 bits per 3-digit group; a 2-digit tail costs 7 bits, 1 digit costs 4
+                    // 10 bits per 3-digit group. A 2-digit tail costs 7 bits, 1 digit costs 4.
                     var groups = dataBits / 10;
                     var remainder = dataBits - groups * 10;
                     return groups * 3 + (remainder >= 7 ? 2 : remainder >= 4 ? 1 : 0);
                 }
             case EncodingMode.Alphanumeric:
                 {
-                    // 11 bits per character pair; a single tail character costs 6 bits
+                    // 11 bits per character pair. A single tail character costs 6 bits.
                     var pairs = dataBits / 11;
                     var remainder = dataBits - pairs * 11;
                     return pairs * 2 + (remainder >= 6 ? 1 : 0);
@@ -579,7 +579,7 @@ public static class MicroQRCodeGenerator
         ValidateOptimalEntry(options.Segmentation);
 
         var analysis = Analyze(textSpan, allowKanji: options.AllowKanji, planKanji: true);
-        // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
+        // The Kanji plan's table, kept by the scan for the build. A text with no Kanji plan takes none.
         Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
@@ -589,7 +589,7 @@ public static class MicroQRCodeGenerator
         Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
         if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, version, eccLevel, plan, out var segmentCount))
         {
-            // The plan that justified this version could not be rebuilt; fall back to
+            // The plan that justified this version could not be rebuilt, so fall back to
             // the single-mode fit, which owns the error when there is none.
             if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
                 throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
@@ -614,7 +614,7 @@ public static class MicroQRCodeGenerator
         ValidateOptimalEntry(options.Segmentation);
 
         var analysis = Analyze(textSpan, allowKanji: options.AllowKanji, planKanji: true);
-        // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
+        // The Kanji plan's table, kept by the scan for the build. A text with no Kanji plan takes none.
         Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
@@ -677,7 +677,7 @@ public static class MicroQRCodeGenerator
         ValidateOptimalEntry(options.Segmentation);
 
         var analysis = Analyze(text, allowKanji: options.AllowKanji, planKanji: true);
-        // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
+        // The Kanji plan's table, kept by the scan for the build. A text with no Kanji plan takes none.
         Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
         if (!MicroQRSegmentPlanner.TrySelectVersion(text, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
             return false;
@@ -735,7 +735,7 @@ public static class MicroQRCodeGenerator
             ? MicroQRBinaryEncoder.EncodeUtf8DataCodewords(textSpan, config.Version, config.EccLevel, dataCodewords)
             : MicroQRBinaryEncoder.EncodeDataCodewords(textSpan, config.Version, config.EccLevel, config.Mode, dataCodewords);
 
-        // Reed-Solomon over the data codeword bytes as-is; a final half codeword
+        // Reed-Solomon over the data codeword bytes as-is. A final half codeword
         // (M1/M3) participates as its high-nibble byte value.
         Span<byte> eccCodewords = stackalloc byte[14]; // max ECC codewords (M4-Q)
         EccBinaryEncoder.CalculateECC(dataCodewords.Slice(0, dataCount), eccCodewords, eccCount);

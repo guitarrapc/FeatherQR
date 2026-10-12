@@ -14,12 +14,12 @@ internal static partial class FinderPatternFinder
         (byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
 
     /// <summary>
-    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask; runs are walked via trailing-zero counts.
+    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask, and runs are walked via trailing-zero counts.
     /// The 1:1:3:1:1 window is evaluated at the end of every dark run from the third onward, exactly the positions and order the scalar walk evaluates, so the result is bit-identical.
     /// </summary>
     private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
-        // The mask covers a full row; keep the common case on the stack (512 B covers rows up to ~4000 px) and rent for wider images.
+        // The mask covers a full row, so keep the common case on the stack (512 B covers rows up to ~4000 px) and rent for wider images.
         var maskLength = ((width + 63) >> 6) + 1;
         ulong[]? rented = maskLength > 64 ? ArrayPool<ulong>.Shared.Rent(maskLength) : null;
         Span<ulong> mask = rented is null ? stackalloc ulong[64] : rented;
@@ -52,7 +52,7 @@ internal static partial class FinderPatternFinder
                     var thr = Vector128.Create(threshold);
                     if (AdvSimd.Arm64.IsSupported)
                     {
-                        // NEON has no movemask; fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, 3 pairwise adds reduce them (simdjson bulk-movemask shape).
+                        // NEON has no movemask, so fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, 3 pairwise adds reduce them (the bulk-movemask shape).
                         // Measured ~8-11% over per-16 ExtractMostSignificantBits and 3.3-4.1x over the scalar walk on Apple M2
                         for (; i + 64 <= width; i += 64)
                         {

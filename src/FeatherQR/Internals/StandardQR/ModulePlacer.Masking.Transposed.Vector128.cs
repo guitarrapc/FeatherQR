@@ -21,7 +21,7 @@ internal static partial class ModulePlacer
     /// <summary>Mask selection for versions 12-40 on 128-bit vectors: scores all eight candidates transposed, applies the winner to <paramref name="buffer"/>, returns it.</summary>
     internal static int MaskCodeTransposedVector128(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        // The per-version tables come from the version's canonical blocked mask; every production caller passes that mask.
+        // The per-version tables come from the version's canonical blocked mask, and every production caller passes that mask.
         var layout = GetTransposedLayout(version, size);
         System.Diagnostics.Debug.Assert(blockedMask.SequenceEqual(GetLayout(version).BlockedMask), "MaskCodeTransposedVector128 requires the version's canonical blocked mask");
         if (buffer.Length < size * size)

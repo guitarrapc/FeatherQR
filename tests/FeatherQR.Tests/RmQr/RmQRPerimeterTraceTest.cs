@@ -4,7 +4,7 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The rMQR grid traced round the symbol's edges from a frame at the finder, against the grid it was drawn with; and the edges it must not trace.
+/// The rMQR grid traced round the symbol's edges from a frame at the finder, against the grid it was drawn with, and the edges it must not trace.
 /// </summary>
 public class RmQRPerimeterTraceTest
 {
@@ -39,7 +39,7 @@ public class RmQRPerimeterTraceTest
     }
 
     /// <summary>
-    /// Two dark runs of the top row painted light in a row are missed and the trace goes on; a third in a row ends it.
+    /// Two dark runs of the top row painted light in a row are missed and the trace goes on. A third in a row ends it.
     /// The runs are timing modules at columns 30, 32 and 34 of an R13x77, clear of its alignment pattern at 25.
     /// </summary>
     [Test]

@@ -9,7 +9,7 @@ public class TripleSelectionDecodeTest
 {
     /// <summary>
     /// A grid of symbols of one size under keystone, as a photograph of many symbols is: the three finders meeting where three symbols touch form a right isosceles triangle smaller than any symbol's own, which keystone skews past the selection's tie band, so the selection spans symbols from the full sweep's list and from the strided scan's.
-    /// No shape tells such a triple from a symbol's own; its timing patterns do, and the image reads through the triples gated by them.
+    /// No shape tells such a triple from a symbol's own. Its timing patterns do, and the image reads through the triples gated by them.
     /// </summary>
     [Test]
     [Arguments(3, 3, 0.12f)]
@@ -117,7 +117,7 @@ public class TripleSelectionDecodeTest
         await Assert.That(text).IsEqualTo(TallContent);
     }
 
-    /// <summary>A grid of version 1 symbols with 2-module quiet zones, each with its own text, supersampled at 4 px/module under keystone; the size of one symbol's grid is returned.</summary>
+    /// <summary>A grid of version 1 symbols with 2-module quiet zones, each with its own text, supersampled at 4 px/module under keystone. The size of one symbol's grid is returned.</summary>
     internal static (byte[] Luminance, int Width, int Height, int Size) RenderGrid(int across, int down, float keystone, Func<int, string> content, Func<int, int, bool>? showsFinder = null)
     {
         var symbols = Enumerable.Range(0, across * down).Select(i => QRCodeGenerator.Create(content(i), QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(1), QuietZoneSize = 2 })).ToArray();

@@ -113,7 +113,7 @@ public class Fnc1RmQRDecodeTest
     [Test]
     public async Task FirstPosition_OnEitherSideOfEci_IsReported()
     {
-        // 111 ECI, 26 (UTF-8), 011 Byte, count 2, C3 A9 (é), terminator; FNC1 before or after the ECI header.
+        // 111 ECI, 26 (UTF-8), 011 Byte, count 2, C3 A9 (é), terminator. FNC1 before or after the ECI header.
         var afterEci = Decode("111 00011010 101 011 010 11000011 10101001 000");
         var beforeEci = Decode("101 111 00011010 011 010 11000011 10101001 000");
 
@@ -197,7 +197,7 @@ public class Fnc1RmQRDecodeTest
     [Test]
     public async Task FirstPosition_PercentAtASegmentStartOrEnd_IsTheSeparator()
     {
-        // count 2: the pair %A; count 3: the pair AB then %.
+        // Count 2: the pair %A. Count 3: the pair AB then %.
         var atStart = Decode("101 010 010 " + PairPercentA + " 000");
         var atEnd = Decode("101 010 011 " + PairAB + " " + Percent + " 000");
 

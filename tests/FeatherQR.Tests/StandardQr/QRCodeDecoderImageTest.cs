@@ -49,17 +49,17 @@ public class QRCodeDecoderImageTest
     [Test]
     [Arguments(12)]
     [Arguments(13)]
-    [Arguments(14)] // 512px / 81 modules = 6.32 px/module — snapped one version low before the run-boundary fix
+    [Arguments(14)] // 512px / 81 modules = 6.32 px/module, snapped one version low before the run-boundary fix
     [Arguments(15)]
     [Arguments(16)]
-    [Arguments(17)] // 5.51 px/module — same regression
+    [Arguments(17)] // 5.51 px/module, same regression
     [Arguments(18)]
     [Arguments(20)]
     [Arguments(25)]
     public async Task Decode_FixedCanvas_NonIntegerModuleSize(int version)
     {
-        // A fixed 512px canvas gives fractional pixels-per-module at most versions;
-        // the pixel-quantized module-size measurement must not snap the dimension
+        // A fixed 512px canvas gives fractional pixels-per-module at most versions.
+        // The pixel-quantized module-size measurement must not snap the dimension
         // estimate to a neighboring version (regression: v14/v17/v18/v20 read as
         // one version lower and failed with DataUncorrectable).
         var content = "https://github.com/guitarrapc/FeatherQR";
@@ -104,7 +104,7 @@ public class QRCodeDecoderImageTest
     /// A thermal printer, a laser marker or a camera at an angle hands the decoder modules that are
     /// not square, so it must keep the finder's horizontal and vertical module scales apart. Every
     /// right-angle rotation decodes to 2.35:1 either way, where the finder cross-check's 12:5 window
-    /// ends; this is 1.25:1, 8 x 10 px.
+    /// ends. This is 1.25:1, 8 x 10 px.
     /// </summary>
     [Test]
     [Arguments(0)]
@@ -376,7 +376,7 @@ public class QRCodeDecoderImageTest
     /// <summary>
     /// Fixed-size builder renders at about 2 px/module, level L. The alignment pattern's centre
     /// is pixel-resolved, a third of a module here, and anchoring the transform on it bent the
-    /// bottom-right block by enough to exceed level L's correction; the three finders alone
+    /// bottom-right block by enough to exceed level L's correction. The three finders alone
     /// sample every module right on a flat symbol, so the decoder falls back to them.
     /// </summary>
     [Test]

@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The image path reads the version information of version 7+ symbols to settle a dimension
 /// the module-size estimate got wrong. Up to three bit errors per copy are corrected, as the
-/// standard allows; four are not, since the code's minimum distance is eight.
+/// standard allows. Four are not, since the code's minimum distance is eight.
 /// </summary>
 public class VersionInformationReadTest
 {

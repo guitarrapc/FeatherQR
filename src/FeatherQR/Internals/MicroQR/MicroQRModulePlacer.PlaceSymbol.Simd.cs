@@ -60,8 +60,8 @@ internal static partial class MicroQRModulePlacer
 
     /// <summary>
     /// Expands 16 bits to 16 (0/1) module bytes: broadcast the 16-bit lane, shuffle byte 0/1 across the halves, then per-lane bit test (byte k = 1 iff bit k set).
-    /// Caller (via <see cref="PlaceCoreVector"/> dispatch) guarantees SSSE3 or AdvSimd.Arm64; IsSupported is a JIT constant so the untaken branch is eliminated. x86: PSHUFB + PAND + PCMPEQB, beat the GFNI bit-expand in the kernel benchmark loop (GFNI's matrix-operand preparation outweighs its single-instruction expand).
-    /// ARM64: TBL + CMTST, CMTST (compare-test: 0xFF iff (a &amp; b) != 0) fuses the AND+CMEQ pair; x86 has no per-lane bit-test compare.
+    /// Caller (via <see cref="PlaceCoreVector"/> dispatch) guarantees SSSE3 or AdvSimd.Arm64. IsSupported is a JIT constant so the untaken branch is eliminated. x86: PSHUFB + PAND + PCMPEQB, beat the GFNI bit-expand in the kernel benchmark loop (GFNI's matrix-operand preparation outweighs its single-instruction expand).
+    /// ARM64: TBL + CMTST, CMTST (compare-test: 0xFF iff (a &amp; b) != 0) fuses the AND+CMEQ pair. x86 has no per-lane bit-test compare.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteExpand16(ref byte p, uint bits16)

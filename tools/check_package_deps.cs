@@ -14,7 +14,7 @@ using System.Xml.Linq;
 // rendering one depends on anything named SkiaSharp. All four packages must be present.
 //
 // This is the second regression guard for the core split. CoreAssemblyDependencyTest reads the
-// assembly references from metadata; this reads what a consumer's restore would resolve,
+// assembly references from metadata. This reads what a consumer's restore would resolve,
 // which is what the split exists to control: a dependency that slips into a csproj (a
 // PackageReference without PrivateAssets, a transitive promotion) reaches the nuspec and
 // nothing else in CI would notice.
@@ -26,7 +26,7 @@ var expected = new Dictionary<string, Dictionary<string, string[]>>(StringCompar
 {
     // The core has no dependencies on the frameworks that carry Span, ArrayPool and Unsafe
     // themselves. On netstandard those live in BCL shim packages, the same ones every
-    // netstandard library that uses Span depends on; nothing here is a library dependency.
+    // netstandard library that uses Span depends on. Nothing here is a library dependency.
     ["FeatherQR"] = new(StringComparer.OrdinalIgnoreCase)
     {
         [".NETStandard2.0"] = ["System.Memory"],
@@ -104,7 +104,7 @@ foreach (var path in packages)
     }
 
     // Dependency groups as the nuspec spells them. A package with no <dependencies> element at
-    // all, or a flat list without groups, is a shape this repository never produces; it is
+    // all, or a flat list without groups, is a shape this repository never produces. It is
     // reported as "no groups" and fails against every expected framework.
     var groups = metadata.Element(ns + "dependencies")?.Elements(ns + "group")
         .ToDictionary(

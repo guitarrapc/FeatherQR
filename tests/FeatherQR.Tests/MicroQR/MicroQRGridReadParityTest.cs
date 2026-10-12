@@ -4,7 +4,7 @@ using FeatherQR.Internals.MicroQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The Micro QR grid path against the one it replaced: codewords read through a placement table and a view of the grid, against the whole-matrix extraction with a transposed copy for the mirrored read; the vector affine sampler against the scalar one; and the format table against the nearest-candidate search.
+/// The Micro QR grid path against the one it replaced: codewords read through a placement table and a view of the grid, against the whole-matrix extraction with a transposed copy for the mirrored read. The vector affine sampler against the scalar one, and the format table against the nearest-candidate search.
 /// </summary>
 /// <remarks>
 /// Status, diagnostics, characters written and the whole destination buffer are compared, since a failing bitstream can leave text behind.
@@ -308,7 +308,7 @@ public class MicroQRGridReadParityTest
 
     private sealed record Scene(string Kind, byte[] Luminance, int Width, int Height, byte Threshold, float CenterX, float CenterY, float UX, float UY, float VX, float VY)
     {
-        /// <summary>Kinds: 0 a symbol turned, framed on its finder; 1 the same framed a little off; 2 8-bit noise; 3 a symbol against the image edge, so the frame runs off it.</summary>
+        /// <summary>Kind 0 is a symbol turned, framed on its finder. Kind 1 is the same framed a little off. Kind 2 is 8-bit noise. Kind 3 is a symbol against the image edge, so the frame runs off it.</summary>
         public static Scene Build(Random random, int kind)
         {
             var ppm = 1.5f + (float)random.NextDouble() * 5f;
@@ -329,7 +329,7 @@ public class MicroQRGridReadParityTest
             var span = (data.Size + 4) * ppm * 1.5f;
             var side = (int)span + 4;
             var luminance = new byte[side * side];
-            // Symbol centre; against the edge the symbol's corner sits a module past the image
+            // Symbol centre. Against the edge the symbol's corner sits a module past the image.
             var centreX = kind == 3 ? data.Size * ppm / 2f - ppm : side / 2f + (float)random.NextDouble();
             var centreY = kind == 3 ? data.Size * ppm / 2f - ppm : side / 2f + (float)random.NextDouble();
             for (var y = 0; y < side; y++)

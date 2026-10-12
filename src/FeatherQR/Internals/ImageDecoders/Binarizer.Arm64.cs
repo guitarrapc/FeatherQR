@@ -22,19 +22,19 @@ internal static partial class Binarizer
     internal static void FillHistogramAdvSimd(ReadOnlySpan<byte> luminance, Span<int> histogram)
     {
         // Why: histogram[v]++ waits on the previous store to the same bin, and a rendered symbol is 0 and 255
-        // in long runs; that chain costs this core twice what it costs x64. So 0 and 255 are counted in
+        // in long runs. That chain costs this core twice what it costs x64. So 0 and 255 are counted in
         // registers, and every other pixel goes to one of four lanes, which cuts the chain to a quarter.
         //
         // Each 32-pixel block (two 128-bit loads) takes one of three paths:
         //   pure   (all 0 or 255)   : counted in registers only, nothing stored
         //   sparse (1-12 others)    : 0 and 255 counted in registers, the others walked one by one
-        //   dense  (13 or more)     : eight pixels a load into four lanes; two dense blocks in a row
+        //   dense  (13 or more)     : eight pixels a load into four lanes, and two dense blocks in a row
         //                             start a stretch of 31 blocks taken without the test
         //
         // What ARM64 makes cheap and dear:
         //   - No movemask, and a general-register popcount round-trips through the vector unit. A block's
         //     extremes are counted by one add across the compare masks instead (lanes are 0, -1 or -2).
-        //   - Zeros accumulate in byte counters, drained every 120 blocks; the 255s are what is left.
+        //   - Zeros accumulate in byte counters, drained every 120 blocks, and the 255s are what is left.
         //   - The other-pixel mask (one bit a byte, from a narrowing shift) is built only when a sparse block has any.
         //   - Four lanes, pixel i into lane i % 4, fit this core's 128 KB L1 where they lost on x64. Each lane
         //     is its own reference: one base plus 256·k makes the JIT sign-extend on the way to every load.
@@ -154,7 +154,7 @@ internal static partial class Binarizer
         // No movemask on ARM64. A narrowing shift does it for two lanes at once: read the lanes as eight 16-bit pairs, keep
         // bits 0 and 4 of each byte (the AND with 0x11), shift each pair right by 4 and keep its low byte. The low lane's bit 4
         // lands at bit 0, the high lane's bit 0, which sat at bit 8 of the pair, lands at bit 4, and the high lane's bit 4 is
-        // shifted out by the narrowing. The eight bytes are the mask; the caller finds a lane with tzcnt and divides by 4.
+        // shifted out by the narrowing. The eight bytes are the mask. The caller finds a lane with tzcnt and divides by 4.
         //
         //   pair (high, low)   FF FF     FF 00     00 FF     00 00
         //   & 0x11             11 11     11 00     00 11     00 00

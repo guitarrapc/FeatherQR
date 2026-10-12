@@ -34,7 +34,7 @@ public class AlignmentPatternSelectionTest
 
     /// <summary>
     /// A pattern on the prediction with one dark module in its light ring passes the
-    /// light-dark-light runs through its center and the dark ring, like data can; only the
+    /// light-dark-light runs through its center and the dark ring, like data can. Only the
     /// light ring tells it apart, and the real pattern five modules away must win.
     /// </summary>
     [Test]

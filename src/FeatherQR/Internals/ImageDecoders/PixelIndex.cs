@@ -15,9 +15,9 @@ internal static class PixelIndex
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int Clamp(float coordinate, float farEdge, int limit)
     {
-        // The far edge is taken before the conversion, so it need not saturate, which not every runtime's cast does;
+        // The far edge is taken before the conversion, so it need not saturate, which not every runtime's cast does.
         // NaN and the near side convert to 0 or below. The native conversion is one instruction on x64, where the cast
-        // saturates in several; on WebAssembly the cast is the faster of the two.
+        // saturates in several. On WebAssembly the cast is the faster of the two.
 #if NET9_0_OR_GREATER
         var pixel = coordinate >= farEdge ? limit - 1
             : OperatingSystem.IsBrowser() ? (int)coordinate : float.ConvertToIntegerNative<int>(coordinate);

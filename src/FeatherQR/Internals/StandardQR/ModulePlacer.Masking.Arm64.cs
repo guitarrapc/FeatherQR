@@ -8,18 +8,18 @@ namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Vectorized mask pattern selection for ARM64 with AdvSimd (NEON).
-/// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>; produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskAdvSimdParityTest).
+/// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>. It produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskAdvSimdParityTest).
 ///
 /// Two tiers, split at 64 modules as <see cref="MaskCodeAdvSimd"/> does:
 /// - Versions 1-11: the AVX2 tiers' earlier lane-per-row form on 128-bit vectors (Vector128&lt;ulong&gt; = 2 rows per iteration, one ulong per row).
-///   The AVX2 tier has since moved to four candidates per vector; that design has not been measured on ARM64.
+///   The AVX2 tier has since moved to four candidates per vector. That design has not been measured on ARM64.
 /// - Versions 12-40: the transposed scorer (the design is in ModulePlacer.Masking.Transposed.cs). It masks and scores with the 128-bit tier's
 ///   code (ModulePlacer.Masking.Transposed.Vector128.cs), whose popcount is cnt and uadalp here, and packs rows and applies the winner
 ///   with this file's 16-module steps. On Apple M2 it took 0.90-0.97 of the two- and three-word SoA tiers' mask selection time at versions
 ///   12-27 and 0.42-0.47 at 28-40 on the JIT, 0.87-0.98 and 0.48-0.57 on NativeAOT, and replaced them (2026-10-05). The 128-bit tier as it
 ///   stands, with a SWAR popcount, movemask packing and an eight-module unpack, read 1.24-1.39 at 12-27, and with the NEON popcount alone 0.89-1.01.
 /// NEON-specific choices:
-/// - The single-word tier's popcount is native (cnt.16b); one uaddlp widens the
+/// - The single-word tier's popcount is native (cnt.16b). One uaddlp widens the
 ///   per-byte counts to ushort lanes, which accumulate directly in
 ///   Vector128&lt;ushort&gt; accumulators (2 instructions per popcount vs 3 for a
 ///   full per-qword widen). Worst-case lane sums stay far below ushort range,
@@ -27,7 +27,7 @@ namespace FeatherQR.Internals.StandardQR;
 ///   with cnt and uadalp (AddPopCount) and reduces through LaneTotals, at its
 ///   checkpoint and at its end.
 /// - Byte&lt;-&gt;bit edges run 16 modules per step in both tiers: packing gathers per-byte bit
-///   weights (cmeq+bic) and reduces with a uaddlp chain; unpacking broadcasts
+///   weights (cmeq+bic) and reduces with a uaddlp chain. Unpacking broadcasts
 ///   the 16-bit delta chunk and replicates bytes with tbl + cmtst (the same
 ///   sequence as MicroQRModulePlacer.Unpack16).
 ///
@@ -36,7 +36,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// The single-word tier against the scalar bit-packed paths on Apple M2: v1 2.4x, v10 3.0x, zero allocations, measured before the rule-3 change of
 /// 2026-10-03 (#448) rewrote both, and not against them since.
 /// The ushort accumulate beat the per-qword AVX2-shaped accumulate by ~8% and the SIMD edges beat the SWAR edges by ~5-11%. The single-word tier
-/// has no early exit; the transposed tier has the 128-bit tier's checkpoint.
+/// has no early exit. The transposed tier has the 128-bit tier's checkpoint.
 /// </summary>
 internal static partial class ModulePlacer
 {
@@ -51,12 +51,12 @@ internal static partial class ModulePlacer
     // ---------------------------------
     // Shared NEON pieces
     // ---------------------------------
-    // Operand-order note: Vector128.AndNot(left, right) computes left & ~right (same helper convention as the Vector256 helper used in the AVX2 file);
-    // the JIT emits bic. Every AndNot in this file is the cross-platform helper.
+    // Operand-order note: Vector128.AndNot(left, right) computes left & ~right (same helper convention as the Vector256 helper used in the AVX2 file).
+    // The JIT emits bic. Every AndNot in this file is the cross-platform helper.
 
     /// <summary>
     /// Per-byte-pair popcount of a 128-bit vector as 8 ushort lanes (cnt.16b + uaddlp).
-    /// Lanes accumulate across calls and reduce once per score via <see cref="SumAcc"/>; only the total is meaningful.
+    /// Lanes accumulate across calls and reduce once per score via <see cref="SumAcc"/>, so only the total is meaningful.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<ushort> Pop16(Vector128<ulong> v)
@@ -118,7 +118,7 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Triple-word NEON row packer.
-    /// The 16-module chunks are 16-aligned so they never straddle a word boundary; the 8-module SWAR steps stay within a word for the same reason.
+    /// The 16-module chunks are 16-aligned so they never straddle a word boundary. The 8-module SWAR steps stay within a word for the same reason.
     /// </summary>
     private static Row192 PackRowBits192AdvSimd(ReadOnlySpan<byte> row)
     {
@@ -262,7 +262,7 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Each allowed row (~blocked) is a contiguous bit slice of the blocked bitmask; a padded copy makes the two 8-byte slice reads always legal.
+        // Each allowed row (~blocked) is a contiguous bit slice of the blocked bitmask. A padded copy makes the two 8-byte slice reads always legal.
         Span<byte> padded = stackalloc byte[blockedMask.Length + 16];
         padded.Clear();
         blockedMask.CopyTo(padded);
@@ -314,7 +314,7 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Lane-per-row Vector128 penalty scorer for single-word rows (structure mirrors the AVX2 tier's row-lane scorer, 2 rows per iteration).
-    /// Row-direction rules run with per-lane shifts and native popcount; column-direction rules materialize eq (vertical run continuation) and v5 (4-deep AND window) arrays with vector passes, then score them with offset loads.
+    /// Row-direction rules run with per-lane shifts and native popcount. Column-direction rules materialize eq (vertical run continuation) and v5 (4-deep AND window) arrays with vector passes, then score them with offset loads.
     /// Scalar tails reuse the scalar expressions.
     /// Popcounts accumulate in weight-grouped ushort accumulators (rule-1 ones / twos, rule-2 x3, rule-3 x40, balance) and reduce once per score.
     /// </summary>
@@ -393,7 +393,7 @@ internal static partial class ModulePlacer
         }
 
         // eqArr[i] = ~(rows[i] ^ rows[i+1]) & rowMask, i in 0..size-2
-        // (vertical run continuation between adjacent rows; reused by rules 1 and 2).
+        // (vertical run continuation between adjacent rows, reused by rules 1 and 2).
         var i = 0;
         for (; i + 2 <= size - 1; i += 2)
         {
@@ -427,7 +427,7 @@ internal static partial class ModulePlacer
         }
 
         // Column rule 1: v5Arr[y] = AND of eqArr[y-4..y-1] for y in 4..size-1
-        // (vertical 5-run marker); v5Arr[3] = 0 backs the prev-load at y = 4.
+        // (vertical 5-run marker). v5Arr[3] = 0 backs the prev-load at y = 4.
         v5Arr[3] = 0;
         y = 4;
         for (; y + 2 <= size; y += 2)
@@ -509,7 +509,7 @@ internal static partial class ModulePlacer
     /// <summary>Mask selection for versions 12-40 on ARM64: scores all eight candidates transposed, applies the winner to <paramref name="buffer"/>, returns it.</summary>
     internal static int MaskCodeTransposedAdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        // The per-version tables come from the version's canonical blocked mask; every production caller passes that mask.
+        // The per-version tables come from the version's canonical blocked mask, and every production caller passes that mask.
         var layout = GetTransposedLayout(version, size);
         System.Diagnostics.Debug.Assert(blockedMask.SequenceEqual(GetLayout(version).BlockedMask), "MaskCodeTransposedAdvSimd requires the version's canonical blocked mask");
         if (buffer.Length < size * size)

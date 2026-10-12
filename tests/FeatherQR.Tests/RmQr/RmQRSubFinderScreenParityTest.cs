@@ -465,8 +465,8 @@ public class RmQRSubFinderScreenParityTest
         private static readonly RmQRVersion[] Versions = Enum.GetValues<RmQRVersion>();
 
         /// <summary>
-        /// Kinds: 0 a symbol turned and keystoned a little, framed near its finder; 1 the same far out along a wide image, where coordinates are large;
-        /// 2 two-level noise and 3 8-bit noise, framed anywhere; 4 a symbol with a frame a module or two off.
+        /// Kinds: 0 a symbol turned and keystoned a little, framed near its finder. 1 the same far out along a wide image, where coordinates are large.
+        /// 2 two-level noise and 3 8-bit noise, framed anywhere. 4 a symbol with a frame a module or two off.
         /// </summary>
         public static Scene Build(Random random, int kind)
         {
@@ -499,7 +499,7 @@ public class RmQRSubFinderScreenParityTest
             var span = (data.Width + 8) * ppm;
             var imageWidth = kind == 1 ? 10_000 + random.Next(10_000) : (int)(span * 1.2f) + random.Next(20);
             var imageHeight = (int)(span * (kind == 1 ? 0.2f : 1.2f) + (data.Height + 8) * ppm) + random.Next(10);
-            // Symbol centre in the image; grid point (gx, gy) maps to centre + R·(gx - w/2, gy - h/2)·ppm with a keystone on the row axis
+            // Symbol centre in the image. Grid point (gx, gy) maps to centre + R·(gx - w/2, gy - h/2)·ppm with a keystone on the row axis.
             var centreX = kind == 1 ? imageWidth - span * 0.6f - random.Next(200) + 0.37f : imageWidth / 2f + (float)random.NextDouble();
             var centreY = imageHeight / 2f + (float)random.NextDouble();
 

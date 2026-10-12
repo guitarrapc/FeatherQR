@@ -6,8 +6,8 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Bitstream decoding: corrected Micro QR data codewords back to text. Golden
-/// vectors are independent of the encoder (hand-derived per ISO/IEC 18004 rules);
-/// encoder round-trips cover every version/ECC/mode/length combination; negative
+/// vectors are independent of the encoder (hand-derived per ISO/IEC 18004 rules).
+/// Encoder round-trips cover every version/ECC/mode/length combination. Negative
 /// cases cover malformed streams (invalid modes, out-of-range group values,
 /// truncated segments) that must not decode.
 /// </summary>
@@ -103,7 +103,7 @@ public class MicroQRBinaryDecoderUnitTest
     /// Decodes a hand-made stream with a capacity-SHAPED bound: the buffer is rounded up
     /// to whole codewords and <c>dataBitCount</c> is that length, minus 4 for M1 and M3,
     /// which end on a half codeword. It is not necessarily one of the version's real
-    /// capacities -- these streams are shorter than any real symbol -- but it reproduces
+    /// capacities, since these streams are shorter than any real symbol, but it reproduces
     /// the relationship production has, which is what the guards depend on.
     /// </summary>
     /// <remarks>
@@ -167,7 +167,7 @@ public class MicroQRBinaryDecoderUnitTest
 
     /// <summary>
     /// A count naming more characters than the remaining bits can hold is a malformed
-    /// stream, not a short buffer; the destination here is ample.
+    /// stream, not a short buffer. The destination here is ample.
     /// </summary>
     [Test]
     public async Task DecodeBitStream_M4KanjiCountExceedsAvailableBits_ReportsInvalidBitstream()
@@ -206,8 +206,8 @@ public class MicroQRBinaryDecoderUnitTest
     /// Micro QR is the only decoder where Kanji is handled by a bespoke branch outside
     /// the payload switch, so continuing correctly is the one thing that branch has to
     /// get right and nothing else covers. Turning its <c>continue</c> into a
-    /// <c>break</c> — a decoder that silently drops everything after the first Kanji
-    /// segment — passed the whole suite before this test existed.
+    /// <c>break</c>, a decoder that silently drops everything after the first Kanji
+    /// segment, passed the whole suite before this test existed.
     /// </remarks>
     [Test]
     public async Task DecodeBitStream_M4KanjiFollowedByAnotherSegment_ConcatenatesBoth()
@@ -233,7 +233,7 @@ public class MicroQRBinaryDecoderUnitTest
 
     /// <summary>
     /// The decoder parses untrusted input, so no stream may make it throw. This is what
-    /// protects every bounds guard in the loop, including ones no targeted test names;
+    /// protects every bounds guard in the loop, including ones no targeted test names.
     /// Standard QR has had the equivalent since its decoder shipped.
     /// </summary>
     [Test]
@@ -324,7 +324,7 @@ public class MicroQRBinaryDecoderUnitTest
     public async Task DecodeBitStream_ZeroCountNonNumericSegment_DecodesAsEmpty()
     {
         // M2: mode 1 (alnum), count 0, an empty segment is not a terminator
-        // (the terminator is numeric-mode-with-zero-count); the stream then ends.
+        // (the terminator is numeric-mode-with-zero-count). The stream then ends.
         var (status, text) = Decode([0b1_000_0000, 0x00, 0x00, 0x00, 0x00], dataBitCount: 40, MicroQRVersion.M2);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
@@ -346,7 +346,7 @@ public class MicroQRBinaryDecoderUnitTest
     [Test]
     public async Task DecodeBitStream_HalfCodewordBitsBeyondCapacity_AreNeverRead()
     {
-        // M3-L: 84 data bits = 10.5 codewords; the low nibble of the final
+        // M3-L: 84 data bits = 10.5 codewords, so the low nibble of the final
         // codeword is outside the data capacity. Fill it with garbage, the
         // decoder must ignore it.
         var codewords = new byte[16];

@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 /// Micro QR data mask patterns (ISO/IEC 18004 Table 10) instead of the automatic
 /// edge-score selection. Any pattern is a legal symbol, so a pinned pattern must
 /// round-trip through the decoder and report itself in the format information.
-/// The Standard QR counterpart lives in MaskPatternOverrideTest; tier-by-tier
+/// The Standard QR counterpart lives in MaskPatternOverrideTest. Tier-by-tier
 /// matrix parity for pinned patterns lives in MicroQRModulePlacerParityTest.
 /// </summary>
 public class MicroQRMaskPatternOverrideTest
@@ -32,7 +32,7 @@ public class MicroQRMaskPatternOverrideTest
     public static IEnumerable<(string content, MicroQREccLevel ecc, MicroQRVersion version, int maskPattern)> VersionMaskCombinations()
     {
         // One (content, ECC) per version, all legal: M1 is numeric + error
-        // detection only; each version has a different symbol size, so all four
+        // detection only. Each version has a different symbol size, so all four
         // fused placement sizes are exercised.
         var perVersion = new (string content, MicroQREccLevel ecc, MicroQRVersion version)[]
         {

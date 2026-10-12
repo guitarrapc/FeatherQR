@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// The luminance seam between the core and the rendering package:
 /// <see cref="LuminanceConverter.Convert"/>, internal and reached through
 /// <c>InternalsVisibleTo</c>. Tier parity between the kernels is
-/// <see cref="LuminanceConverterParityTest"/>; this file pins what an adapter sees: the
+/// <see cref="LuminanceConverterParityTest"/>. This file pins what an adapter sees: the
 /// BT.601 weighting and white compositing, the four layouts, row padding, argument
 /// validation, and that the SkiaSharp adapter produces the same bytes as a direct call
 /// with the pixmap span.
@@ -18,7 +18,7 @@ public class LuminanceConverterContractTest
 {
     private static readonly PixelLayout[] ColorLayouts = [PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x];
 
-    // The enum is internal, so it cannot be a public test parameter; layout-generic tests loop instead.
+    // The enum is internal, so it cannot be a public test parameter. Layout-generic tests loop instead.
     private static readonly PixelLayout[] AllLayouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x];
 
     private static int BytesPerPixel(PixelLayout layout) => layout == PixelLayout.Gray8 ? 1 : 4;
@@ -44,7 +44,7 @@ public class LuminanceConverterContractTest
         return (byte)((77 * r + 150 * g + 29 * b) >> 8);
     }
 
-    /// <summary>Writes one pixel in the given layout; alpha is dropped for Rgb888x, whose fourth byte is padding.</summary>
+    /// <summary>Writes one pixel in the given layout. Alpha is dropped for Rgb888x, whose fourth byte is padding.</summary>
     private static void WritePixel(Span<byte> pixel, PixelLayout layout, byte r, byte g, byte b, byte a)
     {
         switch (layout)
@@ -126,7 +126,7 @@ public class LuminanceConverterContractTest
     }
 
     /// <summary>
-    /// The same image in every 32-bit layout converts to the same bytes; the layout only
+    /// The same image in every 32-bit layout converts to the same bytes. The layout only
     /// says where the channels are.
     /// </summary>
     [Test]
@@ -283,7 +283,7 @@ public class LuminanceConverterContractTest
         await Assert.That(viaAdapter).IsEquivalentTo(direct, CollectionOrdering.Matching);
     }
 
-    /// <summary>A color type outside the four is redrawn once; the result is still luminance, not garbage.</summary>
+    /// <summary>A color type outside the four is redrawn once, and the result is still luminance, not garbage.</summary>
     [Test]
     public async Task SkiaAdapter_UnsupportedColorType_IsRedrawnAndConverted()
     {

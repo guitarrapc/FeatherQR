@@ -4,7 +4,7 @@ namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Standard QR helpers for <see cref="EncodingMode"/>.
-/// The indicator widths encode ISO/IEC 18004 version thresholds (1-9 / 10-26 / 27-40); Micro QR and rMQR define their own width tables in their respective symbology namespaces.
+/// The indicator widths encode ISO/IEC 18004 version thresholds (1-9 / 10-26 / 27-40). Micro QR and rMQR define their own width tables in their respective symbology namespaces.
 /// </summary>
 internal static class EncodingModeExtensions
 {
@@ -12,7 +12,7 @@ internal static class EncodingModeExtensions
     /// Character count indicator width for Kanji mode (ISO/IEC 18004 Table 3): 8 bits for versions 1-9, 10 for 10-26, 12 for 27-40.
     /// </summary>
     /// <remarks>
-    /// The decoder reads the mode from its raw indicator bits and asks for this width directly; the encoder reaches the same width through <see cref="GetCountIndicatorLength"/>.
+    /// The decoder reads the mode from its raw indicator bits and asks for this width directly. The encoder reaches the same width through <see cref="GetCountIndicatorLength"/>.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetKanjiCountIndicatorLength(int version)

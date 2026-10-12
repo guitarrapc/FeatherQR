@@ -3,7 +3,7 @@ using SkiaSharp;
 /// <summary>
 /// End-to-end PNG image generation and image decoding through the public rMQR API.
 /// RmQRCodeData is pre-generated in setup so the render scenarios cover the Skia render + PNG encode path only (letterboxed into a square canvas, as RmQRCodeImageBuilder does by default), and the decode scenarios cover the image detector (finder candidates → format → sub-finder anchored sampling → matrix decode) on clean 8 px/module renders.
-/// The span decode variants must stay allocation-free; the bitmap ones go through string overloads and carry the result.
+/// The span decode variants must stay allocation-free. The bitmap ones go through string overloads and carry the result.
 ///
 /// Scenarios:
 ///   R7x43_512px / R17x139_1024px : smallest / largest symbol rendered to PNG
@@ -109,7 +109,7 @@ public class RmQRImageEndToEnd
 
     // Failure path: no symbol present, so detection runs the whole pipeline for both
     // reflectance polarities and reports NotDetected. Salt-and-pepper is the adversarial
-    // shape (false finder candidates); the gradient is the ordinary photo-ish shape.
+    // shape (false finder candidates), and the gradient is the ordinary photo-ish shape.
     [Benchmark]
     public bool NoSymbol_Noise_1144x168() => RmQRCodeDecoder.TryDecodeImage(_noise, 1144, 168, _decodeBuffer, out _, out _);
 

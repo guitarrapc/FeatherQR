@@ -65,7 +65,7 @@ internal enum ReportRule
 /// </summary>
 /// <remarks>
 /// It decides which result is reported, not where the search stops: each method returns whether the result it was given settles the symbol (<see cref="AttemptStatus.IsSettled"/>), and the caller decides whether that ends its search.
-/// Standard QR stops at a settled result; each finder scan of Micro QR and rMQR goes on to its other candidates past everything but a read, since another symbol in the image may read (<see cref="CandidateScan"/>).
+/// Standard QR stops at a settled result. Each finder scan of Micro QR and rMQR goes on to its other candidates past everything but a read, since another symbol in the image may read (<see cref="CandidateScan"/>).
 /// </remarks>
 /// <typeparam name="TInfo">The decoder's diagnostic record.</typeparam>
 internal struct SearchResult<TInfo>
@@ -94,7 +94,7 @@ internal struct SearchResult<TInfo>
     }
 
     /// <summary>
-    /// The result of the main path's attempt. Under <see cref="ReportRule.MainPath"/> it is reported unless a settled result was taken before it; under <see cref="ReportRule.Furthest"/> it is one more attempt.
+    /// The result of the main path's attempt. Under <see cref="ReportRule.MainPath"/> it is reported unless a settled result was taken before it. Under <see cref="ReportRule.Furthest"/> it is one more attempt.
     /// </summary>
     /// <returns>Whether the result settles the symbol.</returns>
     public bool Main(DecodeStatus status, int charsWritten, in TInfo info)
@@ -108,7 +108,7 @@ internal struct SearchResult<TInfo>
     }
 
     /// <summary>
-    /// The result of any other attempt. Under <see cref="ReportRule.MainPath"/> it is reported when it settles, or when no attempt came before it; under <see cref="ReportRule.Furthest"/> when it got further than every attempt before it.
+    /// The result of any other attempt. Under <see cref="ReportRule.MainPath"/> it is reported when it settles, or when no attempt came before it, and under <see cref="ReportRule.Furthest"/> when it got further than every attempt before it.
     /// </summary>
     /// <returns>Whether the result settles the symbol.</returns>
     public bool Other(DecodeStatus status, int charsWritten, in TInfo info)

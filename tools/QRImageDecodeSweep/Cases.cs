@@ -28,7 +28,7 @@ internal static class Cases
             sb.Append("https://example.com/");
         while (sb.Length < length)
             sb.Append(alphabet[random.Next(alphabet.Length)]);
-        // A trailing space is legal but some encoders trim it; avoid it
+        // A trailing space is legal but some encoders trim it, so avoid it
         if (sb[^1] == ' ')
             sb[^1] = 'A';
         return sb.ToString();
@@ -54,14 +54,14 @@ internal static class Cases
         var ecc = (QREccLevel)random.Next(4);
         var mode = new[] { "numeric", "alphanumeric", "byte" }[random.Next(3)];
         var full = RandomText(random, mode, 7100);
-        // A text that does not fit is false; a defect of the draw, an undefined level among them, throws
+        // A text that does not fit is false. A defect of the draw, an undefined level among them, throws.
         int Capacity(int atMost) => LongestFit(full, text =>
             QRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var size, new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = QRVersionRange.AtMost(atMost) })
             && size.Version <= atMost);
 
         // Longer than the version below holds and no longer than this one does, so the smallest version that fits is the one asked for.
         // A fraction of this version's capacity alone would not do: from version 6 up the version below holds over 75 % of it.
-        // Another encoder may still land on a neighbour (its own segmentation); the result file carries each symbol's version.
+        // Another encoder may still land on a neighbour (its own segmentation). The result file carries each symbol's version.
         var capacity = Math.Max(1, Capacity(version));
         var below = version == 1 ? 0 : Capacity(version - 1);
         var length = Math.Min(capacity, below + 1 + (int)(random.NextDouble() * (capacity - below)));

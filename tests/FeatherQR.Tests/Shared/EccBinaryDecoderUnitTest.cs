@@ -50,7 +50,7 @@ public class EccBinaryDecoderUnitTest
     [Test]
     public async Task TryCorrect_ErrorsBeyondCapacity_Fails()
     {
-        // Arrange - 10 ECC codewords, capacity is 5; inject 6 errors
+        // Arrange - 10 ECC codewords, capacity is 5, so inject 6 errors
         byte[] data = [64, 86, 134, 86, 242, 7, 118, 134];
         var codeword = BuildCodeword(data, 10);
 

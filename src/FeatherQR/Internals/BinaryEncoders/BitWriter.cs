@@ -12,8 +12,8 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// Bits are staged in a 64-bit accumulator and stored as big-endian words once available, so up to 31 bits stay pending between writes:
 /// 32-bit words from <see cref="Write"/> and from a <see cref="WriteWide"/> that brings 32 to 63 bits pending, 64-bit words from
 /// <see cref="Write64"/> and from a <see cref="WriteWide"/> that fills one.
-/// Buffer contents are only guaranteed after <see cref="Flush"/> (called by <see cref="GetData"/> and <see cref="WritePadBytes"/>); <see cref="BitPosition"/> and <see cref="ByteCount"/> are always valid.
-/// The caller guarantees the buffer is large enough for all writes; exceeding it surfaces as an out-of-range exception from the underlying span access.
+/// Buffer contents are only guaranteed after <see cref="Flush"/> (called by <see cref="GetData"/> and <see cref="WritePadBytes"/>), but <see cref="BitPosition"/> and <see cref="ByteCount"/> are always valid.
+/// The caller guarantees the buffer is large enough for all writes. Exceeding it surfaces as an out-of-range exception from the underlying span access.
 /// </remarks>
 internal ref struct BitWriter
 {
@@ -64,7 +64,7 @@ internal ref struct BitWriter
         // step 2: (_accumulator |= 0b11 << (64 - 3 - 2)) => 1011_1xxx ...
         // step 3: (_accumulatorBits = 5)
         // Once _accumulatorBits reaches 32, the top 32 bits are stored to the buffer
-        // as one big-endian word; the rest stays pending until Flush()/GetData().
+        // as one big-endian word, and the rest stays pending until Flush()/GetData().
         // Result (after Flush): _buffer[0] = 0b1011_1000
         // --------------------------------------------
 
@@ -93,7 +93,7 @@ internal ref struct BitWriter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write64(ulong value)
     {
-        // merge pending bits with the head of the value and store 8 bytes;
+        // merge pending bits with the head of the value and store 8 bytes, and
         // the displaced tail bits stay pending (count unchanged)
         var combined = _accumulator | (value >> _accumulatorBits);
         BinaryPrimitives.WriteUInt64BigEndian(_buffer.Slice(_bytePosition), combined);
@@ -104,7 +104,7 @@ internal ref struct BitWriter
     /// <summary>
     /// Writes 1 to 56 bits at once (several payload fields in one append).
     /// </summary>
-    /// <param name="value">The bits, already masked to <paramref name="bitCount"/>; the MSB of the range is written first.</param>
+    /// <param name="value">The bits, already masked to <paramref name="bitCount"/>. The MSB of the range is written first.</param>
     /// <param name="bitCount">Number of bits to write (1-56).</param>
     /// <remarks>
     /// The pending bits and the value may pass 64 bits. Then the first 64 are stored as one 8-byte word and the rest stays pending (at most
@@ -141,8 +141,8 @@ internal ref struct BitWriter
 
     /// <summary>
     /// Stores all pending bits to the buffer.
-    /// Full bytes advance the position; a trailing partial byte is stored (low bits zero) without advancing.
-    /// Idempotent; writing may continue afterwards.
+    /// Full bytes advance the position. A trailing partial byte is stored (low bits zero) without advancing.
+    /// Idempotent. Writing may continue afterwards.
     /// </summary>
     public void Flush()
     {

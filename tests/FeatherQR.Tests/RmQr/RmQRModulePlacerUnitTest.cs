@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// predicate vs the independent naive painter, structural invariants of the placed
 /// function patterns, format-copy read-back, and the module-exact oracle: placing
 /// the same payload as every comparable committed external symbol must reproduce
-/// that symbol module for module (libzint exactly; qrtool except its documented tail
+/// that symbol module for module (libzint exactly, qrtool except its documented tail
 /// defect). Legacy UTF-8 fixtures without ECI remain decoder-only oracles.
 /// </summary>
 public class RmQRModulePlacerUnitTest
@@ -62,7 +62,7 @@ public class RmQRModulePlacerUnitTest
         // Every module written (no dirty 0xCC survives) and only 0/1 values.
         await Assert.That(core.All(b => b is 0 or 1)).IsTrue();
 
-        // Finder 7×7: dark border, light ring, dark 3×3 center; separators light.
+        // Finder 7×7: dark border, light ring, dark 3×3 center. Separators light.
         for (var r = 0; r < 7; r++)
             for (var c = 0; c < 7; c++)
             {
@@ -95,7 +95,7 @@ public class RmQRModulePlacerUnitTest
         for (var r = 2; r < h - 5; r++)
             await Assert.That(Dark(r, w - 1)).IsEqualTo(r % 2 == 0).Because($"right timing row {r} of {version}");
 
-        // Corner patterns: top-right (0,w-1),(0,w-2),(1,w-1) dark, (1,w-2) light; bottom-left mirror.
+        // Corner patterns: top-right (0,w-1),(0,w-2),(1,w-1) dark, (1,w-2) light. Bottom-left mirror.
         await Assert.That(Dark(0, w - 1)).IsTrue();
         await Assert.That(Dark(0, w - 2)).IsTrue();
         await Assert.That(Dark(1, w - 1)).IsTrue();

@@ -13,7 +13,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// Shape tests, not behaviour tests. Each of these was inconsistent across the three
-/// symbologies before 2.0.0 — Standard QR's sizing result was a <c>record struct</c> with
+/// symbologies before 2.0.0. Standard QR's sizing result was a <c>record struct</c> with
 /// a public constructor while the other two were plain structs, and the drift was
 /// invisible until someone read all three files side by side. A rule a test states is a
 /// rule the next type has to follow.
@@ -52,9 +52,9 @@ public class TypeShapeTest
     /// <para>
     /// A sweep, not a list. The rule was first written over a hand-listed set of option
     /// structs and <see cref="IconData"/> was found missing from it a review round later,
-    /// with its two factories both hardcoding <see cref="ImageIconShape"/> — so every other
+    /// with its two factories both hardcoding <see cref="ImageIconShape"/>, so every other
     /// shape was unreachable below C# 9. A list only states the rule for the types someone
-    /// remembered; the sweep states it for the next type too.
+    /// remembered. The sweep states it for the next type too.
     /// </para>
     /// <para>
     /// The generator options were swept here until their constructors went. The
@@ -188,7 +188,7 @@ public class TypeShapeTest
 
         // IconData's guard is the one place the two routes deliberately differ. The
         // constructor is reached from language versions with no nullable analysis, where
-        // a null compiles silently, so it throws; the initializer needs `null!` to get
+        // a null compiles silently, so it throws. The initializer needs `null!` to get
         // there at all and keeps its existing behaviour of drawing no icon.
         await Assert.That(() => new IconData(null!)).Throws<ArgumentNullException>();
         await Assert.That(new IconData { Icon = null! }.Icon).IsNull();
@@ -233,8 +233,8 @@ public class TypeShapeTest
     /// <summary>
     /// Being library-built does not mean being opaque: every result value is a
     /// <c>record struct</c>, so it prints its members in a log line and compares without
-    /// boxing. Getting there does not need a public constructor or <c>init</c> setters —
-    /// the record only has to be declared without positional parameters.
+    /// boxing. Getting there does not need a public constructor or <c>init</c> setters.
+    /// The record only has to be declared without positional parameters.
     /// </summary>
     /// <remarks>
     /// The first cut of this rule demoted them to plain structs, which threw away
@@ -297,7 +297,7 @@ public class TypeShapeTest
         await Assert.That(names.Contains("Fnc1")).IsEqualTo(hasFnc1);
         await Assert.That(names.Length).IsEqualTo(5 + (hasMaskPattern ? 1 : 0) + (hasStructuredAppend ? 1 : 0) + (hasFnc1 ? 1 : 0));
 
-        // Status and Corners are the shared types on all three; version and ECC level are per-symbology.
+        // Status and Corners are the shared types on all three. Version and ECC level are per-symbology.
         await Assert.That(type.GetProperty("Status")!.PropertyType).IsEqualTo(typeof(DecodeStatus));
         await Assert.That(type.GetProperty("Corners")!.PropertyType).IsEqualTo(typeof(SymbolCorners));
         if (hasStructuredAppend)
@@ -336,7 +336,7 @@ public class TypeShapeTest
     /// The extension points are the three shape hierarchies (<see cref="ModuleShape"/>,
     /// <see cref="FinderPatternShape"/>, <see cref="IconShape"/>) and
     /// <see cref="SymbolImageBuilderBase{TSelf}"/>, which is open only to this package
-    /// through its <c>private protected</c> constructor; the set is pinned here too, so
+    /// through its <c>private protected</c> constructor. The set is pinned here too, so
     /// adding a fifth is also a decision rather than an accident. Static classes read as
     /// sealed in metadata, so they need no carve-out.
     /// </summary>
@@ -420,8 +420,8 @@ public class TypeShapeTest
     /// rebuilds with one member changed and nothing translated.
     /// </summary>
     /// <remarks>
-    /// It used to be asymmetric — colours came out as a span and went in as an array, and
-    /// "no stops" came out empty but went in as <c>null</c> — so recolouring cost a
+    /// It used to be asymmetric. Colours came out as a span and went in as an array, and
+    /// "no stops" came out empty but went in as <c>null</c>, so recolouring cost a
     /// <c>ToArray()</c> and a ternary just to carry the stops across, and a caller who
     /// omitted the ternary silently lost them.
     /// </remarks>
@@ -493,7 +493,7 @@ public class TypeShapeTest
         // and equal values have to hash equal or a Dictionary lookup misses its own key.
         await Assert.That(withPositions).IsEqualTo(samePositions);
         await Assert.That(withPositions.GetHashCode()).IsEqualTo(samePositions.GetHashCode());
-        // Not a contract — unequal values may legally collide — but this hash is a
+        // Not a contract, since unequal values may legally collide, but this hash is a
         // hand-written FNV-1a with no randomized seed, so it is deterministic, and the
         // assertion is what catches a GetHashCode that stops folding the stops in at all.
         await Assert.That(withPositions.GetHashCode()).IsNotEqualTo(movedStop.GetHashCode());
@@ -502,7 +502,7 @@ public class TypeShapeTest
     /// <summary>
     /// A caller varies the direction of a ready-made gradient with <c>with</c>, the same
     /// way the generator options structs are varied. The copy shares the colour array,
-    /// which is safe precisely because the array is private and never handed out — that
+    /// which is safe precisely because the array is private and never handed out. That
     /// sharing was the bug when the array was a public <c>init</c> property.
     /// </summary>
     [Test]
@@ -518,7 +518,7 @@ public class TypeShapeTest
 
     /// <summary>
     /// The generated <c>ToString</c> cannot print a <c>ReadOnlySpan</c> member usefully,
-    /// so the record prints its own; this also keeps the generated printer from having to
+    /// so the record prints its own. This also keeps the generated printer from having to
     /// compile against a ref struct on four target frameworks.
     /// </summary>
     [Test]
@@ -529,7 +529,7 @@ public class TypeShapeTest
         await Assert.That(text).Contains("2 colors");
         await Assert.That(text).Contains("TopToBottom");
         // Stops are printed only when there are some, so evenly distributed gradients do
-        // not carry a misleading "0 stops"; both halves of that branch are printed here.
+        // not carry a misleading "0 stops". Both halves of that branch are printed here.
         await Assert.That(text).DoesNotContain("stops");
 
         var withStops = new GradientOptions([SKColors.Red, SKColors.Blue], GradientDirection.TopToBottom, [0f, 0.25f]).ToString();
@@ -580,7 +580,7 @@ public class TypeShapeTest
         await Assert.That(bigger).IsNotEqualTo(icon);
 
         // The summary names every option type, so every option type is exercised here.
-        // GradientOptions has its own case above; these three had none. The quiet zone goes
+        // GradientOptions has its own case above, but these three had none. The quiet zone goes
         // to 3, which is the default of none of the three (4, 2 and 2), so that a setter
         // that left the default does not pass.
         var qr = new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = 5 } with { QuietZoneSize = 3 };

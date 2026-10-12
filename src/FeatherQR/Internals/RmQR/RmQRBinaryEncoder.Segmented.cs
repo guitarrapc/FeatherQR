@@ -6,7 +6,7 @@ namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// Multi-segment data-codeword stream for <see cref="RmQRSegmentation.Optimal"/>.
-/// Same bit grammar as the single-segment writer, repeated per planned run: mode indicator, count indicator, payload; one optional ECI prefix ahead of the first run (an rMQR decoder carries the declared charset across the runs that follow), then the shared terminator / padding tail.
+/// Same bit grammar as the single-segment writer, repeated per planned run: mode indicator, count indicator, payload. One optional ECI prefix goes ahead of the first run (an rMQR decoder carries the declared charset across the runs that follow), and the shared terminator / padding tail follows the runs.
 /// </summary>
 /// <remarks>
 /// The cold half of the encoder, reusing the hot path's segment writers so the bits are identical run for run.
@@ -71,7 +71,7 @@ internal static partial class RmQRBinaryEncoder
             var countBits = modeIndex switch { 0 => numericCountBits, 1 => alnumCountBits, 2 => byteCountBits, _ => kanjiCountBits };
 
             // The count indicator width always covers the largest unit count a version
-            // can hold, and a run holds no more than that, so this cannot bind; assert
+            // can hold, and a run holds no more than that, so this cannot bind. Assert
             // it anyway because overflowing it would corrupt the mode indicator above.
             Debug.Assert(segment.UnitCount < (1 << countBits), "run length must fit the character count indicator");
 
@@ -118,7 +118,7 @@ internal static partial class RmQRBinaryEncoder
 
     /// <summary>
     /// Transcodes one Byte-mode run and writes it.
-    /// <paramref name="expectedBytes"/> is what the plan budgeted; a mismatch means the plan and the transcoder disagree, which would silently produce an unreadable symbol.
+    /// <paramref name="expectedBytes"/> is what the plan budgeted. A mismatch means the plan and the transcoder disagree, which would silently produce an unreadable symbol.
     /// </summary>
     private static void WriteUtf8Segment(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> chars, int expectedBytes, Span<byte> scratch)
     {
@@ -131,7 +131,7 @@ internal static partial class RmQRBinaryEncoder
             return;
         }
 
-        // Unreachable for a plan that passed the capacity check; kept so a caller
+        // Unreachable for a plan that passed the capacity check, but kept so a caller
         // that hand-builds a plan cannot overrun the stack budget.
         var rented = ArrayPool<byte>.Shared.Rent(chars.Length * 3);
         try

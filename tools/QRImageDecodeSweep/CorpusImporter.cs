@@ -76,7 +76,7 @@ internal static class CorpusImporter
                 var text = Path.ChangeExtension(image, ".txt");
                 if (!File.Exists(text))
                 {
-                    // A few samples carry their payload as raw bytes only; they have no text to compare
+                    // A few samples carry their payload as raw bytes only, so they have no text to compare
                     Console.WriteLine($"skipped {set}/{Path.GetFileName(image)}: no .txt beside it");
                     continue;
                 }

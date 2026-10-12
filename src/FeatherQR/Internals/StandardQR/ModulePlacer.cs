@@ -33,15 +33,15 @@ internal static partial class ModulePlacer
     /// - The stream is consumed strictly sequentially, so the next up-to-64 bits are kept MSB-aligned in a ulong register and refilled 8 bytes at a time, replacing an indexed byte load + variable shift per module.
     /// - The two modules of a strip row sit at adjacent bit indices (b, b-1) in the blocked mask and ~90% of rows have both free: one 2-bit mask window read + one 2-bit stream consume handles the pair on the fast path.
     /// - Once the stream is exhausted nothing can be written again, so the remainder modules end the walk via return instead of a per-module guard.
-    /// - Buffer/mask accesses go through refs so the JIT emits no bounds checks in the row loop (measured ~15% at version 10); the index range is validated once up front instead.
+    /// - Buffer/mask accesses go through refs so the JIT emits no bounds checks in the row loop (measured ~15% at version 10). The index range is validated once up front instead.
     /// </remarks>
     public static void PlaceDataWords(Span<byte> buffer, int size, ReadOnlySpan<byte> interleavedData, ReadOnlySpan<byte> blockedMask)
     {
         // Ref-based access below elides per-module bounds checks, so validate the whole traversal range here.
         // size >= 7 keeps the strip column x >= 1 (real QR sizes are 21..177), so b-1 never goes negative.
         // The module count is computed in long: an int size*size would overflow for size >= 46341 and could wrap below the actual span lengths, letting the unchecked writes run out of bounds.
-        // With long, any size whose square exceeds int range can never satisfy the length checks and throws here;
-        // for every size that passes, the int index arithmetic below is exact.
+        // With long, any size whose square exceeds int range can never satisfy the length checks and throws here.
+        // For every size that passes, the int index arithmetic below is exact.
         if (size < 7)
             throw new ArgumentOutOfRangeException(nameof(size), $"size must be >= 7, got {size}");
         var totalModules = (long)size * size;
@@ -52,7 +52,7 @@ internal static partial class ModulePlacer
 
         var up = true;
 
-        // Next up-to-64 stream bits, MSB-aligned; accBits of them are valid.
+        // Next up-to-64 stream bits, MSB-aligned, of which accBits are valid.
         var acc = 0ul;
         var accBits = 0;
         var bytePos = 0;
@@ -66,14 +66,14 @@ internal static partial class ModulePlacer
             if (x == 6)
                 x--;
 
-            // Walk the strip via the flat index: right module at b = y * size + x, left at b - 1; direction alternates per strip.
+            // Walk the strip via the flat index: right module at b = y * size + x, left at b - 1. Direction alternates per strip.
             var b = up ? (size - 1) * size + x : x;
             var step = up ? -size : size;
 
             for (var rows = 0; rows < size; rows++, b += step)
             {
                 // rightmodule = b, leftmodule = b - 1
-                // b tracks the right module's flat index directly; stepping by ±size avoids per-row y computation and re-multiplication.
+                // b tracks the right module's flat index directly, so stepping by ±size avoids per-row y computation and re-multiplication.
 
                 // Blocked bits for the row pair: w bit1 = blocked(b), bit0 = blocked(b-1).
                 // |    `w` |  right `b` | left `b-1` |
@@ -103,7 +103,7 @@ internal static partial class ModulePlacer
                 else
                 {
                     // Slow path: a module is blocked, or fewer than 2 bits are buffered.
-                    // Handle each module independently; refill happens only when the accumulator is empty (a leftover single bit is consumed first).
+                    // Handle each module independently. Refill happens only when the accumulator is empty (a leftover single bit is consumed first).
                     if ((w & 2) == 0)
                     {
                         // w bit1 == 0, right module is free

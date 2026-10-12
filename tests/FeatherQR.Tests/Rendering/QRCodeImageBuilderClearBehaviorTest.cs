@@ -41,7 +41,7 @@ public class QRCodeImageBuilderClearBehaviorTest
 
         using var bitmap = builder.ToBitmap();
 
-        // Pad outside content keeps the clear color; the clear must not be skipped.
+        // Pad outside content keeps the clear color. The clear must not be skipped.
         await Assert.That(bitmap.GetPixel(0, 0)).IsEquivalentTo(SKColors.Red);
         await Assert.That(bitmap.GetPixel(canvasSide - 1, canvasSide - 1)).IsEquivalentTo(SKColors.Red);
 

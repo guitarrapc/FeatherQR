@@ -76,7 +76,7 @@ public class LensDistortionDecodeTest
         return null;
     }
 
-    /// <summary>The symbol on a card tilted about an axis in its plane, photographed through a lens with a light blur and noise; with its data modules redrawn at random where asked.</summary>
+    /// <summary>The symbol on a card tilted about an axis in its plane, photographed through a lens with a light blur and noise, with its data modules redrawn at random where asked.</summary>
     internal static (CameraRenderer.Photograph Photograph, QRCodeData Symbol, string Text) Render(int version, float pixelsPerModule, float tiltDegrees, float tiltAxisDegrees, float rollDegrees, float distortion, bool destroyData)
     {
         var text = $"FQR LENS v{version}";
@@ -191,7 +191,7 @@ public class LensDistortionDecodeTest
         await Assert.That(wrong).IsEmpty();
     }
 
-    /// <summary>The dimension the finders estimate, unsnapped, and the one the version information read at them names; from the triple of the global threshold, as the decoder measures it.</summary>
+    /// <summary>The dimension the finders estimate, unsnapped, and the one the version information read at them names. Both are from the triple of the global threshold, as the decoder measures it.</summary>
     private static (float Estimate, int Named) Dimensions(CameraRenderer.Photograph photograph)
     {
         var (frame, sizes) = FinderOutlineFitDecodeTest.Measure(photograph.Luminance, photograph.Width, photograph.Height, out var threshold, out var grey);

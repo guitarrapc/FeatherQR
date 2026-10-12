@@ -169,7 +169,7 @@ public class CoreAssemblyDependencyTest
 
     /// <summary>
     /// A C# file of the core that <paramref name="build"/> was compiled from and that no longer exists, read from the documents of
-    /// the build's PDB. A document is found by its path below src/FeatherQR, since a CI build maps the repository to /_/; one below
+    /// the build's PDB. A document is found by its path below src/FeatherQR, since a CI build maps the repository to /_/. One below
     /// obj (generated, the source generators' output among it) is not a source.
     /// </summary>
     private static string? CompiledSourceGone(string build, string project)

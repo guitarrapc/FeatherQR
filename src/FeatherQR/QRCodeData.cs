@@ -71,7 +71,7 @@ public sealed class QRCodeData
     //     ↑               ↑                       ↑       ↑
     //   col 0           col 4                   col 28  col 32
     //
-    // Q = QuietZone (white border, VIRTUAL — not stored, indexer returns false)
+    // Q = QuietZone (white border, VIRTUAL, not stored, indexer returns false)
     // C = Core modules (stored bit-packed in _bits)
     //
     // ┌─────────────────────────────────────────────────────────┐
@@ -97,7 +97,7 @@ public sealed class QRCodeData
     // │ _baseSize: 25                                           │
     // │ _quietZoneSize: 0                                       │
     // │ _size: 25 (same as _baseSize)                           │
-    // │ _bits.Length: 79 bytes — IDENTICAL to the QuietZone=4   │
+    // │ _bits.Length: 79 bytes, IDENTICAL to the QuietZone=4    │
     // │ case: only core modules are stored, so the quiet zone   │
     // │ costs no memory and only changes coordinate translation │
     // └─────────────────────────────────────────────────────────┘
@@ -213,7 +213,7 @@ public sealed class QRCodeData
     /// Creates an empty matrix sized for the given version.
     /// </summary>
     /// <param name="version">The QR code version, 1 to 40.</param>
-    /// <param name="quietZoneSize">Width of the light border in modules, 0 to 10,000. The standard asks for 4; 0 leaves the QR code hard to scan.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules, 0 to 10,000. The standard asks for 4, and 0 leaves the QR code hard to scan.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not 1 to 40 or the quiet zone size is out of range.</exception>
     public QRCodeData(int version, int quietZoneSize)
     {
@@ -316,7 +316,7 @@ public sealed class QRCodeData
     /// </summary>
     /// <remarks>
     /// Writes a "QRR" header (3 bytes), the base size (1 byte), then the bit-packed modules.
-    /// The quiet zone is not written; pick its width again when restoring through <see cref="QRCodeData(byte[], int)"/>.
+    /// The quiet zone is not written, so pick its width again when restoring through <see cref="QRCodeData(byte[], int)"/>.
     /// </remarks>
     public byte[] GetRawData()
     {
@@ -331,7 +331,7 @@ public sealed class QRCodeData
     /// <param name="writer">Where to write the bytes.</param>
     /// <returns>The number of bytes written.</returns>
     /// <remarks>
-    /// The quiet zone is not written; pick its width again when restoring.
+    /// The quiet zone is not written, so pick its width again when restoring.
     /// </remarks>
     public int GetRawData(IBufferWriter<byte> writer)
     {
@@ -419,11 +419,11 @@ public sealed class QRCodeData
     /// <para>
     /// Coordinates match the indexer: one unit is one module, the origin is the top-left corner including the quiet zone, <see cref="ModuleRect.X"/> is the column and <see cref="ModuleRect.Y"/> the row.
     /// Scale by the pixel size of one module.
-    /// Consumers scale by the pixel size of one module; <see cref="Size"/> gives the total extent in modules.
+    /// Consumers scale by the pixel size of one module. <see cref="Size"/> gives the total extent in modules.
     /// </para>
     /// <para>
     /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
-    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol; a styled one draws its finder patterns as whole patterns instead).
+    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol. A styled one draws its finder patterns as whole patterns instead).
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()
@@ -475,7 +475,7 @@ public sealed class QRCodeData
             throw new ArgumentException($"Destination span size too small: expected at least {totalModules} bytes (baseSize={_baseSize}), got {destination.Length} bytes");
 
         // Same layout as the encoder's stream expansion (one 0/1 byte per bit, MSB first),
-        // so the whole bytes go through its kernel; a symbol's module count is odd, so the
+        // so the whole bytes go through its kernel. A symbol's module count is odd, so the
         // last byte is always partial and stays here.
         var wholeBytes = totalModules >> 3;
         Internals.StandardQR.ModulePlacer.ExpandBits(_bits, wholeBytes, destination);

@@ -62,7 +62,7 @@ public class QRCodeDecoderRoundTripTest
     [Test]
     public async Task RoundTrip_AllVersions()
     {
-        // Force every version; content sized to fit version 1 at ECC H
+        // Force every version, with content sized to fit version 1 at ECC H
         var content = "V17!";
         for (var version = 1; version <= 40; version++)
         {
@@ -83,7 +83,7 @@ public class QRCodeDecoderRoundTripTest
     [Test]
     public async Task RoundTrip_VariousContents_CoversMultipleMaskPatterns()
     {
-        // Mask selection depends on content; a spread of contents exercises
+        // Mask selection depends on content, so a spread of contents exercises
         // several of the 8 patterns through the decoder's unmasking path.
         var observedMasks = new HashSet<int>();
         for (var i = 0; i < 64; i++)
@@ -308,7 +308,7 @@ public class QRCodeDecoderRoundTripTest
     /// <summary>
     /// Every block carrying as many codeword errors as its ECC codewords correct, ⌊ecc/2⌋, reads: the matrix decoder
     /// corrects to the code's full strength and reserves no misdecode protection (ISO/IEC 18004 Table 9's p).
-    /// 1-L, 1-M and 2-L are the rows where p would lower the count below ⌊ecc/2⌋; elsewhere p is 0, or the ECC count is odd
+    /// 1-L, 1-M and 2-L are the rows where p would lower the count below ⌊ecc/2⌋. Elsewhere p is 0, or the ECC count is odd
     /// and p takes nothing ⌊ecc/2⌋ does not already leave.
     /// </summary>
     [Test]
@@ -372,7 +372,7 @@ public class QRCodeDecoderRoundTripTest
     [Test]
     public async Task Decode_HeavilyCorruptedData_ReturnsDataUncorrectable()
     {
-        // Version 1-L corrects only 3 codewords; flipping a large scattered set
+        // Version 1-L corrects only 3 codewords, so flipping a large scattered set
         // of data modules must exceed capacity and fail (not misdecode).
         var qr = QRCodeGenerator.Create("FAIL", QREccLevel.L, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 0 });
         var size = qr.Size;

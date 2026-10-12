@@ -8,7 +8,7 @@ namespace FeatherQR.Internals.BinaryEncoders;
 
 /// <summary>
 /// Vectorized Reed-Solomon kernels for x86/x64.
-/// Selected at runtime by <see cref="EccBinaryEncoder.CalculateECC"/>; every kernel produces byte-identical output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
+/// Selected at runtime by <see cref="EccBinaryEncoder.CalculateECC"/>. Every kernel produces byte-identical output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
 /// </summary>
 /// <remarks>
 /// Shared architecture of both kernels (result of a measured 13-round optimization loop)
@@ -23,10 +23,10 @@ namespace FeatherQR.Internals.BinaryEncoders;
 ///   PRE-update register using composed T∘U tables, which keeps the whole vector
 ///   update off the critical dependency chain (same idea as multi-bit CRC tables).
 /// - The register update multiplies the (shifted) generator vector by each factor:
-///   GFNI does this in one gf2p8affineqb per factor; the SSSE3 kernel uses the
+///   GFNI does this in one gf2p8affineqb per factor. The SSSE3 kernel uses the
 ///   classic PSHUFB nibble-split multiply (2 shuffles per factor) instead.
 ///
-/// Table cost: 2 KB of GFNI matrices baked into the assembly as constant data (no runtime build), ~8 KB SSSE3 nibble-split table, plus ~8-18 KB per distinct eccCount actually used (QR uses at most 13 values; a typical app touches one or two).
+/// Table cost: 2 KB of GFNI matrices baked into the assembly as constant data (no runtime build), ~8 KB SSSE3 nibble-split table, plus ~8-18 KB per distinct eccCount actually used (QR uses at most 13 values, and a typical app touches one or two).
 /// All runtime-built tables build lazily on first use, so GFNI machines never pay for the SSSE3 table.
 /// </remarks>
 internal static partial class EccBinaryEncoder
@@ -44,7 +44,7 @@ internal static partial class EccBinaryEncoder
             return;
         }
 #endif
-        // Covers all pre-GFNI x86 (AVX2-only CPUs included; wider vectors measured
+        // Covers all pre-GFNI x86 (AVX2-only CPUs included, since wider vectors measured
         // slower than dual 128-bit registers for this kernel).
         CalculateEccSsse3(data, ecc, eccCount);
     }
@@ -277,8 +277,8 @@ internal static partial class EccBinaryEncoder
     /// </summary>
     /// <remarks>
     /// Two blocks' chains in one loop took 0.72 of one at a time at version 6-M (16 codewords). Above 16, a pair that read its sixteen generator vectors from
-    /// the nibble table at every step took 0.90 to 1.06 at versions 10-M to 40-L (26 to 30 codewords; 17 to 24 were not measured), so those go one at a
-    /// time; a pair holding them in registers was not tried (.NET 10 on Zen 4, the kernels called directly, one run, 2026-10-07).
+    /// the nibble table at every step took 0.90 to 1.06 at versions 10-M to 40-L (26 to 30 codewords, and 17 to 24 were not measured), so those go one at a
+    /// time. A pair holding them in registers was not tried (.NET 10 on Zen 4, the kernels called directly, one run, 2026-10-07).
     /// </remarks>
     internal static void CalculateEccSsse3Group(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks, int length)
     {
@@ -852,7 +852,7 @@ internal static partial class EccBinaryEncoder
     // Table construction (all lazy, per eccCount). Benign races: concurrent builders
     // produce identical arrays and the losing build is garbage. Publication uses
     // Volatile.Write so readers on weakly-ordered hardware can never observe a
-    // partially initialized array; plain reads suffice because the element loads are
+    // partially initialized array. Plain reads suffice because the element loads are
     // address-dependent on the reference load.
     // ---------------------------------------------------------------------------
 
@@ -903,7 +903,7 @@ internal static partial class EccBinaryEncoder
 
     // Shuffle-ready nibble split of (gen >> s bytes) for s = 0..3, each as
     // [loA|hiA|loB|hiB] 16-byte blocks (A = gen bytes 0..15, B = 16..31).
-    // Offsets below; 256 bytes per eccCount.
+    // Offsets below. 256 bytes per eccCount.
     private const nuint NibGenLoA = 0;
     private const nuint NibGenHiA = 16;
     private const nuint NibGenLoB = 32;

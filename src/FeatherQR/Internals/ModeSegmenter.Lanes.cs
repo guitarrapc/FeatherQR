@@ -9,10 +9,10 @@ namespace FeatherQR.Internals;
 /// The program with parents over several pieces of one text at once, one vector lane a piece: the symbols of a Structured Append set, whose plans have nothing to do with each other.
 /// </summary>
 /// <remarks>
-/// The program is a serial recurrence, so one piece cannot be vectorised; eight pieces can, each lane at its own character. The keyed form of <see cref="ModeSegmenter"/> is what makes that cheap: the minimum of keys is one instruction a lane and the predecessor falls out of it, with no compare-and-blend chain for the tie-break.
-/// The table is the single piece's, <see cref="ParentBytesPerChar"/> bytes a character, interleaved by lane so that a step is one store; <see cref="ReconstructLane"/> walks one lane of it back by stride.
-/// Lanes end at different characters: the loop runs to the nearest end, the result of every lane that ends there is taken, and the lane goes on reading the longest piece so that it keeps reading text that exists; what it writes past its own end is never read.
-/// Accelerated <c>Vector256</c> handles eight pieces; ARM64 NEON handles groups of four 32-bit keys, and every other 128-bit target the same groups on portable vectors. Without accelerated vectors the caller plans piece by piece.
+/// The program is a serial recurrence, so one piece cannot be vectorised, but eight pieces can, each lane at its own character. The keyed form of <see cref="ModeSegmenter"/> is what makes that cheap: the minimum of keys is one instruction a lane and the predecessor falls out of it, with no compare-and-blend chain for the tie-break.
+/// The table is the single piece's, <see cref="ParentBytesPerChar"/> bytes a character, interleaved by lane so that a step is one store. <see cref="ReconstructLane"/> walks one lane of it back by stride.
+/// Lanes end at different characters: the loop runs to the nearest end, the result of every lane that ends there is taken, and the lane goes on reading the longest piece so that it keeps reading text that exists. What it writes past its own end is never read.
+/// Accelerated <c>Vector256</c> handles eight pieces. ARM64 NEON handles groups of four 32-bit keys, and every other 128-bit target the same groups on portable vectors. Without accelerated vectors the caller plans piece by piece.
 /// </remarks>
 internal static partial class ModeSegmenter
 {
@@ -42,7 +42,7 @@ internal static partial class ModeSegmenter
 
     /// <summary>
     /// <see cref="ComputeCosts"/> with parents for the pieces of <paramref name="text"/> that begin at <paramref name="starts"/> and are <paramref name="lengths"/> long (at most <see cref="Lanes"/>, none empty), every mode allowed.
-    /// <paramref name="table"/> is <see cref="LaneTableBytesPerChar"/> bytes a character of the longest piece; each lane's cost and final state come back in <paramref name="costs"/> and <paramref name="finalStates"/>.
+    /// <paramref name="table"/> is <see cref="LaneTableBytesPerChar"/> bytes a character of the longest piece. Each lane's cost and final state come back in <paramref name="costs"/> and <paramref name="finalStates"/>.
     /// </summary>
     internal static void ComputeCostsLanes(ReadOnlySpan<char> text, ReadOnlySpan<int> starts, ReadOnlySpan<int> lengths, EciMode charset, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, Span<byte> table, Span<int> costs, Span<int> finalStates)
     {

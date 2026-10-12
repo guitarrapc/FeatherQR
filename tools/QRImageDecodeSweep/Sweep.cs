@@ -74,7 +74,7 @@ internal static class Sweep
                 Console.WriteLine($"[{stopwatch.Elapsed:mm\\:ss}] {symbology}: {n}/{caseCount} cases");
         });
 
-        // A case names its version; this library's encoder is first in the list and has to land on it, or the sample is not the one the table claims
+        // A case names its version. This library's encoder is first in the list and has to land on it, or the sample is not the one the table claims.
         Console.WriteLine($"{symbology}: {offVersion} of {caseCount} cases are not the version they ask for");
 
         return [.. rows.OrderBy(static r => r.Key[3], StringComparer.Ordinal).ThenBy(static r => r.Key[2], StringComparer.Ordinal).ThenBy(static r => int.Parse(r.Key[1], CultureInfo.InvariantCulture))];

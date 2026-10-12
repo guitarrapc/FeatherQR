@@ -80,7 +80,7 @@ public class StructuredAppendPlannerTest
     public async Task Bound_NeverRejectsACountTheWalkReaches(string kind, int length, QRSegmentation segmentation)
     {
         // The bound gates the walk, so wherever the walk reaches a count at a version, the
-        // bound must admit that count there; a bound that rejects one turns a fit into a
+        // bound must admit that count there. A bound that rejects one turns a fit into a
         // "does not fit".
         var text = Text(kind, length);
         var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
@@ -94,7 +94,7 @@ public class StructuredAppendPlannerTest
                 var capacity = StructuredAppendPlanner.Capacity(version, ecc);
                 var count = StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, capacity, int.MaxValue, ends);
                 if (count == int.MaxValue)
-                    continue; // a character that fits no symbol at this version; no count exists
+                    continue; // a character that fits no symbol at this version, so no count exists
                 await Assert.That(StructuredAppendPlanner.CanHold(capacity, count, cheapest, charset)).IsTrue()
                     .Because($"the walk splits {kind} into {count} chunks at version {version}-{ecc}");
             }
@@ -115,7 +115,7 @@ public class StructuredAppendPlannerTest
     {
         // The planned bound gates the version scan, so wherever the walk reaches a count at a
         // version, the bound built from the whole text's minimal plan at that version's widths
-        // must admit that count there; rejecting one would move the set to a larger version.
+        // must admit that count there. Rejecting one would move the set to a larger version.
         var text = Text(kind, length);
         var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
@@ -142,7 +142,7 @@ public class StructuredAppendPlannerTest
     public async Task PlannedBound_RejectsVersionsTheRateBoundAdmits()
     {
         // On digit-and-word content the rate bound prices digits as if every one sat in a full
-        // Numeric group, so it admits versions no split can hold; the planned bound is the one
+        // Numeric group, so it admits versions no split can hold. The planned bound is the one
         // that turns those away without walking them.
         var text = Text("mixed", 3000);
         var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
@@ -247,7 +247,7 @@ public class StructuredAppendPlannerTest
     [Test]
     public async Task Bound_RejectsACountNoSplitCanReach()
     {
-        // 600 ASCII characters cost at least 600 x 8 bits in any mode; five version 1-M
+        // 600 ASCII characters cost at least 600 x 8 bits in any mode. Five version 1-M
         // symbols offer 5 x (128 - 32) bits of payload. The walk needs far more than five.
         var text = Text("ascii", 600);
         var cheapest = StructuredAppendPlanner.CheapestPayloadBits(text, EciMode.Default);
@@ -314,7 +314,7 @@ public class StructuredAppendPlannerTest
     [Arguments("alnumDigitsThenJapanese", QRSegmentation.Single, true)]
     public async Task LongestChunkEnd_MatchesTheReferenceWalk(string kind, QRSegmentation segmentation, bool utf8Bom)
     {
-        // The chunk end is found without pricing whole prefixes; the reference extends one
+        // The chunk end is found without pricing whole prefixes. The reference extends one
         // character (or pair) at a time and prices each prefix with ChunkBits, the cost the
         // split is defined by. Every budget the answer can turn on is tried: each candidate
         // prefix's cost, and one bit below it.
@@ -398,7 +398,7 @@ public class StructuredAppendPlannerTest
     public async Task Plan_CharacterThatFitsNoSymbolOfASet_IsRefused()
     {
         // One emoji under a UTF-8 ECI at version 1-H: 20 + 12 + 4 + 8 + 32 = 76 bits against 72. Without the set
-        // header it is 56, which a single symbol holds; the generator asks that question, not the planner.
+        // header it is 56, which a single symbol holds. The generator asks that question, not the planner.
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
 
         var planned = StructuredAppendPlanner.TryPlan("🎉", QREccLevel.H, EciMode.Utf8, EncodingMode.Byte, false, QRSegmentation.Single, 1, 1, ends, out _, out _, out _);
@@ -443,14 +443,14 @@ public class StructuredAppendPlannerTest
     [Test]
     public async Task Parity_Latin1_CountsTheLastCharacterItHolds()
     {
-        // U+00FF is ISO-8859-1's last character and its own byte; one past it is what the writer replaces.
+        // U+00FF is ISO-8859-1's last character and its own byte. One past it is what the writer replaces.
         var text = (char)0xFF + "abc" + (char)0x100;
         var expected = (byte)(0xFF ^ 'a' ^ 'b' ^ 'c' ^ '?');
 
         await Assert.That(StructuredAppendPlanner.Parity(text, EciMode.Iso8859_1, false)).IsEqualTo(expected);
     }
 
-    /// <summary>Reference walk: extend each chunk one character at a time while it fits; surrogate pairs move together.</summary>
+    /// <summary>Reference walk: extend each chunk one character at a time while it fits. Surrogate pairs move together.</summary>
     private static int GreedyCount(string text, EciMode charset, QRSegmentation segmentation, int version, int budget, List<int>? ends = null)
     {
         var count = 0;
@@ -467,7 +467,7 @@ public class StructuredAppendPlannerTest
         return count;
     }
 
-    /// <summary>Reference chunk end: extend one character (or pair) at a time while <see cref="StructuredAppendPlanner.ChunkBits"/> fits; -1 when the first does not.</summary>
+    /// <summary>Reference chunk end: extend one character (or pair) at a time while <see cref="StructuredAppendPlanner.ChunkBits"/> fits. -1 when the first does not.</summary>
     private static int ReferenceChunkEnd(string text, int start, EciMode charset, int version, QRSegmentation segmentation, bool utf8Bom, int budget)
     {
         var end = start;

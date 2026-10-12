@@ -122,7 +122,7 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
         // too. Not so when the cells are not square: one stroke width cannot be one module on both
         // axes, and the ring would spill past the short edges, so those fall back to the path.
         // The tolerance is for the fit's own rounding, which leaves two of a Standard QR's three
-        // finders a few float ulps off square at most canvas sizes; a ring a ten-thousandth of a
+        // finders a few float ulps off square at most canvas sizes. A ring a ten-thousandth of a
         // module out is not a ring anyone can see, and a real aspect difference is orders larger.
         if (Math.Abs(moduleWidth - moduleHeight) <= 1e-4f * Math.Max(moduleWidth, moduleHeight))
         {
@@ -244,7 +244,7 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
         using var path = builder.Detach();
         canvas.DrawPath(path, paint);
 
-        // The center (3×3), an oval so it stays on the grid; a circle on a square area. Drawn on
+        // The center (3×3), an oval so it stays on the grid, which is a circle on a square area. Drawn on
         // its own rather than as a third contour: it sits strictly inside the hole, so the picture
         // is the same, and SKSvgCanvas writes it as one <ellipse> instead of flattening it into
         // the path's quadratics, which is 5 KB of document per finder.

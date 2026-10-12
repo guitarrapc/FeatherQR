@@ -7,7 +7,7 @@ using FeatherQR.Internals;
 /// </summary>
 internal static class SimdReport
 {
-    /// <summary>The build class <c>--simd-class</c> names, or null without the argument; false when the argument names none.</summary>
+    /// <summary>The build class <c>--simd-class</c> names, or null without the argument. False when the argument names none.</summary>
     public static bool TryParseClass(string[] args, out SimdBuildClass? buildClass)
     {
         buildClass = null;

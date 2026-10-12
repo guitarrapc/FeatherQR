@@ -113,7 +113,7 @@ public class GreyLevelsEnableTest
         Binarizer.ComputeOtsuThresholdFromHistogram(lightTie, out var lightGrey);
         await Assert.That(lightGrey.Darkness(250)).IsEqualTo(5f / 255f).Within(1e-5f);
 
-        // Levels 32 apart are far enough apart; one closer is not
+        // Levels 32 apart are far enough apart, but one closer is not
         var atTheBound = new int[256];
         atTheBound[0] = 100;
         atTheBound[10] = 1;

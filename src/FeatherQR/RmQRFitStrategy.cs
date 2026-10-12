@@ -5,12 +5,12 @@ namespace FeatherQR;
 /// </summary>
 public enum RmQRFitStrategy
 {
-    /// <summary>Fewest modules (height × width); ties prefer the smaller height, i.e. the wider symbol. The default.</summary>
+    /// <summary>Fewest modules (height × width). Ties prefer the smaller height, i.e. the wider symbol. The default.</summary>
     MinimizeArea = 0,
 
-    /// <summary>Smallest width; ties prefer the smaller height.</summary>
+    /// <summary>Smallest width. Ties prefer the smaller height.</summary>
     MinimizeWidth = 1,
 
-    /// <summary>Smallest height; ties prefer the smaller width.</summary>
+    /// <summary>Smallest height. Ties prefer the smaller width.</summary>
     MinimizeHeight = 2,
 }

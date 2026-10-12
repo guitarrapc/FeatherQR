@@ -7,10 +7,10 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The bounds the three planners screen a Kanji plan's candidates with, re-derived for the eighth state: each lower bound must never exceed the Kanji plan's optimum at any version, and each upper bound must never fall below it.
-/// A lower bound that did would skip a version the plan fits; an upper bound that did would accept one it does not.
+/// A lower bound that did would skip a version the plan fits, and an upper bound that did would accept one it does not.
 /// </summary>
 /// <remarks>
-/// The optimum is the eight-state program, which <c>ModeSegmenterKanjiParityTest</c> holds to an independent reference; the corpus is that test's.
+/// The optimum is the eight-state program, which <c>ModeSegmenterKanjiParityTest</c> holds to an independent reference. The corpus is that test's.
 /// Which old bound would have skipped a winning plan is shown through the public API in <c>KanjiOptimalTest</c>.
 /// </remarks>
 public class KanjiPlanBoundsTest
@@ -19,7 +19,7 @@ public class KanjiPlanBoundsTest
 
     // ---- Standard QR ---------------------------------------------------------------
 
-    /// <summary>The screen adds the narrowest count indicator of any mode; Kanji's narrowest (versions 1-9) is 8 bits, the same as Byte's, so the constant stands.</summary>
+    /// <summary>The screen adds the narrowest count indicator of any mode. Kanji's narrowest (versions 1-9) is 8 bits, the same as Byte's, so the constant stands.</summary>
     [Test]
     public async Task StandardQr_NarrowestCountIndicator_IsStillEightWithKanji()
     {

@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// The plan must be the one the build makes on its own, run for run, and the scan must choose what it chose without a table.
-/// The scan can price more than one candidate before it accepts (Micro QR M3 then M4, Standard QR one run per count-indicator band), so the corpus has to reach an acceptance after a rejection, where a table kept from the first run would be the wrong one; the tests count those cases.
+/// The scan can price more than one candidate before it accepts (Micro QR M3 then M4, Standard QR one run per count-indicator band), so the corpus has to reach an acceptance after a rejection, where a table kept from the first run would be the wrong one. The tests count those cases.
 /// </remarks>
 public class KanjiPlanTableReuseTest
 {

@@ -88,7 +88,7 @@ public class QRCodeDecoderPerspectiveTest
 
     /// <summary>
     /// Renders a QR code and warps it with a keystone homography (top edge shrunk
-    /// by <paramref name="tilt"/> of the width per side), optionally rotated —
+    /// by <paramref name="tilt"/> of the width per side), optionally rotated,
     /// simulating an off-axis capture of a flat print.
     /// </summary>
     private static SKBitmap RenderKeystone(string content, int version, float tilt, float rotateDegrees)

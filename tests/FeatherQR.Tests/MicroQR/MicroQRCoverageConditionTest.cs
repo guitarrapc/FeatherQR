@@ -15,7 +15,7 @@ public class MicroQRCoverageConditionTest
 
     /// <summary>
     /// An M4 whose data from row and column 10 on is inverted past what Reed-Solomon corrects, drawn as sampled or transposed, its
-    /// format word exact or one module off; the grid sampled in the image's own orientation.
+    /// format word exact or one module off. The grid is sampled in the image's own orientation.
     /// </summary>
     [Test]
     [Arguments(false, false, true)]
@@ -53,7 +53,7 @@ public class MicroQRCoverageConditionTest
         }
 
         // Premise, of the orientation drawn alone: past its format information, failing at its data, its word exact or not as
-        // drawn; the other orientation does not get past its format information, so the case asks the drawn one's condition
+        // drawn. The other orientation does not get past its format information, so the case asks the drawn one's condition.
         var (drawn, other) = mirrored
             ? (Orientation(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size), Orientation(modules, new MatrixModules(size), size))
             : (Orientation(modules, new MatrixModules(size), size), Orientation(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size));

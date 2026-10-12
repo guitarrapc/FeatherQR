@@ -11,10 +11,10 @@ namespace FeatherQR.Internals;
 
 /// <summary>
 /// Conversion between the byte-per-module matrix (0 = light, non-zero = dark) and the MSB-first bit-packed storage of the data models: bit 7 of byte 0 is module 0, the padding bits of the final byte are zero.
-/// All three pack through it, the Micro QR and rMQR models with <see cref="Pack"/> and Standard QR's <see cref="QRCodeData"/> with <see cref="PackZeroOrOne"/>; the Micro QR and rMQR models also unpack through it, and <see cref="QRCodeData"/> unpacks through its placer's bit expansion.
+/// All three pack through it, the Micro QR and rMQR models with <see cref="Pack"/> and Standard QR's <see cref="QRCodeData"/> with <see cref="PackZeroOrOne"/>. The Micro QR and rMQR models also unpack through it, and <see cref="QRCodeData"/> unpacks through its placer's bit expansion.
 /// </summary>
 /// <remarks>
-/// Both directions run 16 (Vector128) / 32 (Vector256) modules per step on .NET 8+ — pack: non-zero compare, lane reversal within each byte group (pshufb / tbl / WebAssembly swizzle), move-mask; unpack: per-lane byte broadcast, bit mask, compare — with a SWAR / unrolled scalar tail, and a portable scalar path on netstandard.
+/// Both directions run 16 (Vector128) / 32 (Vector256) modules per step on .NET 8+, with a SWAR / unrolled scalar tail, and a portable scalar path on netstandard. Pack is a non-zero compare, a lane reversal within each byte group (pshufb / tbl / WebAssembly swizzle) and a move-mask. Unpack is a per-lane byte broadcast, a bit mask and a compare.
 /// Kept behind byte parity with a naive reference by <c>ModuleBitPackerParityTest</c>.
 /// </remarks>
 internal static class ModuleBitPacker
@@ -66,7 +66,7 @@ internal static class ModuleBitPacker
         PackTail(ref src, ref dst, i, count);
     }
 
-    /// <summary>Packs <paramref name="modules"/> into <paramref name="bits"/> (at least ceil(n / 8) bytes; exactly that many are written).</summary>
+    /// <summary>Packs <paramref name="modules"/> into <paramref name="bits"/> (at least ceil(n / 8) bytes, and exactly that many are written).</summary>
     public static void Pack(ReadOnlySpan<byte> modules, Span<byte> bits)
     {
         var count = modules.Length;
@@ -81,9 +81,9 @@ internal static class ModuleBitPacker
 #if NET8_0_OR_GREATER
         if (Avx2.IsSupported && count >= 32)
         {
-            // dark lanes -> 0xFF; reverse the lanes inside each 8-lane group so the
-            // move-mask (lane i -> bit i) yields MSB-first bytes; the 32-bit mask's
-            // little-endian bytes are exactly modules 0-7, 8-15, 16-23, 24-31
+            // Dark lanes -> 0xFF. Reverse the lanes inside each 8-lane group so the
+            // move-mask (lane i -> bit i) yields MSB-first bytes. The 32-bit mask's
+            // little-endian bytes are exactly modules 0-7, 8-15, 16-23, 24-31.
             var reverse = Vector256.Create((byte)7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8, 23, 22, 21, 20, 19, 18, 17, 16, 31, 30, 29, 28, 27, 26, 25, 24);
             for (; i + 32 <= count; i += 32)
             {

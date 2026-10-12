@@ -12,7 +12,7 @@ internal static partial class FinderPatternFinder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ClassifyWindows8(ref short starts, ref short ends, nuint k, out Vector128<short> strict, out Vector128<short> near, out Vector128<short> crisp)
     {
-        // The arithmetic is ClassifyWindows16's on eight lanes; how the checks became integers is at the top of that method.
+        // The arithmetic is ClassifyWindows16's on eight lanes. How the checks became integers is at the top of that method.
         // Two things are different here, both chosen on ARM64:
         //
         // 1. The verdicts leave as lanes (0 or all bits), not as bits. Turning a vector of shorts into a bitmask is one

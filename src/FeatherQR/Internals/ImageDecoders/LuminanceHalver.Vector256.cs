@@ -10,7 +10,7 @@ internal static partial class LuminanceHalver
 {
     /// <summary>
     /// 256-bit tier: 64 pixels of each row a step into 32. Each row's bytes are read as 16-bit lanes, so a lane holds a horizontal pair, the two rows add, and the means narrow back to bytes.
-    /// A step loads both rows before it stores, so a row halved in place reads nothing an earlier step wrote; the row ends on the scalar tier, not on a last step laid over pixels already written.
+    /// A step loads both rows before it stores, so a row halved in place reads nothing an earlier step wrote. The row ends on the scalar tier, not on a last step laid over pixels already written.
     /// The spans are sized as <see cref="Halve"/> checks them.
     /// </summary>
     internal static void HalveVector256(ReadOnlySpan<byte> source, int width, int height, Span<byte> destination)

@@ -40,7 +40,7 @@ internal static class Qrtool
         var modules = new bool[width * height];
         for (var r = 0; r < height; r++)
         {
-            // Two characters a module; trailing light modules may be trimmed
+            // Two characters a module. Trailing light modules may be trimmed.
             var line = lines[r];
             for (var c = 0; c < width; c++)
             {

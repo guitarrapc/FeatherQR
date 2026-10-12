@@ -49,7 +49,7 @@ public class SampleGridPiecewiseParityTest
     /// <summary>
     /// Alignment centres from the library's own Annex E table, a homography for the node positions,
     /// each node moved by up to <paramref name="jitter"/> pixels, and a two-valued image of blocks
-    /// (the content only decides the compare; the geometry decides which pixel is read).
+    /// (the content only decides the compare, and the geometry decides which pixel is read).
     /// </summary>
     private static Scene BuildScene(int version, float pixelsPerModule, bool bent, float shiftModules, float jitter, int seed)
     {
@@ -85,7 +85,7 @@ public class SampleGridPiecewiseParityTest
             }
         }
 
-        // Not square, so a clamp against the wrong side's limit shows; and the blocks take the values either side of
+        // Not square, so a clamp against the wrong side's limit shows. The blocks take the values either side of
         // the threshold as well as the extremes, so a compare that is off by one shows.
         var height = side + 37;
         var luminance = new byte[side * height];
@@ -239,7 +239,7 @@ public class SampleGridPiecewiseParityTest
 
     /// <summary>
     /// The fast tiers store through unchecked references, so the two lengths they rely on are checked
-    /// once at the top; a short buffer is an exception there, not a write past the span.
+    /// once at the top. A short buffer is an exception there, not a write past the span.
     /// </summary>
     [Test]
     public async Task EveryTier_RejectsBuffersItCannotIndex()

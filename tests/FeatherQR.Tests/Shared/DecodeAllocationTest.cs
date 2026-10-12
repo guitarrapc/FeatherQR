@@ -15,8 +15,8 @@ namespace FeatherQR.Tests;
 /// Release only: an unoptimized build allocates where an optimized one does not, a span initialized from a list of <see cref="int"/> or <see cref="float"/> values among others.
 /// </para>
 /// <para>
-/// Runs alone. The decoders rent from <see cref="System.Buffers.ArrayPool{T}"/>, whose thread slot holds one array a size; a second array of that size, which Standard QR's grids take while the first is out, comes from the per-core stacks every thread shares, and a test running beside this one can empty them.
-/// With this class's tests running beside each other, the Standard QR decoder allocated 4,120 B on noise in every round in one of six runs on .NET 8; alone it allocated nothing in every run.
+/// Runs alone. The decoders rent from <see cref="System.Buffers.ArrayPool{T}"/>, whose thread slot holds one array a size. A second array of that size, which Standard QR's grids take while the first is out, comes from the per-core stacks every thread shares, and a test running beside this one can empty them.
+/// With this class's tests running beside each other, the Standard QR decoder allocated 4,120 B on noise in every round in one of six runs on .NET 8. Alone it allocated nothing in every run.
 /// </para>
 /// <para>
 /// Where another test pins an image to the path it reads through, the image here is that one, drawn the same way, and its scene names the test.
@@ -60,7 +60,7 @@ public class DecodeAllocationTest
 
     #region Matrix level
 
-    /// <summary>A module buffer from the generator's span overload, the smallest version or a large one, quiet zone as given; and which modules of its core are function modules.</summary>
+    /// <summary>A module buffer from the generator's span overload, the smallest version or a large one, quiet zone as given, and which modules of its core are function modules.</summary>
     private static (byte[] Modules, int Width, int Height, string Content, Func<int, int, bool> IsFunction) Matrix(Symbology symbology, bool large, int quietZone)
     {
         switch (symbology)
@@ -238,7 +238,7 @@ public class DecodeAllocationTest
         MeshAfterAnchoredGrid,
         /// <summary>Micro QR only: crisp at 1.4 px/module, where whole-pixel modules put the finder's size a few percent off: the frame measured on the timing patterns.</summary>
         SnappedToPixels,
-        /// <summary>Crisp between 1 and 1.5 px/module (1.15 for Micro QR, where 1.4 still reads through the timing frame; 1.4 for the others), under the density a grid extrapolated from the finders holds: the module boundaries.</summary>
+        /// <summary>Crisp between 1 and 1.5 px/module (1.15 for Micro QR, where 1.4 still reads through the timing frame, and 1.4 for the others), under the density a grid extrapolated from the finders holds: the module boundaries.</summary>
         LowDensity,
         /// <summary>rMQR only: <see cref="RmQRPerimeterTraceTest.Decode_LowDensityTraceFails_AnchoredGridStillReads"/> (R17x99 anti-aliased at 1.31 px/module), the traced grid failing in the data and the anisotropic grid reading.</summary>
         TracedGridFails,

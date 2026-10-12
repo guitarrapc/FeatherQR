@@ -10,12 +10,12 @@ namespace FeatherQR.Tests;
 /// destination, so it is the read a sized call returns, and the candidate's other grids and searches could only read something
 /// else at many times the cost. It carries its corners until the scan has used them: a later candidate inside that symbol is a
 /// finder-like pattern in its own data, and is skipped. The other candidates of that finder scan are still tried, so another
-/// symbol among them that fits is read; the full sweep does not run after it (<see cref="CandidateScanTest"/>). The corners are
+/// symbol among them that fits is read. The full sweep does not run after it (<see cref="CandidateScanTest"/>). The corners are
 /// reported with a read only.
 /// </para>
 /// <para>
 /// The timing tests run alone. Each compares the median of a call with a destination of 2 characters against a sized call's,
-/// calls of each in turn, so a stall of the machine moves neither; its bound, 3 or 5 times, is sized against the regression it
+/// calls of each in turn, so a stall of the machine moves neither. Its bound, 3 or 5 times, is sized against the regression it
 /// guards, which its summary gives as measured.
 /// </para>
 /// </remarks>
@@ -35,7 +35,7 @@ public class DestinationContractTest
 
     /// <summary>
     /// An image of two symbols: the big one, tried first, and the other, with a destination of <see cref="DestinationLength"/>
-    /// characters, too short for the big one's text; <see cref="RenderOther"/>, when given, draws the other one alone where it is.
+    /// characters, too short for the big one's text. <see cref="RenderOther"/>, when given, draws the other one alone where it is.
     /// </summary>
     public sealed record TwoSymbols(SingleFinderDecoder Decoder, string Name, Func<(byte[] Luminance, int Width, int Height)> Render, string BigText, string BigVersion, string OtherText, string OtherVersion, int DestinationLength, Func<(byte[] Luminance, int Width, int Height)>? RenderOther = null)
     {
@@ -68,8 +68,8 @@ public class DestinationContractTest
     }
 
     /// <summary>
-    /// The grids are sampled in the same order whatever the destination, so the first one that reads is the sized call's answer;
-    /// one character short, that read does not fit and is the answer too. Its corners are reported with the sized call's read only.
+    /// The grids are sampled in the same order whatever the destination, so the first one that reads is the sized call's answer.
+    /// One character short, that read does not fit and is the answer too. Its corners are reported with the sized call's read only.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(SingleSymbols))]
@@ -119,11 +119,11 @@ public class DestinationContractTest
     /// ends the candidate wherever it is made: on the renders read through the timing frame, the module boundaries and the
     /// coverage re-read, a grid site that let it go on cost about 27, 30 to 38 and 53 times. With the site's fault planted, the
     /// renders after them cost these per-call medians (full-suite runs, 2026-10-02, as are those three):
-    /// - the rMQR keystones: about 7 and 11 times through the perspective search, 5 through the perimeter traced in a scaled
-    ///   frame, and 21 through the outline's frames;
-    /// - the low-density turned rMQR renders: about 26 through the angular sweep, 50 through the isotropic grid, and 70 through a
-    ///   frame's scales and the anisotropic grid;
-    /// - the noisy turned Micro QR renders: about 6.5 through the scale search and 5.5 after it.
+    /// - The rMQR keystones: about 7 and 11 times through the perspective search, 5 through the perimeter traced in a scaled
+    ///   frame, and 21 through the outline's frames.
+    /// - The low-density turned rMQR renders: about 26 through the angular sweep, 50 through the isotropic grid, and 70 through a
+    ///   frame's scales and the anisotropic grid.
+    /// - The noisy turned Micro QR renders: about 6.5 through the scale search and 5.5 after it.
     /// Stopped at the read, the call costs what a sized one does. The bound is 5 times a sized call, 3 for the renders after the
     /// first ones, below every one of those. The inverted image stops at the same read.
     /// </summary>
@@ -149,7 +149,7 @@ public class DestinationContractTest
 
     public static IEnumerable<Func<TwoTextImage>> TwoTextImages()
     {
-        // Upright, Micro QR reads in its axis-aligned path; turned, in its arbitrary-orientation one
+        // Upright, Micro QR reads in its axis-aligned path, and turned, in its arbitrary-orientation one
         yield return () => new TwoTextImage(SingleFinderDecoder.MicroQR, "M4-L upright", () => MicroQRDestinationRenders.RenderTwoTexts(Text, CoverageText, degrees: 0), "M4");
         yield return () => new TwoTextImage(SingleFinderDecoder.MicroQR, "M4-L at 20°", () => MicroQRDestinationRenders.RenderTwoTexts(Text, CoverageText, degrees: 20), "M4");
         yield return () => new TwoTextImage(SingleFinderDecoder.RmQR, "R13x43-M at 6 px/module", () => RmQRDestinationRenders.RenderTwoTexts(RmQRVersion.R13x43, RmQREccLevel.M, Text, CoverageText, 6, 0.25f), "R13x43");
@@ -158,7 +158,7 @@ public class DestinationContractTest
 
     /// <summary>
     /// A grid whose text does not fit the destination is not read again by coverage. On a real image that re-read reads the same
-    /// text; on this crafted one it reads another, and a call too short for the text a sized call returns reported the other as a
+    /// text. On this crafted one it reads another, and a call too short for the text a sized call returns reported the other as a
     /// success.
     /// </summary>
     [Test]
@@ -184,7 +184,7 @@ public class DestinationContractTest
     {
         // These renders, and the stacked ones, also hold rMQR's frame loop and module boundaries sites and the corners, which no
         // other test catches: plant the faults again when they change (tools/mutants/single-finder-candidate-scan.tsv)
-        // Micro QR: the pattern at (61,110) and (49,56); transposed, a mirrored capture read by the transposed grid
+        // Micro QR: the pattern at (61,110) and (49,56). Transposed, a mirrored capture read by the transposed grid.
         foreach (var mirrored in new[] { false, true })
         {
             yield return () => new TimedImage(SingleFinderDecoder.MicroQR, $"M4-M at 5.1 px/module, 93°{(mirrored ? ", mirrored" : "")}", () => MicroQRDestinationRenders.RenderTurnedSupersampled(MicroQRVersion.M4, "63028458518747710056101171", MicroQREccLevel.M, 5.1, 93.0, mirrored), "63028458518747710056101171", "M4", 100, 5);

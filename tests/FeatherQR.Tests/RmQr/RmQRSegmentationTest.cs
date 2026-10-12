@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// <see cref="RmQRSegmentation.Optimal"/> end to end. The three properties every
 /// case is held to are: the symbol never has more core modules than the single-mode
-/// default (which is not the same as never rendering larger — see
+/// default (which is not the same as never rendering larger, see
 /// <see cref="Optimal_FewerCoreModulesCanStillRenderLarger"/>), it
 /// still decodes to the original content, and when it lands on the same version as
 /// the single-mode default it is byte-for-byte the same matrix (the blast radius
@@ -222,7 +222,7 @@ public class RmQRSegmentationTest
             int cost;
             if (content.Length == 0)
             {
-                // Empty content never plans; the single-mode fit is the answer.
+                // Empty content never plans. The single-mode fit is the answer.
                 cost = 3 + RmQRConstants.GetCountIndicatorLength(version, analysis.EncodingMode);
             }
             else if (analysis.EncodingMode == EncodingMode.Kanji)
@@ -387,7 +387,7 @@ public class RmQRSegmentationTest
     [Test]
     public async Task Optimal_RequestedVersion_FitsWhereSingleModeDoesNot()
     {
-        // R7x99-M holds 27 Byte-mode characters; this is 30 characters as Byte but
+        // R7x99-M holds 27 Byte-mode characters. This is 30 characters as Byte but
         // fits once the digit tail becomes a Numeric run.
         const string content = "abcdefghij1234567890abcdefghij";
         const RmQRVersion version = RmQRVersion.R7x99;
@@ -404,7 +404,7 @@ public class RmQRSegmentationTest
     /// The requested-version path commits to planning without pricing it first and lets
     /// the plan build decide, so this pins the whole outcome space of that path over
     /// every version: either it encodes and round-trips, or it throws exactly what the
-    /// single-mode path throws. It also pins the direction — Optimal must never throw
+    /// single-mode path throws. It also pins the direction. Optimal must never throw
     /// where Single succeeds.
     /// </summary>
     [Test]
@@ -622,7 +622,7 @@ public class RmQRSegmentationTest
     public async Task Optimal_LeadingBom_DecodesLikeSingle()
     {
         // A content-leading U+FEFF is stream-initial under Single too, so both arms
-        // drop it on decode; the run-at-offset-0 exemption keeps the split allowed
+        // drop it on decode. The run-at-offset-0 exemption keeps the split allowed
         // and the two must decode identically (not necessarily to the input). The
         // area assertion is strict: the split genuinely wins here, so losing the
         // exemption (which silently falls back to the identical single-mode
@@ -641,7 +641,7 @@ public class RmQRSegmentationTest
     public async Task Optimal_TrailingBomNoSingleModeHolds_IsPlannedBehindTheDigitBeforeIt()
     {
         // 303 UTF-8 bytes fit no single mode. The unconstrained minimum opens a Byte
-        // run at the trailing U+FEFF, where the decoder would consume it; the plan
+        // run at the trailing U+FEFF, where the decoder would consume it. The plan
         // takes the last digit into that run instead.
         var content = new string('1', 300) + "\uFEFF";
         var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
@@ -837,7 +837,7 @@ public class RmQRSegmentationTest
 
 #if !DEBUG
     /// <summary>
-    /// The span destination is the library's zero-allocation path; the mixed-mode
+    /// The span destination is the library's zero-allocation path. The mixed-mode
     /// planner must keep it that way (its parent table rents from the pool rather
     /// than allocating). Debug builds are excluded per repo notes.
     /// </summary>

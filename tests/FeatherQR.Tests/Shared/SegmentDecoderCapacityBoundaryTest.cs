@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The exact-fill side is real content — ISO/IEC 18004 7.4.9 lets the terminator be
+/// The exact-fill side is real content. ISO/IEC 18004 7.4.9 lets the terminator be
 /// shortened away when the data fills the capacity, so a symbol whose last character
 /// ends on the final bit is legal and common at capacity boundaries.
 /// </para>
@@ -19,7 +19,7 @@ namespace FeatherQR.Tests;
 /// For Standard QR and for Micro QR M2/M4 the capacity and the buffer end together,
 /// so a decoder that let the payload run one bit over would not merely misread: it
 /// would throw <see cref="InvalidOperationException"/> out of a bool-returning
-/// <c>TryDecode</c>. Both sides are needed — a guard pinned only from above can be
+/// <c>TryDecode</c>. Both sides are needed. A guard pinned only from above can be
 /// weakened by one bit and no test notices.
 /// </para>
 /// </remarks>
@@ -54,7 +54,7 @@ public class SegmentDecoderCapacityBoundaryTest
         yield return ("Numeric-remainder2", Binary(123, 10) + Binary(45, 7), 5, 17, "12345");
         // Numeric with a one-digit remainder group (4 bits).
         yield return ("Numeric-remainder1", Binary(123, 10) + Binary(4, 4), 4, 14, "1234");
-        // Alphanumeric: two pairs, 11 bits each. A=10 B=11 -> 10*45+11; '1'=1 '2'=2 -> 1*45+2.
+        // Alphanumeric: two pairs, 11 bits each. A=10 B=11 -> 10*45+11. '1'=1 '2'=2 -> 1*45+2.
         yield return ("Alphanumeric", Binary(10 * 45 + 11, 11) + Binary(1 * 45 + 2, 11), 4, 22, "AB12");
         // Alphanumeric with an odd trailing character (6 bits). Z = 35.
         yield return ("Alphanumeric-odd", Binary(10 * 45 + 11, 11) + Binary(35, 6), 3, 17, "ABZ");
@@ -113,7 +113,7 @@ public class SegmentDecoderCapacityBoundaryTest
     /// This is what the up-front sufficiency check is actually for. Numeric and
     /// alphanumeric also check per group inside their loops, so weakening the up-front
     /// check by a bit still yields <c>InvalidBitstream</c> when the destination is
-    /// ample — the inner check catches it. It only becomes visible here: with a short
+    /// ample, because the inner check catches it. It only becomes visible here: with a short
     /// destination, a weakened up-front check falls through to the destination test and
     /// reports <c>DestinationTooSmall</c>, which callers read as "the symbol was read,
     /// grow your buffer" and which stops the image decoder hunting for the real symbol.
@@ -130,7 +130,7 @@ public class SegmentDecoderCapacityBoundaryTest
 
     // The remaining guards in SegmentDecoders that bound a read or a value. They are
     // not Kanji work, but they are the same family as the four above and were equally
-    // unpinned; the ECI pair fails in the way this class exists to prevent.
+    // unpinned. The ECI pair fails in the way this class exists to prevent.
 
     /// <summary>
     /// A truncated ECI designator is a malformed stream, not an exception. Both

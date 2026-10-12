@@ -203,7 +203,7 @@ internal static partial class TextAnalyzer
             // code unit at or above U+8000 (surrogates, U+FFFD, most of the CJK
             // compatibility area) is negative as an Int16, so a signed
             // CompareGreaterThan reports it as in-range and the text would be declared
-            // Latin-1 encodable. c > 127 <=> any bit from bit 7 up is set; SSE2 has no
+            // Latin-1 encodable. c > 127 <=> any bit from bit 7 up is set. SSE2 has no
             // PTEST, so the test is AND against zero (MoveMask cannot see bit 8-15 of a
             // lane, which is exactly where the ISO-8859-1 answer lives).
             if (!hasNonAscii)

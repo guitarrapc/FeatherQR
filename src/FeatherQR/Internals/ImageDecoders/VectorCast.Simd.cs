@@ -26,14 +26,14 @@ internal static class VectorCast
         // SSE2 has no unsigned conversion: both edges are clamped first, and the max's operand order sends NaN to 0
         if (Sse2.IsSupported)
             return Sse2.ConvertToVector128Int32WithTruncation(Sse.Min(Sse.Max(coordinate, Vector128<float>.Zero), last));
-        // The unsigned conversion takes NaN and the near side to 0 itself; the min caps the far side and keeps NaN
+        // The unsigned conversion takes NaN and the near side to 0 itself, and the min caps the far side and keeps NaN
         if (PackedSimd.IsSupported)
             return PackedSimd.ConvertToUInt32Saturate(PackedSimd.PseudoMin(coordinate, last)).AsInt32();
         return Vector128.ConvertToUInt32(Vector128.Min(coordinate, last)).AsInt32();
     }
 
     /// <summary>
-    /// Truncated toward zero, exact from -1 (exclusive) up to 2^31; outside that range or at NaN the lane depends on the platform,
+    /// Truncated toward zero, exact from -1 (exclusive) up to 2^31. Outside that range or at NaN the lane depends on the platform,
     /// for callers that do not read such lanes.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

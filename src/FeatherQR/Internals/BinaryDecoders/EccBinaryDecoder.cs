@@ -16,7 +16,7 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// Corrects up to ⌊eccCount/2⌋ byte errors per block, in place.
 /// <para>
 /// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the verification pass) has four tiers: a GFNI kernel on net10.0+ x64 (see EccBinaryDecoder.X86.cs), an AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs), a 128-bit kernel on x64 without GFNI and on WebAssembly (see EccBinaryDecoder.Vector128.cs), and a scalar log-domain path with four interleaved Horner chains everywhere else.
-/// All four produce byte-identical output; see the decoder kernel parity tests.
+/// All four produce byte-identical output. See the decoder kernel parity tests.
 /// Berlekamp-Massey, Chien and Forney stay scalar on every target.
 /// </para>
 /// </remarks>
@@ -40,7 +40,7 @@ internal static partial class EccBinaryDecoder
     /// <param name="codeword">Block codewords (data followed by ECC). Corrected in place.</param>
     /// <param name="eccCount">Number of ECC codewords at the tail of <paramref name="codeword"/> (1-30).</param>
     /// <param name="errorsCorrected">Number of byte errors corrected (0 when the block was clean).</param>
-    /// <returns>True when the block is clean or was fully corrected; false when the block contains more errors than the code can correct.</returns>
+    /// <returns>True when the block is clean or was fully corrected. False when the block contains more errors than the code can correct.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="ArgumentException"></exception>
     public static bool TryCorrect(Span<byte> codeword, int eccCount, out int errorsCorrected)
@@ -119,7 +119,7 @@ internal static partial class EccBinaryDecoder
 
         // 3. Chien search: codeword[idx] is the coefficient of x^(n-1-idx), so an
         // error at idx has locator X = α^(n-1-idx). Test every position p by
-        // evaluating Λ(α^-p); a zero means an error at idx = n-1-p.
+        // evaluating Λ(α^-p). A zero means an error at idx = n-1-p.
         Span<int> errorIndexes = stackalloc int[MaxErrors];
         Span<byte> errorLocators = stackalloc byte[MaxErrors];        // X_k = α^p
         Span<byte> errorLocatorInverses = stackalloc byte[MaxErrors]; // X_k^-1 = α^-p
@@ -147,7 +147,7 @@ internal static partial class EccBinaryDecoder
             errorCount++;
         }
 
-        // Every root of Λ must lie inside the codeword; a deficit means errors
+        // Every root of Λ must lie inside the codeword. A deficit means errors
         // at positions that do not exist (degree mismatch), uncorrectable.
         if (errorCount != errorCountEstimate)
             return false;
@@ -191,7 +191,7 @@ internal static partial class EccBinaryDecoder
             if (denominator == 0)
                 return false;
 
-            // e_k = X_k^(1-b)·Ω(X_k^-1)/Λ'(X_k^-1); with b = 0 the X_k factor remains.
+            // e_k = X_k^(1-b)·Ω(X_k^-1)/Λ'(X_k^-1). With b = 0 the X_k factor remains.
             var magnitude = GaloisField.Multiply(errorLocators[k], GaloisField.Divide(omegaValue, denominator));
             codeword[errorIndexes[k]] ^= magnitude;
         }
@@ -217,12 +217,12 @@ internal static partial class EccBinaryDecoder
     /// </summary>
     /// <remarks>
     /// <paramref name="syndromes"/> must be at least <see cref="SyndromeLanes"/> bytes long, not <paramref name="eccCount"/>: the vector kernels store their accumulator registers whole and only the first <paramref name="eccCount"/> lanes are meaningful.
-    /// A shorter span throws on the GFNI tier (Vector256.CopyTo bounds-checks the destination) but silently corrupts the caller's stack on ARM64, so x64 CI cannot see the ARM failure mode; EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes, .AdvSimdKernel_WritesExactlySyndromeLanes and .Vector128Kernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
+    /// A shorter span throws on the GFNI tier (Vector256.CopyTo bounds-checks the destination) but silently corrupts the caller's stack on ARM64, so x64 CI cannot see the ARM failure mode. EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes, .AdvSimdKernel_WritesExactlySyndromeLanes and .Vector128Kernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
     /// <para>
-    /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register, one multiply per data byte for every syndrome at once), the AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs) or the 128-bit kernel on the other vector targets (see EccBinaryDecoder.Vector128.cs); each keeps every syndrome in vector lanes rather than walking the codeword once per syndrome.
+    /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register, one multiply per data byte for every syndrome at once), the AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs) or the 128-bit kernel on the other vector targets (see EccBinaryDecoder.Vector128.cs). Each keeps every syndrome in vector lanes rather than walking the codeword once per syndrome.
     /// </para>
     /// <para>
-    /// The scalar path keeps the Horner multiply in log domain — the multiplier's log is the constant i, so each step is one zero-check + one log load + one exp load (measured 0.84-0.90x of the GaloisField.Multiply form) — and runs four syndromes per pass over the codeword.
+    /// The scalar path keeps the Horner multiply in log domain: the multiplier's log is the constant i, so each step is one zero-check + one log load + one exp load (measured 0.84-0.90x of the GaloisField.Multiply form). It runs four syndromes per pass over the codeword.
     /// That interleaving is not cosmetic: the per-syndrome walk is bound by the dependent log → exp load chain rather than by throughput, so four independent accumulators measured 2.2-2.9x the single walk on large blocks.
     /// This is the tier netstandard2.0/2.1 runs, and any build without 128-bit vectors.
     /// </para>
@@ -261,7 +261,7 @@ internal static partial class EccBinaryDecoder
         var i = 0;
         for (; i + 4 <= eccCount; i += 4)
         {
-            // Four independent Horner chains over one pass of the codeword; each step
+            // Four independent Horner chains over one pass of the codeword. Each step
             // is value·α^i = exp[log[value] + i] (exp is 512 entries so no % 255).
             byte v0 = 0, v1 = 0, v2 = 0, v3 = 0;
             for (var j = 0; j < length; j++)

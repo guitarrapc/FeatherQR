@@ -9,8 +9,8 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// <remarks>
 /// <para>
 /// Internal, reached by the first-party rendering package through <c>InternalsVisibleTo</c>: an adapter reads the pixel layout out of its bitmap type and hands the raw bytes here.
-/// The layouts are the ones QR sources actually use (<see cref="PixelLayout"/>); anything else is converted by the caller first.
-/// A third-party decoder adapter produces luminance itself and calls <c>TryDecodeImage</c>; this type is not public so that the surface does not grow ahead of a concrete need.
+/// The layouts are the ones QR sources actually use (<see cref="PixelLayout"/>). Anything else is converted by the caller first.
+/// A third-party decoder adapter produces luminance itself and calls <c>TryDecodeImage</c>. This type is not public so that the surface does not grow ahead of a concrete need.
 /// </para>
 /// <para>
 /// Luminance is ITU-R BT.601, (77 R + 150 G + 29 B) / 256. Transparent pixels are composited against white before weighting: QR quiet zones are white by definition, and transparent-background PNGs are a common input.
@@ -22,7 +22,7 @@ internal static partial class LuminanceConverter
     /// <summary>
     /// Converts pixels to luminance: width × height bytes, row-major, no padding.
     /// </summary>
-    /// <param name="pixels">Source pixels, rows of <paramref name="rowBytes"/> bytes; the last row may end after its <paramref name="width"/> pixels.</param>
+    /// <param name="pixels">Source pixels, rows of <paramref name="rowBytes"/> bytes. The last row may end after its <paramref name="width"/> pixels.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="rowBytes">Stride between rows in bytes, at least <paramref name="width"/> × bytes per pixel.</param>
@@ -79,11 +79,11 @@ internal static partial class LuminanceConverter
     /// <summary>
     /// Pixel buffer to BT.601 luminance.
     /// Four tiers: an AVX2 kernel at 32 pixels per iteration (LuminanceConverter.X86.cs), a NEON dot-product kernel at 16 (LuminanceConverter.Arm64.cs), a 128-bit kernel at 16 for every other vector target (LuminanceConverter.Simd.cs), and this per-pixel loop for netstandard and rows under 16 pixels.
-    /// All four produce identical bytes; see LuminanceConverterParityTest.
+    /// All four produce identical bytes. See LuminanceConverterParityTest.
     /// </summary>
     /// <remarks>
     /// The extents are checked once here, not per row.
-    /// Every tier walks by <c>ref</c> from a single <c>GetReference</c> and so carries no bounds check of its own — including the scalar tier, whose per-row re-slicing was removed for speed.
+    /// Every tier walks by <c>ref</c> from a single <c>GetReference</c> and so carries no bounds check of its own, including the scalar tier, whose per-row re-slicing was removed for speed.
     /// A caller that hands over a short destination would otherwise corrupt whatever follows it (in practice a pooled rental) instead of throwing.
     /// </remarks>
     internal static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, bool forceScalar = false)
@@ -102,7 +102,7 @@ internal static partial class LuminanceConverter
             }
 
             // The NEON and 128-bit kernels cover a whole row from 16-pixel blocks plus one
-            // overlapping final block, so they have no scalar remainder to fall back on;
+            // overlapping final block, so they have no scalar remainder to fall back on.
             // IsVectorTierTaken is what keeps narrower rows off them.
             ConvertRgbaBlocks16(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
             return;
@@ -123,12 +123,12 @@ internal static partial class LuminanceConverter
         ConvertRgbaVector128(pixels, luminance, width, height, rowBytes, bgra, hasAlpha, premultiplied);
     }
 
-    /// <summary>BGRA (2,1,0) or RGBA / RGB888x (0,1,2); nothing else reaches a vector tier.</summary>
+    /// <summary>BGRA (2,1,0) or RGBA / RGB888x (0,1,2). Nothing else reaches a vector tier.</summary>
     private static bool IsVectorLayout(int redOffset, int greenOffset, int blueOffset)
         => greenOffset == 1 && (redOffset == 2 ? blueOffset == 0 : redOffset == 0 && blueOffset == 2);
 
     /// <summary>
-    /// UDOT carries the whole luminance sum (<see cref="System.Runtime.Intrinsics.Arm.Dp"/>, an ARMv8.2 extension that Cortex-A53/A72-class cores lack) and the composite path separates planes with UZP1/UZP2, which live under <c>AdvSimd.Arm64</c> — so both gates are required rather than plain AdvSimd.
+    /// UDOT carries the whole luminance sum (<see cref="System.Runtime.Intrinsics.Arm.Dp"/>, an ARMv8.2 extension that Cortex-A53/A72-class cores lack) and the composite path separates planes with UZP1/UZP2, which live under <c>AdvSimd.Arm64</c>, so both gates are required rather than plain AdvSimd.
     /// LD4 would also serve for the planes but has no ref-taking overload, so it was rejected (see LuminanceConverter.Arm64.cs).
     /// </summary>
     private static bool IsAdvSimdTierAvailable
@@ -151,11 +151,11 @@ internal static partial class LuminanceConverter
         false;
 #endif
 
-    /// <summary>Extents for a ref-walking tier; see the remarks on <see cref="ConvertRgba"/>.</summary>
+    /// <summary>Extents for a ref-walking tier. See the remarks on <see cref="ConvertRgba"/>.</summary>
     private static void ValidateExtents(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int bytesPerPixel)
     {
         // Nothing is walked, and a negative extent would make every comparison below
-        // vacuously true; the loops run zero iterations either way.
+        // vacuously true. The loops run zero iterations either way.
         if (width <= 0 || height <= 0)
             return;
         if (rowBytes < 0)
@@ -168,7 +168,7 @@ internal static partial class LuminanceConverter
             throw new ArgumentException($"Pixel buffer too small: required {requiredPixels} bytes ({width}x{height}, rowBytes {rowBytes}), got {pixels.Length}.", nameof(pixels));
     }
 
-    /// <summary>Which tier a parity test wants; <see cref="ConvertTier.Vector"/> refuses to fall back.</summary>
+    /// <summary>Which tier a parity test wants. <see cref="ConvertTier.Vector"/> refuses to fall back.</summary>
     internal enum ConvertTier
     {
         /// <summary>The portable per-layout loop.</summary>
@@ -193,7 +193,7 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// The layout half of <see cref="IsVectorTierTaken"/> — layout ONLY, deliberately carrying no ISA or width term.
+    /// The layout half of <see cref="IsVectorTierTaken"/>. It is layout ONLY, deliberately carrying no ISA or width term.
     /// A parity test skips on this and then asserts a coverage floor, so anything that switches a tier off fails the floor instead of widening the skip until the test is green and empty.
     /// </summary>
     internal static bool IsVectorTierTakenForLayout(int redOffset, int greenOffset, int blueOffset)
@@ -207,7 +207,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// Tier-selecting entry for parity tests.
-    /// <see cref="ConvertTier.Vector"/> throws when no vector kernel would run for these arguments rather than quietly handing back the scalar result — see <see cref="IsVectorTierTaken"/>.
+    /// <see cref="ConvertTier.Vector"/> throws when no vector kernel would run for these arguments rather than quietly handing back the scalar result. See <see cref="IsVectorTierTaken"/>.
     /// </summary>
     internal static void ConvertRgbaForTest(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, ConvertTier tier)
     {
@@ -238,14 +238,14 @@ internal static partial class LuminanceConverter
     /// </list>
     /// <para>
     /// Two plausible-looking alternatives were measured and rejected.
-    /// Reading the pixel as one <c>uint</c> and splitting it with shifts costs 37-53 % on ARM64, where a byte load at a constant offset is cheap and the extra ALU work is not; that is the opposite of the x64 result.
+    /// Reading the pixel as one <c>uint</c> and splitting it with shifts costs 37-53 % on ARM64, where a byte load at a constant offset is cheap and the extra ALU work is not. That is the opposite of the x64 result.
     /// Replacing the three multiplies with 256-entry weight tables loses 3-5 % (MUL is 1-2 cycles at one per cycle, while three more L1 loads contend with the pixel loads) and would additionally read out of bounds on a premultiplied buffer that violates c ≤ a, which nothing forbids at this boundary.
     /// Eight pixels per iteration regressed one layout by 2x.
     /// </para>
     /// </remarks>
     private static void ConvertRgbaScalar(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)
     {
-        // Constant offsets per layout; the general arm keeps arbitrary offsets working
+        // Constant offsets per layout. The general arm keeps arbitrary offsets working
         // for any caller the switch above does not anticipate.
         if (greenOffset == 1 && redOffset == 2 && blueOffset == 0 && alphaOffset == 3)
             Rows(pixels, luminance, width, height, rowBytes, 2, 1, 0, true, premultiplied);
@@ -317,7 +317,7 @@ internal static partial class LuminanceConverter
         return (byte)((77 * r + 150 * g + 29 * b) >> 8);
     }
 
-    /// <summary>Arbitrary channel offsets; the straightforward loop, kept for completeness.</summary>
+    /// <summary>Arbitrary channel offsets. The straightforward loop, kept for completeness.</summary>
     private static void RowsGeneral(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)
     {
         for (var y = 0; y < height; y++)

@@ -13,12 +13,12 @@ namespace FeatherQR.Tests;
 /// This is deliberately NOT the same check as
 /// <see cref="RmQRBinaryEncoderKernelParityTest"/>. That one runs the same writer
 /// with <c>vectorized</c> true and false and compares the two, which only proves the
-/// two tiers agree — on a machine whose vector ISA the writer does not use, both
+/// two tiers agree. On a machine whose vector ISA the writer does not use, both
 /// calls take the same code and the comparison degenerates into a self-check. It
 /// also cannot see a bug in a batching loop that BOTH tiers share.
 ///
 /// The reference below emits the spec's bit groups one at a time (3 digits ⇒ 10
-/// bits, 2 ⇒ 7, 1 ⇒ 4; a character pair ⇒ 11 bits, a lone character ⇒ 6; one byte
+/// bits, 2 ⇒ 7 and 1 ⇒ 4, a character pair ⇒ 11 bits and a lone character ⇒ 6, and one byte
 /// ⇒ 8 bits) with no batching, no SWAR and no accumulator, so it shares nothing
 /// with the writers' grouping loops. Comparison is on the LOGICAL bit stream
 /// (stored bytes followed by pending bits, MSB first) because a batched append may

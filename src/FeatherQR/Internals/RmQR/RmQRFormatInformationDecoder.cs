@@ -26,7 +26,7 @@ internal static class RmQRFormatInformationDecoder
         return table;
     }
 
-    /// <summary>Decodes one copy; false when no valid word is within 3 bits.</summary>
+    /// <summary>Decodes one copy. Returns false when no valid word is within 3 bits.</summary>
     public static bool TryDecodeCopy(int raw, bool subFinderSide, out RmQRVersion version, out RmQREccLevel eccLevel, out int distance)
     {
         var candidates = subFinderSide ? subFinderSideCandidates : finderSideCandidates;
@@ -57,7 +57,7 @@ internal static class RmQRFormatInformationDecoder
     }
 
     /// <summary>
-    /// Decodes from both copies when the version is already known from the physical dimensions: only copies that agree with <paramref name="expectedVersion"/> count (a copy miscorrected toward another version's word cannot veto the valid one), the closer agreeing copy wins (ties → finder side); false when neither copy is a valid word of the expected version within the correction distance.
+    /// Decodes from both copies when the version is already known from the physical dimensions: only copies that agree with <paramref name="expectedVersion"/> count (a copy miscorrected toward another version's word cannot veto the valid one), the closer agreeing copy wins (ties → finder side). Returns false when neither copy is a valid word of the expected version within the correction distance.
     /// </summary>
     public static bool TryDecode(int finderSideRaw, int subFinderSideRaw, RmQRVersion expectedVersion, out RmQREccLevel eccLevel, out int distance)
     {

@@ -113,7 +113,7 @@ public class ModeSegmenterPlanParityTest
                     await Assert.That(actual).IsEqualTo(expected).Because(because);
                     await Assert.That(actualState).IsEqualTo(expectedState).Because(because);
 
-                    // The cost-only loop is a different body; it must say the same thing.
+                    // The cost-only loop is a different body. It must say the same thing.
                     var costOnly = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, default, out var costOnlyState, allowAlnum, allowByte);
                     await Assert.That(costOnly).IsEqualTo(expected).Because(because);
                     await Assert.That(costOnlyState).IsEqualTo(expectedState).Because(because);

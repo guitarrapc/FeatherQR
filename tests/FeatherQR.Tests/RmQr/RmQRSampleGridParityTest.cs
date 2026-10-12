@@ -15,13 +15,13 @@ namespace FeatherQR.Tests;
 /// The three geometries are separate equivalence classes because the kernel dispatches
 /// on the transform:
 /// <list type="bullet">
-/// <item>Affine (a13 = a23 = 0, a33 = 1) — every first attempt on a clean capture, since
+/// <item>Affine (a13 = a23 = 0, a33 = 1): every first attempt on a clean capture, since
 /// the isotropic and anisotropic frames are built with perspectiveX = perspectiveY = 0.
 /// The kernel skips both divisions here (the denominator is exactly 1f).</item>
-/// <item>Rotated affine (a12 != 0) — still affine, but the sampled y varies along a row.
+/// <item>Rotated affine (a12 != 0): still affine, but the sampled y varies along a row.
 /// Without this class every affine case would be axis-aligned and a y-invariant bug
 /// would pass.</item>
-/// <item>Projective — the perspective search, where the divisions are actually taken.</item>
+/// <item>Projective: the perspective search, where the divisions are actually taken.</item>
 /// </list>
 /// Clamping and degenerate transforms get their own tests: sampling off the image is
 /// the outermost-module case the clamp exists for, and a collapsed frame is what a
@@ -124,7 +124,7 @@ public class RmQRSampleGridParityTest
 
     /// <summary>
     /// The production entry point. Its scalar fallback (`columns &lt; 8`) is unreachable
-    /// for real symbols, and that is the property worth pinning — every rMQR width is at
+    /// for real symbols, and that is the property worth pinning. Every rMQR width is at
     /// least 27, so a change that narrowed the vector path would have to break this
     /// invariant first.
     /// </summary>
@@ -144,7 +144,7 @@ public class RmQRSampleGridParityTest
 
     /// <summary>
     /// Degenerate frames the geometry search can hand the sampler: a collapsed axis
-    /// (zero derivative) and projective frames whose denominator reaches zero — one
+    /// (zero derivative) and projective frames whose denominator reaches zero, one
     /// between module centres (large finite coordinates) and one exactly on a centre,
     /// which is what actually produces infinities and NaN. The kernel must land wherever
     /// the scalar loop lands rather than diverge from it.

@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 /// <summary>The geometry a <see cref="SupersampledRenderer"/> render was drawn with.</summary>
 internal static class SupersampledGeometry
 {
-    /// <summary>Grid point (u, v) of the symbol, quiet zone excluded, to its pixel position; module (c, r) spans u from c to c + 1 and v from r to r + 1.</summary>
+    /// <summary>Grid point (u, v) of the symbol, quiet zone excluded, to its pixel position. Module (c, r) spans u from c to c + 1 and v from r to r + 1.</summary>
     public static PerspectiveTransform GridToPixel(int columns, int rows, float pixelsPerModule, float degrees, float keystone)
         => GridToPixel(columns, rows, pixelsPerModule, degrees, keystone, tiltDegrees: 0f);
 

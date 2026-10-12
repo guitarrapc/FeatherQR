@@ -18,9 +18,9 @@ internal static class EccBlockDecoder
     /// Deinterleaves <paramref name="codewords"/> into <paramref name="blocks"/>, corrects each block, and writes the corrected data codewords over the front of <paramref name="codewords"/>, in block order.
     /// </summary>
     /// <param name="codewords">The interleaved stream, data then ECC codewords (<see cref="ECCInfo.TotalDataCodewords"/> plus the ECC codewords of every block). On success its first <see cref="ECCInfo.TotalDataCodewords"/> bytes are the corrected data.</param>
-    /// <param name="blocks">Work space as long as the stream; with two or more blocks it holds each block's data then ECC codewords, group 1 first.</param>
+    /// <param name="blocks">Work space as long as the stream. With two or more blocks it holds each block's data then ECC codewords, group 1 first.</param>
     /// <param name="eccInfo">The block structure.</param>
-    /// <param name="correctionCapacity">The most errors a block may correct and still be read. A block Reed-Solomon corrects with more is refused, which is how a symbology reserves misdecode protection codewords; the full strength is <see cref="ECCInfo.ECCPerBlock"/> / 2, which Reed-Solomon never exceeds.</param>
+    /// <param name="correctionCapacity">The most errors a block may correct and still be read. A block Reed-Solomon corrects with more is refused, which is how a symbology reserves misdecode protection codewords. The full strength is <see cref="ECCInfo.ECCPerBlock"/> / 2, which Reed-Solomon never exceeds.</param>
     /// <param name="errorsCorrected">The errors corrected over every block. On failure, those of the blocks before the one that failed, plus that block's own when the capacity refused it.</param>
     /// <returns>Whether every block was read. It stops at the first block that is not.</returns>
     public static bool TryCorrect(Span<byte> codewords, Span<byte> blocks, in ECCInfo eccInfo, int correctionCapacity, out int errorsCorrected)

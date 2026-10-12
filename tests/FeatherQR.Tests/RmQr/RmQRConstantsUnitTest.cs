@@ -24,7 +24,7 @@ public class RmQRConstantsUnitTest
     }
 
     // Published data capacities (characters), Numeric / Alphanumeric / Byte, per
-    // version at M then H (Denso Wave capacity table; also measured against qrtool
+    // version at M then H (Denso Wave capacity table, also measured against qrtool
     // 192/192, see specs/rmqr-encoder.md). Index = (int)version - 1.
     private static readonly (int NumM, int AlnM, int ByteM, int NumH, int AlnH, int ByteH)[] publishedCapacities =
     [
@@ -145,8 +145,8 @@ public class RmQRConstantsUnitTest
     public async Task ErrorCorrectionCapacity_HasNoMicroQrStyleProtectionCodewords()
     {
         // ISO/IEC 18004 Micro QR reserves p codewords (2t + p = ecc) so the capacity is
-        // below the RS strength; rMQR reserves none. 60 of the 64 rows have an even ECC
-        // count per block, where any p >= 1 would visibly lower t — those are the rows
+        // below the RS strength, but rMQR reserves none. 60 of the 64 rows have an even ECC
+        // count per block, where any p >= 1 would visibly lower t. Those are the rows
         // that make the claim falsifiable. The 4 odd-ECC rows cannot distinguish p = 1
         // from p = 0, so the 60/4 split is pinned below to keep the limit of this check visible.
         var falsifiable = 0;
@@ -232,9 +232,9 @@ public class RmQRConstantsUnitTest
         // ISO/IEC 23941 Table 3 takes, per version and mode, the narrowest count field
         // that can still express the largest count the version's M-level data capacity
         // allows. Derived from the data codeword count alone, that rule reproduces all
-        // 96 oracle-verified Numeric / Alphanumeric / Byte widths — which is what makes
+        // 96 oracle-verified Numeric / Alphanumeric / Byte widths, which is what makes
         // it usable on the Kanji column, which had no oracle when it was written (qrtool
-        // can emit Kanji, found later; its four fixtures now read widths 4, 5 and 7, so
+        // can emit Kanji, found later. Its four fixtures now read widths 4, 5 and 7, so
         // 2, 3 and 6 still rest on this derivation alone). It caught R17x99 Kanji
         // transcribed as 7 where the rule gives 6.
         var dataBits = RmQRConstants.GetDataCodewordCount(version, RmQREccLevel.M) * 8;
@@ -304,7 +304,7 @@ public class RmQRConstantsUnitTest
     public async Task FormatWords_ArePairwiseDistant_ForBothCopies()
     {
         // BCH(18,6) minimum distance is what the decoder's ≤ 3-bit correction
-        // relies on; the XOR mask does not change pairwise distances, so both copies
+        // relies on. The XOR mask does not change pairwise distances, so both copies
         // share it. Also, no finder-side word may equal a sub-finder-side word (the
         // two masks differ by 0x3F1C9, weight 11), so a copy cannot be mistaken for the other.
         var words = new List<(int Left, int Right)>();

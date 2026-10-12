@@ -16,11 +16,11 @@ namespace FeatherQR.Internals.MicroQR;
 /// <remarks>
 /// Micro QR differences from Standard QR handled here:
 /// <list type="bullet">
-/// <item>Mode indicator is 0-3 bits wide (version − 1); M1 has none.</item>
+/// <item>Mode indicator is 0-3 bits wide (version − 1). M1 has none.</item>
 /// <item>Character count indicator is 3-6 bits wide (version-dependent).</item>
 /// <item>Terminator is 3/5/7/9 zero bits, shortened at capacity.</item>
 /// <item>No ECI: non-Latin-1 text is emitted as raw UTF-8 bytes in Byte mode
-/// (Micro QR has no ECI mode; readers detect UTF-8 heuristically).</item>
+/// (Micro QR has no ECI mode, so readers detect UTF-8 heuristically).</item>
 /// <item>M1/M3 capacities end on a half byte: the final data codeword is 4 bits
 /// stored in the byte's high nibble with a forced-zero low nibble, and a final 4-bit pad codeword is 0000 (never part of the 0xEC/0x11 cycle).</item>
 /// </list>
@@ -31,18 +31,18 @@ namespace FeatherQR.Internals.MicroQR;
 /// Terminator/alignment zeros are position arithmetic only, and the 0xEC/0x11 pad run is OR-ed in from a phase-selected 128-bit constant.
 ///
 /// Byte-mode Latin-1 SIMD tiers: x64 narrows 8 chars per SSE2 pack into one 64-bit append behind the scalar OR-reduction validity scan.
-/// ARM64 goes further, because payloads never exceed 15 chars, one aligned load plus one end-overlapped load cover the whole text, serving both the validity check (UMAXV) and the appends (XTN narrow; the overlapped vector's low bytes are the tail), with a 64-bit SWAR variant of the same overlap for 4-7 chars.
+/// ARM64 goes further, because payloads never exceed 15 chars, one aligned load plus one end-overlapped load cover the whole text, serving both the validity check (UMAXV) and the appends (XTN narrow, and the overlapped vector's low bytes are the tail), with a 64-bit SWAR variant of the same overlap for 4-7 chars.
 /// </remarks>
 internal static partial class MicroQRBinaryEncoder
 {
     /// <summary>
     /// Encodes <paramref name="text"/> into data codewords (padding included) and writes them to <paramref name="destination"/>.
     /// </summary>
-    /// <param name="text">Input text; must satisfy the mode's alphabet and the version's capacity (validated by the caller).</param>
+    /// <param name="text">Input text. It must satisfy the mode's alphabet and the version's capacity (validated by the caller).</param>
     /// <param name="version">Micro QR version (M1-M4).</param>
     /// <param name="eccLevel">Error correction level (valid for the version).</param>
     /// <param name="mode">Data encoding mode (Numeric / Alphanumeric / Byte / Kanji, the last two from M3).</param>
-    /// <param name="destination">Destination for the data codewords. When at least 16 bytes long the full accumulator is stored (bytes beyond the returned count are zero); shorter destinations receive exactly the codeword bytes.</param>
+    /// <param name="destination">Destination for the data codewords. When at least 16 bytes long the full accumulator is stored (bytes beyond the returned count are zero). Shorter destinations receive exactly the codeword bytes.</param>
     /// <returns>Number of codeword bytes written (= data codeword count for the version/ECC).</returns>
     public static int EncodeDataCodewords(ReadOnlySpan<char> text, MicroQRVersion version, MicroQREccLevel eccLevel, EncodingMode mode, Span<byte> destination)
     {
@@ -57,7 +57,7 @@ internal static partial class MicroQRBinaryEncoder
         //   -> 5. big-endian store
         // (steps 3-5 live in FinishAndStore)
 
-        // 1. Mode indicator (version - 1 bits; M1 carries numeric implicitly),
+        // 1. Mode indicator (version - 1 bits, so M1 carries numeric implicitly),
         //    fused with the character count indicator into a single append.
         var countBits = MicroQRConstants.GetCountIndicatorLength(version, mode);
         var headerBits = (int)version - 1 + countBits;
@@ -125,9 +125,9 @@ internal static partial class MicroQRBinaryEncoder
                 {
                     // 64-bit SWAR tier for 4-7 chars (below the vector grain):
                     // the same overlap idea on two 4-char ulong reads. Validity
-                    // is one AND against the per-lane high-byte mask; SwarPack4
+                    // is one AND against the per-lane high-byte mask. SwarPack4
                     // compacts the four 16-bit lanes to 4 bytes. Gated to ARM64
-                    // alongside the NEON tier (measured there; x64 keeps its
+                    // alongside the NEON tier (measured there, and x64 keeps its
                     // shipped SSE2 shape below), the lane math is little-endian,
                     // which every AdvSimd runtime satisfies.
                     var length = text.Length;
@@ -151,11 +151,11 @@ internal static partial class MicroQRBinaryEncoder
                 }
 #endif
                     // Latin-1 validity, branch-free: if every char is <= 0x00FF the
-                    // OR of all code units stays <= 0xFF; any char with high bits
+                    // OR of all code units stays <= 0xFF, and any char with high bits
                     // pushes it above. The loop only ORs and the compare happens once
                     // at the end, no per-char `if (text[i] > 0xFF)` branch. Trade-off:
                     // no early exit, so a non-Latin-1 char up front still scans the
-                    // whole text; Micro QR inputs are <= 15 chars, so avoiding the
+                    // whole text. Micro QR inputs are <= 15 chars, so avoiding the
                     // data-dependent branch wins over bailing out early.
                     var acc = 0;
                     for (var i = 0; i < text.Length; i++)
@@ -167,7 +167,7 @@ internal static partial class MicroQRBinaryEncoder
                         return EncodeUtf8Codewords(text, version, capacityBits, codewordCount, modeValue, headerBits, destination);
                     }
 
-                    // Byte mode: the count indicator counts encoded BYTES; on the
+                    // Byte mode: the count indicator counts encoded BYTES. On the
                     // Latin-1 path every char narrows to one byte, so count = length.
                     Append(ref hi, ref lo, ref pos, modeValue | text.Length, headerBits);
                     var j = 0;
@@ -175,7 +175,7 @@ internal static partial class MicroQRBinaryEncoder
                 if (Sse2.IsSupported && text.Length >= 8)
                 {
                     // Narrow 8 chars -> 8 bytes, appended as one 64-bit batch.
-                    // PackUnsignedSaturate narrows 16-bit lanes to 8-bit; passing
+                    // PackUnsignedSaturate narrows 16-bit lanes to 8-bit. Passing
                     // the same vector twice duplicates the result into both
                     // halves, and ToScalar() takes the low 64 bits we need.
                     // Saturation cannot corrupt data: the Latin-1 check above
@@ -224,7 +224,7 @@ internal static partial class MicroQRBinaryEncoder
     ///              ->  [group0: 10 bits][group1: 10 bits][group2: 10 bits]
     ///              ->  (123 &lt;&lt; 20) | (456 &lt;&lt; 10) | 789
     /// </code>
-    /// Group values come from <see cref="SwarGroup"/>, whose 8-byte load covers 4 chars for a 3-digit group, so every SWAR grain needs one readable char beyond it (hence the i+9 / i+3 guards); tails without that headroom use scalar group math with the '0' bias folded into one constant.
+    /// Group values come from <see cref="SwarGroup"/>, whose 8-byte load covers 4 chars for a 3-digit group, so every SWAR grain needs one readable char beyond it (hence the i+9 / i+3 guards). Tails without that headroom use scalar group math with the '0' bias folded into one constant.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteNumericData(ref ulong hi, ref ulong lo, ref int pos, ReadOnlySpan<char> digits)
@@ -236,7 +236,7 @@ internal static partial class MicroQRBinaryEncoder
         ref var c = ref MemoryMarshal.GetReference(digits);
         var length = digits.Length;
         var i = 0;
-        // 9 digits -> one 30-bit append; the SWAR load at i+6 reads chars
+        // 9 digits -> one 30-bit append, and the SWAR load at i+6 reads chars
         // i+6..i+9, so a 10th char must exist: i + 9 < length
         for (; i + 9 < length; i += 9)
         {
@@ -251,7 +251,7 @@ internal static partial class MicroQRBinaryEncoder
         // scalar tail: 0-3 digits left, no headroom for an 8-byte load
         if (i + 2 < length)
         {
-            // chars stay unbiased through the multiply; the per-digit '0' offsets
+            // chars stay unbiased through the multiply, and the per-digit '0' offsets
             // fold into one subtract: 5328 = '0' * (100 + 10 + 1)
             Append(ref hi, ref lo, ref pos, digits[i] * 100 + digits[i + 1] * 10 + digits[i + 2] - 5328, 10);
             i += 3;
@@ -270,14 +270,14 @@ internal static partial class MicroQRBinaryEncoder
     // turning a 3-digit group into its numeric value with a single 64-bit
     // multiply instead of per-digit subtracts and multiplies.
     //
-    //   chunk = 4 chars, unaligned 8-byte read; "1234" lays out little-endian as
+    //   chunk = 4 chars, unaligned 8-byte read. "1234" lays out little-endian as
     //           lanes  '1' | '2' | '3' | '4'
     //   chunk - SwarDigitBias   subtracts '0' from every lane:
     //           lanes   1  |  2  |  3  |  4
     //   * SwarGroupMagic (100<<32 | 10<<16 | 1): the partial products
     //           d0*100<<32, d1*10<<32, d2*1<<32
     //   all land in bit window [32..47], so that window holds d0*100 + d1*10 + d2.
-    //   The group value is <= 999 < 2^10 (mask 0x3FF); lower lanes cannot carry
+    //   The group value is <= 999 < 2^10 (mask 0x3FF). Lower lanes cannot carry
     //   into the window, and every product of the 4th lane lands at bit 48+ or
     //   overflows out of the 64-bit register, so its value never matters.
     //
@@ -318,14 +318,14 @@ internal static partial class MicroQRBinaryEncoder
         // does not hold, and a whole-ulong byte reversal (the NormalizeEndianness
         // approach used for byte-lane SWAR elsewhere) would also swap the bytes
         // INSIDE each 16-bit char lane, so fall back to scalar group math.
-        // IsLittleEndian is a JIT-time constant; this branch vanishes from
+        // IsLittleEndian is a JIT-time constant, so this branch vanishes from
         // little-endian codegen.
         return Unsafe.Add(ref c, i) * 100 + Unsafe.Add(ref c, i + 1) * 10 + Unsafe.Add(ref c, i + 2) - 5328; // folded bias: 5328 = '0' * 111
     }
 
 #if NET8_0_OR_GREATER
     /// <summary>
-    /// Compacts four little-endian 16-bit char lanes (high bytes zero, verified by the caller's validity mask) to their four low bytes: <c>chunk | chunk &gt;&gt; 8</c> yields bytes <c>[c0 c1 c1 c2 c2 c3 c3 0]</c> (LSB first); bytes 0-1 and 4-5 are the contiguous pairs.
+    /// Compacts four little-endian 16-bit char lanes (high bytes zero, verified by the caller's validity mask) to their four low bytes: <c>chunk | chunk &gt;&gt; 8</c> yields bytes <c>[c0 c1 c1 c2 c2 c3 c3 0]</c> (LSB first). Bytes 0-1 and 4-5 are the contiguous pairs.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint SwarPack4(ulong chunk)
@@ -337,7 +337,7 @@ internal static partial class MicroQRBinaryEncoder
 
     // Direct value table replacing the per-char CharacterSets.GetAlphanumericValue
     // call (and its two compare+throw branches). QR alphanumeric values are 0-44,
-    // so byte entries suffice; invalid slots hold 0 and are never read because the
+    // so byte entries suffice. Invalid slots hold 0 and are never read because the
     // caller validates the alphabet. Lookups index as AlnumValues[c & 0x7F]: the
     // 7-bit mask keeps ANY UTF-16 char inside 0-127, so the access is memory-safe
     // without a bounds check even for out-of-alphabet input.
@@ -393,7 +393,7 @@ internal static partial class MicroQRBinaryEncoder
     }
 
     /// <summary>
-    /// Kanji segment: 13 bits per character, the compacted Shift_JIS value (ISO/IEC 18004 8.4.5) that <see cref="ShiftJisKanjiReverseTable"/> holds for it; two characters share one 26-bit append.
+    /// Kanji segment: 13 bits per character, the compacted Shift_JIS value (ISO/IEC 18004 8.4.5) that <see cref="ShiftJisKanjiReverseTable"/> holds for it. Two characters share one 26-bit append.
     /// A character without a cell is caught after the loop from the OR of the lookups (a miss is -1): it still occupies its 13 bits, so the accumulator stays inside the capacity the caller validated.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -479,7 +479,7 @@ internal static partial class MicroQRBinaryEncoder
     /// <summary>
     /// Hand-rolled UTF-8 encoder matching Encoding.UTF8.GetBytes semantics, including U+FFFD replacement for lone surrogates.
     /// Payloads are tiny (≤ 15 encoded bytes), where Encoding's fixed dispatch cost dominates.
-    /// This also replaces the old netstandard2.0 path, <c>Encoding.UTF8.GetBytes(text.ToString())</c> — which allocated both a string and a byte array per call; this loop allocates nothing.
+    /// This also replaces the old netstandard2.0 path, <c>Encoding.UTF8.GetBytes(text.ToString())</c>, which allocated both a string and a byte array per call. This loop allocates nothing.
     /// </summary>
     private static int EncodeUtf8(ReadOnlySpan<char> text, Span<byte> utf8)
     {
@@ -651,10 +651,10 @@ internal static partial class MicroQRBinaryEncoder
         pos += Math.Min(MicroQRConstants.GetTerminatorLength(version), capacityBits - pos);
 
         // 4. Alternating full pad codewords (0xEC, 0x11, ...) up to the last
-        //    full data codeword. The old design looped one codeword at a time;
-        //    here the whole run lands in at most two 64-bit ORs:
+        //    full data codeword. The old design looped one codeword at a time.
+        //    Here the whole run lands in at most two 64-bit ORs:
         //    - phase: the pattern constant is picked by the pad start's byte
-        //      parity so that byte i gets 0xEC when (i - padStartByte) is even —
+        //      parity so that byte i gets 0xEC when (i - padStartByte) is even:
         //      even start: EC 11 EC 11 ...,  odd start: 11 EC 11 EC ...
         //    - range: prefixMask[end] & ~prefixMask[start] masks the pattern to
         //      exactly [padStartByte, padEndByte) (see the table comment).

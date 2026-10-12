@@ -40,7 +40,7 @@ public class VersionRangeTest
     [Test]
     public async Task StandardRange_FullBoundsCollapseOntoAny()
     {
-        // The bounds are stored normalised so the canonical form is unique; otherwise
+        // The bounds are stored normalised so the canonical form is unique. Otherwise
         // Between(1, 40) and Any would compare unequal while behaving identically.
         await Assert.That(QRVersionRange.Between(1, 40)).IsEqualTo(QRVersionRange.Any);
         await Assert.That(QRVersionRange.AtLeast(1)).IsEqualTo(QRVersionRange.Any);
@@ -327,7 +327,7 @@ public class VersionRangeTest
     [Test]
     public async Task StandardQr_RangeAboveTheFit_UsesTheRangeMinimum()
     {
-        // 10 digits fit version 1; AtLeast(15) has to produce 15, not 1.
+        // 10 digits fit version 1, but AtLeast(15) has to produce 15, not 1.
         var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtLeast(15) };
 
         await Assert.That(QRCodeGenerator.Create(Digits, QREccLevel.M, options).Version).IsEqualTo(15);
@@ -384,7 +384,7 @@ public class VersionRangeTest
     [Test]
     public async Task MicroQr_RangeWhoseVersionsCannotCarryTheMode_IsNotAFit()
     {
-        // Byte mode needs M3 or M4; a range capped at M2 is a "does not fit", not an
+        // Byte mode needs M3 or M4, so a range capped at M2 is a "does not fit", not an
         // argument error, because the text is what picks the mode.
         var options = new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.AtMost(MicroQRVersion.M2) };
 

@@ -237,7 +237,7 @@ public class RmQRCodeDataUnitTest
         data.SetCoreData(SyntheticCore(RmQRVersion.R7x43, 3));
         var raw = data.GetRawData();
 
-        // 301 bits → 38 bytes, 3 padding bits; dirty padding must not survive a round trip.
+        // 301 bits → 38 bytes, 3 padding bits. Dirty padding must not survive a round trip.
         var dirty = (byte[])raw.Clone();
         dirty[^1] |= 0x07;
         var restored = new RmQRCodeData(dirty, 0);

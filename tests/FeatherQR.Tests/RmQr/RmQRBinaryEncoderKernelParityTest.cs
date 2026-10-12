@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 /// Covers every length up to the largest rMQR capacity, every pending-bit phase the
 /// header can leave (0..12 bits), min / max / cyclic / pseudo-random contents.
 /// On hardware without the vector ISA both calls take the scalar path and the test
-/// degenerates to a self-check; <see cref="RmQRBinaryEncoderParityTest"/> pins the
+/// degenerates to a self-check. <see cref="RmQRBinaryEncoderParityTest"/> pins the
 /// end-to-end stream against the naive reference either way.
 /// </summary>
 public class RmQRBinaryEncoderKernelParityTest

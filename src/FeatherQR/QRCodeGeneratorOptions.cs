@@ -43,20 +43,20 @@ public record struct QRCodeGeneratorOptions
 
     /// <summary>
     /// Include a UTF-8 byte order mark.
-    /// Ignored unless the content is written as UTF-8 in Byte mode; asking for one keeps text that <see cref="AllowKanji"/> would write in Kanji mode in UTF-8.
+    /// Ignored unless the content is written as UTF-8 in Byte mode. Asking for one keeps text that <see cref="AllowKanji"/> would write in Kanji mode in UTF-8.
     /// When a BOM would be written, <see cref="QRSegmentation.Optimal"/> emits the single-mode stream instead of a split (the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text).
     /// </summary>
     public bool Utf8Bom { get; set; }
 
     /// <summary>
     /// The versions the generator may choose from.
-    /// Defaults to <see cref="QRVersionRange.Any"/>; an <c>int</c> or <c>int?</c> converts implicitly, so <c>Version = 15</c> pins one and a <c>null</c> means automatic.
+    /// Defaults to <see cref="QRVersionRange.Any"/>. An <c>int</c> or <c>int?</c> converts implicitly, so <c>Version = 15</c> pins one and a <c>null</c> means automatic.
     /// </summary>
     public QRVersionRange Version { get; set; }
 
     /// <summary>
     /// Quiet zone width in modules.
-    /// Defaults to 4, the ISO/IEC 18004 value; 0 is valid.
+    /// Defaults to 4, the ISO/IEC 18004 value, and 0 is valid.
     /// </summary>
     public int QuietZoneSize
     {
@@ -67,7 +67,7 @@ public record struct QRCodeGeneratorOptions
     /// <summary>
     /// Pin one of the eight ISO/IEC 18004 data mask patterns (0-7) instead of the automatic penalty-scored selection.
     /// <c>null</c> (the default) selects the lowest-penalty pattern.
-    /// Any pattern yields a valid, decodable symbol; the automatic choice merely optimizes scan reliability.
+    /// Any pattern yields a valid, decodable symbol. The automatic choice merely optimizes scan reliability.
     /// </summary>
     /// <remarks>
     /// For reproducing a symbol produced elsewhere byte-for-byte (the pattern another encoder chose is reported by <see cref="QRCodeDecodeInfo.MaskPattern"/>), and for exercising a decoder against all eight patterns.
@@ -87,7 +87,7 @@ public record struct QRCodeGeneratorOptions
 
     /// <summary>
     /// Raise the error correction level above the requested one when the chosen version's capacity allows it, without changing the version.
-    /// The requested level becomes the minimum; the version is still chosen for it, so boosting never produces a larger symbol, only spends padding that would otherwise be wasted.
+    /// The requested level becomes the minimum. The version is still chosen for it, so boosting never produces a larger symbol, only spends padding that would otherwise be wasted.
     /// Recommended when an icon or custom module shape overlays the symbol.
     /// </summary>
     /// <remarks>
@@ -110,7 +110,7 @@ public record struct QRCodeGeneratorOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Applies only where the charset is the library's choice (<see cref="EciMode.Default"/>) and no byte order mark is asked for (<see cref="Utf8Bom"/>); a charset the caller names is written as named.
+    /// Applies only where the charset is the library's choice (<see cref="EciMode.Default"/>) and no byte order mark is asked for (<see cref="Utf8Bom"/>). A charset the caller names is written as named.
     /// Then text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) is one Kanji segment, and under <see cref="QRSegmentation.Optimal"/> text that is so apart from its ASCII can be Kanji runs beside runs of that ASCII, where that is the smaller symbol.
     /// Seven JIS X 0208 characters that Windows code page 932 reads differently, among them the wave dash 〜, keep a text in UTF-8, as does any character outside the table.
     /// A Structured Append set made with this option can be a Kanji set: no symbol carries an ECI header, and the parity is the XOR of the whole text's Shift_JIS bytes.

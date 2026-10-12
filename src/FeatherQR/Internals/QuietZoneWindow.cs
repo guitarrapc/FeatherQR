@@ -9,7 +9,7 @@ namespace FeatherQR.Internals;
 /// <summary>
 /// A core matrix centred in a byte-per-module destination with a quiet zone around it, written in the destination itself: no second
 /// buffer, no clear of the whole destination. A placer that writes the core into the strided window needs only the margins cleared
-/// (Micro QR, rMQR); one that needs a contiguous core builds it at the destination's start, and <see cref="CenterCore"/> moves it
+/// (Micro QR, rMQR). One that needs a contiguous core builds it at the destination's start, and <see cref="CenterCore"/> moves it
 /// into the window (Standard QR on every build but netstandard2.0).
 /// </summary>
 /// <remarks>
@@ -18,7 +18,7 @@ namespace FeatherQR.Internals;
 /// 16-byte stores from its two ends, and a wider one by a clear of its length (see <see cref="ClearGap"/>). A clear of the 2q bytes
 /// themselves, a length known only at run time, is a call: with one per row, moving a small symbol's core in place took longer than
 /// clearing the whole destination and copying the rows. The stores of a gap of up to 16 bytes also zero up to 6 bytes in front of it,
-/// the end of the row before it, so that row is written after them; every core is wider than that.
+/// the end of the row before it, so that row is written after them. Every core is wider than that.
 /// </remarks>
 internal static partial class QuietZoneWindow
 {
@@ -29,7 +29,7 @@ internal static partial class QuietZoneWindow
     /// </summary>
     /// <remarks>
     /// The last row moves first. Row r lands at (q + r) × (width + 2q) + q, past r × width, where the rows not yet moved end, so no
-    /// row is overwritten before it moves; a row overlapping its own place moves as a memmove does. The gap in front of a row is
+    /// row is overwritten before it moves. A row overlapping its own place moves as a memmove does. The gap in front of a row is
     /// zeroed once the row has moved. What that zeroes reaches back from the row's place at most 16 bytes, or the gap when it is
     /// wider, and the rows not yet moved end q × (width + 2q) + 3q or more bytes before it, which is no nearer for a core of 11 or
     /// more modules, so the bytes zeroed in front of the gap are in the window of the row that moves next. The rows above the first
@@ -71,10 +71,10 @@ internal static partial class QuietZoneWindow
         target.Slice(first + (height - 1) * totalWidth + width).Clear();                  // the last row's right margin and the bottom rows
     }
 
-    /// <summary>Zeroes the <paramref name="gap"/> bytes ending at <paramref name="gapEnd"/>; a gap of up to 16 bytes also zeroes up to 6 bytes in front of it.</summary>
+    /// <summary>Zeroes the <paramref name="gap"/> bytes ending at <paramref name="gapEnd"/>. A gap of up to 16 bytes also zeroes up to 6 bytes in front of it.</summary>
     /// <remarks>
     /// .NET 10 on x64 writes a clear of a constant 8 or 16 bytes as one store whichever form its profile saw run, unless the method it is
-    /// inlined into has used up its inline budget (see <c>ClearByStores</c>); 32-bit x86 on .NET 10 calls
+    /// inlined into has used up its inline budget (see <c>ClearByStores</c>). 32-bit x86 on .NET 10 calls
     /// <c>SpanHelpers.ClearWithoutReferences</c> for it. .NET 8 leaves the form the profile did not see as a call, so a process that
     /// encoded with the default quiet zones and then with one of 5 to 8 paid a call a row. The builds before .NET 10 write 8-byte stores
     /// instead, which .NET 8 inlines in either form. .NET Framework 4.8 inlines them too but calls <c>MemoryMarshal.GetReference</c> for

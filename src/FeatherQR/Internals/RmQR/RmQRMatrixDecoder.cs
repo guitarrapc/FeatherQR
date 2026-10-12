@@ -11,7 +11,7 @@ namespace FeatherQR.Internals.RmQR;
 /// <remarks>
 /// The capacity cap is the same post-correction shape as <see cref="MicroQR.MicroQRMatrixDecoder"/>, but on rMQR it can never fire: every <see cref="RmQRConstants.GetErrorCorrectionCapacity"/> entry equals the full Reed-Solomon strength ⌊ecc/2⌋, and <see cref="EccBinaryDecoder.TryCorrect"/> only reports a success at or below that.
 /// It is applied anyway so both symbologies read the rule from their constants table at the same point in the pipeline, and so a future ISO/IEC 23941 Table 8 that reserves misdecode-protection codewords p on some row (as ISO/IEC 18004 Table 9 does for Micro QR) is a table edit alone.
-/// Micro QR has a false-positive damage class for its cap; rMQR's is empty by construction, which is why no test exercises this branch.
+/// Micro QR has a false-positive damage class for its cap, but rMQR's is empty by construction, which is why no test exercises this branch.
 /// </remarks>
 internal static partial class RmQRMatrixDecoder
 {
@@ -28,7 +28,7 @@ internal static partial class RmQRMatrixDecoder
             return DecodeStatus.InvalidMatrix;
         }
 
-        // 2. Format information (both copies) → ECC; only copies that agree with the dimension-derived version count, so a copy miscorrected toward another version's word cannot veto the valid one.
+        // 2. Format information (both copies) → ECC. Only copies that agree with the dimension-derived version count, so a copy miscorrected toward another version's word cannot veto the valid one.
         ReadFormatCopies(modules, width, height, out var finderSideRaw, out var subFinderSideRaw);
         if (!RmQRFormatInformationDecoder.TryDecode(finderSideRaw, subFinderSideRaw, version, out var eccLevel, out _))
         {
@@ -46,7 +46,7 @@ internal static partial class RmQRMatrixDecoder
         ExtractCodewords(modules, width, height, version, stream);
 
         // 4. Deinterleave into Reed-Solomon blocks, correct each, and gather the data codewords over the front of the stream.
-        // The capacity cap is unreachable while every table entry equals ⌊ecc/2⌋ (see the remarks on this class); it is the seam a reserved p would use.
+        // The capacity cap is unreachable while every table entry equals ⌊ecc/2⌋ (see the remarks on this class). It is the seam a reserved p would use.
         Span<byte> blocks = stackalloc byte[MaxTotalCodewords];
         if (!EccBlockDecoder.TryCorrect(stream, blocks.Slice(0, totalCodewords), eccInfo, RmQRConstants.GetErrorCorrectionCapacity(version, eccLevel), out var errorsCorrected))
         {
@@ -66,7 +66,7 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Upper bound on decoded characters for a version across ECC levels and modes: numeric packs 3 digits into 10 bits, so one data codeword (8 bits) yields at most 2.4 characters; 3× the M-level data codewords is a safe bound.
+    /// Upper bound on decoded characters for a version across ECC levels and modes: numeric packs 3 digits into 10 bits, so one data codeword (8 bits) yields at most 2.4 characters, and 3× the M-level data codewords is a safe bound.
     /// </summary>
     public static int GetMaxCharCount(RmQRVersion version)
         => RmQRConstants.GetDataCodewordCount(version, RmQREccLevel.M) * 3;
@@ -105,13 +105,13 @@ internal static partial class RmQRMatrixDecoder
 
     /// <summary>
     /// Inverse of <see cref="RmQRModulePlacer.PlaceData"/>: the same walk, unmasked on the fly.
-    /// Every byte of <paramref name="stream"/> is written; modules past the codeword stream (remainder) are ignored.
+    /// Every byte of <paramref name="stream"/> is written. Modules past the codeword stream (remainder) are ignored.
     /// </summary>
     /// <remarks>
     /// Everything the walk derives from the version alone (which modules are function modules, their order, the mask bit at each one) is hoisted into lazily built per-version tables, exactly as the placer does for the encode direction.
     /// Two tiers consume those tables: a bit-plane kernel on x64 with AVX2 and fast BMI2 (see RmQRMatrixDecoder.X86.cs) and a portable table walk everywhere else.
     /// Measured 16-64x and 8-12x respectively over the per-module reference walk across R7x43..R17x139 (see the decoder kernel parity tests for equivalence).
-    /// ARM64 has a third tier (RmQRMatrixDecoder.Arm64.cs) built on pair-interleaved planes instead, because NEON has no PEXT/PDEP; it is 1.1-3.3x the portable tier.
+    /// ARM64 has a third tier (RmQRMatrixDecoder.Arm64.cs) built on pair-interleaved planes instead, because NEON has no PEXT/PDEP. It is 1.1-3.3x the portable tier.
     /// The pair planes on portable vectors (RmQRMatrixDecoder.Vector128.cs) take x64 without fast PEXT, and WebAssembly for symbols with enough stream bits per column (<see cref="PairPlanesVector128Pay"/>).
     /// </remarks>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream)
@@ -149,7 +149,7 @@ internal static partial class RmQRMatrixDecoder
 #endif
     }
 
-    /// <summary>Which extraction kernel to run; anything but <see cref="ExtractKernel.Auto"/> is for parity tests.</summary>
+    /// <summary>Which extraction kernel to run. Anything but <see cref="ExtractKernel.Auto"/> is for parity tests.</summary>
     internal enum ExtractKernel
     {
         /// <summary>The fastest tier this machine supports.</summary>
@@ -165,7 +165,7 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Kernel-selecting entry; <paramref name="kernel"/> pins one tier for parity tests.
+    /// Kernel-selecting entry. <paramref name="kernel"/> pins one tier for parity tests.
     /// Pinning a tier that cannot run here throws rather than falling through to the portable walk: a parity test that silently compares the portable kernel against itself stays green while the tier it names goes unexercised.
     /// </summary>
     internal static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream, ExtractKernel kernel)
@@ -183,7 +183,7 @@ internal static partial class RmQRMatrixDecoder
         var layout = GetExtractLayout(version);
 #if NET8_0_OR_GREATER
         // Both vector kernels emit whole words off a per-version table, so their output length is fixed by the version rather than by the span they are handed.
-        // The portable tier reads stream.Length and truncates. Only dispatch to a kernel when those two agree; every production caller sizes the span exactly.
+        // The portable tier reads stream.Length and truncates. Only dispatch to a kernel when those two agree. Every production caller sizes the span exactly.
         var exact = stream.Length == RmQRConstants.GetTotalCodewordCount(version);
         if (exact && kernel != ExtractKernel.Scalar)
         {
@@ -252,9 +252,9 @@ internal static partial class RmQRMatrixDecoder
     }
 
     // ---------------------------------------------------------------
-    // Per-version extraction tables (built once from the placer's own predicates, so they are correct by construction; published with a volatile write - a benign
+    // Per-version extraction tables (built once from the placer's own predicates, so they are correct by construction, and published with a volatile write, where a benign
     // race builds identical tables twice).
-    // Memory per version: 2 bytes per stream bit plus 24 bytes per column pair, and where a pair-plane tier runs the pair-plane run tables on top of that. Measured: R17x139 is 5,368 B without them (3,712 B of order plus 69 column pairs) and 7,368 B with them; decoding all 32 versions costs about 68 KB and about 100 KB respectively.
+    // Memory per version: 2 bytes per stream bit plus 24 bytes per column pair, and where a pair-plane tier runs the pair-plane run tables on top of that. Measured: R17x139 is 5,368 B without them (3,712 B of order plus 69 column pairs) and 7,368 B with them. Decoding all 32 versions costs about 68 KB and about 100 KB respectively.
     // ---------------------------------------------------------------
 
     /// <summary>Low bits of an <see cref="ExtractLayout.Order"/> entry: the core module index.</summary>
@@ -265,7 +265,7 @@ internal static partial class RmQRMatrixDecoder
 
     /// <summary>
     /// Column stride between the two bit planes.
-    /// The widest symbol is 139 columns and the transpose stores 16 at a time, so the last store ends at 128 + 16 = 144; rounded to 160 so writing the last column group cannot run past the first plane into the second, with margin.
+    /// The widest symbol is 139 columns and the transpose stores 16 at a time, so the last store ends at 128 + 16 = 144. That is rounded to 160 so writing the last column group cannot run past the first plane into the second, with margin.
     /// </summary>
     private const int PlaneStride = 160;
 
@@ -282,7 +282,7 @@ internal static partial class RmQRMatrixDecoder
         /// <summary>Bits a full pair contributes before compression: 2 * (height - 2).</summary>
         public readonly int FieldBits;
 
-        /// <summary>Data mask in plane coordinates, indexed by pair index; XORed into the plane once per block.</summary>
+        /// <summary>Data mask in plane coordinates, indexed by pair index. It is XORed into the plane once per block.</summary>
         public readonly uint[] PlaneXor;
 
         /// <summary>
@@ -290,7 +290,7 @@ internal static partial class RmQRMatrixDecoder
         /// </summary>
         public readonly uint[] Runs;
 
-        /// <summary>End offset in <see cref="Runs"/> of each block's runs; blocks are walked in descending order.</summary>
+        /// <summary>End offset in <see cref="Runs"/> of each block's runs. Blocks are walked in descending order.</summary>
         public readonly uint[] BlockRunEnd;
 
         /// <summary>All-ones in the lanes whose pair walks downward, so needs the row-reversed word.</summary>
@@ -404,7 +404,7 @@ internal static partial class RmQRMatrixDecoder
         /// </summary>
         public readonly uint[] Pairs;
 
-        /// <summary>Tables for the pair-plane kernels; null where neither runs.</summary>
+        /// <summary>Tables for the pair-plane kernels. Null where neither runs.</summary>
         public readonly PairPlaneLayout? PairPlanes;
 
         public ExtractLayout(ushort[] order, uint[] pairs, PairPlaneLayout? pairPlanes)
@@ -501,7 +501,7 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Whether the portable pair planes beat the walk on this symbol: on every symbol on x64; on WebAssembly from
+    /// Whether the portable pair planes beat the walk on this symbol: on every symbol on x64, and on WebAssembly from
     /// <see cref="MinPackedSimdBitsPerBlock"/> stream bits per eight columns, below which the interpreter lost to the walk.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

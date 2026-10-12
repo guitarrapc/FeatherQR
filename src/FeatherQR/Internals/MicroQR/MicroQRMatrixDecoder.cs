@@ -14,7 +14,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// 3. Codeword extraction: inverse two-column zigzag, unmasking on the fly
 ///    (single Reed-Solomon block, so there is no deinterleaving stage)
 /// 4. Reed-Solomon error correction, capped at the ISO Table 9 capacity t
-///    (the ECC codewords include misdecode-protection codewords p; M1 is
+///    (the ECC codewords include misdecode-protection codewords p, and M1 is
 ///    error detection only, t = 0) and, on a grid sampled from an image, at
 ///    what its structure earns (MicroQRGridEvidence)
 /// 5. Bitstream decoding (mode segments → text), bounded by the bit capacity
@@ -33,7 +33,7 @@ internal static class MicroQRMatrixDecoder
     /// <param name="modules">Core module matrix, one byte per module (0 = light, non-zero = dark), row-major, no quiet zone.</param>
     /// <param name="size">Matrix size in modules per side (11/13/15/17).</param>
     /// <param name="destination">Destination buffer for decoded characters.</param>
-    /// <param name="charsWritten">Number of characters written; 0 unless the decode succeeds, whatever the segments before a failure wrote.</param>
+    /// <param name="charsWritten">Number of characters written. It is 0 unless the decode succeeds, whatever the segments before a failure wrote.</param>
     /// <param name="info">Diagnostic information (version, ECC level, mask, corrected errors).</param>
     public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
@@ -94,7 +94,7 @@ internal static class MicroQRMatrixDecoder
         var dataCodewords = MicroQRConstants.GetDataCodewordCount(version, eccLevel);
         var eccCodewords = MicroQRConstants.GetEccCodewordCount(version, eccLevel);
 
-        // Single block [data | ecc]; the M1/M3 half codeword occupies a full byte
+        // Single block [data | ecc]. The M1/M3 half codeword occupies a full byte
         // with a zero low nibble (the same byte value Reed-Solomon was computed over).
         Span<byte> block = stackalloc byte[MaxTotalCodewords].Slice(0, dataCodewords + eccCodewords);
         block.Clear();
@@ -124,7 +124,7 @@ internal static class MicroQRMatrixDecoder
     /// Upper bound of decoded characters for a version, across all ECC levels and modes.
     /// </summary>
     /// <remarks>
-    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound.
+    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters, and 3× codewords is a safe bound.
     /// The L (or detection-only) level has the most data codewords per version.
     /// </remarks>
     public static int GetMaxCharCount(MicroQRVersion version)
@@ -143,7 +143,7 @@ internal static class MicroQRMatrixDecoder
             || errorsCorrected <= MicroQRGridEvidence.MaxCorrections(version, eccLevel, formatDistance, timingMismatches, quietZone.CountDark(luminance, width, height, threshold, size));
     }
 
-    /// <summary>Timing modules (row 0 and column 0 from index 8, dark on even indices) that read the other way; the same count for a grid and its transpose.</summary>
+    /// <summary>Timing modules (row 0 and column 0 from index 8, dark on even indices) that read the other way. The count is the same for a grid and its transpose.</summary>
     private static int CountTimingMismatches<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size)
         where TModules : struct, IMicroQRModules
     {
@@ -191,7 +191,7 @@ internal static class MicroQRMatrixDecoder
 
     /// <summary>
     /// Reads data/ECC codeword bits from the matrix in placement order (inverse of <see cref="MicroQRModulePlacer.PlaceDataCodewords"/>), unmasking each module on the fly.
-    /// Data bits fill <paramref name="block"/> from byte 0 (the M1/M3 half codeword ends as a high nibble because the stream stops at <paramref name="dataBitCount"/>); ECC bits fill full bytes from <paramref name="dataCodewords"/> on.
+    /// Data bits fill <paramref name="block"/> from byte 0 (the M1/M3 half codeword ends as a high nibble because the stream stops at <paramref name="dataBitCount"/>). ECC bits fill full bytes from <paramref name="dataCodewords"/> on.
     /// </summary>
     internal static void ExtractCodewords<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size, int maskPattern, int dataBitCount, int dataCodewords, Span<byte> block)
         where TModules : struct, IMicroQRModules
@@ -245,7 +245,7 @@ internal static class MicroQRMatrixDecoder
     {
         var placement = new List<PlacedModule>(size * size);
         var upward = true;
-        // Column pairs (size-1, size-2) … (2, 1); column 0 is all function modules.
+        // Column pairs (size-1, size-2) … (2, 1). Column 0 is all function modules.
         for (var right = size - 1; right >= 2; right -= 2)
         {
             for (var step = 0; step < size; step++)

@@ -63,7 +63,7 @@ public sealed class MicroQRCodeData
     // 16│ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │
     //   └───┴───┴───┴───┴───┴───┴───┴───┴───┘
     //
-    // Q = QuietZone (VIRTUAL — not stored, indexer returns false)
+    // Q = QuietZone (VIRTUAL: not stored, indexer returns false)
     // C = Core modules (stored bit-packed in _bits)
     //
     // ┌─────────────────────────────────────────────────────────┐
@@ -232,7 +232,7 @@ public sealed class MicroQRCodeData
     /// </summary>
     /// <remarks>
     /// Writes a "QRX" header (3 bytes), the symbology (1 byte), the width and height (1 byte each), then the bit-packed modules.
-    /// The quiet zone is not written; pick its width again when restoring.
+    /// The quiet zone is not written, so pick its width again when restoring.
     /// </remarks>
     public byte[] GetRawData()
     {
@@ -279,11 +279,11 @@ public sealed class MicroQRCodeData
     /// <para>
     /// Coordinates match the indexer: one unit is one module, the origin is the top-left corner including the quiet zone, <see cref="ModuleRect.X"/> is the column and <see cref="ModuleRect.Y"/> the row.
     /// Scale by the pixel size of one module.
-    /// Consumers scale by the pixel size of one module; <see cref="Size"/> gives the total extent in modules.
+    /// Consumers scale by the pixel size of one module. <see cref="Size"/> gives the total extent in modules.
     /// </para>
     /// <para>
     /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
-    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol; a styled one draws its finder patterns as whole patterns instead).
+    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol, but a styled one draws its finder patterns as whole patterns instead).
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()

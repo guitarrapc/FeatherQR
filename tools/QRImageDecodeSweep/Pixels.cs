@@ -44,7 +44,7 @@ internal static class Pixels
 
     /// <summary>
     /// Writes every image of <paramref name="root"/>'s directories as the grey image <see cref="ToLuminance"/> hands the readers here, as PNG under the same directory and name.
-    /// A reader run in its own harness converts a photograph to grey its own way, and reads at the edge of a decoder move with the conversion; given these files it reads the pixels every other reader was given.
+    /// A reader run in its own harness converts a photograph to grey its own way, and reads at the edge of a decoder move with the conversion. Given these files it reads the pixels every other reader was given.
     /// </summary>
     public static int WriteGrey(string root, string outDir)
     {

@@ -13,13 +13,13 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class RmQRFormatScaleTest
 {
-    /// <summary>R7x43-M holds 7 alphanumerics; every other version takes the longer payload.</summary>
+    /// <summary>R7x43-M holds 7 alphanumerics. Every other version takes the longer payload.</summary>
     private static string ContentFor(RmQRVersion version) => version == RmQRVersion.R7x43 ? "RMQR 43" : "RMQR 12345";
 
     /// <summary>
     /// Builder renders at about 1.7 px/module whose finder measures 3.5-6 % over the symbol's
     /// pitch, so the finder-side format copy does not read at the measured scale, and R11x77 at
-    /// 140 px, which reads its copy exactly at a scale a few percent off even upright; every
+    /// 140 px, which reads its copy exactly at a scale a few percent off even upright, at every
     /// right angle.
     /// </summary>
     [Test]
@@ -58,7 +58,7 @@ public class RmQRFormatScaleTest
     /// Builder sizes from 1.5 to 2.5 px/module, every third pixel, in all four right-angle
     /// rotations. The finder's scale error depends on which of its modules the snapping widened,
     /// so a rotation can make the copy read exactly at a wrong scale (R13x99 at 211 px turned
-    /// 180° and 270°); the search has to go on while the frames fail.
+    /// 180° and 270°). The search has to go on while the frames fail.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(FractionalSizes))]
@@ -95,7 +95,7 @@ public class RmQRFormatScaleTest
     /// A finder with random modules where the format copy would be, and nothing else. Within the
     /// usual 3 bits, about a quarter of random reads match a format word, so over the searched
     /// scales one nearly always would, and the decoder would go on to sample a symbol that is not
-    /// there. A corrected scale has to read an exact codeword; these seeds read one only within
+    /// there. A corrected scale has to read an exact codeword. These seeds read one only within
     /// 1-3 bits.
     /// </summary>
     [Test]
@@ -132,7 +132,7 @@ public class RmQRFormatScaleTest
             for (var c = 0; c < 7; c++)
                 dark[r, c] = r is 0 or 6 || c is 0 or 6 || (r is >= 2 and <= 4 && c is >= 2 and <= 4);
         }
-        // The finder-side copy: bit c·5 + r at column 8 + c, row 1 + r; bits 15-17 at column 11, rows 1-3
+        // The finder-side copy: bit c·5 + r at column 8 + c, row 1 + r, and bits 15-17 at column 11, rows 1-3
         for (var bit = 0; bit < 18; bit++)
         {
             var (row, column) = bit < 15 ? (1 + bit % 5, 8 + bit / 5) : (1 + bit - 15, 11);

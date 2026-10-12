@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp.Internals;
 /// </summary>
 /// <remarks>
 /// Reads the pixel layout out of the bitmap and hands the bytes to the core (<see cref="LuminanceConverter"/>).
-/// Fast paths cover the color types QR sources actually use (Gray8, Bgra8888, Rgba8888, Rgb888x); anything else is redrawn once into Bgra8888.
+/// Fast paths cover the color types QR sources actually use (Gray8, Bgra8888, Rgba8888, Rgb888x). Anything else is redrawn once into Bgra8888.
 /// Transparent pixels are composited against white, QR quiet zones are white by definition, and transparent-background PNGs are a common input.
 /// </remarks>
 internal static class BitmapLuminanceConverter

@@ -27,7 +27,7 @@ internal static partial class FinderPatternFinder
         //    no mask buffer to clear, write and read back.
         //
         // 2. Edges come from the word and the same word one pixel later:
-        //      previous = (word << 1) | carry      bit i = pixel x + i - 1 is dark; the carry is the last pixel of the word before,
+        //      previous = (word << 1) | carry      bit i = pixel x + i - 1 is dark. The carry is the last pixel of the word before,
         //                                          so a run is followed across words. It begins at 0: a row that starts dark starts a run at 0.
         //      rising   = word & ~previous         dark, and the pixel before it light: a run starts here
         //      falling  = ~word & previous         light, and the pixel before it dark: a run ended just before here
@@ -42,7 +42,7 @@ internal static partial class FinderPatternFinder
         //    the split saved the classification. The classification wants them apart because a window is three consecutive
         //    starts and ends, so six loads give a step of windows.
         //    Within a word the two sets alternate, start, end, start, end, so one loop takes one of each an iteration and the
-        //    odd one out follows. Each edge is a two-cycle chain (clear the bit, find the next); in one loop the two chains
+        //    odd one out follows. Each edge is a two-cycle chain (clear the bit, find the next). In one loop the two chains
         //    overlap, and the loop branches half as often as two loops in a row would.
         //
         // 4. A run that reaches the end of the row still needs its end. In a last word that is not full the bits past the row are 0,
@@ -94,7 +94,7 @@ internal static partial class FinderPatternFinder
         return endCount;
     }
 
-    /// <summary>Bit i set where pixel x + i is dark, for the 64 pixels at <paramref name="x"/>; bits past the row stay 0.</summary>
+    /// <summary>Bit i set where pixel x + i is dark, for the 64 pixels at <paramref name="x"/>. Bits past the row stay 0.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong DarkWord(ref byte pixels, int x, int width, byte threshold)
     {
@@ -107,7 +107,7 @@ internal static partial class FinderPatternFinder
         // ARM64: byte-lane LessThan is the unsigned compare (cmhi), but there is no movemask, so the word is folded out of the
         //      compare masks. Each of the four 16-lane masks is ANDed with the weights 1, 2, 4, ..., 128, 1, 2, ..., 128, so a dark
         //      lane holds the bit its pixel has inside its byte of the word. Three pairwise adds then merge neighbouring lanes,
-        //      64 to 32 to 16 to 8 bytes; a lane pair never shares a bit, so no add carries:
+        //      64 to 32 to 16 to 8 bytes. A lane pair never shares a bit, so no add carries:
         //
         //        pixels    0 1 2 3 4 5 6 7 | 8 .. 15 | 16 .. 31 | 32 .. 63       four compares, a weight kept where dark
         //        add 1     (0+1) (2+3) (4+5) (6+7) (8+9) ...                       32 bytes, two pixels' bits each
@@ -197,7 +197,7 @@ internal static partial class FinderPatternFinder
     /// The three integer checks on the <see cref="ClassifyWindowLanes"/> windows that begin at dark runs <paramref name="k"/> on: one bit a window in each result.
     /// </summary>
     /// <remarks>
-    /// Window j is runs starts[j]..ends[j], ends[j]..starts[j + 1], starts[j + 1]..ends[j + 1], ends[j + 1]..starts[j + 2], starts[j + 2]..ends[j + 2]; two more starts and ends than lanes are read from <paramref name="k"/> on, whatever they hold.
+    /// Window j is runs starts[j]..ends[j], ends[j]..starts[j + 1], starts[j + 1]..ends[j + 1], ends[j + 1]..starts[j + 2], starts[j + 2]..ends[j + 2]. Two more starts and ends than lanes are read from <paramref name="k"/> on, whatever they hold.
     /// <paramref name="strict"/> is <see cref="IsFinderRatio(int, int, int, int, int)"/>, <paramref name="near"/> is <see cref="IsNearFinderRatio"/>, <paramref name="crisp"/> is <see cref="IsSmallCrispFinderRuns"/>, for runs below <see cref="EdgeListWidthLimit"/> in total.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

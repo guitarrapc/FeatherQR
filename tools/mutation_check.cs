@@ -19,10 +19,10 @@ using System.Xml.Linq;
 //   dotnet run tools/mutation_check.cs -- helper <path-in-the-test-project>
 //
 // A mutants file is tab-separated, one edit a line: id, path from the repository root, the text to
-// find and the text to put in its place, both literal. The text must occur exactly once in the file;
-// a '␤' in either stands for a line break, written as the file writes its own, so a line repeated
+// find and the text to put in its place, both literal. The text must occur exactly once in the file.
+// A '␤' in either stands for a line break, written as the file writes its own, so a line repeated
 // elsewhere in the file is found with the line beside it that is not.
-// Lines sharing an id are one fault, applied together; '#' starts a comment. A fault is small and of
+// Lines sharing an id are one fault, applied together. '#' starts a comment. A fault is small and of
 // the kind the test exists to catch: a bound one step too tight, `<` for `<=`, a constant off by one.
 //
 //   A5	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.RunWalk.cs	Math.Min(3 * totalLow / 14 + 1,	Math.Min((3 * totalLow + 1) / 14 + 1,
@@ -30,7 +30,7 @@ using System.Xml.Linq;
 // `run` builds the test project in Release (a Debug.Assert would take the test host down instead of
 // failing a test) and runs the suite once unchanged, which must catch nothing, then once a fault: the
 // fault written into src, built, run, and the file put back from memory. The files a fault touches must
-// be clean in git, so that `git checkout -- <file>` is a way back should the run be killed; `--allow-dirty`
+// be clean in git, so that `git checkout -- <file>` is a way back should the run be killed. `--allow-dirty`
 // runs on files with changes of their own, which a killed run leaves faulted, so copy them aside first. Each run
 // leaves <id>.json (the failed test cases and the logged sub-cases), the TRX and the logs in <out-dir>.
 //
@@ -71,7 +71,7 @@ using System.Xml.Linq;
 // `compare` the two: a fault a method, a class or the suite caught before and no longer does is lost.
 //
 // What this does not do: it knows only the faults it is given, so an axis that carries meaning (a count
-// indicator band, a surrogate edge) is worth keeping even where no planted fault needs it; and it runs
+// indicator band, a surrogate edge) is worth keeping even where no planted fault needs it, and it runs
 // one target framework on one machine, so code that only another architecture runs is not measured.
 // Nor is code only the netstandard builds compile: it builds the test project alone, which leaves those
 // builds older than the faulted file, so the tests that read them (NetStandardBuildParityTest and the
@@ -322,9 +322,9 @@ static (int Total, int Failed, List<Catch> Catches) ReadTrx(string path)
 // The test a crashed host was running, from what it wrote to stderr, where the runtime writes the crash and no test result goes: in
 // the last stack after "Fatal error", "Unhandled exception", "Stack overflow" or "Process terminated" (a fail-fast), the outermost
 // method in the test assembly's namespace before the frames of TUnit's engine and of the testing platform. Lines that are not frames
-// (the message, an inner exception's end, a repeat count) and the frames of an assertion are passed over; an async method stands for
+// (the message, an inner exception's end, a repeat count) and the frames of an assertion are passed over. An async method stands for
 // its state machine's MoveNext, and a lambda's frame for the method that calls it. An unhandled exception whose first frame is the
-// framework's is the framework failing, not a test; an access violation there is a fault's crash that names no test.
+// framework's is the framework failing, not a test. An access violation there is a fault's crash that names no test.
 static Catch CrashCatch(IReadOnlyList<string> errors, string testAssembly, int exitCode, string runLog)
 {
     var testNamespace = Regex.Escape(testAssembly);
@@ -559,7 +559,7 @@ static string Git(string[] arguments)
     return output;
 }
 
-// Runs a process with its stdout and stderr in one log, line by line as they come; stderr's lines also go to errors, in their order.
+// Runs a process with its stdout and stderr in one log, line by line as they come, and stderr's lines also go to errors, in their order.
 static int Exec(string file, IEnumerable<string> arguments, string workingDirectory, string logPath, Dictionary<string, string>? environment, TimeSpan timeout, out bool timedOut, List<string>? errors = null)
 {
     var psi = new ProcessStartInfo(file) { WorkingDirectory = workingDirectory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };

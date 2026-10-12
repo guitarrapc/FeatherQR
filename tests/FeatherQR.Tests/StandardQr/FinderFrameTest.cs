@@ -79,7 +79,7 @@ public class FinderFrameTest
     }
 
     /// <summary>
-    /// Weights of 0.55 on both lines put the vanishing line across the far corner of a version 1 symbol, which no plane in front of the camera does; 0.62 keeps it outside.
+    /// Weights of 0.55 on both lines put the vanishing line across the far corner of a version 1 symbol, which no plane in front of the camera does. 0.62 keeps it outside.
     /// </summary>
     [Test]
     [Arguments(0.55f, true)]
@@ -132,7 +132,7 @@ public class FinderFrameTest
     }
 
     /// <summary>
-    /// The parallelogram predicts the bottom-right alignment pattern a lattice step or more off under a strong keystone, and a search there anchors on a neighbouring pattern; the frame predicts it where it is.
+    /// The parallelogram predicts the bottom-right alignment pattern a lattice step or more off under a strong keystone, and a search there anchors on a neighbouring pattern. The frame predicts it where it is.
     /// </summary>
     [Test]
     [Arguments(32, 0.2f, 227f, 3.7f)]
@@ -183,7 +183,7 @@ public class FinderFrameTest
     }
 
     /// <summary>
-    /// A line whose far end cannot be measured to sub-pixel edges takes both of its sizes from whole-pixel runs, so its change of size is never compared across two resolutions; the other line keeps its sub-pixel sizes.
+    /// A line whose far end cannot be measured to sub-pixel edges takes both of its sizes from whole-pixel runs, so its change of size is never compared across two resolutions. The other line keeps its sub-pixel sizes.
     /// The far finder's row-scan size is given as half the module, which stops its sub-pixel walk before the dark ring ends and leaves the runs, which have no such limit, to measure it.
     /// </summary>
     [Test]

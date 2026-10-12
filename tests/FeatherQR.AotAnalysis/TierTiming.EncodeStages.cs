@@ -16,7 +16,7 @@ using FeatherQR.Internals.StandardQR;
 /// The forced rows apply pattern 0 or 3 through the path a pinned <see cref="QRCodeGeneratorOptions.MaskPattern"/> takes, and the
 /// <c>e2e-qz0-maskN</c> rows encode with the pattern pinned. The <c>e2e-qzN</c> rows encode at quiet zones 8, 9, 16, 17, 32 and 33, on
 /// both sides of the bounds of <c>QuietZoneWindow.ClearGap</c>'s forms for the gap between two rows (the 16-byte form at 8, two 16-byte
-/// stores from 9 to 16 and four from 17 to 32 outside the browser, the clear of the gap from 33). The forms write the same bytes, so no test tells which one a build takes; these rows time it.
+/// stores from 9 to 16 and four from 17 to 32 outside the browser, the clear of the gap from 33). The forms write the same bytes, so no test tells which one a build takes. These rows time it.
 /// </remarks>
 internal static partial class TierTiming
 {

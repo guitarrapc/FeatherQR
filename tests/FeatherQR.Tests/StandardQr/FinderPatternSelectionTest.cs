@@ -62,7 +62,7 @@ public class FinderPatternSelectionTest
 
     /// <summary>
     /// Four candidates on the corners of a square make four right isosceles triangles, so
-    /// geometry and module size tie; the corner confirmed on fewer rows is the one left out.
+    /// geometry and module size tie. The corner confirmed on fewer rows is the one left out.
     /// </summary>
     [Test]
     public async Task Select_GeometryAndSizeTie_PrefersTheMoreConfirmedTriple()
@@ -316,7 +316,7 @@ public class FinderPatternSelectionTest
     /// <summary>
     /// Two symbols side by side: six candidates, and the selection must take all three from one
     /// symbol. Selecting by module size alone mixed them whenever both symbols were rendered at
-    /// the same density, since every candidate then measured the same size; different
+    /// the same density, since every candidate then measured the same size. Different
     /// densities (the 5/6 case) were already told apart.
     /// </summary>
     [Test]

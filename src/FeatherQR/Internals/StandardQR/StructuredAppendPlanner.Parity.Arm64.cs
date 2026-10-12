@@ -103,7 +103,7 @@ internal static partial class StructuredAppendPlanner
                 }
             }
             raw ^= c;
-            // UTF-8 payload shifts/masks are linear under XOR; apply them once after the loop.
+            // UTF-8 payload shifts/masks are linear under XOR, so apply them once after the loop.
             // These groups need bits 6..11 and 12..15 respectively, leaving bit 0 free to record their count parity for the encoded-byte prefix constants.
             var tagged = c | Vector128.Create((ushort)1);
             nonAscii ^= tagged & Vector128.GreaterThan(c, Vector128.Create((ushort)0x7F));

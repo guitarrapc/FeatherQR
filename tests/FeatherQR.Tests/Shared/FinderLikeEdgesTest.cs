@@ -89,7 +89,7 @@ public class FinderLikeEdgesTest
     [Test]
     public async Task ModuleFloor_IsTwoPixels()
     {
-        // Same-polarity distances summing to 24 are a module of 2 px; 23 and 22 are under it
+        // Same-polarity distances summing to 24 are a module of 2 px, and 23 and 22 are under it
         await Assert.That(FinderPatternFinder.IsFinderRatioByLikeEdges(2, 2, 6, 2, 2, out _)).IsTrue();
         await Assert.That(FinderPatternFinder.IsFinderRatioByLikeEdges(2, 2, 6, 2, 1, out _)).IsFalse();
         await Assert.That(FinderPatternFinder.IsFinderRatioByLikeEdges(2, 2, 5, 2, 2, out _)).IsFalse();
@@ -224,7 +224,7 @@ public class FinderLikeEdgesTest
         }
         return (luminance, side);
 
-        // The band 0-4 (outer dark, light, centre, light, outer dark) a coordinate falls in, each dark band shrunk by the thinning at both of its edges; -1 outside
+        // The band 0-4 (outer dark, light, centre, light, outer dark) a coordinate falls in, each dark band shrunk by the thinning at both of its edges, or -1 outside
         static int Band(int p, int module, int thinning)
         {
             int[] edges = [thinning, module - thinning, 2 * module + thinning, 5 * module - thinning, 6 * module + thinning, 7 * module - thinning];

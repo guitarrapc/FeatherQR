@@ -12,9 +12,9 @@ internal static partial class QRImageDecoder
     /// ARM64 tier: the AVX2 tier's step on four lanes, two steps a loop body, their eight pixels packed into one word for one compare and one store.
     /// </summary>
     /// <remarks>
-    /// The same float operations in the reference's order, so the same pixel; what differs from the AVX2 tier is what this machine has. Byte-lane <c>LessThan</c> is the unsigned compare (cmhi), so no min identity is needed.
-    /// The scalar cast is fcvtzs on ARM64 on every runtime, saturating with NaN to 0, so the row tail's plain cast and integer clamp give the pixel the reference's <c>PixelIndex.Clamp</c> does, without converting the limits to float. The vector conversion is the same instruction; its clamp keeps the AVX2 tier's shape (the limit first in a float minimum, then an integer maximum with 0), which lands NaN and both infinities where the reference does.
-    /// The pixel index is one integer multiply-add, exact. Measured on Apple M2 against the column-table tier while a coordinate was interpolated through two nodes, before the third: 0.46 to 0.51 at versions 14 to 40, upright and rotated; a per-cell broadcast kept as vectors and loading the pixels straight into lanes each measured level and were left out. Four lanes are half of the AVX2 tier's gain on that machine, and there is no wider form on this ISA.
+    /// The same float operations in the reference's order, so the same pixel. What differs from the AVX2 tier is what this machine has. Byte-lane <c>LessThan</c> is the unsigned compare (cmhi), so no min identity is needed.
+    /// The scalar cast is fcvtzs on ARM64 on every runtime, saturating with NaN to 0, so the row tail's plain cast and integer clamp give the pixel the reference's <c>PixelIndex.Clamp</c> does, without converting the limits to float. The vector conversion is the same instruction. Its clamp keeps the AVX2 tier's shape (the limit first in a float minimum, then an integer maximum with 0), which lands NaN and both infinities where the reference does.
+    /// The pixel index is one integer multiply-add, exact. Measured on Apple M2 against the column-table tier while a coordinate was interpolated through two nodes, before the third: 0.46 to 0.51 at versions 14 to 40, upright and rotated. A per-cell broadcast kept as vectors and loading the pixels straight into lanes each measured level and were left out. Four lanes are half of the AVX2 tier's gain on that machine, and there is no wider form on this ISA.
     /// </remarks>
     internal static void SampleGridPiecewiseAdvSimd(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {
@@ -28,7 +28,7 @@ internal static partial class QRImageDecoder
         //   indices   i0  i1   i2   i3  | i4  ... i7        eight scattered loads, packed low byte first
         //   modules   d0  d1   d2   d3    d4  ... d7        LessThan(word, threshold) & 1, one ulong store
         //
-        // What this machine changes: byte-lane LessThan is the unsigned compare, so no min identity; the scalar cast and the vector conversion are both fcvtzs (saturating, NaN to 0), so one conversion form serves every runtime where the AVX2 tier needs two. A step that touches three runs of columns, or a mesh past the stack tables, goes to the column-table tier, as there.
+        // What this machine changes: byte-lane LessThan is the unsigned compare, so no min identity. The scalar cast and the vector conversion are both fcvtzs (saturating, NaN to 0), so one conversion form serves every runtime where the AVX2 tier needs two. A step that touches three runs of columns, or a mesh past the stack tables, goes to the column-table tier, as there.
         if (!AdvSimd.Arm64.IsSupported || width > MaxExactFloatSide || height > MaxExactFloatSide
             || !CheckPiecewiseArguments(luminance, width, height, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules))
         {
@@ -106,7 +106,7 @@ internal static partial class QRImageDecoder
                 var dark = Vector128.LessThan(Vector128.CreateScalar(pixels).AsByte(), limitVector) & one;
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, rowBase + u), dark.AsUInt64().ToScalar());
             }
-            // row tail: 1 module for even versions and 5 for odd ones (17 + 4·version), up to 7 for any other dimension; the reference's scalar body on the same per-run floats
+            // row tail: 1 module for even versions and 5 for odd ones (17 + 4·version), up to 7 for any other dimension, with the reference's scalar body on the same per-run floats
             for (; u < dimension; u++)
             {
                 var c = firstOf[u];
@@ -130,7 +130,7 @@ internal static partial class QRImageDecoder
     private static Vector128<uint> StepIndexAdvSimd(ref float startX0, ref float slopeX0, ref float curveX0, ref float startY0, ref float slopeY0, ref float curveY0, int a, int b, ref int mask0, ref float along0, ref float past0, int u, Vector128<float> maxPx, Vector128<float> maxPy, Vector128<int> zero, Vector128<int> widthVector)
     {
         // One step of four modules.
-        // The run of the step's first lane gives start, slope and curvature; where the step's last lane is in the next run, the lanes in it take that run's values through the lane mask (a step never touches a third run:
+        // The run of the step's first lane gives start, slope and curvature. Where the step's last lane is in the next run, the lanes in it take that run's values through the lane mask (a step never touches a third run:
         // the step table refused such a lattice). Then the interpolation as separate multiplies and adds (fused, a coordinate can land an ulp off the reference's and truncate into the next pixel), the limit first in the minimum so a NaN lane converts to 0, the conversion, the clamp at 0, and px + py * width in one multiply-add.
         var startX = Vector128.Create(Unsafe.Add(ref startX0, a));
         var slopeX = Vector128.Create(Unsafe.Add(ref slopeX0, a));
@@ -153,7 +153,7 @@ internal static partial class QRImageDecoder
         // each multiply and add kept separate: fused, a coordinate can differ from the reference's by an ulp and truncate into the next pixel
         var x = startX + along * (slopeX + past * curveX);
         var y = startY + along * (slopeY + past * curveY);
-        // a NaN lane comes out of the minimum as NaN whichever operand it is, converts to 0 and stays 0; the limit is first as in the AVX2 tier
+        // a NaN lane comes out of the minimum as NaN whichever operand it is, converts to 0 and stays 0. The limit is first as in the AVX2 tier.
         var px = Vector128.Max(Vector128.ConvertToInt32(Vector128.Min(maxPx, x)), zero);
         var py = Vector128.Max(Vector128.ConvertToInt32(Vector128.Min(maxPy, y)), zero);
         return AdvSimd.MultiplyAdd(px, py, widthVector).AsUInt32();

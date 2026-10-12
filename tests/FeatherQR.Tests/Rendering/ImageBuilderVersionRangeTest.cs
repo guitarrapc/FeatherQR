@@ -152,7 +152,7 @@ public class ImageBuilderVersionRangeTest
     [Test]
     public async Task MicroQr_RangeThatCannotCarryTheMode_ReportsItAsAnArgumentError()
     {
-        // Byte content needs M3 or M4; capping the range at M2 leaves nothing usable.
+        // Byte content needs M3 or M4, so capping the range at M2 leaves nothing usable.
         var builder = new MicroQRCodeImageBuilder("hello").WithErrorCorrection(MicroQREccLevel.L).WithVersion(MicroQRVersionRange.AtMost(MicroQRVersion.M2));
 
         await Assert.That(() => builder.ToByteArray()).Throws<ArgumentException>();

@@ -337,7 +337,7 @@ public class ContentVerdictImageDecodeTest
         var (mapped, _, _) = Build(symbology, Mapped);
         const int quietZone = 4;
         var tileWidth = columns + 2 * quietZone;
-        // The readable symbol on the left, in the shadow; the unmapped one on the right, lit
+        // The readable symbol on the left, in the shadow, and the unmapped one on the right, lit
         (byte[] Luminance, int Width, int Height) Render(bool drawUnmapped) => UnevenLightingRenderer.Render((row, column) =>
         {
             var tile = column / tileWidth;
@@ -352,7 +352,7 @@ public class ContentVerdictImageDecodeTest
         await Assert.That(status).IsEqualTo(DecodeStatus.UnmappedCharacter);
     }
 
-    /// <summary>A mirrored Standard QR symbol is read on its transposed grid; the untransposed grid's format failure does not hide the verdict.</summary>
+    /// <summary>A mirrored Standard QR symbol is read on its transposed grid, and the untransposed grid's format failure does not hide the verdict.</summary>
     [Test]
     public async Task StandardQR_UnmappedCellMirrored_ReachesTheCallerAsUnmappedCharacter()
     {

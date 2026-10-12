@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// the symbol's own top-left, populated when and only when the decode succeeded.
 /// </summary>
 /// <remarks>
-/// Every scene renders the symbol flat, then draws it onto white through a matrix; the expected
+/// Every scene renders the symbol flat, then draws it onto white through a matrix. The expected
 /// corners are that matrix applied to the flat corners, so the oracle is the scene, not the
 /// decoder. (0, 0) is the top-left corner of the top-left pixel. Seen on screen a printed symbol's
 /// corners run clockwise and a mirrored capture's counter-clockwise.
@@ -60,7 +60,7 @@ public class SymbolCornersTest
         await AssertNear(rmInfo.Corners.TopLeft, Expected(matrix, rm).TopLeft, 0.15f, "TopLeft");
     }
 
-    /// <summary>Version 1, with no alignment pattern, is held for rotation too; its only gap is keystone.</summary>
+    /// <summary>Version 1, with no alignment pattern, is held for rotation too. Its only gap is keystone.</summary>
     [Test]
     [Arguments(2, 90)]
     [Arguments(2, 180)]
@@ -105,7 +105,7 @@ public class SymbolCornersTest
 
     /// <summary>
     /// A version with an alignment pattern gets a true four-point fit, held to half a module at
-    /// each tilt below; from version 14 on it is still the anchored transform that reads, not the
+    /// each tilt below. From version 14 on it is still the anchored transform that reads, not the
     /// mesh. Version 1 has no alignment pattern and is covered by the flat and rotated cases only.
     /// </summary>
     [Test]
@@ -132,7 +132,7 @@ public class SymbolCornersTest
     /// The bottom-right corner is anchored on the alignment centre, which resolves to about a pixel
     /// at any module size, so its error is near-constant in pixels and grows in modules as the
     /// capture coarsens (version 2, every degree: 4.09 px at 6 px per module, 3.63 at 8, 3.94 at 12).
-    /// These rows pin the pixel bound; the half-module one holds only from 8 up.
+    /// These rows pin the pixel bound. The half-module one holds only from 8 up.
     /// </summary>
     [Test]
     [Arguments(3, 34)]
@@ -352,7 +352,7 @@ public class SymbolCornersTest
     // ---- when there is nothing to report ------------------------------------------------
 
     /// <summary>
-    /// A matrix-level decode has no image, so it has no corners; the value is the default
+    /// A matrix-level decode has no image, so it has no corners. The value is the default
     /// and says so.
     /// </summary>
     [Test]
@@ -397,7 +397,7 @@ public class SymbolCornersTest
     /// image: a symbol that was located and fully read but did not fit the caller's buffer
     /// (<see cref="DecodeStatus.DestinationTooSmall"/>), and one that was located but could
     /// not be read (<see cref="DecodeStatus.DataUncorrectable"/> after damage). Both leave
-    /// the corners empty, on all three symbologies; a guard that widened to "terminal" would
+    /// the corners empty, on all three symbologies. A guard that widened to "terminal" would
     /// fail the first, and one that attached corners before checking the status the second.
     /// </summary>
     [Test]
@@ -492,7 +492,7 @@ public class SymbolCornersTest
 
     // ---- scenes -------------------------------------------------------------------------
 
-    /// <summary>Paints out the bottom-right alignment pattern (5 modules across) so the search finds nothing there; white is enough, since it looks for a dark-light-dark run.</summary>
+    /// <summary>Paints out the bottom-right alignment pattern (5 modules across) so the search finds nothing there. White is enough, since it looks for a dark-light-dark run.</summary>
     private static void EraseBottomRightAlignmentPattern(SKBitmap flat, int version, int pixelsPerModule = PixelsPerModule)
     {
         // ISO/IEC 18004 Table E.1: the last alignment coordinate is 7 modules in from the edge.

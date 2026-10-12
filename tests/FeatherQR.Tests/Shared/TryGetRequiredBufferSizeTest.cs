@@ -3,7 +3,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The non-throwing sizing surface across all three symbologies: <c>false</c> only ever
 /// means "does not fit", argument errors still throw. The load-bearing case is
-/// <c>ReportedSize_MatchesTheEncodeItDescribes</c> — a divergence there means a buffer sized by
+/// <c>ReportedSize_MatchesTheEncodeItDescribes</c>. A divergence there means a buffer sized by
 /// <c>Try</c> is the wrong size for the matrix <c>Create</c> writes.
 /// </summary>
 public class TryGetRequiredBufferSizeTest
@@ -43,7 +43,7 @@ public class TryGetRequiredBufferSizeTest
     [Test]
     public async Task RmQR_RequestedVersionTooSmall_ReturnsFalse()
     {
-        // R7x43 at M holds 12 digits; 13 is one over.
+        // R7x43 at M holds 12 digits, so 13 is one over.
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize("0123456789012", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 })).IsFalse();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize("012345678901", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 })).IsTrue();
     }
@@ -187,7 +187,7 @@ public class TryGetRequiredBufferSizeTest
     [Test]
     public async Task RmQR_VersionAndHeightContradiction_Throws_NotFalse()
     {
-        // Both are individually legal; the caller asked for two different things.
+        // Both are individually legal, but the caller asked for two different things.
         await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R9x43, Height = RmQRHeight.H7 })).Throws<ArgumentException>();
     }
 
@@ -327,7 +327,7 @@ public class TryGetRequiredBufferSizeTest
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly((MicroQRVersion)0) })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly((MicroQRVersion)5) })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { QuietZoneSize = -1 })).Throws<ArgumentOutOfRangeException>();
-        // The quiet zone is bounded above as well as below; the upper half of that guard
+        // The quiet zone is bounded above as well as below. The upper half of that guard
         // lost its only test with the throwing sizing overloads.
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { QuietZoneSize = 10_001 })).Throws<ArgumentOutOfRangeException>();
         // M1 accepts ErrorDetectionOnly only: a version/ECC contradiction, text-independent.
@@ -345,7 +345,7 @@ public class TryGetRequiredBufferSizeTest
 
     /// <summary>
     /// Sizing and encoding have to answer the same question. Until 2.0.0 this swept the
-    /// throwing overload against the <c>Try</c> one; with the throwing overload removed,
+    /// throwing overload against the <c>Try</c> one. With the throwing overload removed,
     /// the encode itself is the reference, which is the comparison that actually matters
     /// to a caller: a buffer sized here has to be the buffer the encode fills.
     /// </summary>
@@ -414,8 +414,8 @@ public class TryGetRequiredBufferSizeTest
 
     public static IEnumerable<(string content, QREccLevel ecc, bool utf8BOM, EciMode eciMode)> StandardAgreementCases()
     {
-        // The BOM adds 3 bytes and ECI a 12-bit header, so both shift the version boundary;
-        // the cases straddle it at v40-L (2,953 bytes / 7,089 digits) and at v1.
+        // The BOM adds 3 bytes and ECI a 12-bit header, so both shift the version boundary.
+        // The cases straddle it at v40-L (2,953 bytes / 7,089 digits) and at v1.
         string[] contents =
         [
             "", "1", "hello world", "日本語",

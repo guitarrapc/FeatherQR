@@ -22,7 +22,7 @@ internal static partial class QRImageDecoder
 
     /// <summary>
     /// The grid read again into <paramref name="modules"/> in module space: each module's luminance the mean of samples over its middle, and the module dark when no lighter than the mean of the modules around it.
-    /// A threshold over pixels, global or regional, sets its scale in pixels and reads one pixel a module; this one measures in modules, so blur and noise average out of a module and the level it is split at follows the light across the symbol.
+    /// A threshold over pixels, global or regional, sets its scale in pixels and reads one pixel a module. This one measures in modules, so blur and noise average out of a module and the level it is split at follows the light across the symbol.
     /// </summary>
     private static DecodeStatus DecodeInModuleSpace(in ImageView image, in PerspectiveTransform transform, int dimension, ReadOnlySpan<byte> transposedFailure, Span<byte> modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
@@ -168,7 +168,7 @@ internal static partial class QRImageDecoder
                 var left = Math.Max(0, u - reach);
                 var right = Math.Min(dimension, u + reach + 1);
                 var total = sums[bottom * stride + right] - sums[top * stride + right] - sums[bottom * stride + left] + sums[top * stride + left];
-                // level <= total / count, without the division; a level is at most 2,295 and a window 45 modules a side, so the product stays in an int, as the sums over 177 × 177 modules do
+                // level <= total / count, without the division. A level is at most 2,295 and a window 45 modules a side, so the product stays in an int, as the sums over 177 × 177 modules do.
                 modules[v * dimension + u] = levels[v * dimension + u] * ((bottom - top) * (right - left)) <= total ? (byte)1 : (byte)0;
             }
         }

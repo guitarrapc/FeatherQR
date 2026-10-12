@@ -86,7 +86,7 @@ public class SegmentDecodersKanjiUnitTest
     /// <remarks>
     /// Eight characters pack into 104 bits = 13 bytes with nothing left over, so
     /// <c>totalBits</c> equals <c>count * 13</c> exactly. The numeric, alphanumeric and
-    /// byte decoders each had an exact-fill case already; Kanji did not, and an
+    /// byte decoders each had an exact-fill case already. Kanji did not, and an
     /// off-by-one there rejects a valid symbol rather than accepting an invalid one.
     /// </remarks>
     [Test]
@@ -113,7 +113,7 @@ public class SegmentDecodersKanjiUnitTest
 
     /// <summary>
     /// A count that names more characters than the remaining bits could hold is a
-    /// malformed stream, not a short buffer; reporting DestinationTooSmall here would
+    /// malformed stream, not a short buffer. Reporting DestinationTooSmall here would
     /// stop the image decoder from looking for the real symbol. Same ordering rule the
     /// numeric and alphanumeric payload decoders follow.
     /// </summary>
@@ -197,7 +197,7 @@ public class SegmentDecodersKanjiUnitTest
         await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
-    /// <summary>A bad cell in the middle stops the segment; earlier characters are not trusted.</summary>
+    /// <summary>A bad cell in the middle stops the segment, and earlier characters are not trusted.</summary>
     [Test]
     public async Task DecodeKanjiPayload_UnassignedCellMidSegment_FailsTheWholeSegment()
     {

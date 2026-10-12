@@ -11,8 +11,8 @@ public enum UnevenLight
 
 /// <summary>
 /// Renders a module grid printed on paper and lit unevenly: each pixel is the reflectance of what it covers (dark ink or light paper) times the light that falls there.
-/// A ramp dims the light steadily across the image; a shadow drops it across a soft edge through the middle.
-/// The whole-scale form draws the grid as given, so its quiet zone has to be part of it; the turned form adds a light margin of two modules.
+/// A ramp dims the light steadily across the image, and a shadow drops it across a soft edge through the middle.
+/// The whole-scale form draws the grid as given, so its quiet zone has to be part of it. The turned form adds a light margin of two modules.
 /// </summary>
 internal static class UnevenLightingRenderer
 {

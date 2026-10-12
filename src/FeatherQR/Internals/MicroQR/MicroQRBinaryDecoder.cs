@@ -11,8 +11,8 @@ namespace FeatherQR.Internals.MicroQR;
 /// Inverse of <see cref="MicroQRBinaryEncoder"/>.
 /// Micro QR framing differs from Standard QR (ISO/IEC 18004 Table 2/3):
 /// <list type="bullet">
-/// <item>Mode indicator is version − 1 bits wide (M1 has none; Numeric is implied).
-/// Values: Numeric = 0, Alphanumeric = 1, Byte = 2, Kanji = 3 (decoded as JIS X 0208 via the shared <see cref="ShiftJisKanjiTable"/>, M3 and M4 only since narrower mode indicators cannot express it); M4 values 4-7 are undefined.</item>
+/// <item>Mode indicator is version − 1 bits wide (M1 has none, so Numeric is implied).
+/// Values: Numeric = 0, Alphanumeric = 1, Byte = 2, Kanji = 3 (decoded as JIS X 0208 via the shared <see cref="ShiftJisKanjiTable"/>, M3 and M4 only since narrower mode indicators cannot express it). M4 values 4-7 are undefined.</item>
 /// <item>Character count indicator is 3-6 bits (Numeric = version + 2, others = version + 1).</item>
 /// <item>The terminator (2·version + 1 zero bits) is exactly a Numeric mode
 /// indicator followed by an all-zero count, a zero-count Numeric segment ends the stream.
@@ -33,8 +33,8 @@ internal static class MicroQRBinaryDecoder
     /// <summary>
     /// Decodes the corrected data codewords into characters.
     /// </summary>
-    /// <param name="data">Corrected data codewords (without ECC); for M1/M3 the final codeword carries data in its high nibble only.</param>
-    /// <param name="dataBitCount">Data capacity in bits for the version/ECC combination (bounds the stream; 4 less than <c>data.Length * 8</c> for M1/M3).</param>
+    /// <param name="data">Corrected data codewords (without ECC). For M1/M3 the final codeword carries data in its high nibble only.</param>
+    /// <param name="dataBitCount">Data capacity in bits for the version/ECC combination (bounds the stream, and is 4 less than <c>data.Length * 8</c> for M1/M3).</param>
     /// <param name="version">Micro QR version (M1-M4), determines mode/count indicator widths.</param>
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
@@ -55,7 +55,7 @@ internal static class MicroQRBinaryDecoder
                 if (totalBits - reader.BitPosition < modeBits)
                     break;
 
-                // M1 has no mode indicator; Numeric is implied.
+                // M1 has no mode indicator, so Numeric is implied.
                 var modeValue = modeBits == 0 ? ModeNumeric : reader.Reads(modeBits);
                 if (modeValue > ModeKanji)
                     return DecodeStatus.InvalidBitstream; // M4 indicators 4-7 are undefined
@@ -82,7 +82,7 @@ internal static class MicroQRBinaryDecoder
                 if (totalBits - reader.BitPosition < countBits)
                 {
                     // A Numeric indicator (all zero bits) running out of room is a
-                    // truncated terminator; anything else is a truncated segment.
+                    // truncated terminator. Anything else is a truncated segment.
                     if (modeValue == ModeNumeric)
                         break;
                     return DecodeStatus.InvalidBitstream;
@@ -104,12 +104,12 @@ internal static class MicroQRBinaryDecoder
                 // that lets BitReader read past the capacity, and since the buffer ends
                 // there too it throws InvalidOperationException out of a bool-returning
                 // TryDecode. (The zero-count rule below it is behaviour-neutral for
-                // Kanji; only the truncated-count one matters.)
+                // Kanji. Only the truncated-count one matters.)
                 //
                 // Not a switch arm: a fourth arm crosses Roslyn's jump-table threshold,
                 // and the M2 numeric / M4 byte decode benchmarks measured 12-15 % slower
                 // with it. A bisect pinned that to this file, but not to the jump table
-                // specifically -- an isolated micro-benchmark of the dispatch shows only
+                // specifically. An isolated micro-benchmark of the dispatch shows only
                 // noise, so code layout is the likelier mechanism. Treat the shape as
                 // measured-better, not as an explained win.
                 if (modeValue == ModeKanji)

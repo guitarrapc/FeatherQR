@@ -13,24 +13,24 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// The exactness argument is the one the AVX2 kernel uses: the BT.601 weights sum to 256 and every channel is a byte, so the weighted sum never exceeds 255 · 256 = 65,280 and fits in 16 bits unsigned.
 /// <para>
 /// The kernel shape, however, is not the AVX2 one.
-/// NEON has no <c>pmaddubsw</c>, so the shuffle-into-<c>[R, G, G, B]</c> trick has nothing to feed; it has <c>UDOT</c> instead (ARMv8.2 dot product), which multiplies four byte pairs into each 32-bit lane and therefore computes <c>77R + 150G + 29B + 0·A</c> for four whole pixels in one instruction, with no deinterleave at all.
+/// NEON has no <c>pmaddubsw</c>, so the shuffle-into-<c>[R, G, G, B]</c> trick has nothing to feed. It has <c>UDOT</c> instead (ARMv8.2 dot product), which multiplies four byte pairs into each 32-bit lane and therefore computes <c>77R + 150G + 29B + 0·A</c> for four whole pixels in one instruction, with no deinterleave at all.
 /// Weighting alpha 0 is also what makes Rgb888x correct, since its fourth byte is padding.
 /// A transliteration of the x64 kernel using <c>LD4</c> to build channel planes was measured and lost by 1.2-1.5x.
 /// </para>
 /// <para>
 /// Alpha is handled by row mode rather than per block.
-/// Testing "is every alpha 255?" every 16 pixels costs a cross-lane reduction plus a vector-to-GPR move, which was measured at 27 % of the kernel; instead each row is converted optimistically while the pixels are ANDed into a vector accumulator, and one cross-lane test per row decides whether the row was in fact opaque.
+/// Testing "is every alpha 255?" every 16 pixels costs a cross-lane reduction plus a vector-to-GPR move, which was measured at 27 % of the kernel. Instead each row is converted optimistically while the pixels are ANDed into a vector accumulator, and one cross-lane test per row decides whether the row was in fact opaque.
 /// A row that carries alpha is redone by the general path and the mode is sticky, so an image with alpha pays the wasted pass once rather than once per row.
 /// </para>
 /// <para>
 /// The general path keeps every alpha shape on the vector unit.
-/// Fully transparent composites to white, which is exactly luminance 255, so those pixels are replaced by 0xFFFFFFFF; a genuinely partial alpha uses the exact composite <c>c' = 255 − ceil((255 − c)·a / 255)</c>, which is equal to the scalar <c>(c·a + 255·(255 − a)) / 255</c> and stays integer-exact in 16-bit lanes because the product is at most 65,025 and <c>floor(t / 255) = (t + 1 + (t &gt;&gt; 8)) &gt;&gt; 8</c> there.
+/// Fully transparent composites to white, which is exactly luminance 255, so those pixels are replaced by 0xFFFFFFFF. A genuinely partial alpha uses the exact composite <c>c' = 255 − ceil((255 − c)·a / 255)</c>, which is equal to the scalar <c>(c·a + 255·(255 − a)) / 255</c> and stays integer-exact in 16-bit lanes because the product is at most 65,025 and <c>floor(t / 255) = (t + 1 + (t &gt;&gt; 8)) &gt;&gt; 8</c> there.
 /// Premultiplied alpha adds 255 − a to every channel, which is exactly 256 · (255 − a) on the sum, so it collapses to an add before the shift and never falls back.
-/// Measured 14-16x over the per-pixel loop on opaque input (Apple M2); see LuminanceConverterParityTest for the equivalence proof by test.
+/// Measured 14-16x over the per-pixel loop on opaque input (Apple M2). See LuminanceConverterParityTest for the equivalence proof by test.
 /// </para>
 /// <para>
 /// The row modes are separate methods on purpose.
-/// Fusing them into one measured 2.3x <em>slower</em> on the largest inputs — on code size alone, in scenarios where the fused-in code never executed — which is the same instruction-cache failure the AVX2 kernel records for its fused variant.
+/// Fusing them into one measured 2.3x <em>slower</em> on the largest inputs, on code size alone, in scenarios where the fused-in code never executed. That is the same instruction-cache failure the AVX2 kernel records for its fused variant.
 /// </para>
 /// </remarks>
 internal static partial class LuminanceConverter
@@ -48,7 +48,7 @@ internal static partial class LuminanceConverter
     /// <summary>
     /// Converts with NEON.
     /// <paramref name="bgra"/> selects the channel order, <paramref name="hasAlpha"/> is false for RGB888x (its fourth byte is padding).
-    /// Requires <paramref name="width"/> ≥ 16; the caller keeps narrower rows scalar.
+    /// Requires <paramref name="width"/> ≥ 16. The caller keeps narrower rows scalar.
     /// </summary>
     internal static void ConvertRgbaAdvSimd(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha, bool premultiplied)
     {
@@ -124,8 +124,8 @@ internal static partial class LuminanceConverter
 
             if (optimistic)
             {
-                // Converts the row unconditionally and reports what the alphas were;
-                // every stored byte is already correct if they were all 255.
+                // Converts the row unconditionally and reports what the alphas were.
+                // Every stored byte is already correct if they were all 255.
                 var and = Vector128<byte>.AllBitsSet;
                 for (nint x = 0; x < blockEnd; x += AdvSimdBlockPixels)
                     and &= PlainBlockAdvSimd(ref row, ref dest, x, weights);
@@ -276,7 +276,7 @@ internal static partial class LuminanceConverter
     /// <summary>
     /// The composite from four already-loaded pixel vectors.
     /// The channel planes are built with two rounds of UZP rather than LD4: LD4 has no ref-taking overload, and the pointer form is not worth enabling unsafe code across the library for a path only partial alpha reaches.
-    /// The UZP ladder itself is free — the partial alpha scenario measured identically either way.
+    /// The UZP ladder itself is free. The partial alpha scenario measured identically either way.
     /// </summary>
     /// <remarks>
     /// NoInlining is load-bearing here.
@@ -320,7 +320,7 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// Composites one channel plane against white for straight alpha: 255 − ceil((255 − c)·a / 255), equal to the scalar (c·a + 255·(255 − a)) / 255 for every c and a — including a = 255, which returns c unchanged.
+    /// Composites one channel plane against white for straight alpha: 255 − ceil((255 − c)·a / 255), equal to the scalar (c·a + 255·(255 − a)) / 255 for every c and a, including a = 255, which returns c unchanged.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<byte> CompositeWhiteAdvSimd(Vector128<byte> c, Vector128<byte> a)
@@ -332,7 +332,7 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// ceil(d / 255) for d ≤ 65,025, as floor((d + 254) / 255); floor(t / 255) is exactly (t + 1 + (t &gt;&gt; 8)) &gt;&gt; 8 for every 16-bit t, and the largest intermediate here is 65,535, so nothing wraps.
+    /// ceil(d / 255) for d ≤ 65,025, as floor((d + 254) / 255), where floor(t / 255) is exactly (t + 1 + (t &gt;&gt; 8)) &gt;&gt; 8 for every 16-bit t, and the largest intermediate here is 65,535, so nothing wraps.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<ushort> DivideBy255CeilingAdvSimd(Vector128<ushort> d)

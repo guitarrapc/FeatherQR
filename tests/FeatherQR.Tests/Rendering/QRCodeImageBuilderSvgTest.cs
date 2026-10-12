@@ -69,7 +69,7 @@ public class QRCodeImageBuilderSvgTest
     public async Task SaveToSvg_NamedFinderShape_OpaqueBackground_KeepsTheTopLeftFinderDark()
     {
         // The opaque case. The same symbol on a non-opaque background keeps its finder patterns too,
-        // which the test below pins; it used to lose them, and that is what this pair guards.
+        // which the test below pins. It used to lose them, and that is what this pair guards.
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
             .WithBackgroundColor(SKColors.White)
@@ -105,7 +105,7 @@ public class QRCodeImageBuilderSvgTest
         // document had no finder patterns at all. The ring is a hole in the drawing now, so nothing is
         // erased and both canvas kinds get the same elements. Both routes in are covered: naming a shape,
         // and styling the modules, which substitutes one. This only asks that the finder's centre is
-        // inked; that the whole pattern is there, on every symbology and every built-in shape, is
+        // inked. That the whole pattern is there, on every symbology and every built-in shape, is
         // DecorativeFinder_SvgCarriesTheWholeFinderPattern, which is also what fails if
         // ResolveFinderShape starts ignoring an explicitly named square.
         // Alpha 128 and 0 both, because at alpha 0 the background rect is omitted entirely and the
@@ -138,7 +138,7 @@ public class QRCodeImageBuilderSvgTest
     public async Task SaveToSvg_GappedRectModules_KeepAntialiasing()
     {
         // Squares below full size leave gaps, so the seam crispEdges exists to remove is not there
-        // and its jagged edges are all that is left. Shape alone does not decide this; the size does too.
+        // and its jagged edges are all that is left. Shape alone does not decide this. The size does too.
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
             .WithModuleShape(RectangleModuleShape.Default, sizePercent: 0.8f)
@@ -151,7 +151,7 @@ public class QRCodeImageBuilderSvgTest
     [Test]
     public async Task SaveToSvg_CustomShapes_KeepAntialiasing()
     {
-        // Curved shapes need antialiasing; crispEdges would render them jagged.
+        // Curved shapes need antialiasing, since crispEdges would render them jagged.
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
             .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.9f)
@@ -240,7 +240,7 @@ public class QRCodeImageBuilderSvgTest
     [Test]
     public async Task SvgInjector_SingleByteWrites_InjectsAttributesOnce()
     {
-        // A write may split the "<svg " marker at any position; the injector must
+        // A write may split the "<svg " marker at any position. The injector must
         // still find it and insert the attributes exactly once.
         var document = "<?xml version=\"1.0\" ?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\"><rect/></svg>";
         var payload = Encoding.UTF8.GetBytes(document);
@@ -419,7 +419,7 @@ public class QRCodeImageBuilderSvgTest
     [Test]
     public async Task WithColors_AreReflectedInSvg()
     {
-        // Use colors without SVG named-color aliases; Skia writes named colors
+        // Use colors without SVG named-color aliases, because Skia writes named colors
         // (e.g. #000080 becomes "navy") when an exact match exists.
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(256, 256)

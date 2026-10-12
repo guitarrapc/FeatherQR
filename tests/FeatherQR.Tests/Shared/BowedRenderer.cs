@@ -1,8 +1,8 @@
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Renders a symbol bowed off the plane: with a 4-module quiet zone, its rows bent into arcs that sag <c>bowModules</c> at the middle column, then turned about the centre of a square canvas; 2×2 supersampled.
-/// No single projective map reads such a symbol; a grid that follows the alignment lattice does.
+/// Renders a symbol bowed off the plane: with a 4-module quiet zone, its rows bent into arcs that sag <c>bowModules</c> at the middle column, then turned about the centre of a square canvas, and 2×2 supersampled.
+/// No single projective map reads such a symbol, but a grid that follows the alignment lattice does.
 /// </summary>
 internal static class BowedRenderer
 {

@@ -30,12 +30,12 @@ public class SymbolRendererAreaFitTest
                 yield return (symbology, entry, 900, 450);
                 yield return (symbology, entry, 300, 900);
                 // This payload still decoded stretched to 1.5:1, so this row cannot catch a lost fit (the
-                // two above do); it pins that a canvas which was readable before stays readable fitted.
+                // two above do). It pins that a canvas which was readable before stays readable fitted.
                 yield return (symbology, entry, 600, 400);
             }
         }
 
-        // rMQR has always fitted; it stays in the table as the reference the others now match. Its size rows are
+        // rMQR has always fitted. It stays in the table as the reference the others now match. Its size rows are
         // here because nothing else renders a non-square area through that overload: while the table paired rMQR
         // with the renderer alone, the rMQR size overload could transpose its width and height unnoticed. The area
         // rows come along so the three entry points are read the same way for every symbology.
@@ -306,7 +306,7 @@ public class SymbolRendererAreaFitTest
     /// <summary>
     /// An inverted area reads two ways, a mirror or the same bounds written backwards, and for an
     /// asymmetric symbol the two are different pictures, so it is refused rather than guessed. All
-    /// three symbologies refuse it alike; rMQR used to draw outside an area inverted vertically.
+    /// three symbologies refuse it alike. rMQR used to draw outside an area inverted vertically.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(InvertedAreas))]
@@ -543,7 +543,7 @@ public class SymbolRendererAreaFitTest
         await Assert.That(ChangedPixels(bitmap, SKColors.Blue)).IsEqualTo(0)
             .Because($"{symbology} with {argument} must leave the canvas as it was");
 
-        // The renderer refuses the same arguments; only the clear is the extensions' own.
+        // The renderer refuses the same arguments. Only the clear is the extensions' own.
         await Assert.That(() => RenderThroughRenderer(canvas, symbology, area, argument == "nullData", percent, gradient))
             .Throws<ArgumentException>().Because($"the renderer with {argument}");
         await Assert.That(ChangedPixels(bitmap, SKColors.Blue)).IsEqualTo(0)
@@ -672,7 +672,7 @@ public class SymbolRendererAreaFitTest
 
     /// <summary>
     /// The size overloads answer for the canvas, then the symbol, then the size, as the area overloads
-    /// do; a caller reading the first failure must not be sent to the wrong argument.
+    /// do. A caller reading the first failure must not be sent to the wrong argument.
     /// </summary>
     [Test]
     [Arguments("qr")]
@@ -865,7 +865,7 @@ public class SymbolRendererAreaFitTest
         }
 
         // A canvas scale rounds each edge on its own, so these squares need both float steps of slack per
-        // axis; a one-step slack shrinks them. Found by searching scaled squares for the widest rounding.
+        // axis. A one-step slack shrinks them. Found by searching scaled squares for the widest rounding.
         foreach (var (x, y, side, scale) in new[]
         {
             (-23.474365f, 1407.5728f, 664.66833f, 2.25f),
@@ -920,7 +920,7 @@ public class SymbolRendererAreaFitTest
     /// <summary>
     /// The slack is for float rounding and nothing more. An area a hundredth of a pixel from square,
     /// far enough from the origin that a looser relative slack would swallow it, is still fitted, and
-    /// so is one a whole pixel off; otherwise a later loosening would bring the stretch back unnoticed.
+    /// so is one a whole pixel off. Otherwise a later loosening would bring the stretch back unnoticed.
     /// At 1e7 a float step is a pixel, and a slack of a few steps there still fits 5 px off.
     /// </summary>
     [Test]

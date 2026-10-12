@@ -20,7 +20,7 @@ internal static partial class PerspectiveGridSampler
     /// </summary>
     /// <remarks>
     /// The loop is bound by scalar conversion/clamp/branch overhead, not by the divisions (module computations are independent, so out-of-order execution hides division latency, halving the division count measured no gain).
-    /// The SIMD paths process 8 module centers per iteration with the exact scalar op sequence (no FMA), so lane results are bit-identical to the scalar path: one Vector256 on AVX2 (measured 2.7x at version 40; PerspectiveSample findings log), two independent Vector128 chains plus a 4-lane cleanup on NEON/WASM (measured 1.9x at version 40 on Apple M2; PerspectiveSampleArm findings log).
+    /// The SIMD paths process 8 module centers per iteration with the exact scalar op sequence (no FMA), so lane results are bit-identical to the scalar path: one Vector256 on AVX2 (measured 2.7x at version 40, see the PerspectiveSample findings log), two independent Vector128 chains plus a 4-lane cleanup on NEON/WASM (measured 1.9x at version 40 on Apple M2, see the PerspectiveSampleArm findings log).
     /// </remarks>
     internal static void Sample(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int dimension, Span<byte> modules)
     {
@@ -56,8 +56,8 @@ internal static partial class PerspectiveGridSampler
                 var x = (transform.a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (transform.a12 * gridX + rowNumeratorY) * reciprocal;
 
-                // Pixel edges sit on integers, so the pixel containing a point is its floor; clamped, since mild inaccuracy at the
-                // outermost modules must not read OOB
+                // Pixel edges sit on integers, so the pixel containing a point is its floor. Clamped, since mild inaccuracy at the
+                // outermost modules must not read OOB.
                 var px = PixelIndex.Clamp(x, width);
                 var py = PixelIndex.Clamp(y, height);
 

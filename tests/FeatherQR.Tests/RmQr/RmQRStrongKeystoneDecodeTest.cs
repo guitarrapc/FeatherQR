@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// rMQR symbols in strong perspective: a plane narrowed by 12 to 20 % along the symbol's short axis, its long axis, or toward a corner, turned and drawn with grey edges at 3.5-4.5 px/module.
-/// On a wide symbol the finder is sheared up to 40° and the sub-finder leans the other way, so neither the finder's square frame nor a search round it reaches the far end; the frame comes from the finder's measured outline and the symbol's traced perimeter.
+/// On a wide symbol the finder is sheared up to 40° and the sub-finder leans the other way, so neither the finder's square frame nor a search round it reaches the far end. The frame comes from the finder's measured outline and the symbol's traced perimeter.
 /// </summary>
 public class RmQRStrongKeystoneDecodeTest
 {

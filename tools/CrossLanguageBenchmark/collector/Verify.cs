@@ -7,7 +7,7 @@ using FeatherQR;
 /// </summary>
 internal static class Verify
 {
-    /// <summary>Null when the result is right; otherwise why the process's timings do not count.</summary>
+    /// <summary>Null when the result is right, otherwise why the process's timings do not count.</summary>
     public static string? Check(ManifestEntry entry, JsonElement output)
     {
         var status = output.TryGetProperty("status", out var s) ? s.GetString() : null;

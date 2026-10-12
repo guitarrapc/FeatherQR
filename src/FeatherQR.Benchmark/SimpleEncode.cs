@@ -10,8 +10,8 @@ using SkiaSharp;
 ///   Segmentation - FeatherQR encodes the payload in a single mode by default,
 ///     while Net.Codecrete.QrCodeGenerator, QRCoder and CodeGlyphX plan mixed-mode
 ///     segments by default. The version comes out the same for these payloads either way.
-///   Quiet zone - FeatherQR and QRCoder place a quiet zone in the returned matrix;
-///     Net.Codecrete.QrCodeGenerator and CodeGlyphX return the bare symbol.
+///   Quiet zone - FeatherQR and QRCoder place a quiet zone in the returned matrix,
+///     while Net.Codecrete.QrCodeGenerator and CodeGlyphX return the bare symbol.
 ///
 /// ZXing is configured to match this library's ECI behavior (Latin-1 for the ASCII payloads, UTF-8 for the unicode one) rather than left on its own default.
 ///

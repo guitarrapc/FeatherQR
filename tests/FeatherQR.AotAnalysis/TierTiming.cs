@@ -689,7 +689,7 @@ internal static partial class TierTiming
         return new(luminance, side, side);
     }
 
-    /// <summary>Mask scoring and selection of one symbol, on random codewords placed as the encoder places them; the copy restores the unmasked matrix each call (<paramref name="score"/> false times the copy alone). With <paramref name="forced"/> 0-7 the pattern is applied as a pinned mask is, with no scoring, and with <paramref name="v128"/> the 128-bit transposed tier is entered directly (versions 12-40).</summary>
+    /// <summary>Mask scoring and selection of one symbol, on random codewords placed as the encoder places them. The copy restores the unmasked matrix each call (<paramref name="score"/> false times the copy alone). With <paramref name="forced"/> 0-7 the pattern is applied as a pinned mask is, with no scoring, and with <paramref name="v128"/> the 128-bit transposed tier is entered directly (versions 12-40).</summary>
     private static Func<int> MaskScoring(int version, bool score, bool scalar = false, int forced = -1, bool v128 = false)
     {
         var layout = ModulePlacer.GetLayout(version);
@@ -819,7 +819,7 @@ internal static partial class TierTiming
     private static Func<int> Parity(string text, EciMode charset) => () => StructuredAppendPlanner.Parity(text, charset, utf8Bom: false);
 
     /// <summary>
-    /// The image as opaque premultiplied RGBA, as a rendered bitmap arrives; with <paramref name="straightAlpha"/>, straight alpha with the light
+    /// The image as opaque premultiplied RGBA, as a rendered bitmap arrives. With <paramref name="straightAlpha"/>, straight alpha with the light
     /// pixels of every eighth row half transparent, so the composite runs.
     /// </summary>
     private static Func<int> Converter(Image image, bool scalar = false, bool straightAlpha = false)
@@ -1417,7 +1417,7 @@ internal static partial class TierTiming
         return sum;
     }
 
-    /// <summary>The cast, then one unsigned test for both edges; the coordinate's sign picks the edge.</summary>
+    /// <summary>The cast, then one unsigned test for both edges. The coordinate's sign picks the edge.</summary>
     private static int ClampUnsigned(byte[] data)
     {
         var sum = 0;
@@ -1433,7 +1433,7 @@ internal static partial class TierTiming
         return sum;
     }
 
-    /// <summary>The integer edges as before PixelIndex; a negative result from a positive coordinate is an overflow the cast did not saturate.</summary>
+    /// <summary>The integer edges as before PixelIndex. A negative result from a positive coordinate is an overflow the cast did not saturate.</summary>
     private static int ClampSignFix(byte[] data)
     {
         var sum = 0;

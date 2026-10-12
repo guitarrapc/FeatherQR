@@ -4,9 +4,9 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity test for the alignment-pattern row-scan kernels: the SIMD mask walk
-/// (net8.0+; AVX2, NEON, or any 128-bit acceleration) must agree with the scalar
+/// (net8.0+: AVX2, NEON, or any 128-bit acceleration) must agree with the scalar
 /// walk across synthetic QR-like scenes (random data modules with isolated dark
-/// modules as false candidates, pattern present/absent, offset sweep; center
+/// modules as false candidates, pattern present/absent, offset sweep, with center
 /// within 0.01px) plus noise sweeps over window lengths crossing every
 /// mask-build block boundary and threshold extremes (center bit-identical: both
 /// kernels derive it from the same integer run boundaries via the same

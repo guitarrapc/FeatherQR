@@ -6,7 +6,7 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// M1-M4 differ in the modes and ECC levels they offer, not only in capacity, so a range can leave nothing usable for two reasons.
-/// No version offering the requested ECC level is a contradiction and throws; none carrying the mode the text needs is a poor fit and returns <c>false</c>, since the text is what picks the mode.
+/// No version offering the requested ECC level is a contradiction and throws. None carrying the mode the text needs is a poor fit and returns <c>false</c>, since the text is what picks the mode.
 /// </remarks>
 public readonly record struct MicroQRVersionRange
 {

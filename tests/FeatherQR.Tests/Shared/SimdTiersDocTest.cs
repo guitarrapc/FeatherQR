@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// .github/docs/specs/qrcode-simd-tiers.md shows <see cref="SimdTiers"/> as tables, rendered here into
-/// the file's generated regions. A region that differs from the code fails the test; run outside CI, the
+/// the file's generated regions. A region that differs from the code fails the test. Run outside CI, the
 /// test also rewrites it, so the change to review is the file's diff.
 /// </summary>
 public class SimdTiersDocTest

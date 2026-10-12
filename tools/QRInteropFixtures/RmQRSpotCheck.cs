@@ -95,8 +95,8 @@ public static class RmQRSpotCheck
             yield return ("latin1-eci3", "é", EciMode.Iso8859_1);
 
         // ECI costs 11 bits, so the no-ECI capacity table is only an upper bound.
-        // Ask the public sizing path for the largest Japanese payload that fits;
-        // the smallest symbol at H cannot hold any ECI + Byte payload.
+        // Ask the public sizing path for the largest Japanese payload that fits.
+        // The smallest symbol at H cannot hold any ECI + Byte payload.
         var utf8 = LargestUtf8Payload(version, ecc, entry.Capacity(ecc.ToString(), "Byte"));
         if (utf8 is not null)
             yield return ("utf8-eci26", utf8, EciMode.Utf8);
@@ -118,7 +118,7 @@ public static class RmQRSpotCheck
 
     private const string KanjiPlanAlphabet = "日本7777東京タワー333";
 
-    /// <summary>The longest prefix of the alphabet repeated that the version holds under Optimal and cannot hold as UTF-8, so the symbol is a Kanji plan; null where none is.</summary>
+    /// <summary>The longest prefix of the alphabet repeated that the version holds under Optimal and cannot hold as UTF-8, so the symbol is a Kanji plan. Null where none is.</summary>
     private static string? LargestKanjiPlanPayload(RmQRVersion version, RmQREccLevel ecc)
     {
         for (var count = 200; count > 2; count--) // three characters at least, so the text holds ASCII

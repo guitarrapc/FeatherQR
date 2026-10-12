@@ -143,7 +143,7 @@ public class SymbolRendererColorParameterTest
 
     /// <summary>
     /// A gradient whose direction is <see cref="GradientDirection.None"/> paints the modules in the code colour,
-    /// the same pixels as no gradient at all; the control shows the colour is the one named, not a default.
+    /// the same pixels as no gradient at all. The control shows the colour is the one named, not a default.
     /// </summary>
     [Test]
     [Arguments("qr")]
@@ -213,7 +213,7 @@ public class SymbolRendererColorParameterTest
         return bitmap;
     }
 
-    /// <summary>A canvas around <see cref="Area"/>, cleared to <paramref name="ground"/> — transparent unless a test needs to see what the renderer leaves alone.</summary>
+    /// <summary>A canvas around <see cref="Area"/>, cleared to <paramref name="ground"/>, which is transparent unless a test needs to see what the renderer leaves alone.</summary>
     private static SKBitmap Canvas(Action<SKCanvas> draw, SKColor? ground = null)
     {
         var bitmap = new SKBitmap(new SKImageInfo((int)Area.Right + 20, (int)Area.Bottom + 20, SKColorType.Rgba8888, SKAlphaType.Premul));

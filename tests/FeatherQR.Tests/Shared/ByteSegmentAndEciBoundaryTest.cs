@@ -15,7 +15,7 @@ namespace FeatherQR.Tests;
 /// <para>
 /// A mutation sweep found all of these unpinned: the production logic is right,
 /// but weakening any one of them passed the whole suite. Two are behaviour-visible
-/// rather than merely uncovered — the Latin-1 destination guard turns into an
+/// rather than merely uncovered. The Latin-1 destination guard turns into an
 /// <see cref="IndexOutOfRangeException"/> escaping a bool-returning <c>TryDecode</c>,
 /// and a wrong ECI mask turns a symbol that should be rejected into a `Success` with
 /// text decoded under the wrong charset.
@@ -25,7 +25,7 @@ namespace FeatherQR.Tests;
 /// <c>IsValidUtf8</c> return false, so the payload falls through to the ISO-8859-1
 /// widening and each byte becomes the same-numbered code point. A validator that
 /// wrongly accepts the sequence produces UTF-8 output instead, which is a different
-/// string — that difference is what these tests assert.
+/// string. That difference is what these tests assert.
 /// </para>
 /// </remarks>
 public class ByteSegmentAndEciBoundaryTest
@@ -43,7 +43,7 @@ public class ByteSegmentAndEciBoundaryTest
 
     /// <summary>
     /// The Latin-1 path widens one byte to one char, so it needs exactly as many
-    /// destination slots as bytes. One short is <c>DestinationTooSmall</c>; a guard
+    /// destination slots as bytes. One short is <c>DestinationTooSmall</c>. A guard
     /// weakened by one writes past the caller's span instead.
     /// </summary>
     [Test]
@@ -80,7 +80,7 @@ public class ByteSegmentAndEciBoundaryTest
     /// Each designator form carries its value in a different number of payload bits
     /// (7, 14 and 21), and the mask that strips the form prefix has to match. A mask
     /// that takes too few bits silently yields a DIFFERENT, valid-looking assignment
-    /// number — 8218 read as 26 means a symbol that should be rejected is decoded as
+    /// number. 8218 read as 26 means a symbol that should be rejected is decoded as
     /// UTF-8 instead.
     /// </summary>
     [Test]
@@ -194,7 +194,7 @@ public class ByteSegmentAndEciBoundaryTest
     /// <summary>
     /// The positive side of the same rules: sequences the validator must ACCEPT, so a
     /// validator tightened by mistake would show up here rather than passing quietly.
-    /// U+007F matters specifically — it is the last byte the ASCII branch owns.
+    /// U+007F matters specifically, because it is the last byte the ASCII branch owns.
     /// </summary>
     [Test]
     [Arguments(new byte[] { 0x7F, 0xC3, 0xA9 }, "é")]         // DEL then 2-byte é

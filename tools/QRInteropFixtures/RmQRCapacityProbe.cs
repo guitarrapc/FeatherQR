@@ -6,15 +6,15 @@ namespace QRInteropFixtures;
 /// <summary>
 /// Correction-capacity oracle probe: answers "does rMQR reserve misdecode-protection
 /// codewords p, the way ISO/IEC 18004 Table 9 does for Micro QR?" by measurement
-/// rather than by reading ISO/IEC 23941 Table 8 (paywalled; the public preview stops
+/// rather than by reading ISO/IEC 23941 Table 8 (paywalled, and the public preview stops
 /// short of it).
 /// </summary>
 /// <remarks>
 /// For every version × ECC the probe damages a symbol one module at a time, keeping
 /// only flips that our own decoder reports as exactly one more corrected codeword, so
 /// the damage saturates at our capacity in every Reed-Solomon block without needing
-/// any block-structure table here. It then asks zxing-cpp — the only maintained OSS
-/// rMQR decode lineage — the same symbol, in both directions:
+/// any block-structure table here. It then asks zxing-cpp, the only maintained OSS
+/// rMQR decode lineage, the same symbol, in both directions:
 /// <list type="bullet">
 /// <item>at saturation, zxing-cpp must still decode. A failure would mean zxing-cpp
 /// stops below our capacity, i.e. a reserved p we are ignoring (we over-correct).</item>
@@ -22,7 +22,7 @@ namespace QRInteropFixtures;
 /// either. A success would mean zxing-cpp reaches further than we do, i.e. our
 /// capacity is too low (we under-correct).</item>
 /// </list>
-/// Both green is evidence for p = 0 in the reference implementation; it is not a
+/// Both green is evidence for p = 0 in the reference implementation. It is not a
 /// reading of the standard, and the Correction cap decision in
 /// specs/rmqr-decoder.md stays open until someone reads Table 8.
 /// <para>

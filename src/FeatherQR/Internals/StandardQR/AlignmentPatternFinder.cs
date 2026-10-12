@@ -31,11 +31,11 @@ internal static partial class AlignmentPatternFinder
     /// <param name="allowanceModules">Search half-window in modules around the prediction.</param>
     /// <param name="centerX">Found center x.</param>
     /// <param name="centerY">Found center y.</param>
-    /// <returns>True when a cross-checked alignment pattern was found in the window; the one nearest the prediction is returned.</returns>
+    /// <returns>True when a cross-checked alignment pattern was found in the window. The one nearest the prediction is returned.</returns>
     public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, out float centerX, out float centerY)
         => TryFindCore(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowanceModules, forceScalar: false, out centerX, out centerY);
 
-    /// <summary>Scalar-scan entry for kernel parity tests; behavior-identical to <see cref="TryFind"/>.</summary>
+    /// <summary>Scalar-scan entry for kernel parity tests. It behaves as <see cref="TryFind"/> does.</summary>
     internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, out float centerX, out float centerY)
         => TryFindCore(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowanceModules, forceScalar: true, out centerX, out centerY);
 
@@ -54,7 +54,7 @@ internal static partial class AlignmentPatternFinder
 
         // Scan rows outward from the middle of the window and keep the cross-checked hit nearest the prediction: data can pass every check too, and the first hit in scan order was measured to be a false one while the real pattern sat on the prediction.
         // A row farther than the best hit plus the cross check's recentering (under a module and a pixel) cannot beat it.
-        // Row stride: the pattern's center dark run is ~1 module tall, so scanning every half-run-th row cannot miss it, and the vertical cross-check recenters exactly regardless of which row inside the run was hit (measured 4x on the not-found sweep; see the AlignmentFind findings log).
+        // Row stride: the pattern's center dark run is ~1 module tall, so scanning every half-run-th row cannot miss it, and the vertical cross-check recenters exactly regardless of which row inside the run was hit. Measured 4x on the not-found sweep (see the AlignmentFind findings log).
         var expected = ExpectedRuns.FromAxes(axisX, axisY, moduleSize);
         var best = new NearestHit(expectedX, expectedY);
         var step = Math.Max(1, (int)(expected.Column / 2f));
@@ -165,7 +165,7 @@ internal static partial class AlignmentPatternFinder
 
     private static void ScanRowScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, ref NearestHit best)
     {
-        // Track the last three completed runs as [light, dark, light]; a window is evaluated whenever a light run completes (light → dark transition).
+        // Track the last three completed runs as [light, dark, light]. A window is evaluated whenever a light run completes (light → dark transition).
         Span<int> runs = stackalloc int[3];
         runs.Clear();
         var runIndex = -1; // -1: waiting for the first light run
@@ -286,8 +286,8 @@ internal static partial class AlignmentPatternFinder
         if (lightDown == 0)
             return false;
 
-        // Vertically too, each light ring plus the dark center must span ~2 modules;
-        // one module of tolerance covers pixel quantization and mild perspective.
+        // Vertically too, each light ring plus the dark center must span ~2 modules.
+        // One module of tolerance covers pixel quantization and mild perspective.
         var vertical = up + down;
         var pair = 2f * columnModule;
         if (Math.Abs(lightUp + vertical - pair) >= columnModule || Math.Abs(vertical + lightDown - pair) >= columnModule)

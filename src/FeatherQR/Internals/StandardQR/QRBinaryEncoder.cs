@@ -32,7 +32,7 @@ internal ref partial struct QRBinaryEncoder
         _writer = new BitWriter(buffer);
     }
 
-    /// <summary>ISO/IEC 18004 Structured Append mode indicator; not an <see cref="EncodingMode"/>, since it carries no data.</summary>
+    /// <summary>ISO/IEC 18004 Structured Append mode indicator. Not an <see cref="EncodingMode"/>, since it carries no data.</summary>
     private const int StructuredAppendModeIndicator = 0b0011;
 
     /// <summary>
@@ -92,7 +92,7 @@ internal ref partial struct QRBinaryEncoder
         var remaining = targetBitCount - currentBits;
 
         // Target already reached (or exceeded): nothing to pad. Only drain pending
-        // bits so callers can read the raw buffer; the position does not advance.
+        // bits so callers can read the raw buffer. The position does not advance.
         if (remaining <= 0)
         {
             _writer.Flush();
@@ -196,7 +196,7 @@ internal ref partial struct QRBinaryEncoder
             var countBits = segment.ModeIndex switch { 0 => numericCountBits, 1 => alnumCountBits, 2 => byteCountBits, _ => kanjiCountBits };
 
             // The count indicator width always covers the largest unit count a version
-            // can hold, and a run holds no more than that, so this cannot bind; assert
+            // can hold, and a run holds no more than that, so this cannot bind. Assert
             // it anyway because overflowing it would corrupt the mode indicator above.
             Debug.Assert(segment.UnitCount < (1 << countBits), "run length must fit the character count indicator");
 
@@ -238,7 +238,7 @@ internal ref partial struct QRBinaryEncoder
 
     /// <summary>
     /// Transcodes one Byte-mode run and writes it.
-    /// <paramref name="expectedBytes"/> is what the plan budgeted; a mismatch means the plan and the transcoder disagree, which would silently produce an unreadable symbol.
+    /// <paramref name="expectedBytes"/> is what the plan budgeted. A mismatch means the plan and the transcoder disagree, which would silently produce an unreadable symbol.
     /// </summary>
     private void WriteUtf8Segment(ReadOnlySpan<char> chars, int expectedBytes)
     {
@@ -433,7 +433,7 @@ internal ref partial struct QRBinaryEncoder
             WriteAlphanumericAdvSimd(ref _writer, chars);
             return;
         }
-        // The WebAssembly tier's step is sixteen characters; a shorter run takes the portable writer.
+        // The WebAssembly tier's step is sixteen characters, so a shorter run takes the portable writer.
         if (System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported && chars.Length >= 16)
         {
             WriteAlphanumericPackedSimd(ref _writer, chars);
@@ -558,7 +558,7 @@ internal ref partial struct QRBinaryEncoder
     private void WriteLatin1Data(ReadOnlySpan<char> textSpan)
     {
 #if NET5_0_OR_GREATER
-        // Encoding.Latin1 narrows chars with SIMD; then bulk-write 8 bytes per store
+        // Encoding.Latin1 narrows chars with SIMD, then bulk-write 8 bytes per store
         if (textSpan.Length <= StackAllocThreshold)
         {
             Span<byte> latin1 = stackalloc byte[textSpan.Length];

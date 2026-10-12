@@ -6,7 +6,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// <remarks>
 /// The frames the angular sweep gives a single finder are square, and a finder in perspective is a parallelogram: at the near end of a wide symbol narrowed along its short axis the columns lean up to 40° off the rows, and a square frame puts the format information a module or two off.
 /// The dark ring's inner edges are the finder's own: they bound the light ring on both sides whatever lies round the pattern, so neither a quiet zone nor a separator is assumed.
-/// Chords along one axis meet the two inner edges it crosses, and under any affine map the edges' lines run along the other axis, so fitting them gives that axis with the shear in it; chords along it then meet the other two edges.
+/// Chords along one axis meet the two inner edges it crosses, and under any affine map the edges' lines run along the other axis, so fitting them gives that axis with the shear in it. Chords along it then meet the other two edges.
 /// </remarks>
 internal readonly struct FinderOutline
 {

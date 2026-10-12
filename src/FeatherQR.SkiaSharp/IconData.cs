@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// <remarks>
 /// The icon covers modules, so the QR code relies on error correction to stay readable.
 /// Use the highest error correction level (<see cref="QREccLevel.H"/>) and keep the icon small.
-/// When the size is given in modules, rendering throws if the icon and its border span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width; sizes given as a percentage of the symbol are not checked against the QR code at all.
+/// When the size is given in modules, rendering throws if the icon and its border span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width. Sizes given as a percentage of the symbol are not checked against the QR code at all.
 /// <para>
 /// Equality compares the sizing members by value and <see cref="Icon"/> by reference, so two instances built from the same <see cref="SKBitmap"/> through separate <see cref="FromImage(SKBitmap, int, int)"/> calls are not equal.
 /// <see cref="IconShape"/> is an open extension point wrapping an <see cref="SKBitmap"/>, neither of which defines value equality, so there is nothing to compare element-wise the way <see cref="GradientOptions"/> compares its colours.
@@ -74,7 +74,7 @@ public sealed record class IconData
     /// <summary>
     /// Width of the background-colored padding around the icon, in pixels.
     /// Ignored once <see cref="IconSizeModules"/> is set.
-    /// Being in pixels, it does not shrink with the symbol, so on a symbol only a few pixels across it reaches past the drawing area; size the icon in modules to keep the padding proportional.
+    /// Being in pixels, it does not shrink with the symbol, so on a symbol only a few pixels across it reaches past the drawing area. Size the icon in modules to keep the padding proportional.
     /// </summary>
     public int IconBorderWidth { get; init; } = 2;
 
@@ -93,7 +93,7 @@ public sealed record class IconData
     /// <summary>
     /// How much of the QR code the icon and its border may cover, as a percentage.
     /// 30 by default.
-    /// Only checked when the size is given in modules; rendering throws when the icon exceeds it.
+    /// Only checked when the size is given in modules. Rendering throws when the icon exceeds it.
     /// </summary>
     public int MaxCoreOccupancyPercent { get; init; } = 30;
 
@@ -118,7 +118,7 @@ public sealed record class IconData
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Pair it with <c>WithModulePixelSize</c> so every module lands on a whole number of pixels; <c>WithSize</c> can then give a larger canvas, with the QR code centered and padded.
+    /// Pair it with <c>WithModulePixelSize</c> so every module lands on a whole number of pixels. <c>WithSize</c> can then give a larger canvas, with the QR code centered and padded.
     /// </para>
     /// <para>
     /// The size is checked against the QR code when it is drawn, not here.

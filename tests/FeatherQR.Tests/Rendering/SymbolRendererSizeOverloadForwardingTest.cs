@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A size overload builds <c>SKRect.Create(0, 0, width, height)</c> and forwards; there is no other logic in it,
+/// A size overload builds <c>SKRect.Create(0, 0, width, height)</c> and forwards. There is no other logic in it,
 /// which is exactly why nothing tested the forwarding. Mutation testing found that dropping
 /// <c>finderPatternShape</c>, forcing <c>moduleSizePercent</c> to 1.0f, hardcoding <c>clearColor</c>, or dropping
 /// Standard QR's <c>iconData</c> all passed the whole suite: the colours were pinned by

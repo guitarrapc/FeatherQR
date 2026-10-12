@@ -194,7 +194,7 @@ public class SegmentDecoderStatusOrderTest
     /// The malformed case the check order exists for: a character count read off the wire
     /// naming more characters than the remaining bits could possibly encode. That is a
     /// broken bitstream whatever buffer the caller passed, so it must report
-    /// <c>InvalidBitstream</c>; reporting <c>DestinationTooSmall</c> would tell a caller
+    /// <c>InvalidBitstream</c>. Reporting <c>DestinationTooSmall</c> would tell a caller
     /// sizing its buffer to grow, and the image decoders treat that status as terminal and
     /// stop looking for the real symbol.
     /// </summary>
@@ -233,7 +233,7 @@ public class SegmentDecoderStatusOrderTest
     /// hides: numeric spends 7 bits on a two-digit remainder and 4 on a single digit,
     /// alphanumeric 6 on an odd final character. A guard that over-charges by one bit
     /// rejects valid symbols whose payload ends exactly at capacity, and then the image
-    /// decoder keeps searching and can accept a wrong grid that happens to pass ECC — a
+    /// decoder keeps searching and can accept a wrong grid that happens to pass ECC, a
     /// wrong-text result, not just a failure.
     /// </summary>
     [Test]
@@ -263,7 +263,7 @@ public class SegmentDecoderStatusOrderTest
     /// M1 holds exactly 5 numeric digits, so its payload ends on the 7-bit two-digit
     /// remainder with no spare bits at all. That makes it the case where a bit budget
     /// over-charged by one is not merely stricter but wrong, and it is the smallest
-    /// symbol in the library — the least room for a formula to be sloppy in.
+    /// symbol in the library, with the least room for a formula to be sloppy in.
     /// </summary>
     [Test]
     [Arguments("01234")]

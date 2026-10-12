@@ -58,7 +58,7 @@ public static partial class QrInterop
     /// Returns PNG bytes on success (first byte 0x89), or UTF-8 JSON <c>{"error":"..."}</c> on failure (first byte 0x7B), the JS side distinguishes the two by the first byte.
     /// </summary>
     /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
-    /// <param name="customLogo">Uploaded logo image bytes; empty unless logo mode is "custom".</param>
+    /// <param name="customLogo">Uploaded logo image bytes, empty unless logo mode is "custom".</param>
     [JSExport]
     public static byte[] Generate(string optionsJson, byte[] customLogo)
     {
@@ -79,7 +79,7 @@ public static partial class QrInterop
     /// Returns UTF-8 SVG bytes on success (first byte '&lt;' 0x3C), or UTF-8 JSON <c>{"error":"..."}</c> on failure (first byte 0x7B), the JS side distinguishes the two by the first byte.
     /// </summary>
     /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
-    /// <param name="customLogo">Uploaded logo image bytes; empty unless logo mode is "custom".</param>
+    /// <param name="customLogo">Uploaded logo image bytes, empty unless logo mode is "custom".</param>
     [JSExport]
     public static byte[] GenerateSvg(string optionsJson, byte[] customLogo)
     {
@@ -121,7 +121,7 @@ public static partial class QrInterop
     /// <c>"corners"</c> is the located symbol as eight numbers (top-left, top-right, bottom-right, bottom-left, each x then y) in the decoded image's pixel space, which <c>"imageWidth"</c> and <c>"imageHeight"</c> describe so the page can scale the overlay to whatever size it displays the image at. That space is the file's <em>stored</em> pixels: <c>"orientation"</c> carries the EXIF tag (1-8) the decoder ignored, and the page must map the corners through it, because every browser decode path applies the tag to the picture it shows.
     /// </para>
     /// <para>
-    /// Uses the library's built-in image decoders, Standard QR first, then Micro QR, then rMQR (<c>"symbology"</c> reports which one matched; rMQR has a single fixed mask, so <c>"maskPattern"</c> is -1 for it): rendered images, scans and photographs, at any rotation, mirrored or tilted.
+    /// Uses the library's built-in image decoders, Standard QR first, then Micro QR, then rMQR (<c>"symbology"</c> reports which one matched, and rMQR has a single fixed mask, so <c>"maskPattern"</c> is -1 for it): rendered images, scans and photographs, at any rotation, mirrored or tilted.
     /// Heavily stylized codes (low-contrast colors, inverted palettes, strong decoration) may report NotDetected even when a computer-vision grade phone scanner reads them.
     /// </para>
     /// </summary>
@@ -139,7 +139,7 @@ public static partial class QrInterop
                 ?? throw new ArgumentException("The file is not a decodable image (PNG/JPEG/WebP).");
 
             // SKBitmap.Decode ignores the EXIF orientation tag, so the corners are in the stored
-            // frame; a browser applies the tag, so the page needs it to place the overlay.
+            // frame. A browser applies the tag, so the page needs it to place the overlay.
             var origin = ReadOrigin(imageBytes);
 
             var success = QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
@@ -274,7 +274,7 @@ public static partial class QrInterop
             var rmBytes = CreateRmBuilder(request, rmData).ToByteArray();
             stopwatch.Stop();
 
-            // matrixSize doubles as the width so older page scripts keep working; matrixHeight is the rectangular extra.
+            // matrixSize doubles as the width so older page scripts keep working, and matrixHeight is the rectangular extra.
             s_lastMeta = string.Create(
                 CultureInfo.InvariantCulture,
                 $"{{\"symbology\":\"rmqr\",\"qrVersion\":{(int)rmData.Version},\"matrixSize\":{rmData.Width},\"matrixHeight\":{rmData.Height},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{rmBytes.Length}}}");
@@ -335,7 +335,7 @@ public static partial class QrInterop
 
     /// <summary>
     /// Builds the rMQR image builder from request options.
-    /// The requested size is the image width; the height follows the rectangular symbol. rMQR has no icon overlay, so the page hides that control; the finder shape it does take is not offered here yet.
+    /// The requested size is the image width, and the height follows the rectangular symbol. rMQR has no icon overlay, so the page hides that control. The finder shape it does take is not offered here yet.
     /// </summary>
     private static RmQRCodeImageBuilder CreateRmBuilder(QrRequest request, RmQRCodeData data)
     {
@@ -423,12 +423,12 @@ public static partial class QrInterop
     };
 
     /// <summary>
-    /// The request carries -1 for "pick the smallest version that fits", which <see cref="QRVersionRange"/> spells as <see cref="QRVersionRange.Any"/>; it deliberately rejects -1 so a defaulted field cannot pass for automatic.
+    /// The request carries -1 for "pick the smallest version that fits", which <see cref="QRVersionRange"/> spells as <see cref="QRVersionRange.Any"/>. It deliberately rejects -1 so a defaulted field cannot pass for automatic.
     /// </summary>
     private static QRVersionRange ParseVersionRange(int version)
         => version == -1 ? QRVersionRange.Any : QRVersionRange.Exactly(version);
 
-    /// <summary>Builds the image builder from request options; shared by preview and benchmark rendering.</summary>
+    /// <summary>Builds the image builder from request options. It is shared by preview and benchmark rendering.</summary>
     private static QRCodeImageBuilder CreateBuilder(QrRequest request, QRCodeData data, byte[] customLogo)
     {
         var size = Math.Clamp(request.Size, 64, 2048);
@@ -452,14 +452,14 @@ public static partial class QrInterop
     /// The page script chains batches so the UI stays responsive and can show progress / cancel.
     /// <para>
     /// Content is made unique per iteration by appending <c>" #&lt;index+1&gt;"</c>.
-    /// Mode <c>encode</c> exercises the allocation-free <see cref="QRCodeGenerator.Create(ReadOnlySpan{char}, QREccLevel, Span{byte}, bool, EciMode, int, int)"/> overload only; mode <c>render</c> runs the full pipeline (encode + Skia render + PNG encode) with the current visual options.
+    /// Mode <c>encode</c> exercises the allocation-free <see cref="QRCodeGenerator.Create(ReadOnlySpan{char}, QREccLevel, Span{byte}, bool, EciMode, int, int)"/> overload only. Mode <c>render</c> runs the full pipeline (encode + Skia render + PNG encode) with the current visual options.
     /// </para>
     /// </summary>
     /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
     /// <param name="mode">"encode" or "render".</param>
     /// <param name="startIndex">Global index of the first iteration in this batch.</param>
     /// <param name="count">Iterations to run in this batch.</param>
-    /// <param name="customLogo">Uploaded logo bytes for render mode; empty otherwise.</param>
+    /// <param name="customLogo">Uploaded logo bytes for render mode, empty otherwise.</param>
     [JSExport]
     public static string BenchmarkBatch(string optionsJson, string mode, int startIndex, int count, byte[] customLogo)
     {
@@ -831,7 +831,7 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// The library's capacity errors point developers at the API ("use Standard QR (QRCodeGenerator)"); in the playground the actionable control is the Symbology selector, so the remedy is rephrased for the page.
+    /// The library's capacity errors point developers at the API ("use Standard QR (QRCodeGenerator)"). In the playground the actionable control is the Symbology selector, so the remedy is rephrased for the page.
     /// </summary>
     private static string ToUserFacingMessage(Exception ex)
     {
@@ -850,13 +850,13 @@ public sealed record QrRequest
     public string FitStrategy { get; init; } = "area";
     /// <summary>rMQR fixed symbol height in modules (7-17), or 0 for any.</summary>
     public int Height { get; init; }
-    /// <summary>Error correction level: L, M, Q or H (Micro QR: EDO, L, M or Q; rMQR: M or H).</summary>
+    /// <summary>Error correction level: L, M, Q or H. Micro QR: EDO, L, M or Q. rMQR: M or H.</summary>
     public string Ecc { get; init; } = "M";
     /// <summary>Standard QR only: raise the ECC level above <see cref="Ecc"/> when the chosen version's spare capacity allows, without changing the version.</summary>
     public bool EccBoost { get; init; }
     /// <summary>Write Japanese text in Kanji mode where the library can (<see cref="QRCodeGeneratorOptions.AllowKanji"/> and its Micro QR and rMQR twins). Off by default, as in the library, because Android's own scanners read none of it.</summary>
     public bool AllowKanji { get; init; }
-    /// <summary>Output image size in pixels (square for Standard / Micro QR; the image width for rMQR, height from the symbol aspect ratio).</summary>
+    /// <summary>Output image size in pixels (square for Standard / Micro QR, and the image width for rMQR, height from the symbol aspect ratio).</summary>
     public int Size { get; init; } = 512;
     /// <summary>Quiet zone in modules (0-10).</summary>
     public int QuietZone { get; init; } = 4;

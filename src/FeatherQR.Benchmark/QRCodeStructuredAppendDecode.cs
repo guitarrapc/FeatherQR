@@ -9,7 +9,7 @@ using System.Text;
 ///
 ///   byte-45k-any    : ASCII prose, 16 symbols at version 40
 ///   numeric-100k-any: digits, 15 symbols at version 40
-///   mixed-40k-opt   : order lines under Optimal, 14 symbols; every symbol carries several segments
+///   mixed-40k-opt   : order lines under Optimal, 14 symbols. Every symbol carries several segments.
 ///   utf8-15k-any    : Japanese prose behind a UTF-8 ECI, 15 symbols
 ///   byte-4k-max10   : ASCII prose capped at version 10, the label-sized set
 /// </summary>

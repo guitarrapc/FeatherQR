@@ -25,7 +25,7 @@ public class MicroQRMatrixDecoderExtractParityTest
         yield return (MicroQRVersion.M4, MicroQREccLevel.Q);
     }
 
-    // 0 light; 1..3 all dark written as 1 / 0xFF / 2 (the contract is "non-zero = dark"); the rest pseudo-random,
+    // 0 light. 1..3 all dark written as 1 / 0xFF / 2 (the contract is "non-zero = dark"). The rest pseudo-random,
     // dark modules carrying arbitrary non-zero bytes.
     private const int GridShapes = 8;
 

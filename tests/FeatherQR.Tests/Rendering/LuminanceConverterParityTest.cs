@@ -16,8 +16,8 @@ namespace FeatherQR.Tests;
 /// <c>SKPixmap.RowBytes</c> may exceed width × 4.
 /// <para>
 /// The alpha shapes are not decoration: each kernel routes them to different code. The
-/// NEON tier alone has four row modes — no alpha, premultiplied, an optimistic pass for
-/// fully opaque rows, and a per-block classifier that whitens or composites — and each
+/// NEON tier alone has four row modes: no alpha, premultiplied, an optimistic pass for
+/// fully opaque rows, and a per-block classifier that whitens or composites. Each
 /// carries its own block and tail arithmetic, so a shape that is not exercised is a
 /// kernel that is not tested.
 /// </para>
@@ -31,7 +31,7 @@ public class LuminanceConverterParityTest
     /// <summary>
     /// ARGB channel order. No vector kernel and none of the scalar tier's three
     /// constant-offset arms accept it, so it is the only layout that reaches
-    /// <c>RowsGeneral</c> — shipped code that every other layout routes around.
+    /// <c>RowsGeneral</c>, shipped code that every other layout routes around.
     /// </summary>
     private const int Argb = 3;
 
@@ -87,7 +87,7 @@ public class LuminanceConverterParityTest
 
     /// <summary>
     /// The specification, written the obvious way: one pixel at a time, plain indexing,
-    /// no specialization. Slow and not shipped — it exists so the shipped scalar tier
+    /// no specialization. Slow and not shipped. It exists so the shipped scalar tier
     /// has something to be checked against.
     /// </summary>
     private static byte[] NaiveReference(byte[] pixels, int width, int height, int rowBytes, int ro, int go, int bo, int ao, bool premultiplied)
@@ -131,8 +131,8 @@ public class LuminanceConverterParityTest
     /// <summary>
     /// The scalar tier against that naive reference. This is not redundant with the
     /// vector-parity test below: that one uses the scalar tier <em>as</em> its expected
-    /// value, so once the scalar tier stopped being a plain per-pixel loop — it
-    /// specializes per layout, walks by ref and takes four pixels per iteration — an
+    /// value, so once the scalar tier stopped being a plain per-pixel loop, since it
+    /// specializes per layout, walks by ref and takes four pixels per iteration, an
     /// error shared by both tiers would pass unnoticed. This test is what pins the
     /// scalar tier to the specification.
     /// </summary>
@@ -192,7 +192,7 @@ public class LuminanceConverterParityTest
 
         // 16, 17, 20 and 24 straddle the NEON block and its overlapping tail (a width of
         // 20 makes the final block redo 12 pixels the main loop already wrote). Widths
-        // below 16 reach a vector kernel only on AVX2 — the NEON tier declines them — so
+        // below 16 reach a vector kernel only on AVX2 and the NEON tier declines them, so
         // they are skipped rather than silently compared scalar-against-scalar.
         int[] widths = [1, 3, 4, 5, 7, 8, 9, 15, 16, 17, 20, 24, 31, 32, 33, 43, 63, 139, 376];
         int[] heights = [1, 2, 5];
@@ -270,7 +270,7 @@ public class LuminanceConverterParityTest
     /// <summary>
     /// Every tier walks by ref with no bounds check of its own, so the extents are
     /// validated once at the entry point. `main` got this for free from per-row
-    /// re-slicing; the ref walk that replaced it does not, and a short destination
+    /// re-slicing. The ref walk that replaced it does not, and a short destination
     /// silently corrupted the bytes after it (in practice a pooled rental) instead of
     /// throwing.
     /// </summary>
@@ -294,8 +294,8 @@ public class LuminanceConverterParityTest
     }
 
     /// <summary>
-    /// The extent check itself must not overflow. Both products it forms —
-    /// width × height and (height − 1) × rowBytes + width × 4 — exceed <see cref="int"/>
+    /// The extent check itself must not overflow. Both products it forms,
+    /// width × height and (height − 1) × rowBytes + width × 4, exceed <see cref="int"/>
     /// for dimensions that are still perfectly representable, and an <c>int</c> multiply
     /// wraps them to a small (or negative) number that any buffer satisfies. The guard
     /// then waves the call through to a tier that walks by ref with no bounds check of
@@ -305,7 +305,7 @@ public class LuminanceConverterParityTest
     /// <remarks>
     /// The dimensions are chosen so the wrapped product lands near zero rather than
     /// merely somewhere smaller: 65536 × 65536 is exactly 2^32, and 999999 × 4295 is
-    /// 2^32 + 28409. Neither case allocates the buffers those numbers describe — the
+    /// 2^32 + 28409. Neither case allocates the buffers those numbers describe. The
     /// point is that the call is rejected before anything is touched.
     /// </remarks>
     [Test]
@@ -319,8 +319,8 @@ public class LuminanceConverterParityTest
             new byte[64], new byte[64], 65536, 65536, 65536 * 4, ro, go, bo, ao, false, LuminanceConverter.ConvertTier.Scalar))
             .Throws<ArgumentException>();
 
-        // width × height fits and the destination is honestly sized; only the pixel
-        // extent wraps, to 28425 bytes against a real requirement of ~4 GB
+        // width × height fits and the destination is honestly sized. Only the pixel
+        // extent wraps, to 28425 bytes against a real requirement of ~4 GB.
         await Assert.That(() => LuminanceConverter.ConvertRgbaForTest(
             new byte[28425], new byte[4 * 1_000_000], 4, 1_000_000, 4295, ro, go, bo, ao, false, LuminanceConverter.ConvertTier.Scalar))
             .Throws<ArgumentException>();
@@ -336,7 +336,7 @@ public class LuminanceConverterParityTest
     /// <remarks>
     /// Comparing only the first width × height bytes cannot see this: an over-write
     /// lands past the compared region and every asserted byte is still correct.
-    /// Verified by mutation — rounding <c>blockEnd</c> up in
+    /// Verified by mutation: rounding <c>blockEnd</c> up in
     /// <c>LuminanceConverter.X86.cs</c> leaves the parity assertions green and is
     /// caught only by the tail.
     /// </remarks>
@@ -365,7 +365,7 @@ public class LuminanceConverterParityTest
         // Every alpha shape, not just one per alpha mode: the straight-alpha and
         // premultiplied kernels are separate loops with their own block arithmetic, and
         // within straight alpha the opaque, whitening and compositing paths are three
-        // more (verified by mutation — an over-run in an uncovered path passed the whole
+        // more (verified by mutation: an over-run in an uncovered path passed the whole
         // class). Shape 0 is opaque, 2 is transparent-or-opaque (whitening), 3 is
         // arbitrary partial alpha (compositing).
         var alphaModes = ao < 0 ? new[] { false } : [false, true];
@@ -393,7 +393,7 @@ public class LuminanceConverterParityTest
                             var expected = new byte[width * height];
                             LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Scalar);
 
-                            // Destination is longer than the converter's region; only the first
+                            // Destination is longer than the converter's region, and only the first
                             // width × height bytes are handed over as its span.
                             var backing = new byte[width * height + TailBytes];
                             backing.AsSpan().Fill(Poison);
@@ -442,14 +442,14 @@ public class LuminanceConverterParityTest
     /// partial once more.
     /// </para>
     /// <para>
-    /// Honest about what this adds: the row modes are fail-SAFE by construction — every
+    /// Honest about what this adds: the row modes are fail-SAFE by construction, since every
     /// mode but the optimistic one is a specialization of the exact composite, so picking
     /// the wrong mode costs speed, not bytes. The one mode that can be wrong is the
     /// optimistic pass, and its accept test is per row. Verified by mutation: hoisting
     /// the row/dest refs out of the row loop, and deciding the row mode once from row 0
-    /// (<c>y &gt; 0 || opaque</c>), both fail here — but both also happen to fail the
+    /// (<c>y &gt; 0 || opaque</c>), both fail here, but both also happen to fail the
     /// uniform test above, on the single 16x5 partial-alpha case whose first row the
-    /// generator happens to make opaque. That is luck of the seed, not coverage; this
+    /// generator happens to make opaque. That is luck of the seed, not coverage. This
     /// test is what makes the transitions deliberate.
     /// </para>
     /// </remarks>

@@ -37,10 +37,10 @@ public class TextAnalyzerAdvSimdParityTest
     /// <remarks>
     /// This is the invariant, tested where it is actually decided. `RmQRBinaryEncoder`
     /// routes Byte-mode text to `WriteLatin1` on `EciMode.Default or Iso8859_1`, and that
-    /// writer truncates chars to a byte — on x64 its SSE2 tier SATURATES instead, so a
+    /// writer truncates chars to a byte. On x64 its SSE2 tier SATURATES instead, so a
     /// mis-detection would produce a different payload per architecture rather than a
     /// uniformly wrong one. The explicit-ECI half of the precondition is enforced by
-    /// `CharacterSets.IsValidISO88591` and covered by RmQRCodeGeneratorUnitTest; this is
+    /// `CharacterSets.IsValidISO88591` and covered by RmQRCodeGeneratorUnitTest. This is
     /// the auto-detect half.
     ///
     /// Position matters as much as the character: every vector tier tests a whole block
@@ -135,7 +135,7 @@ public class TextAnalyzerAdvSimdParityTest
             return;
         }
 
-        // Lengths crossing the 8/16-char vector grain; the char alone, repeated,
+        // Lengths crossing the 8/16-char vector grain. The char alone, repeated,
         // leading a digit run, and trailing a digit run (tail-only flag flips).
         foreach (var length in new[] { 1, 7, 8, 9, 15, 16, 17, 24 })
         {

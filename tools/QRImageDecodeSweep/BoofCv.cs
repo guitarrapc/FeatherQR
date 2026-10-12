@@ -10,7 +10,7 @@ namespace QRImageDecodeSweep;
 /// BoofCV's QR photographs (<c>qrcodes_v3.zip</c>, its <c>detection</c> directory): one directory per category, each photograph beside a <c>.txt</c> of hand-picked corners, four a code.
 /// The set records where each code is, not what it says, so a read is scored without a known text, two ways:
 /// located, when the read symbol's centre lies inside a labelled code's outline, and agreed, when another reader, or the same reader in another photograph, read the same text.
-/// A photograph counts for a reader when one of its reads is agreed. The set is never committed (its licence is not stated); the path is given on the command line.
+/// A photograph counts for a reader when one of its reads is agreed. The set is never committed (its licence is not stated), so the path is given on the command line.
 /// Readers run in their own harness join through a file of result lines (<see cref="ReaderLines"/>): their texts count toward agreement like any other read, and each gets a table and a gap of its own. Their reads carry no position, so they count photographs and not codes.
 /// </summary>
 internal static class BoofCv
@@ -49,7 +49,7 @@ internal static class BoofCv
         var stopwatch = Stopwatch.StartNew();
         var photos = new Photo[images.Count];
         var done = 0;
-        // A photograph is up to 12 MP, decoded to 4 bytes a pixel before it is grey; fewer threads keep the memory bounded
+        // A photograph is up to 12 MP, decoded to 4 bytes a pixel before it is grey, so fewer threads keep the memory bounded
         Parallel.For(0, images.Count, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 1, 16) }, i =>
         {
             photos[i] = Measure(images[i].Category, images[i].Path, lines);
@@ -128,7 +128,7 @@ internal static class BoofCv
         });
     }
 
-    /// <summary>ZXing.Net with <c>TryHarder</c>, every symbol it finds; its result points are the finder centres, whose mean lies inside the symbol.</summary>
+    /// <summary>ZXing.Net with <c>TryHarder</c>, every symbol it finds. Its result points are the finder centres, whose mean lies inside the symbol.</summary>
     private static Read[] ZXingNet(byte[] luminance, int width, int height)
     {
         try
@@ -245,7 +245,7 @@ internal static class BoofCv
         List(sb, "Gap: zxing-cpp has an agreed read, FeatherQR none", photos.Where(p => p.Reads[1].Any(agreed) && !p.Reads[0].Any(agreed)), static p => $"{p.Category}/{p.File} ({p.Width}x{p.Height}, {p.Labels.Count} codes): {p.FeatherQrStatus}");
         List(sb, "Reverse: FeatherQR has an agreed read, zxing-cpp none", photos.Where(p => p.Reads[0].Any(agreed) && !p.Reads[1].Any(agreed)), static p => $"{p.Category}/{p.File} ({p.Width}x{p.Height}, {p.Labels.Count} codes)");
 
-        // A FeatherQR read inside a code zxing-cpp read otherwise, or a text no other read confirms, is either a code read once or a misread; each is looked at by hand
+        // A FeatherQR read inside a code zxing-cpp read otherwise, or a text no other read confirms, is either a code read once or a misread, so each is looked at by hand
         List(sb, "FeatherQR read a code zxing-cpp read with another text", photos.Where(p => p.Reads[0].Any(own => LabelOf(p, own) is var label && label >= 0 && p.Reads[1].Any(other => LabelOf(p, other) == label && other.Text != own.Text))), static p => $"{p.Category}/{p.File}");
         List(sb, "FeatherQR texts no other read confirms", photos.Where(p => p.Reads[0].Any(own => !agreed(own))), p => $"{p.Category}/{p.File}: {Show(p.Reads[0][0].Text)}");
         return sb.ToString();

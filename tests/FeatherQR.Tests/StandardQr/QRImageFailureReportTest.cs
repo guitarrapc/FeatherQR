@@ -4,17 +4,17 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Which failure a Standard QR image decode reports: at each level of its search the main path's attempt, unless another settles, so the version and level of a failure are those of the grid the symbol's own measurements gave.
-/// These hold it on whole images; <see cref="FinderTripleCornersTest"/> holds it between the corners and triples of a search.
+/// These hold it on whole images. <see cref="FinderTripleCornersTest"/> holds it between the corners and triples of a search.
 /// </summary>
 /// <remarks>
-/// Micro QR and rMQR report the failure that got furthest instead. Standard QR does not (standardqr-decoder.md, Decisions, failure diagnostics; tried and declined 2026-09-30): its format word names no version, so a grid sampled at a guessed dimension gets past it about half the time and fails at Reed-Solomon with that dimension's version.
+/// Micro QR and rMQR report the failure that got furthest instead. Standard QR does not. That was tried and declined 2026-09-30 (standardqr-decoder.md, Decisions, failure diagnostics): its format word names no version, so a grid sampled at a guessed dimension gets past it about half the time and fails at Reed-Solomon with that dimension's version.
 /// Under the furthest rule every one of these symbols reported <see cref="DecodeStatus.DataUncorrectable"/> one version too small.
 /// </remarks>
 public class QRImageFailureReportTest
 {
     /// <summary>
     /// Every grid of a symbol whose format information is destroyed fails at it: the estimate's grid, with the symbol's own version, is reported, not a guessed dimension's grid that got past the format word by chance.
-    /// On an image with grey levels each grid is read again by coverage, and a crisp render samples the same modules both ways, so that re-read is skipped; a skip is no attempt, and is not reported either.
+    /// On an image with grey levels each grid is read again by coverage, and a crisp render samples the same modules both ways, so that re-read is skipped. A skip is no attempt, and is not reported either.
     /// </summary>
     [Test]
     [Arguments(2, false)]
@@ -53,7 +53,7 @@ public class QRImageFailureReportTest
         throw new InvalidOperationException("No word beyond the correction distance");
     }
 
-    /// <summary>Dark 0 and light 255, square modules; blurred, each pixel is the mean of the 3 × 3 around it, which gives the image grey levels at every edge.</summary>
+    /// <summary>Dark 0 and light 255, square modules. Blurred, each pixel is the mean of the 3 × 3 around it, which gives the image grey levels at every edge.</summary>
     private static byte[] Render(byte[] modules, int size, int pixelsPerModule, int quietZone, bool blurred, out int side)
     {
         side = (size + 2 * quietZone) * pixelsPerModule;

@@ -22,7 +22,7 @@ namespace FeatherQR.Tests;
 /// </para>
 /// <para>
 /// When a golden is missing the test generates it into the source tree and passes
-/// (commit the new file with the PR); on CI a missing golden fails instead. When a
+/// (commit the new file with the PR). On CI a missing golden fails instead. When a
 /// case mismatches, the rendered output is saved next to the golden as
 /// <c>*.actual.png</c> for visual diffing. To intentionally change rendering,
 /// delete the affected goldens, rerun, review, and commit the regenerated files.

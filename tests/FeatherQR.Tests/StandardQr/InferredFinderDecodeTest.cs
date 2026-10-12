@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// A symbol with one finder gone, under glare, damage or an odd drawing: the two finders found imply where the third is, and the symbol reads from the three.
-/// The third is the perpendicular of the pair's edge from one of them, or half of it from the pair's midpoint when the pair is the diagonal; under perspective that puts it a module or two off, and a search of the timing patterns around it settles the centre.
+/// The third is the perpendicular of the pair's edge from one of them, or half of it from the pair's midpoint when the pair is the diagonal. Under perspective that puts it a module or two off, and a search of the timing patterns around it settles the centre.
 /// </summary>
 public class InferredFinderDecodeTest
 {
@@ -34,7 +34,7 @@ public class InferredFinderDecodeTest
 
     /// <summary>
     /// Under keystone the perpendicular construction lands further from the drawn centre than the centre refinement moves a finder (three quarters of a module), and the symbol still reads: the search of the timing patterns around it.
-    /// Version 3 at 6 px/module reads this way to 0.20 keystone and not past 0.25, where the frame, flat along the lines to the inferred finder, no longer follows the symbol; for the same reason the corner reported at the inferred finder is held to three modules here, not the half module of the other three.
+    /// Version 3 at 6 px/module reads this way to 0.20 keystone and not past 0.25, where the frame, flat along the lines to the inferred finder, no longer follows the symbol. For the same reason the corner reported at the inferred finder is held to three modules here, not the half module of the other three.
     /// </summary>
     [Test]
     [Arguments(Finder.TopLeft, 15f, 0.18f)]
@@ -130,7 +130,7 @@ public class InferredFinderDecodeTest
     private const int QuietZone = 4;
 
     /// <summary>
-    /// The version 3 symbol at 6 px/module with the finder and its separator blanked to the ground; with <paramref name="destroyData"/>, every module past the finders' rows and columns but the alignment pattern is drawn at random too.
+    /// The version 3 symbol at 6 px/module with the finder and its separator blanked to the ground. With <paramref name="destroyData"/>, every module past the finders' rows and columns but the alignment pattern is drawn at random too.
     /// </summary>
     internal static (byte[] Luminance, int Width, int Height, PerspectiveTransform Truth, int Size) Render(Finder blanked, float degrees, float keystone, bool destroyData = false)
     {

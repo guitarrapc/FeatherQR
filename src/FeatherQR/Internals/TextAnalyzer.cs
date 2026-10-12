@@ -17,7 +17,7 @@ namespace FeatherQR.Internals;
 /// <param name="DataLength">The text's length in <paramref name="EncodingMode"/>'s units: characters, or encoded bytes for Byte mode.</param>
 /// <param name="KanjiPlannable">
 /// The text is Kanji-eligible and holds ASCII, so a mixed-mode plan can write its other characters as Kanji runs beside runs of its ASCII, with no ECI header.
-/// Set only for a caller that plans Kanji (<see cref="TextAnalyzer.Analyze(ReadOnlySpan{char}, EciMode, bool, bool)"/>); the rest of the analysis is then the UTF-8 one, which is what the single-mode stream writes.
+/// Set only for a caller that plans Kanji (<see cref="TextAnalyzer.Analyze(ReadOnlySpan{char}, EciMode, bool, bool)"/>). The rest of the analysis is then the UTF-8 one, which is what the single-mode stream writes.
 /// </param>
 internal readonly record struct TextAnalysisResult(EncodingMode EncodingMode, EciMode EciMode, int DataLength, bool KanjiPlannable = false);
 
@@ -87,7 +87,7 @@ internal static partial class TextAnalyzer
     /// <remarks>
     /// <para>
     /// Every such character costs 13 bits in Kanji mode against 16 or 24 in UTF-8, and the stream carries no ECI header, so the result never needs a larger version than UTF-8 would.
-    /// A text with ASCII in it stays UTF-8 here, because one Kanji segment cannot hold ASCII; mixing the two is a plan's business.
+    /// A text with ASCII in it stays UTF-8 here, because one Kanji segment cannot hold ASCII. Mixing the two is a plan's business.
     /// </para>
     /// <para>
     /// The pass runs only once the analysis has resolved UTF-8, and stops at the first character without a cell, so ASCII and Latin-1 text pays one comparison for it.
@@ -108,7 +108,7 @@ internal static partial class TextAnalyzer
     }
 
     /// <summary>
-    /// The Kanji analysis of a UTF-8 text when every character has an encoder cell; with <paramref name="planKanji"/>, the UTF-8 analysis marked plannable when every character is ASCII or has one; otherwise the UTF-8 analysis unchanged.
+    /// The Kanji analysis of a UTF-8 text when every character has an encoder cell. With <paramref name="planKanji"/>, the UTF-8 analysis marked plannable when every character is ASCII or has one. Otherwise the UTF-8 analysis unchanged.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static TextAnalysisResult ResolveKanji(ReadOnlySpan<char> text, in TextAnalysisResult utf8, bool planKanji)
@@ -117,7 +117,7 @@ internal static partial class TextAnalyzer
         foreach (var c in text)
         {
             // No ASCII character has a cell (U+005C's is one of the seven never written), so ASCII skips the lookup.
-            // The rest ask membership only; the writer looks the value up, once per character.
+            // The rest ask membership only. The writer looks the value up, once per character.
             if (c < 0x80)
             {
                 if (!planKanji)
@@ -215,7 +215,7 @@ internal static partial class TextAnalyzer
     /// Bytes a Byte-mode segment carries, which is what its character count indicator declares.
     /// </summary>
     /// <remarks>
-    /// Only UTF-8 has to be counted. Latin-1 is one byte per <c>char</c>, out-of-range ones included, since the writer narrows each and the encoder replaces each, so the length is the count and no pass over the text is needed; the classification pass has already answered which of the two the charset resolves to, so the rescan that answer used to cost is gone with it.
+    /// Only UTF-8 has to be counted. Latin-1 is one byte per <c>char</c>, out-of-range ones included, since the writer narrows each and the encoder replaces each, so the length is the count and no pass over the text is needed. The classification pass has already answered which of the two the charset resolves to, so the rescan that answer used to cost is gone with it.
     /// Pinned against <see cref="Encoding"/> and against the bytes the writer emits, per charset and content class, by <c>TextAnalyzerByteCountTest</c>.
     /// </remarks>
     private static int CalculateByteCount(ReadOnlySpan<char> text, EciMode eciMode, bool hasNonIso88591)

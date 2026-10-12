@@ -61,7 +61,7 @@ public class MicroQRCodeDecoderImageTest
     /// Anti-aliased renders at low density and small rotations: the axis recovery took the
     /// direction of the shortest span through the finder, a flat minimum that pixel noise
     /// moved several degrees, and scaled the grid from the measurement that won it.
-    /// M4 at 20 degrees failed; the broader candidate search read the rest either way, and
+    /// M4 at 20 degrees failed. The broader candidate search read the rest either way, and
     /// they stay to pin the envelope. The estimator itself is pinned in FinderAxisEstimatorTest.
     /// </summary>
     [Test]
@@ -139,7 +139,7 @@ public class MicroQRCodeDecoderImageTest
     /// A thermal printer, a laser marker or a camera at an angle hands the decoder modules that are
     /// not square, so it must keep the finder's horizontal and vertical module scales apart. Every
     /// right-angle rotation decodes to 2.35:1 either way, where the finder cross-check's 12:5 window
-    /// ends; this is 1.25:1, 8 x 10 px.
+    /// ends. This is 1.25:1, 8 x 10 px.
     /// </summary>
     [Test]
     [Arguments(0)]

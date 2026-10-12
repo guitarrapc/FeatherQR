@@ -58,7 +58,7 @@ public class ShiftJisKanjiTableUnitTest
             .Because("the declared count must track the data");
     }
 
-    /// <summary>Non-kanji rows 1-8 hold 524 cells; kanji rows 16-84 hold 6,355.</summary>
+    /// <summary>Non-kanji rows 1-8 hold 524 cells, and kanji rows 16-84 hold 6,355.</summary>
     [Test]
     public async Task AssignedCells_SplitIntoTheStandardsNonKanjiAndKanjiTotals()
     {
@@ -113,8 +113,8 @@ public class ShiftJisKanjiTableUnitTest
 
     /// <summary>
     /// Row 13 is the NEC extension block (circled digits, unit ligatures) that CP932
-    /// assigns and JIS X 0208 does not. Choosing JIS X 0208 means these stay unmapped;
-    /// this is the false-positive case a CP932-derived table would silently get wrong.
+    /// assigns and JIS X 0208 does not. Choosing JIS X 0208 means these stay unmapped.
+    /// This is the false-positive case a CP932-derived table would silently get wrong.
     /// </summary>
     [Test]
     [Arguments(0x8740)] // CP932 U+2460 circled digit one
@@ -224,7 +224,7 @@ public class ShiftJisKanjiTableUnitTest
 
     /// <summary>
     /// Pins all 8,192 entries at once. The other tests here constrain only WHICH cells
-    /// are assigned; a table whose readings were permuted within a row satisfies every
+    /// are assigned. A table whose readings were permuted within a row satisfies every
     /// one of them, and that is exactly how a regenerated table can go wrong. Update
     /// this hash only together with a deliberate, reviewed regeneration.
     /// </summary>
@@ -246,12 +246,12 @@ public class ShiftJisKanjiTableUnitTest
 
     /// <summary>
     /// SHA-256 of the 16,384-byte table, little-endian UTF-16 code units. On a
-    /// deliberate regeneration, `generate-kanji-table` prints the new value; paste it
+    /// deliberate regeneration, `generate-kanji-table` prints the new value. Paste it
     /// here in the same reviewed change.
     /// </summary>
     private const string GoldenDigest = "7C0016107C60919AF564AA12482CB915BBA964D74E2A107D172C7C1C9490D2E2";
 
-    /// <summary>Every assigned cell is structurally expressible; the reverse does not hold.</summary>
+    /// <summary>Every assigned cell is structurally expressible, but the reverse does not hold.</summary>
     [Test]
     public async Task EveryAssignedCell_IsStructurallyValid()
     {

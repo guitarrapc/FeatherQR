@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// would land on the next object unseen. For loads wider than what they use (an 8-byte load for three digits, sixteen characters read for
 /// twelve written), whose guard is the only thing keeping them inside the input.
 /// </summary>
-/// <remarks>Windows (VirtualAlloc) and Linux and macOS (mmap); <see cref="IsSupported"/> is false elsewhere.</remarks>
+/// <remarks>Windows (VirtualAlloc) and Linux and macOS (mmap). <see cref="IsSupported"/> is false elsewhere.</remarks>
 internal sealed class PageEndMemory : IDisposable
 {
     private readonly nint _address;

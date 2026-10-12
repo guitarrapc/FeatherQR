@@ -11,7 +11,7 @@ public class FinderPatternShapeColorTest
     /// background shows through it on its own, opaque or not, and the renderer neither paints the
     /// ring nor erases it. A shape that painted the ring itself, with a light paint the renderer
     /// used to hand it, could only be made right on a translucent background by erasing through a
-    /// layer, which SVG output cannot express; the layer is gone and so is that overload.
+    /// layer, which SVG output cannot express. The layer is gone and so is that overload.
     /// </summary>
     [Test]
     [Arguments(255)]

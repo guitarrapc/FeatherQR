@@ -7,7 +7,7 @@ public class PerspectiveTransformUnitTest
     [Test]
     public async Task QuadToQuad_MapsCorrespondencePoints()
     {
-        // Map a square onto a keystone quad; all four correspondences must hold.
+        // Map a square onto a keystone quad. All four correspondences must hold.
         var transform = PerspectiveTransform.QuadrilateralToQuadrilateral(
             0, 0, 10, 0, 10, 10, 0, 10,
             2, 1, 11, 3, 9, 12, 1, 9);

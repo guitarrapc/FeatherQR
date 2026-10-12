@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The rule that lets a search skip the segmentation program: a mixed plan can only be cheaper
 /// than one run when the content holds a run of a denser mode long enough to repay the mode
-/// header it adds. The predicate may say yes and be wrong, which only costs a cost run; saying
+/// header it adds. The predicate may say yes and be wrong, which only costs a cost run. Saying
 /// no when a plan would have won changes what the library emits, so that direction is held to
 /// the program itself over content built around every length near the thresholds.
 /// </summary>
@@ -59,7 +59,7 @@ public class PlanCouldWinTest
         foreach (var requested in new[] { EciMode.Default, EciMode.Utf8 })
         {
             // The charset the analysis resolves to is the one both costs are priced in, as
-            // the planner prices them; asking the program about a charset the text was not
+            // the planner prices them. Asking the program about a charset the text was not
             // analysed under compares two different byte sequences.
             var analysis = TextAnalyzer.Analyze(text, requested);
             foreach (var (version, cciNumeric, cciAlnum, cciByte) in Bands())

@@ -9,7 +9,7 @@ internal static partial class QRImageDecoder
     /// </summary>
     /// <remarks>
     /// The frame is one plane. A lens or a bend moves the lattice off any plane by more than the search window across a symbol, and by little from one node to the next, so a node's offset from the frame is predicted from its neighbours' and only the difference is searched for.
-    /// The order follows from that. First the three corner nodes, which have no pattern: each sits three modules inside its finder's centre, and is placed by that finder's inner outline, its centre and axes measured on the image; the frame's own position stands where the outline is not measured.
+    /// The order follows from that. First the three corner nodes, which have no pattern: each sits three modules inside its finder's centre, and is placed by that finder's inner outline, its centre and axes measured on the image. The frame's own position stands where the outline is not measured.
     /// Then the patterns on the timing lines, outward from the top-left corner, each with the offset of the node before it on its line, and the interior row by row, each node with the offsets of the three neighbours already placed (left + above − diagonal).
     /// A pattern is searched within four modules of its prediction, and a node not found keeps the prediction.
     /// </remarks>

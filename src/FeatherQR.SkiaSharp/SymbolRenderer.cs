@@ -10,7 +10,7 @@ namespace FeatherQR.SkiaSharp;
 /// <remarks>
 /// The symbol is fitted into the area at one uniform module scale and centered, whatever the area's aspect ratio, using the same fit as the image builders (given an explicit canvas size, they also round the offset to whole pixels): modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The background covers the whole area.
 /// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
-/// An inverted area is refused rather than read as a mirror; for a mirrored symbol (a transfer print, a sticker read through glass), scale the canvas by -1 about the area.
+/// An inverted area is refused rather than read as a mirror. For a mirrored symbol (a transfer print, a sticker read through glass), scale the canvas by -1 about the area.
 /// </remarks>
 public static class SymbolRenderer
 {
@@ -21,7 +21,7 @@ public static class SymbolRenderer
     /// A non-square area gets the symbol at a uniform module scale, centered, with the background over the whole area.
     /// The two colors are values with no spelling for "the default": <c>default</c> is transparent here, not black. <see cref="GetFinderPatternRect"/> and <see cref="GetIconRects"/> fit the same way, so pass them the same area.
     /// With the default rectangle shape at <paramref name="moduleSizePercent"/> 1.0, horizontal runs of dark modules are drawn as single merged rectangles (fewer native draw calls).
-    /// Merged and per-module rendering are pixel-identical under axis-preserving canvas transforms (translation/scale); under rotation, shared-edge rounding may differ at sub-pixel level.
+    /// Merged and per-module rendering are pixel-identical under axis-preserving canvas transforms (translation/scale). Under rotation, shared-edge rounding may differ at sub-pixel level.
     /// Any custom module shape or a module size below 1.0 falls back to per-module drawing.
     /// </remarks>
     /// <param name="canvas">The canvas to render the QR code on.</param>
@@ -30,9 +30,9 @@ public static class SymbolRenderer
     /// <param name="codeColor">The dark modules, <see cref="SKColors.Black"/> conventionally. A <paramref name="gradientOptions"/> paints them instead, unless its direction is <see cref="GradientDirection.None"/>.</param>
     /// <param name="backgroundColor">Behind the QR code.</param>
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
-    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only; the finder patterns are never drawn with gaps, or the symbol stops being detectable.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only. The finder patterns are never drawn with gaps, or the symbol stops being detectable.</param>
     /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
-    /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>; omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>. Omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted. A shape draws the dark modules only and leaves the light rings undrawn, so the background shows through them at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, keeps its background and draws nothing else.</exception>
@@ -71,8 +71,8 @@ public static class SymbolRenderer
         // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
 
-        // Apply gradient if specified. The shader wrapper must be disposed here;
-        // disposing the paint alone leaves the SKShader to the finalizer.
+        // Apply gradient if specified. The shader wrapper must be disposed here.
+        // Disposing the paint alone leaves the SKShader to the finalizer.
         using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
         if (gradientShader is not null)
         {
@@ -135,9 +135,9 @@ public static class SymbolRenderer
     /// <param name="data">The Micro QR code to draw.</param>
     /// <param name="codeColor">The dark modules, <see cref="SKColors.Black"/> conventionally. A <paramref name="gradientOptions"/> paints them instead, unless its direction is <see cref="GradientDirection.None"/>.</param>
     /// <param name="backgroundColor">Behind the Micro QR code.</param>
-    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only; the finder pattern is never drawn with gaps, or the symbol stops being detectable.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only. The finder pattern is never drawn with gaps, or the symbol stops being detectable.</param>
     /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
-    /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>; omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>. Omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, keeps its background and draws nothing else.</exception>
@@ -171,8 +171,8 @@ public static class SymbolRenderer
         // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
 
-        // Apply gradient if specified. The shader wrapper must be disposed here;
-        // disposing the paint alone leaves the SKShader to the finalizer.
+        // Apply gradient if specified. The shader wrapper must be disposed here.
+        // Disposing the paint alone leaves the SKShader to the finalizer.
         using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
         if (gradientShader is not null)
         {
@@ -212,9 +212,9 @@ public static class SymbolRenderer
     /// <param name="data">The rMQR code to draw.</param>
     /// <param name="codeColor">The dark modules, <see cref="SKColors.Black"/> conventionally. A <paramref name="gradientOptions"/> paints them instead, unless its direction is <see cref="GradientDirection.None"/>.</param>
     /// <param name="backgroundColor">Behind the rMQR code.</param>
-    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only; the finder pattern is never drawn with gaps, or the symbol stops being detectable.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only. The finder pattern is never drawn with gaps, or the symbol stops being detectable.</param>
     /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
-    /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>; omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>. Omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered rectangle rounds away, keeps its background and draws nothing else.</exception>
@@ -299,7 +299,7 @@ public static class SymbolRenderer
         var height = area.Height;
 
         // SKRect.Create(x, y, s, s) stores right and bottom as rounded sums, so a square at fractional
-        // coordinates can come out a rounding step from square; shrinking it by that step moves module edges.
+        // coordinates can come out a rounding step from square. Shrinking it by that step moves module edges.
         // Scaled per axis before the sum, which would overflow near the top of the float range.
         var slack = MaxAbs(area.Left, area.Right) * SquareTolerance + MaxAbs(area.Top, area.Bottom) * SquareTolerance;
         if (Math.Abs(width - height) <= slack)
@@ -310,7 +310,7 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// Refuses an area with a negative or non-finite size. A zero size is accepted; the renderer keeps its background and draws nothing else.
+    /// Refuses an area with a negative or non-finite size. A zero size is accepted, and the renderer keeps its background and draws nothing else.
     /// </summary>
     /// <remarks>
     /// An inverted area reads two ways, a mirror or the same bounds written backwards, and for an asymmetric symbol the two are different pictures, so neither is guessed. A mirror is asked for with the canvas.
@@ -408,7 +408,7 @@ public static class SymbolRenderer
     /// <summary>
     /// Slack for "already square", per axis, as a share of that axis's largest coordinate: two float steps there, since a float step at m is at most m / 2^23.
     /// Two steps is what a square costs to store, not a margin: a square whose edges are each scaled, which is what a canvas scale gives, comes back two steps from square.
-    /// It follows that far from the origin, where a step is a large share of the area, a rectangle that is not square can pass as one; no symbol renders there either, since the same step quantises every module edge.
+    /// It follows that far from the origin, where a step is a large share of the area, a rectangle that is not square can pass as one. No symbol renders there either, since the same step quantises every module edge.
     /// </summary>
     private const float SquareTolerance = 1f / (1 << 22);
 
@@ -419,7 +419,7 @@ public static class SymbolRenderer
     /// When <see cref="IconData.IconSizeModules"/> is set, sizing is module-based and percent/pixel values are ignored.
     /// A non-square area is fitted exactly as <c>Render</c> fits it, so pass the area you drew into. An area no symbol fits in, where <c>Render</c> draws nothing, gives empty rectangles at the fitted symbol's centre.
     /// Module-based icons are validated against QR size and core occupancy at render time.
-    /// Icon rectangles are snapped to the module grid; even module sizes cannot be geometrically centered on an odd QR matrix.
+    /// Icon rectangles are snapped to the module grid, since even module sizes cannot be geometrically centered on an odd QR matrix.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> or <paramref name="iconData"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite.</exception>
@@ -456,7 +456,7 @@ public static class SymbolRenderer
             var borderHeight = iconBorderModules * cellHeight;
 
             // Snap to module grid. QR matrix size is always odd, so an even icon size
-            // cannot be geometrically centered without cutting modules; prefer module edges.
+            // cannot be geometrically centered without cutting modules. Prefer module edges.
             var iconOriginModule = (size - iconSizeModules) / 2;
             var iconLeft = area.Left + iconOriginModule * cellWidth;
             var iconTop = area.Top + iconOriginModule * cellHeight;
@@ -528,7 +528,7 @@ public static class SymbolRenderer
 
         renderArea = GetSquareArea(renderArea);
 
-        // No symbol was drawn, so no pattern was either; a cell of one side's size would give a rect with the other side's.
+        // No symbol was drawn, so no pattern was either. A cell of one side's size would give a rect with the other side's.
         if (IsEmpty(renderArea))
             return new SKRect(renderArea.Left, renderArea.Top, renderArea.Left, renderArea.Top);
 
@@ -566,9 +566,9 @@ public static class SymbolRenderer
     /// Which shape draws the finder patterns, or <c>null</c> to leave them to the module loop.
     /// </summary>
     /// <remarks>
-    /// The module shape and size style the data; a finder is located by its 1:1:3:1:1 run, which
+    /// The module shape and size style the data. A finder is located by its 1:1:3:1:1 run, which
     /// gaps between modules erase, so it never takes them. Full-size rectangles already draw the
-    /// pattern solid and stay in the run-merge path; anything else gets an explicit shape.
+    /// pattern solid and stay in the run-merge path. Anything else gets an explicit shape.
     /// </remarks>
     private static FinderPatternShape? ResolveFinderShape(ModuleShape shape, float moduleSizePercent, FinderPatternShape? requested)
     {
@@ -605,7 +605,7 @@ public static class SymbolRenderer
     /// <summary>
     /// Draws dark modules as merged horizontal runs of full-cell rectangles.
     /// Only valid for <see cref="RectangleModuleShape"/> at 100% module size, where adjacent modules share edges, antialiasing is always off (<see cref="RectangleModuleShape.RequiresAntialiasing"/> is false), and merging is pixel-identical to per-module drawing.
-    /// The parity holds under axis-preserving canvas transforms (translation/scale); rotated canvases may rasterize shared edges hairline-differently at sub-pixel level, inherent to non-axis-aligned rasterization, which affects per-module drawing between adjacent modules just the same.
+    /// The parity holds under axis-preserving canvas transforms (translation/scale). Rotated canvases may rasterize shared edges hairline-differently at sub-pixel level, inherent to non-axis-aligned rasterization, which affects per-module drawing between adjacent modules just the same.
     /// </summary>
     private static void DrawModuleRuns<TView>(SKCanvas canvas, TView data, SKRect area, SKPaint paint, bool skipFinderPatterns)
         where TView : struct, IModuleMatrixView

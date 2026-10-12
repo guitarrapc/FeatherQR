@@ -11,7 +11,7 @@ namespace FeatherQR.Tests;
 /// exit inside the 5x5 template.
 /// </summary>
 /// <remarks>
-/// Both are pure optimizations — they may only make a search that was going to fail
+/// Both are pure optimizations. They may only make a search that was going to fail
 /// fail sooner. What has to be pinned is that neither ever changes an answer: a
 /// tightened bound or an off-by-one acceptance floor is invisible to a decode test,
 /// because the sub-finder is one step of a pipeline with several fallbacks behind it.
@@ -35,8 +35,8 @@ public class RmQRSubFinderGuardTest
     /// Reference locator: the same 5x5 template over the same half-module lattice, with
     /// no bounding-box rejection and no early exit. Deliberately a separate transcription
     /// rather than a flag on the production one, so a guard that changes an answer shows
-    /// up as a disagreement. It models the axis-aligned case only — production also tries
-    /// three shear leans and stops at the first perfect 25/25 — which is why every fixture
+    /// up as a disagreement. It models the axis-aligned case only. Production also tries
+    /// three shear leans and stops at the first perfect 25/25, which is why every fixture
     /// here renders axis-aligned.
     /// </summary>
     private static bool ReferenceLocate(
@@ -136,7 +136,7 @@ public class RmQRSubFinderGuardTest
 
         if (expected)
         {
-            // Same lattice, so an accepted position must be the same one; the locator
+            // Same lattice, so an accepted position must be the same one. The locator
             // then refines the centre, so allow a module of slack.
             await Assert.That(Math.Abs(gotX - wantX)).IsLessThanOrEqualTo(module)
                 .Because($"{version} at {modulePixelSize} px/module: sub-finder X moved");
@@ -206,7 +206,7 @@ public class RmQRSubFinderGuardTest
     /// <remarks>
     /// It does NOT pin the acceptance floor itself. The ring search walks a half-module
     /// lattice, so a neighbouring position re-scores the damaged module against a
-    /// different pixel and reaches 25 anyway; raising the early exit's threshold by one
+    /// different pixel and reaches 25 anyway. Raising the early exit's threshold by one
     /// leaves this green (verified by mutation). Pinning the floor exactly would need a
     /// fixture that damages the template identically at every lattice offset, which no
     /// real symbol produces. What is pinned is the tolerance being reachable end to end.
@@ -234,7 +234,7 @@ public class RmQRSubFinderGuardTest
             out var originX, out var originY);
         await Assert.That(found).IsTrue().Because("the undamaged symbol must locate, or the fixture is wrong");
 
-        // The (-2, -2) corner is a dark ring sample; make it light. The whole module is
+        // The (-2, -2) corner is a dark ring sample. Make it light. The whole module is
         // cleared, not one pixel: the ring search walks a half-module lattice, so a
         // single flipped pixel leaves a neighbouring position still scoring 25 and the
         // acceptance floor never decides anything.
@@ -270,7 +270,7 @@ public class RmQRSubFinderGuardTest
 
     /// <summary>
     /// A prediction far enough outside the image that no sample of any ring position
-    /// can land in it must be rejected — that is the case the box exists for, and it
+    /// can land in it must be rejected. That is the case the box exists for, and it
     /// must still return the same answer an unguarded search would.
     /// </summary>
     [Test]

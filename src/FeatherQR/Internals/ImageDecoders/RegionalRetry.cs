@@ -24,16 +24,16 @@ internal static class RegionalRetry
     /// <summary>Decodes the regional binarization of the positive, then of the negative unless the positive's read the symbol or gave a verdict on its content.</summary>
     /// <typeparam name="TAttempt">The decoder's attempt type.</typeparam>
     /// <typeparam name="TInfo">The decoder's diagnostic record.</typeparam>
-    /// <param name="attempt">The decoder's attempt; a struct, so the call is direct.</param>
+    /// <param name="attempt">The decoder's attempt. It is a struct, so the call is direct.</param>
     /// <param name="luminance">The image, positive.</param>
-    /// <param name="buffer">The inverted retry's buffer, one byte a pixel; overwritten with each binarization.</param>
-    /// <param name="histogram">The negative's histogram, as the inverted retry left it; overwritten.</param>
+    /// <param name="buffer">The inverted retry's buffer, one byte a pixel. It is overwritten with each binarization.</param>
+    /// <param name="histogram">The negative's histogram, as the inverted retry left it. It is overwritten.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Where the attempt writes the decoded characters.</param>
-    /// <param name="charsWritten">What the last polarity's decode wrote; 0 when that polarity was not decoded.</param>
-    /// <param name="info">The last polarity's decode diagnostics; default when that polarity was not decoded.</param>
-    /// <returns>The last polarity's status: the positive's when it read the symbol or gave a verdict on its content, else the negative's; <see cref="DecodeStatus.NotDetected"/> for a polarity not decoded.</returns>
+    /// <param name="charsWritten">What the last polarity's decode wrote, or 0 when that polarity was not decoded.</param>
+    /// <param name="info">The last polarity's decode diagnostics, or default when that polarity was not decoded.</param>
+    /// <returns>The last polarity's status: the positive's when it read the symbol or gave a verdict on its content, else the negative's. It is <see cref="DecodeStatus.NotDetected"/> for a polarity not decoded.</returns>
     public static DecodeStatus Decode<TAttempt, TInfo>(ref TAttempt attempt, ReadOnlySpan<byte> luminance, Span<byte> buffer, Span<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info)
         where TAttempt : struct, ILuminanceAttempt<TInfo>
     {
@@ -82,7 +82,7 @@ internal static class RegionalRetry
         return attempt.Decode(binarized, luminance, negative, histogram, width, height, destination, out charsWritten, out info);
     }
 
-    /// <summary>Whether every pixel is 0 or 255; symmetric, so it holds for a histogram in either polarity.</summary>
+    /// <summary>Whether every pixel is 0 or 255. This is symmetric, so it holds for a histogram in either polarity.</summary>
     internal static bool HoldsOnlyExtremes(ReadOnlySpan<int> histogram)
     {
         foreach (var count in histogram.Slice(1, Binarizer.HistogramBins - 2))

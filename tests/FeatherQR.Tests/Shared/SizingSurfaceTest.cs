@@ -19,7 +19,7 @@ public class SizingSurfaceTest
         => [.. generator.GetMethods(BindingFlags.Public | BindingFlags.Static).Where(m => m.Name == name)];
 
     /// <summary>
-    /// rMQR never shipped a throwing sizing method; Standard QR and Micro QR carried one
+    /// rMQR never shipped a throwing sizing method. Standard QR and Micro QR carried one
     /// through the 1.2.0 deprecation cycle and lost it in 2.0.0. None of the three has one.
     /// </summary>
     [Test]
@@ -59,7 +59,7 @@ public class SizingSurfaceTest
     /// <summary>
     /// Every <c>Create</c> overload takes the options struct. The 1.1.1 parameter lists
     /// (<c>utf8BOM</c>, <c>eciMode</c>, <c>requestedVersion</c>, <c>quietZoneSize</c>) were
-    /// frozen through 1.2.0 and removed in 2.0.0; rMQR never had them, and the three
+    /// frozen through 1.2.0 and removed in 2.0.0. rMQR never had them, and the three
     /// generators now have the same shape.
     /// </summary>
     [Test]

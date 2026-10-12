@@ -36,7 +36,7 @@ internal static class Readers
         return success ? (text, "Success") : (null, status.ToString());
     }
 
-    /// <summary>zxing-cpp with its defaults and <c>TryHarder</c>; every symbol it reports.</summary>
+    /// <summary>zxing-cpp with its defaults and <c>TryHarder</c>, every symbol it reports.</summary>
     public static string[] ZXingCpp(string symbology, Rendered image)
     {
         var format = symbology switch
@@ -104,7 +104,7 @@ internal static class Readers
         return new ResultRow(key, Digest(image), misread ? "Misread" : status, text == expected, misread, cpp, net, misread ? Difference(expected, text!) : null);
     }
 
-    /// <summary>The pixels only; the size is in the key.</summary>
+    /// <summary>The pixels only. The size is in the key.</summary>
     private static string Digest(Rendered image) => Convert.ToHexString(SHA256.HashData(image.Luminance), 0, 8);
 
     public static string Difference(string expected, string actual)

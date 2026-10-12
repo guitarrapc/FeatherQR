@@ -20,18 +20,18 @@ public record struct MicroQRCodeGeneratorOptions
 
     /// <summary>
     /// The versions the generator may choose from.
-    /// Defaults to <see cref="MicroQRVersionRange.Any"/>; a <see cref="MicroQRVersion"/> or its nullable converts implicitly, so a <c>null</c> means automatic.
+    /// Defaults to <see cref="MicroQRVersionRange.Any"/>. A <see cref="MicroQRVersion"/> or its nullable converts implicitly, so a <c>null</c> means automatic.
     /// </summary>
     public MicroQRVersionRange Version { get; set; }
 
     /// <summary>
     /// Pin one of the four Micro QR data mask patterns (0-3, ISO/IEC 18004 Table 10) instead of the automatic edge-score selection.
     /// <c>null</c> (the default) selects the highest-scoring pattern.
-    /// Any pattern yields a valid, decodable symbol; the automatic choice merely optimizes scan reliability.
+    /// Any pattern yields a valid, decodable symbol. The automatic choice merely optimizes scan reliability.
     /// </summary>
     /// <remarks>
     /// For reproducing a symbol produced elsewhere byte-for-byte (the pattern another encoder chose is reported by <see cref="MicroQRCodeDecodeInfo.MaskPattern"/>), and for exercising a decoder against all four patterns.
-    /// Micro QR numbers its patterns 0-3; they are not the Standard QR patterns of the same index.
+    /// Micro QR numbers its patterns 0-3, but they are not the Standard QR patterns of the same index.
     /// Like <see cref="Version"/>, an invalid value is an argument error and is rejected here rather than when a generator reads it.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not 0-3 or <c>null</c>.</exception>
@@ -48,7 +48,7 @@ public record struct MicroQRCodeGeneratorOptions
 
     /// <summary>
     /// Quiet zone width in modules.
-    /// Defaults to 2, the ISO/IEC 18004 value for Micro QR; 0 is valid.
+    /// Defaults to 2, the ISO/IEC 18004 value for Micro QR. 0 is valid.
     /// </summary>
     public int QuietZoneSize
     {

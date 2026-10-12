@@ -20,7 +20,7 @@ using System.Text;
 //
 // This is the gate public_api.cs deliberately is not. The two render the same listing from
 // the same assembly - public_api.cs through reflection, for a page with documentation and
-// source links; this one through metadata, for four target frameworks and a diff. Their
+// source links, and this one through metadata, for four target frameworks and a diff. Their
 // type and member text is expected to match line for line, which is how each keeps the
 // other honest.
 //
@@ -203,7 +203,7 @@ static string Render(string assemblyPath)
     {
         var sb = new StringBuilder();
         sb.Append('\n');
-        // A ref struct carries a compiler-emitted [Obsolete] for compilers that predate it; that is not the author's attribute.
+        // A ref struct carries a compiler-emitted [Obsolete] for compilers that predate it. That is not the author's attribute.
         if (HasAttribute(type.GetCustomAttributes(), "ObsoleteAttribute") && !HasAttribute(type.GetCustomAttributes(), "IsByRefLikeAttribute")) sb.Append("    [Obsolete]\n");
         sb.Append("    ").Append(TypeHeader(type)).Append('\n').Append("    {\n");
         foreach (var member in Members(type)) sb.Append("        ").Append(member).Append('\n');
@@ -213,7 +213,7 @@ static string Render(string assemblyPath)
 
     // Nested protected counts as reachable: a consumer gets at those by deriving. Compiler-generated
     // nested types do not: a C# 14 extension block emits public marker types with unspeakable names
-    // (<G>$hash, <M>$hash) that no caller can spell; the members themselves are listed on the
+    // (<G>$hash, <M>$hash) that no caller can spell. The members themselves are listed on the
     // enclosing class, which is where a caller finds them.
     bool IsVisibleType(TypeDefinition type)
     {
@@ -234,7 +234,7 @@ static string Render(string assemblyPath)
         return type.IsNested ? $"{BareName(reader.GetTypeDefinition(type.GetDeclaringType()))}.{name}" : name;
     }
 
-    // A nested type carries no namespace of its own; it belongs to the one its outermost
+    // A nested type carries no namespace of its own. It belongs to the one its outermost
     // declaring type is in.
     string NamespaceOf(TypeDefinition type) => type.IsNested
         ? NamespaceOf(reader.GetTypeDefinition(type.GetDeclaringType()))
@@ -279,7 +279,7 @@ static string Render(string assemblyPath)
     }
 
     // Namespace-qualified, because the framework bases below are recognised by name. A
-    // constructed generic base is a type specification and has no name of its own; null is
+    // constructed generic base is a type specification and has no name of its own. Null is
     // right for it, since it is never one of those.
     string? BaseFullName(TypeDefinition type) => type.BaseType.Kind switch
     {
@@ -400,7 +400,7 @@ static string Render(string assemblyPath)
             if (writable) text.Append(AccessorAccess(isPublic, setterIsPublic)).Append(IsInitOnly(setter!.Value, context) ? "init; " : "set; ");
             text.Append('}');
 
-            // An indexer is a property with parameters; its metadata name ("Item") is not
+            // An indexer is a property with parameters. Its metadata name ("Item") is not
             // what a caller writes.
             var name = signature.ParameterTypes.Length > 0
                 ? $"this[{Parameters(readable ? getter!.Value : setter!.Value, context)}]"
@@ -557,7 +557,7 @@ static string Render(string assemblyPath)
 
     // Only the outermost annotation is rendered, so only the first byte of the encoding is
     // read: NullableAttribute holds one byte when every part of the type shares a state, and
-    // an array in declaration order otherwise. 2 is "may be null"; 1 and 0 are not.
+    // an array in declaration order otherwise. 2 is "may be null". 1 and 0 are not.
     byte Nullability(CustomAttributeHandleCollection? attributes, byte inherited)
     {
         if (attributes is null) return inherited;
@@ -566,7 +566,7 @@ static string Render(string assemblyPath)
             var attribute = reader.GetCustomAttribute(handle);
             if (AttributeName(attribute) != "NullableAttribute") continue;
             var blob = reader.GetBlobBytes(attribute.Value);
-            // Prolog(2) value(1) named-argument count(2) for the single-byte form; the array
+            // Prolog(2) value(1) named-argument count(2) for the single-byte form. The array
             // form carries a 4-byte length before its elements.
             if (blob.Length == 5) return blob[2];
             if (blob.Length >= 7) return blob[6];

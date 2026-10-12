@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 /// rMQR image decoding in mild perspective (keystone along either symbol
 /// axis), including composition with rotation and mirroring. rMQR symbols are
 /// wide, so the far end of the symbol is where the sub-finder anchored
-/// refinement earns its keep; the envelope asserted here is the measured one.
+/// refinement earns its keep. The envelope asserted here is the measured one.
 /// </summary>
 public class RmQRCodeDecoderPerspectiveTest
 {

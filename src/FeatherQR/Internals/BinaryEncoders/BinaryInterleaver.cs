@@ -5,7 +5,7 @@ namespace FeatherQR.Internals.BinaryEncoders;
 
 /// <summary>
 /// Reed-Solomon block interleaving (ISO/IEC 18004 7.6, ISO/IEC 23941 7.6): data codewords round-robin across blocks, then ECC codewords round-robin, then zero remainder bits.
-/// Shared across symbologies: the layout depends only on the <see cref="ECCInfo"/> block structure, never on a symbology-specific version (Standard QR and rMQR interleave identically; Micro QR has one block and no interleaving stage).
+/// Shared across symbologies: the layout depends only on the <see cref="ECCInfo"/> block structure, never on a symbology-specific version (Standard QR and rMQR interleave identically, and Micro QR has one block and no interleaving stage).
 /// Lifted from Internals.StandardQR when rMQR became the second consumer.
 /// The matrix decoders' inverse is <see cref="BinaryDecoders.EccBlockDecoder.Deinterleave"/>, held to this by EccBlockDecoderTest over every block structure.
 /// </summary>
@@ -26,8 +26,8 @@ internal static class BinaryInterleaver
         // 2. ECC codewords are interleaved in round-robin order from all blocks
         // 3. Final sequence follows QR code specification for optimal error correction
         //
-        // Writing the output sequentially makes the source access strided (block length);
-        // the reverse (sequential reads, strided writes) measured consistently slower in benchmarks.
+        // Writing the output sequentially makes the source access strided (block length).
+        // The reverse (sequential reads, strided writes) measured consistently slower in benchmarks.
         //
         // Image
         // data:  [D1 D2 D3 | D4 D5 D6]

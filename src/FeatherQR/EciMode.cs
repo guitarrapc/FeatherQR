@@ -60,7 +60,7 @@ public enum EciMode
     /// </summary>
     /// <remarks>
     /// The ECI header costs 12 bits in Standard QR and 11 in rMQR.
-    /// Emoji, CJK and Cyrillic cannot be encoded; use <see cref="Utf8"/> for those.
+    /// Emoji, CJK and Cyrillic cannot be encoded. Use <see cref="Utf8"/> for those.
     /// </remarks>
     Iso8859_1 = 3,
     /// <summary>
@@ -68,7 +68,7 @@ public enum EciMode
     /// </summary>
     /// <remarks>
     /// The ECI header costs 12 bits in Standard QR and 11 in rMQR, and each character takes 1 to 4 bytes.
-    /// For Western European text <see cref="Iso8859_1"/> is denser, and for Japanese text the Kanji mode <see cref="Default"/> writes with the generator's <c>AllowKanji</c> option is; asking for UTF-8 keeps such text in UTF-8 whatever that option says.
+    /// For Western European text <see cref="Iso8859_1"/> is denser, and for Japanese text the Kanji mode <see cref="Default"/> writes with the generator's <c>AllowKanji</c> option is. Asking for UTF-8 keeps such text in UTF-8 whatever that option says.
     /// </remarks>
     Utf8 = 26
 }

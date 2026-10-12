@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Where a sampler reads when a module's coordinate is not a pixel: every tier takes the same pixel, whatever the runtime's cast
-/// does with NaN or a value past the int range (CoreCLR saturates from .NET 9 on; .NET 8 on x64 and the WebAssembly interpreter
+/// does with NaN or a value past the int range (CoreCLR saturates from .NET 9 on, but .NET 8 on x64 and the WebAssembly interpreter
 /// write <see cref="int.MinValue"/>). Past the right edge reads the last column, anything left of it or NaN the first.
 /// </summary>
 /// <remarks>

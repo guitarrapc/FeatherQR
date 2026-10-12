@@ -7,9 +7,9 @@ namespace FeatherQR.Tests;
 /// <see cref="ModuleBitPacker"/> (byte-per-module ↔ MSB-first bit-packed, the storage
 /// conversion of the three data models) versus an independent naive reference: every
 /// length to 80, which takes each vector step's tail, and eleven from 297 to 4,097, the
-/// largest rMQR core (2,363) among them; all-light, all-dark, 0/1, any-byte and
-/// high-bit-only contents, any non-zero byte dark for <see cref="ModuleBitPacker.Pack"/>;
-/// the padding bits of the final byte zero and nothing written past it, and unpack
+/// largest rMQR core (2,363) among them. All-light, all-dark, 0/1, any-byte and
+/// high-bit-only contents, any non-zero byte dark for <see cref="ModuleBitPacker.Pack"/>.
+/// The padding bits of the final byte zero and nothing written past it, and unpack
 /// reproducing the 0/1 view exactly.
 /// Standard QR's entry, <see cref="ModuleBitPacker.PackZeroOrOne"/>, is held to the same
 /// reference over 0/1 modules on both its routes, and to the route the tier table gives
@@ -140,7 +140,7 @@ public class ModuleBitPackerParityTest
     }
 
     // The entry's route: Pack where the packer's row of the tier table has a tier that runs in this process, the gather otherwise. Both
-    // pack modules of 0 and 1 alike, so the test above cannot tell which ran; a byte of 0xFF at module 0 can, since Pack makes it dark
+    // pack modules of 0 and 1 alike, so the test above cannot tell which ran. A byte of 0xFF at module 0 can, since Pack makes it dark
     // and the gather darkens modules 2 to 7 with it.
     [Test]
     public async Task PackZeroOrOne_TakesPack_WhereTheTierTableGivesThePackerAVectorStep()

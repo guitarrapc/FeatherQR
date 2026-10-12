@@ -31,7 +31,7 @@ public class KeystoneFrameDecodeTest
     public async Task Version1Keystone_ReadsThroughTheFrame(float pixelsPerModule, float degrees, float keystone)
         => await AssertDecodes(1, pixelsPerModule, degrees, keystone, binarized: false);
 
-    /// <summary>A binarized image has no grey edges to measure sizes on; whole-pixel runs that differ by more than their resolution still give the frame.</summary>
+    /// <summary>A binarized image has no grey edges to measure sizes on, but whole-pixel runs that differ by more than their resolution still give the frame.</summary>
     [Test]
     [Arguments(28, 2.457f, 244.8f, 0.143f)]
     [Arguments(1, 4.131f, 211f, 0.17f)]

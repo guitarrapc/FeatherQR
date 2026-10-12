@@ -10,11 +10,11 @@ namespace FeatherQR.Internals.StandardQR;
 internal static partial class QRImageDecoder
 {
     /// <summary>
-    /// Eight modules a step. The start, the slope and the curvature of a run of columns that shares its three nodes are taken once a row and broadcast; a step that straddles two runs selects per lane with a mask that depends on the version only.
+    /// Eight modules a step. The start, the slope and the curvature of a run of columns that shares its three nodes are taken once a row and broadcast. A step that straddles two runs selects per lane with a mask that depends on the version only.
     /// </summary>
     /// <remarks>
     /// Each multiply and add stays a separate instruction: fused, a coordinate can differ from the reference's by an ulp and truncate into the next pixel.
-    /// The reference takes each pixel through <see cref="ImageDecoders.PixelIndex.Clamp(float, int)"/>, the same on every runtime. Here the upper clamp is taken in float with the limit as the first operand of the minimum, so a NaN lane passes through, truncates to INT_MIN and is raised to 0 by the integer maximum, which is where the reference puts it; with the operands the other way round NaN becomes the limit and a different pixel.
+    /// The reference takes each pixel through <see cref="ImageDecoders.PixelIndex.Clamp(float, int)"/>, the same on every runtime. Here the upper clamp is taken in float with the limit as the first operand of the minimum, so a NaN lane passes through, truncates to INT_MIN and is raised to 0 by the integer maximum, which is where the reference puts it. With the operands the other way round NaN becomes the limit and a different pixel.
     /// A gather was measured slower than eight scalar loads and would read past the last pixel.
     /// </remarks>
     internal static void SampleGridPiecewiseAvx2(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)

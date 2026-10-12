@@ -12,7 +12,7 @@ namespace QRInteropFixtures;
 /// friends). This decides, empirically, which mapping each available oracle
 /// applies, so the fixture corpus can avoid asserting on characters where the
 /// oracles themselves disagree. Findings go in
-/// .github/docs/specs/qrcode-test-fixtures.md; nothing here runs in CI.
+/// .github/docs/specs/qrcode-test-fixtures.md. Nothing here runs in CI.
 /// </summary>
 public static class KanjiMappingProbe
 {

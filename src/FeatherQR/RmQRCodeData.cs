@@ -70,7 +70,7 @@ public sealed class RmQRCodeData
     // 10│ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │
     //   └───┴───┴───┴───┴───┴───┴───┴───┘
     //
-    // Q = QuietZone (VIRTUAL — not stored, indexer returns false)
+    // Q = QuietZone (VIRTUAL, not stored, indexer returns false)
     // C = Core modules (stored bit-packed in _bits)
     //
     // ┌─────────────────────────────────────────────────────────┐
@@ -94,7 +94,7 @@ public sealed class RmQRCodeData
     // The "QRX" container names the symbology and both dimensions, so one
     // reader can tell an rMQR payload from a Micro QR one. Here the width and
     // height bytes genuinely differ, which is what lets a reader recover the
-    // rectangle; Standard QR keeps its own 4-byte "QRR" header with one size.
+    // rectangle. Standard QR keeps its own 4-byte "QRR" header with one size.
     //
     // ┌──────────────────────────────────────────────────────────┐
     // │ Serialization (GetRawData)                               │
@@ -247,7 +247,7 @@ public sealed class RmQRCodeData
     /// </summary>
     /// <remarks>
     /// Writes a "QRX" header (3 bytes), the symbology (1 byte), the width and height (1 byte each), then the bit-packed modules.
-    /// The quiet zone is not written; pick its width again when restoring.
+    /// The quiet zone is not written, so pick its width again when restoring.
     /// </remarks>
     public byte[] GetRawData()
     {
@@ -294,11 +294,11 @@ public sealed class RmQRCodeData
     /// <para>
     /// Coordinates match the indexer: one unit is one module, the origin is the top-left corner including the quiet zone, <see cref="ModuleRect.X"/> is the column and <see cref="ModuleRect.Y"/> the row.
     /// Scale by the pixel size of one module.
-    /// Consumers scale by the pixel size of one module; <see cref="Width"/> and <see cref="Height"/> give the total extent in modules.
+    /// Consumers scale by the pixel size of one module. <see cref="Width"/> and <see cref="Height"/> give the total extent in modules.
     /// </para>
     /// <para>
     /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
-    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol; a styled one draws its finder patterns as whole patterns instead).
+    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol, but a styled one draws its finder patterns as whole patterns instead).
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()
@@ -346,7 +346,7 @@ public sealed class RmQRCodeData
     }
 
     /// <summary>
-    /// Packs a byte-per-module core matrix (0 = light, non-zero = dark; row-major over the core width) into the internal bit representation.
+    /// Packs a byte-per-module core matrix (0 = light, non-zero = dark, row-major over the core width) into the internal bit representation.
     /// </summary>
     internal void SetCoreData(ReadOnlySpan<byte> source)
     {

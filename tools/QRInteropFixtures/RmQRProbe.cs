@@ -6,7 +6,7 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// Diagnostic for the rMQR oracle facts that must be established before fixtures can
-/// be generated; the answers are recorded in specs/qrcode-test-fixtures.md:
+/// be generated. The answers are recorded in specs/qrcode-test-fixtures.md:
 /// (1) how libzint's <c>version=N</c> option maps to rMQR sizes,
 /// (2) what the zxing-cpp reader reports in <c>Extra("Version"/"EcLevel"/"DataMask")</c>
 ///     for rMQR symbols, and

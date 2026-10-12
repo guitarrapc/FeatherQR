@@ -8,7 +8,7 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// rMQR specific rather than shared: <see cref="Version"/> is a different type in each symbology, <see cref="QuietZoneSize"/> has a different specified default, and <see cref="FitStrategy"/>, <see cref="Height"/> and <see cref="Segmentation"/> have no meaning outside rMQR.
-/// There is no version range here because rMQR's 32 versions are not totally ordered; fit is constrained by strategy and height instead.
+/// There is no version range here because rMQR's 32 versions are not totally ordered. Fit is constrained by strategy and height instead.
 /// A plain value a caller may assign to and copy with <c>with</c>, for the reasons on <see cref="QRCodeGeneratorOptions"/>.
 /// </remarks>
 public record struct RmQRCodeGeneratorOptions
@@ -51,7 +51,7 @@ public record struct RmQRCodeGeneratorOptions
 
     /// <summary>
     /// Quiet zone width in modules.
-    /// Defaults to 2, the ISO/IEC 23941 value; 0 is valid.
+    /// Defaults to 2, the ISO/IEC 23941 value, and 0 is valid.
     /// </summary>
     public int QuietZoneSize
     {
@@ -72,7 +72,7 @@ public record struct RmQRCodeGeneratorOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Applies only where the charset is the library's choice (<see cref="EciMode.Default"/>); a charset the caller names is written as named.
+    /// Applies only where the charset is the library's choice (<see cref="EciMode.Default"/>). A charset the caller names is written as named.
     /// Then text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) is one Kanji segment, and under <see cref="RmQRSegmentation.Optimal"/> text that is so apart from its ASCII can be Kanji runs beside runs of that ASCII, where that is the smaller symbol.
     /// Seven JIS X 0208 characters that Windows code page 932 reads differently, among them the wave dash 〜, keep a text in UTF-8, as does any character outside the table.
     /// The capacity can matter more than in Standard QR: R7x43-M holds 3 characters in Kanji mode and 1 in UTF-8.

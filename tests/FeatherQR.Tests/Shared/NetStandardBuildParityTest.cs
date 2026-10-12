@@ -39,7 +39,7 @@ public class NetStandardBuildParityTest
     /// Which netstandard build keeps Standard QR's old quiet-zone path. netstandard2.0, which .NET Framework runs, keeps the pooled core
     /// copied into the cleared destination, since the move in place measured slower on .NET Framework 4.8. netstandard2.1, which .NET 6
     /// and 7 run, moves the core in place as .NET 8 and later do. The old path's row copy, <c>CopyIntoWindow</c>, is compiled only into a
-    /// build that keeps the path, so its presence tells the two apart; <see cref="SpanCreate_DirtyDestination_MatchesThisHostsBuild"/>
+    /// build that keeps the path, so its presence tells the two apart. <see cref="SpanCreate_DirtyDestination_MatchesThisHostsBuild"/>
     /// holds either path's output to this host's.
     /// </summary>
     [Test]
@@ -113,7 +113,7 @@ public class NetStandardBuildParityTest
         }
     }
 
-    /// <summary>The core's build for <paramref name="targetFramework"/>, loaded once into a load context of its own; a stale build skips the case.</summary>
+    /// <summary>The core's build for <paramref name="targetFramework"/>, loaded once into a load context of its own. A stale build skips the case.</summary>
     private static async Task<(Assembly Build, string Path)> LoadBuild(string targetFramework)
     {
         var path = CoreAssemblyDependencyTest.FindCoreBuild(targetFramework);

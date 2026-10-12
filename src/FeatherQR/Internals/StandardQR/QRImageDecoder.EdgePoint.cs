@@ -82,7 +82,7 @@ internal static partial class QRImageDecoder
         return true;
     }
 
-    /// <summary>The distance along (<paramref name="dirX"/>, <paramref name="dirY"/>) from a dark start to the first light pixel, at half-pixel steps, the crossing taken halfway; false when the start is light or no light pixel lies within <paramref name="reach"/>.</summary>
+    /// <summary>The distance along (<paramref name="dirX"/>, <paramref name="dirY"/>) from a dark start to the first light pixel, at half-pixel steps, the crossing taken halfway. False when the start is light or no light pixel lies within <paramref name="reach"/>.</summary>
     private static bool TryEdgeCrossing(in ImageView image, float startX, float startY, float dirX, float dirY, float reach, out float distance)
     {
         distance = 0f;

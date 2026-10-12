@@ -33,7 +33,7 @@ internal static partial class LuminanceConverter
     /// <summary>
     /// Converts with 128-bit vectors.
     /// <paramref name="bgra"/> selects the channel order, <paramref name="hasAlpha"/> is false for RGB888x (its fourth byte is padding).
-    /// Requires <paramref name="width"/> ≥ 16; the caller keeps narrower rows scalar.
+    /// Requires <paramref name="width"/> ≥ 16. The caller keeps narrower rows scalar.
     /// </summary>
     internal static void ConvertRgbaVector128(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha, bool premultiplied)
     {
@@ -110,7 +110,7 @@ internal static partial class LuminanceConverter
 
             if (optimistic)
             {
-                // Converts the row unconditionally and reports what the alphas were; every stored byte is already correct if they were all 255
+                // Converts the row unconditionally and reports what the alphas were. Every stored byte is already correct if they were all 255.
                 var and = Vector128<uint>.AllBitsSet;
                 for (nint x = 0; x < blockEnd; x += Vector128BlockPixels)
                     and &= PlainBlockVector128(ref row, ref dest, x, weights);
@@ -319,7 +319,7 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// ceil(d / 255) for d ≤ 65,025, as floor((d + 254) / 255); floor(t / 255) is exactly (t + 1 + (t &gt;&gt; 8)) &gt;&gt; 8 for every 16-bit t,
+    /// ceil(d / 255) for d ≤ 65,025, as floor((d + 254) / 255), where floor(t / 255) is exactly (t + 1 + (t &gt;&gt; 8)) &gt;&gt; 8 for every 16-bit t,
     /// and the largest intermediate here is 65,535, so nothing wraps.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -331,7 +331,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// Shifts four dword sums (16 pixels) down by 8 and stores their low bytes. The shifted sums are at most 510, so the signed packs are
-    /// exact; with <paramref name="wrap"/> each is first cut to its low byte, as the scalar byte cast does with a premultiplied sum above 255.
+    /// exact. With <paramref name="wrap"/> each is first cut to its low byte, as the scalar byte cast does with a premultiplied sum above 255.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void StoreBlockVector128(ref byte dest, nint x, Vector128<uint> s0, Vector128<uint> s1, Vector128<uint> s2, Vector128<uint> s3, bool wrap)

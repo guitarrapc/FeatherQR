@@ -17,7 +17,7 @@ public enum QRSegmentation
     /// Never selects a larger version than <see cref="Single"/>, emits the <see cref="Single"/> bit stream verbatim when a split would not shrink the symbol, and additionally encodes content that overflows every version in a single mode. A U+FEFF inside UTF-8 content never opens a Byte run, where a reader would drop it as a byte order mark: the run opens a character early and keeps it interior.
     /// </summary>
     /// <remarks>
-    /// Opt-in because it searches candidate versions; the search itself allocates nothing for typical content and rents pooled buffers for long content.
+    /// Opt-in because it searches candidate versions. The search itself allocates nothing for typical content and rents pooled buffers for long content.
     /// When <see cref="QRCodeGeneratorOptions.Utf8Bom"/> would actually write a byte order mark (a UTF-8 Byte-mode stream), the split is disabled and the <see cref="Single"/> stream is emitted: the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text.
     /// Content whose single mode is Numeric or Alphanumeric never carries a BOM and still splits.
     /// Size buffers with the same segmentation you encode with, the two can select different versions.

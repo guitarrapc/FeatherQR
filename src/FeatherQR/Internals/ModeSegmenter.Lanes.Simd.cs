@@ -124,7 +124,7 @@ internal static partial class ModeSegmenter
                 if (TBytes.Utf8)
                 {
                     var chars = Vector128.Create((int)c0, c1, c2, c3);
-                    // A lane at a byte order mark only continues its Byte run; past its first character it has one.
+                    // A lane at a byte order mark only continues its Byte run. Past its first character it has one.
                     noOpen = Vector128.Equals(chars, Vector128.Create((int)ByteOrderMark)) & Vector128.Create(U);
                     if (Vector128.EqualsAny(chars & Vector128.Create(0xF800), Vector128.Create(0xD800)))
                     {
@@ -134,7 +134,7 @@ internal static partial class ModeSegmenter
                     }
                     else
                     {
-                        // One byte, one more above U+007F, one more above U+07FF; a compare is all ones, so it takes one off.
+                        // One byte, one more above U+007F, one more above U+07FF. A compare is all ones, so it takes one off.
                         byteBits = (Vector128.Create(1) - Vector128.GreaterThan(chars, Vector128.Create(0x7F)) - Vector128.GreaterThan(chars, Vector128.Create(0x7FF))) << 6;
                     }
                 }
@@ -152,7 +152,7 @@ internal static partial class ModeSegmenter
                     openKey = Vector128.Max(openKey, noOpen);
                 var byteKey = Vector128.Min(openKey, b) + byteBits;
 
-                // Both bytes of every lane's entry in one 8-byte store; an entry is below 0x4000, so the signed narrowing is exact.
+                // Both bytes of every lane's entry in one 8-byte store. An entry is below 0x4000, so the signed narrowing is exact.
                 var parents = (byteKey & stateBits) | ((numericKey & stateBits) << 8) | ((alnumKey & stateBits) << 11);
                 MemoryMarshal.Write(table.Slice(i * LaneTableBytesPerChar, Width * ParentBytesPerChar), NarrowEntries(parents).AsUInt64().ToScalar());
 

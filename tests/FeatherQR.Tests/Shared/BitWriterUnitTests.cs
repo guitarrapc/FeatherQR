@@ -175,7 +175,7 @@ public class BitWriterUnitTests
 
     /// <summary>
     /// The appends into a buffer exactly as long as their bits, filled with <see cref="Untouched"/>. After each append the bit position is
-    /// the bits so far and no byte from the one the next bit lands in has been stored (a store holds written bits only); a store past the
+    /// the bits so far and no byte from the one the next bit lands in has been stored (a store holds written bits only). A store past the
     /// buffer throws. Flushed, the buffer must be the bits MSB first, zero past them. Returns what went wrong, or null.
     /// </summary>
     private static string? Run(List<(ulong Value, int Width, bool Wide)> appends)

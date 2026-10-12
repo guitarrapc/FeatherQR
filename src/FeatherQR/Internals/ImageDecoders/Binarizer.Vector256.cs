@@ -27,7 +27,7 @@ internal static partial class Binarizer
         //                    the compares would only be added to it
         //   a stretch        two dense blocks in a row with no 0 and no 255 at all start 31 blocks taken without the test.
         //                    A photo-like image is such blocks end to end, and the test in front of each one is what made it
-        //                    slower than the scalar tier; a rendered or resampled symbol almost never has one
+        //                    slower than the scalar tier. A rendered or resampled symbol almost never has one.
         //
         //   block      0   0   0   0  255 255   0   0   0  200 255  ...    32 pixels
         //   isMin      1   1   1   1   0   0    1   1   1   0   0          popcount into minCount
