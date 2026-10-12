@@ -18,7 +18,7 @@ public enum Gs1ErrorKind
     /// <summary>The URI is a compressed GS1 Digital Link URI, which this library does not read.</summary>
     CompressedUri = 4,
 
-    /// <summary>A percent escape in the URI is not <c>%</c> and two hexadecimal digits, or does not decode to UTF-8.</summary>
+    /// <summary>A percent escape in the URI is not <c>%</c> and two hexadecimal digits, does not decode to UTF-8, or decodes to a control character.</summary>
     InvalidPercentEncoding = 5,
 
     /// <summary>A separator (U+001D) where no value can end: at the start of the element string, or right after another separator.</summary>
@@ -33,7 +33,7 @@ public enum Gs1ErrorKind
     /// <summary>No primary key AI for the path of a GS1 Digital Link URI.</summary>
     MissingPrimaryKey = 9,
 
-    /// <summary>The key qualifiers after the primary key are not in one of the orders the table allows.</summary>
+    /// <summary>The key qualifiers after the primary key are not in one of the orders the table allows, or a qualifier of that key is in the query instead of the path.</summary>
     InvalidKeyQualifierSequence = 10,
 
     /// <summary>An element with no value.</summary>

@@ -219,7 +219,7 @@ internal static class Gs1Hri
                 error = new Gs1Error(valueError.Kind, pair.ValueStart + from, to - from);
                 return false;
             }
-            needsSeparator = !(entry.IsPredefinedLength && Gs1Splitter.TryGetFixedLength(entry, out _));
+            needsSeparator = Gs1Splitter.NeedsSeparator(entry);
         }
 
         if (!Gs1Validator.CheckPairings(buffer.Slice(0, written), out var pairingError))
@@ -361,7 +361,7 @@ internal static class Gs1Hri
                 var textStart = pair.AiStart - 1;
                 return new Gs1Error(error.Kind, textStart, pair.ValueStart + pair.ValueLength - textStart);
             }
-            needsSeparator = !(Gs1AiTable.TryFind(hri.Slice(pair.AiStart, pair.AiLength), out var entry) && entry.IsPredefinedLength && Gs1Splitter.TryGetFixedLength(entry, out _));
+            needsSeparator = !Gs1AiTable.TryFind(hri.Slice(pair.AiStart, pair.AiLength), out var entry) || Gs1Splitter.NeedsSeparator(entry);
         }
         return error;
     }

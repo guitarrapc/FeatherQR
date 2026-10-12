@@ -53,6 +53,23 @@ public class Gs1AllocationTest
     }
 
     [Test]
+    public async Task DigitalLinkAndReadSpanForms_AllocateNothing()
+    {
+        var text = Photograph;
+        var uri = "https://id.gs1.org/01/09504000059101/10/1234567p/21/12345678p901?17=141120&8200=http%3A%2F%2Fwww.gs1.org%2Fdemo%2F";
+        var uriBuffer = new char[256];
+        var esBuffer = new char[uri.Length];
+        var hriBuffer = new char[2 * uri.Length];
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryToDigitalLink(text.AsSpan(), uriBuffer, out _, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryGetToDigitalLinkLength(text.AsSpan(), out _, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryFromDigitalLink(uri.AsSpan(), esBuffer, out _, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryGetFromDigitalLinkLength(uri.AsSpan(), out _, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryRead(uri.AsSpan(), default, hriBuffer, out _, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryRead(text.AsSpan(), Fnc1Mode.FirstPosition, hriBuffer, out _, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryGetReadLength(uri.AsSpan(), default, out _, out _))).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task EnumerateElements_AllocatesNothing()
     {
         var text = Photograph;

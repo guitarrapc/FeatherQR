@@ -6,8 +6,9 @@ namespace FeatherQR.Tests;
 /// No <c>Try</c> form throws for any input text (gs1-support-plan.md, "What has to stay true"): mutations of
 /// every corpus input (characters inserted, deleted and replaced, separators and non-ASCII among them) and
 /// random strings go through <see cref="Gs1ElementString.TryValidate"/>, <see cref="Gs1ElementString.EnumerateElements"/>
-/// and the (AI) text conversions in both directions without an exception, an accepted string always
-/// enumerates at least one element, and an accepted string formats and its text reads back.
+/// the (AI) text and Digital Link conversions in both directions and <see cref="Gs1ElementString.TryRead"/>
+/// without an exception, an accepted string always enumerates at least one element, an accepted string formats
+/// and its text reads back, a URI that reads gives an element string that splits, and a built URI reads back.
 /// </summary>
 public class Gs1FuzzTest
 {
@@ -77,6 +78,24 @@ public class Gs1FuzzTest
         _ = Gs1ElementString.TryFromHri(text, out _, out _);
         Gs1ElementString.TryGetToHriLength(text, out _, out _);
         Gs1ElementString.TryGetFromHriLength(text, out _, out _);
+
+        // The Digital Link conversions and the decode-side read never throw either, and a URI read gives an element string that splits.
+        if (Gs1ElementString.TryFromDigitalLink(text, out var fromUri, out _))
+        {
+            var count = 0;
+            foreach (var element in Gs1ElementString.EnumerateElements(fromUri))
+                count++;
+            if (count == 0 || !Gs1ElementString.TryToHri(fromUri, out _, out var fromUriError))
+                throw new InvalidOperationException($"a URI read into an element string that does not split: \"{text}\" -> \"{fromUri}\"");
+        }
+        Gs1ElementString.TryGetFromDigitalLinkLength(text, out _, out _);
+        var toUri = Gs1ElementString.TryToDigitalLink(text, out var uri, out _);
+        if (toUri && !Gs1ElementString.TryFromDigitalLink(uri, out _, out var backError))
+            throw new InvalidOperationException($"a built URI does not read: \"{text}\" -> \"{uri}\" ({backError})");
+        Gs1ElementString.TryGetToDigitalLinkLength(text, out _, out _);
+        Gs1ElementString.TryRead(text, Fnc1Mode.FirstPosition, out _, out _);
+        Gs1ElementString.TryRead(text, default, out _, out _);
+        Gs1ElementString.TryGetReadLength(text, default, out _, out _);
     }
 
     private static string Mutate(string input, Random random)

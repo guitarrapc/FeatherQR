@@ -111,6 +111,9 @@ internal static class Gs1Splitter
         return true;
     }
 
+    /// <summary>Whether a builder must put a separator after this AI's value when another element follows: every AI but one of predefined length (7.8.6.2).</summary>
+    public static bool NeedsSeparator(in Gs1AiTable.Gs1AiEntry entry) => !(entry.IsPredefinedLength && TryGetFixedLength(entry, out _));
+
     /// <summary>The value length of an entry whose components are all fixed and mandatory, which is the only case a reader can take without a separator.</summary>
     public static bool TryGetFixedLength(in Gs1AiTable.Gs1AiEntry entry, out int length)
     {
