@@ -7,7 +7,7 @@ using static FeatherQR.Internals.ImageDecoders.AttemptStatus;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Decodes a QR code from a grayscale image: clean, screen-rendered or scanned inputs, including arbitrary rotation, mirroring, reflectance reversal, a lighting gradient across the symbol and mild perspective distortion.
+/// Decodes a QR code from a grayscale image: a rendered symbol, a scan or a photograph, at any rotation, mirrored, reflectance-reversed, under a lighting gradient across the symbol or in perspective.
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, then the regional binarization, which a verdict on the content from either earlier pass also skips.

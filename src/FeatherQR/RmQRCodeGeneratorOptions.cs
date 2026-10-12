@@ -78,8 +78,8 @@ public record struct RmQRCodeGeneratorOptions
     /// The capacity can matter more than in Standard QR: R7x43-M holds 3 characters in Kanji mode and 1 in UTF-8.
     /// </para>
     /// <para>
-    /// Off by default, as on the other two symbologies, because not every reader reads Kanji mode: in Standard QR an Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it.
-    /// Neither phone's own scanner reads rMQR at all; Denso Wave's reader and zxing-cpp read it in Kanji mode and in UTF-8 alike.
+    /// Off by default, as on the other two symbologies, because not every reader reads Kanji mode: in Standard QR some phone scanners show nothing readable for it.
+    /// Phone scanners read rMQR in neither form, and the dedicated readers tried read it in Kanji mode and in UTF-8 alike.
     /// </para>
     /// </remarks>
     public bool AllowKanji { get; set; }

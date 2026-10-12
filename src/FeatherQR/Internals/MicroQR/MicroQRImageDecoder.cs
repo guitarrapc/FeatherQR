@@ -7,7 +7,7 @@ using static FeatherQR.Internals.ImageDecoders.AttemptStatus;
 namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
-/// Decodes a Micro QR code from a grayscale image: clean, screen-rendered or scanned inputs, including a lighting gradient across the symbol.
+/// Decodes a Micro QR code from a grayscale image: a rendered symbol, a scan or a photograph in mild perspective, including a lighting gradient across the symbol.
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
