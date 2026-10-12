@@ -4,7 +4,7 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Public rMQR generator surface (design record: signatures frozen in Phase 5.0):
+/// Public rMQR generator surface, with the signatures the design record fixed:
 /// class / span / span-destination / <c>TryGetRequiredBufferSize</c> agreement, the
 /// default fit strategy decision (MinimizeArea, matching both external encoders'
 /// automatic choice), argument validation, actionable capacity messages, and

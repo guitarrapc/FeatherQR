@@ -303,7 +303,7 @@ public class RmQRConstantsUnitTest
     [Test]
     public async Task FormatWords_ArePairwiseDistant_ForBothCopies()
     {
-        // BCH(18,6) minimum distance is what a Phase 6 decoder's ≤ 3-bit correction
+        // BCH(18,6) minimum distance is what the decoder's ≤ 3-bit correction
         // relies on; the XOR mask does not change pairwise distances, so both copies
         // share it. Also, no finder-side word may equal a sub-finder-side word (the
         // two masks differ by 0x3F1C9, weight 11), so a copy cannot be mistaken for the other.

@@ -4,7 +4,7 @@ namespace FeatherQR.Internals.StandardQR;
 
 internal static partial class QRImageDecoder
 {
-    /// <summary>The dimension the plane is fitted below: version 7, the first with an alignment lattice for the mesh to follow, where the fitted plane reads no photograph more and costs a large grid's samplings.</summary>
+    /// <summary>The dimension the plane is fitted below: version 7, the first with an alignment lattice for the mesh to follow.</summary>
     private const int OutlineFitBelowDimension = 17 + 4 * 7;
 
     /// <summary>

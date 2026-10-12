@@ -117,7 +117,7 @@ internal static partial class FinderPatternFinder
     /// The row again (<paramref name="acrossAxes"/> false) is the row scan's own line through a refined centre: the same cross section, within 40 %.
     /// The column is the other axis, and a symbol in perspective draws a finder longer along one axis than the other: at keystone k the finder at the wide edge is stretched 1/(1 − k), 2 at 50 %.
     /// Stretched along its own axes, a finder's column is at most that factor from its row whatever the turn; stretched off them, as a tilt about both axes draws every finder and a one-axis keystone the corner ones, it can be further, up to 2.31 at a stretch of 2.
-    /// A card tilted steeply away is drawn further still, one axis at the cosine of the tilt. The window is 2/7 to 7/2, a tilt of 73°: photographed finders measure up to 3.1.
+    /// A card tilted steeply away is drawn further still, one axis at the cosine of the tilt. The window is 2/7 to 7/2, a tilt of 73°.
     /// </remarks>
     internal static bool IsTotalInWindow(int total, int expectedTotal, bool acrossAxes)
         => acrossAxes

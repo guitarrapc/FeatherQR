@@ -675,7 +675,7 @@ internal static partial class FinderPatternFinder
         var rowOffCentre = false;
         if (float.IsNaN(centerX))
         {
-            // A hole on the centre row is not the ring: a row a quarter of the centre square above or below crosses the same rings. From 4 px a module, where that row is three pixels off; a nearer one reads on texture wherever the scanned row did
+            // A hole on the centre row is not the ring, so a row a quarter of the centre square above or below is read instead. Not under 4 px a module: there that row is the scanned row's neighbour and reads on texture whenever the scanned row did.
             if (columnCentre < 12)
                 return false;
             var offset = columnCentre / 4;

@@ -79,7 +79,7 @@ public record struct RmQRCodeGeneratorOptions
     /// </para>
     /// <para>
     /// Off by default, as on the other two symbologies, because not every reader reads Kanji mode: in Standard QR an Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it.
-    /// Neither phone's own scanner reads rMQR at all; the dedicated readers tried read it in Kanji mode and in UTF-8 alike.
+    /// Neither phone's own scanner reads rMQR at all. The dedicated readers tried read it in Kanji mode and in UTF-8 alike.
     /// </para>
     /// </remarks>
     public bool AllowKanji { get; set; }

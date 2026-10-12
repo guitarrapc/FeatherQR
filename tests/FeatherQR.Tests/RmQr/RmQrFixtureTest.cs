@@ -11,11 +11,9 @@ namespace FeatherQR.Tests;
 /// <c>dotnet run --project tools/QRInteropFixtures -- regenerate</c>
 /// (the qrtool binary comes from <c>tools/QRInteropFixtures/get-qrtool.ps1</c>).
 /// <para>
-/// Phase 5.1a scaffolding: this class pins the corpus SHAPE (both lineages present,
-/// every version covered, manifests internally consistent, matrices rectangular and
-/// dimensionally exact). The table oracle tests (Phase 5.1b) and the decode
-/// assertions (Phase 6.4 matrix path, Phase 7 image path) are added here as those
-/// phases land.
+/// This class pins the corpus shape (both lineages present, every version covered,
+/// manifests internally consistent, matrices rectangular and dimensionally exact)
+/// and decodes every fixture through the matrix path and the PNG image path.
 /// </para>
 /// </summary>
 public class RmQrFixtureTest
@@ -63,7 +61,7 @@ public class RmQrFixtureTest
         }
 
         // The libzint sweep carries one single-character case per version × mode
-        // (these pin the count-indicator widths in Phase 5.1b).
+        // (these pin the count-indicator widths).
         foreach (var (height, width) in Versions)
         {
             foreach (var mode in new[] { "Numeric", "Alphanumeric", "Byte" })

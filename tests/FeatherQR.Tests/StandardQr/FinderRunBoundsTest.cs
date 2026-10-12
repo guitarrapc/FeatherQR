@@ -12,7 +12,7 @@ public class FinderRunBoundsTest
 {
     [Test]
     [Arguments(false, 40)]
-    // The column's window reaches 7/2 of the expected total, so the enumeration grows as its fifth power; 16 keeps it to the row's size
+    // The column's window reaches 7/2 of the expected total, so the enumeration grows as its fifth power. 16 keeps it to the row's size.
     [Arguments(true, 16)]
     public async Task EveryAcceptableCrossSection_IsInsideTheBounds_SmallTotalsExhaustive(bool acrossAxes, int largestExpected)
     {

@@ -260,7 +260,7 @@ public class GeneratorOptionsTest
     [Arguments(-2)]
     public async Task StandardQrOptions_VersionOutOfRange_ThrowsBeforeAGeneratorIsCalled(int version)
     {
-        // An invalid version is an argument error, not a "does not fit". Since Phase 3 it
+        // An invalid version is an argument error, not a "does not fit". It
         // is rejected when the range is constructed rather than when a generator reads it,
         // so an option set carrying an impossible version cannot be built at all. The
         // per-factory coverage lives in VersionRangeTest.

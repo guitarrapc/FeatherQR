@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// A symbol photographed at a tilt near 70°: the card's far axis is drawn at a third of its near one, so a finder's column of runs is about three times its row's, or a third of it.
-/// Every line through such a finder's centre still crosses its rings 1:1:3:1:1; only how far the two axes may differ decides whether it is a candidate.
+/// Every line through such a finder's centre still crosses its rings 1:1:3:1:1. Only how far the two axes may differ decides whether it is a candidate.
 /// </summary>
 public class SteepTiltDecodeTest
 {
@@ -20,7 +20,7 @@ public class SteepTiltDecodeTest
     {
         var (photograph, qr, text) = Render(version, pixelsPerModule, tiltDegrees, tiltAxisDegrees, rollDegrees);
 
-        // The premise: at a drawn finder's centre the row and the column both read, and one is more than the given factor times the other; a keystone of a half draws a finder to 2.33
+        // The premise: at a drawn finder's centre the row and the column both read, and one is more than the given factor times the other. A keystone of a half draws a finder to 2.33.
         var threshold = Binarizer.ComputeOtsuThreshold(photograph.Luminance, out _);
         var furthest = 0f;
         var d = qr.Size;
