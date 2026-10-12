@@ -14,7 +14,7 @@ internal static class QRImageLayout
     /// Rectangular-aware layout.
     /// With a module pixel size the content is exactly <c>matrixWidth × matrixHeight</c> modules at that size (centered in an explicit canvas on whole pixels).
     /// With only an explicit canvas size the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox), never stretched non-uniformly: a symbol whose modules are not square stops being findable well before it stops being drawn.
-    /// With neither, <paramref name="defaultSize"/> is the symbology's own aspect-derived canvas and the content rectangle is the whole canvas: the renderer paints the background over all of it and draws the symbol at a uniform module scale inside (rMQR: <c>SymbolRenderer.GetLetterboxedArea</c>), so the height rounding costs at most a few pixels of background at the sides; letterboxing here again would only turn that background into a padded band on a canvas the caller never asked for.
+    /// With neither, <paramref name="defaultSize"/> is the symbology's own aspect-derived canvas and the content rectangle is the whole canvas: the renderer paints the background over all of it and draws the symbol at a uniform module scale inside (rMQR: <c>SymbolRenderer.GetLetterboxedArea</c>), so the height rounding costs at most a few pixels of background at the sides. Letterboxing here again would only turn that background into a padded band on a canvas the caller never asked for.
     /// </summary>
     internal static (SKImageInfo info, SKRect contentRect) CreateLayout(int matrixWidth, int matrixHeight, Vector2Slim? explicitSize, int? modulePixelSize, Vector2Slim defaultSize)
     {
@@ -25,7 +25,7 @@ internal static class QRImageLayout
             if (explicitSize is null)
                 return (info, SKRect.Create(0, 0, size.X, size.Y));
 
-            // Uniform scale, centered on whole pixels; the builder paints the leftover pad.
+            // Uniform scale, centered on whole pixels. The builder paints the leftover pad.
             // The same fit as SymbolRenderer.GetLetterboxedArea, in double: placing on integer pixels needs precision that drawing does not.
             var scale = Math.Min((double)size.X / matrixWidth, (double)size.Y / matrixHeight);
             var contentWidth = matrixWidth * scale;

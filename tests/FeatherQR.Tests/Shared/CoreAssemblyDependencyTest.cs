@@ -6,7 +6,7 @@ using System.Xml.Linq;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The split's regression guard: the core assembly references no SkiaSharp, on every target
+/// The core assembly references no SkiaSharp, on every target
 /// framework it ships for. A single <c>using SkiaSharp;</c> that slips into the core would
 /// pass every functional test (the test host has SkiaSharp loaded) and reach consumers as a
 /// native dependency they installed FeatherQR to avoid.
@@ -169,7 +169,7 @@ public class CoreAssemblyDependencyTest
 
     /// <summary>
     /// A C# file of the core that <paramref name="build"/> was compiled from and that no longer exists, read from the documents of
-    /// the build's PDB. A document is found by its path below src/FeatherQR, since a CI build maps the repository to /_/; one below
+    /// the build's PDB. A document is found by its path below src/FeatherQR, since a CI build maps the repository to /_/. One below
     /// obj (generated, the source generators' output among it) is not a source.
     /// </summary>
     private static string? CompiledSourceGone(string build, string project)

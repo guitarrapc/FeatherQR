@@ -106,7 +106,7 @@ internal static partial class RmQRMatrixDecoder
 
         while (current >= 0)
         {
-            // With a single block left the step overlaps the block above it, which has already been emitted; transposing it twice is cheaper than carrying a third step shape, and the emit below skips it.
+            // With a single block left the step overlaps the block above it, which has already been emitted. Transposing it twice is cheaper than carrying a third step shape, and the emit below skips it.
             var start = current >= 1 ? current - 1 : 0;
             var upper = Vector128<ushort>.Zero;
             var lower = Vector128<ushort>.Zero;
@@ -150,7 +150,7 @@ internal static partial class RmQRMatrixDecoder
 
     /// <summary>
     /// One row of 16 columns as 8 lanes of <c>(right &lt;&lt; 1) | left</c>, right being the odd column.
-    /// The two columns are merged while still bytes — a pair value is at most 3 — so one widening feeds the accumulator instead of one per column.
+    /// The two columns are merged while still bytes, since a pair value is at most 3, so one widening feeds the accumulator instead of one per column.
     /// </summary>
     /// <remarks>
     /// The load reads past the columns it uses and past the row end rather than peeling a tail: rows 1..h−2 always have a row below them and every rMQR width is at least 27, so the read stays inside the width × height grid and the extra lanes are discarded.
@@ -202,7 +202,7 @@ internal static partial class RmQRMatrixDecoder
 
     /// <summary>
     /// Compresses one block's pairs into the stream: each run contributes one AND, one shift and one OR into the bit accumulator, which is drained a whole 32-bit word at a time.
-    /// The drain is a branch on purpose — the run lengths are per-version constants, so its pattern is periodic and the predictor learns it; making it branchless measured 13-22 % slower.
+    /// The drain is a branch on purpose. The run lengths are per-version constants, so its pattern is periodic and the predictor learns it. A branchless drain is slower.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Emit(ref byte dst, ref uint lanes, ref uint runs, nuint end, ref ulong accumulator, ref int accumulated, ref nint written, ref nuint at)

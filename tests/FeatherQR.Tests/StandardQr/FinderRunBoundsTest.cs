@@ -12,7 +12,7 @@ public class FinderRunBoundsTest
 {
     [Test]
     [Arguments(false, 40)]
-    // The column's window reaches 7/2 of the expected total, so the enumeration grows as its fifth power; 16 keeps it to the row's size
+    // The column's window reaches 7/2 of the expected total, so the enumeration grows as its fifth power. 16 keeps it to the row's size.
     [Arguments(true, 16)]
     public async Task EveryAcceptableCrossSection_IsInsideTheBounds_SmallTotalsExhaustive(bool acrossAxes, int largestExpected)
     {
@@ -54,7 +54,6 @@ public class FinderRunBoundsTest
     public async Task EveryAcceptableCrossSection_IsInsideTheBounds_LargeTotalsAtTheEdges(bool acrossAxes)
     {
         // Large totals cannot be enumerated, so the vectors are built where a bound could be wrong: around 1:1:3:1:1 at a module size, every run pushed to and past its tolerance
-        // 400,000 draws: of the bound faults planted by hand, each one four million draws caught is caught within these, or by the exhaustive or the window-corner walk in this class
         var random = new Random(20260922);
         var acceptable = 0L;
         string? first = null;

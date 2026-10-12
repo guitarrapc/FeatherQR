@@ -48,7 +48,7 @@ internal static class Hyperfine
     /// <summary>
     /// Times each command, in the order given, as <paramref name="runs"/> whole processes after <paramref name="warmup"/> untimed ones,
     /// and returns every run's wall-clock seconds, per command. The export is read back from <paramref name="scratch"/>, which has to be on
-    /// the container's own disk: read back through Docker Desktop's Windows bind mount, a file just written there came back as zero bytes.
+    /// the container's own disk: read back through Docker Desktop's Windows bind mount, a file just written there can come back as zero bytes.
     /// </summary>
     public static double[][] Time(string[][] commands, int warmup, int runs, string scratch, string what)
     {

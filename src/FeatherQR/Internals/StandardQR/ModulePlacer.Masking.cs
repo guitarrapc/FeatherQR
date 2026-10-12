@@ -11,8 +11,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// QR modules are 1-bit values, so the whole evaluation pipeline operates on rows packed into ulongs instead of one byte per module: a row needs 1 word for matrices up to 64 modules (versions 1-11), and 2 or 3 words for larger ones (versions 12-27 and 28-40).
 /// Per pattern, applying the mask is a handful of XOR/AND word operations per row and all four ISO/IEC 18004 penalty rules are computed bit-parallel with shifts and popcounts.
 ///
-/// Measured against the previous byte-per-module implementation (see the micro-optimization findings log): version 1 ~8x, version 10 ~44x, version 40 ~30-40x, zero allocations.
-/// Bit-packing beat both Parallel.For over the 8 patterns (which allocates and still loses at every size) and early-terminating the score (5-15%): the serial 8-pattern loop was never the problem, the per-pattern representation was.
+/// The eight patterns are scored one after another: Parallel.For over them allocates and is slower at every size.
 /// </summary>
 internal static partial class ModulePlacer
 {
@@ -28,18 +27,17 @@ internal static partial class ModulePlacer
     /// <returns>Index of the best mask pattern number (0-7).</returns>
     /// <remarks>
     /// Scoring evaluates each candidate exactly as a decoder would see it: mask XOR over the data area, format bits for (eccLevel, pattern), and version bits (version 7+).
-    /// Version bits live in blocked areas, so they are pattern-invariant and packed once per call; only the 30 format-bit modules are re-poked per pattern.
+    /// Version bits live in blocked areas, so they are pattern-invariant and packed once per call. Only the 30 format-bit modules are re-poked per pattern.
     /// </remarks>
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
 #if NET8_0_OR_GREATER
         // AVX2: four candidates per vector for versions 1-11 (ModulePlacer.Masking.X86.cs), the transposed scorer for 12-40 (ModulePlacer.Masking.Transposed.X86.cs).
-        // 2.5-2.8x the scalar bit-packed paths below at versions 1, 6 and 10 (2026-10-05), and 2.3-2.9x the scalar path at versions 12, 20, 27, 28 and 40 (2026-10-08), on the JIT on Zen 4.
         if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
         {
             return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
         }
-        // ARM64 NEON (ModulePlacer.Masking.Arm64.cs): two rows per vector, one candidate at a time, for versions 1-11 (the AVX2 tiers' earlier lane-per-row form; its measurements are in that file); the transposed scorer for 12-40, on the 128-bit tier's rules with NEON's popcount, packing and unpack, 0.42-0.57 of the SoA tiers it replaced at 28-40 and 0.87-0.98 at 12-27 on Apple M2 (2026-10-05).
+        // ARM64 NEON (ModulePlacer.Masking.Arm64.cs): two rows per vector, one candidate at a time, for versions 1-11, and the transposed scorer for 12-40, on the 128-bit tier's rules with NEON's popcount, packing and unpack.
         if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
         {
             return MaskCodeAdvSimd(buffer, size, version, blockedMask, eccLevel);
@@ -82,10 +80,10 @@ internal static partial class ModulePlacer
     /// into the bytes as the selection applies its winner, so a pinned pattern costs the selection's last step and nothing else.
     /// </summary>
     /// <remarks>
-    /// The predicate tested per module cost more than the whole eight-pattern selection it skips: 26 µs at version 26, where the selection
-    /// took 9 µs (2026-10-03, Lessons Learned, Performance in specs/standardqr-encoder.md).
+    /// The predicate tested per module costs more than the whole eight-pattern selection it skips (Lessons Learned, Performance in
+    /// specs/standardqr-encoder.md).
     /// </remarks>
-    /// <param name="buffer">QR matrix with data placed and no mask applied; masked in place.</param>
+    /// <param name="buffer">QR matrix with data placed and no mask applied. It is masked in place.</param>
     /// <param name="size">QR code size in modules.</param>
     /// <param name="blockedMask">Blocked-module bitmask (function patterns and format/version areas).</param>
     /// <param name="patternIndex">Mask pattern number (0-7).</param>
@@ -116,7 +114,7 @@ internal static partial class ModulePlacer
     /// <summary><see cref="ApplyMaskPattern"/> unpacking 8 modules a step (SWAR): the route of every build without AVX2 or ARM64 AdvSimd.</summary>
     internal static void ApplyMaskPatternScalar(Span<byte> buffer, int size, ReadOnlySpan<byte> blockedMask, int patternIndex)
     {
-        // The unblocked rows are bit slices of the blocked bitmask; a padded copy keeps every 8-byte slice read inside it.
+        // The unblocked rows are bit slices of the blocked bitmask. A padded copy keeps every 8-byte slice read inside it.
         Span<byte> padded = stackalloc byte[blockedMask.Length + 32];
         blockedMask.CopyTo(padded);
         padded.Slice(blockedMask.Length).Clear();
@@ -192,7 +190,7 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Each allowed row (~blocked) is a contiguous bit slice of the blocked bitmask; a padded copy makes the two 8-byte slice reads always legal.
+        // Each allowed row (~blocked) is a contiguous bit slice of the blocked bitmask. A padded copy makes the two 8-byte slice reads always legal.
         Span<byte> padded = stackalloc byte[blockedMask.Length + 16];
         padded.Clear();
         blockedMask.CopyTo(padded);
@@ -223,7 +221,6 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Apply the winner to the byte buffer: unpack the XOR delta 8 modules at a time.
         {
             var tplBase = bestPatternIndex * 12;
             for (int y = 0, tplRow = 0; y < size; y++)
@@ -242,8 +239,8 @@ internal static partial class ModulePlacer
     /// <paramref name="rows"/> is used as scratch for the column finder windows: the caller rebuilds it for each candidate.
     /// </summary>
     /// <remarks>
-    /// Terminates early (returning int.MaxValue) once the running sum of rules 1-3 exceeds <paramref name="abortAbove"/>: penalty sub-scores only ever accumulate, so a pattern whose partial sum already exceeds the best total can never be selected, the result is provably identical.
-    /// Measured ~5-10% on this single-word path. The multi-word scorer intentionally has no abort: a per-row abort gave no measurable win on the <see cref="Row192"/> scorer it replaced, at version 40 (see the findings log, 2026-07-10), and on .NET Framework 4.8, with a checkpoint before the multi-word scorer's column rules, mask selection took 1.00 to 1.01 of its time without one (2026-10-07).
+    /// Terminates early (returning int.MaxValue) once the running sum of rules 1-3 exceeds <paramref name="abortAbove"/>: penalty sub-scores only ever accumulate, so a pattern whose partial sum already exceeds the best total can never be selected.
+    /// The multi-word scorer has no abort: neither a per-row abort nor a checkpoint before its column rules gains anything there.
     /// </remarks>
 #if NET6_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -445,10 +442,10 @@ internal static partial class ModulePlacer
     /// reads two up to version 27 (size 125) and three from version 28.
     /// </summary>
     /// <remarks>
-    /// The rows are plain words in one array, three a row, rather than a <see cref="Row192"/> each in a <see cref="Span{T}"/>: on .NET
-    /// Framework 4.8 that form took 4.2 to 4.5 times as long as the same rules over words. There the operators' 24-byte results went
-    /// through the stack, the portable span's indexer tested its pinned object at each access, and in the last loops of the column
-    /// finder windows the operators and the indexer were calls (2026-10-07, Lessons Learned, Performance in specs/standardqr-encoder.md).
+    /// The rows are plain words in one array, three a row, rather than a <see cref="Row192"/> each in a <see cref="Span{T}"/>. On .NET
+    /// Framework that form is several times slower: the operators' 24-byte results go through the stack, the portable span's indexer
+    /// tests its pinned object at each access, and in the last loops of the column finder windows the operators and the indexer are
+    /// calls (Lessons Learned, Performance in specs/standardqr-encoder.md).
     /// </remarks>
     internal static int MaskCode192(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
@@ -521,7 +518,6 @@ internal static partial class ModulePlacer
                 }
             }
 
-            // Apply the winner to the byte buffer via the packed XOR delta.
             {
                 var tplBase = bestPatternIndex * 12;
                 ref var bufRef = ref MemoryMarshal.GetReference(buffer);
@@ -668,10 +664,8 @@ internal static partial class ModulePlacer
     //
     // // ISO/IEC 18004:2015 Section 8.8.2: Score = (|closest multiple of 5 - 50| / 5) x 10
     // // Evaluate the multiples of 5 on both sides of the percentage and take the
-    // // smaller deviation from 50%. (An earlier version of this reference used
-    // // `Floor(percent / 5) * 5 - 45` for the upper side, which is wrong when the
-    // // percentage is an exact multiple of 5, e.g. percent = 45 scored 0 instead
-    // // of 10. Ceiling keeps prev == next there, matching the shipped code.)
+    // // smaller deviation from 50%. Ceiling keeps prev == next when the percentage
+    // // is an exact multiple of 5, so percent = 45 scores 10.
     // var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
     // var nextMultipleOf5 = Math.Abs((int)Math.Ceiling(percent / 5) * 5 - 50) / 5;
     // score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
@@ -681,7 +675,7 @@ internal static partial class ModulePlacer
     /// Produces scores identical to the plain byte-per-module formulation (see the reference block above and ModulePlacerMaskPackedParityTest).
     ///
     /// Rule 1 (runs >= 5, rows): y5 = x &amp; (x>>1) &amp; ... &amp; (x>>4) marks every
-    ///   position where 5 consecutive equal bits start; a run of length L
+    ///   position where 5 consecutive equal bits start. A run of length L
     ///   contributes popcount L-4 and its total penalty is 3+(L-5) = L-2, so
     ///   score = popcount(y5) + 2 * runs, runs isolated via y5 &amp; ~(y5&lt;&lt;1).
     ///   Computed for dark bits and for light bits (~x within the row).
@@ -692,8 +686,8 @@ internal static partial class ModulePlacer
     ///   popcount(v5) + 2 * popcount(v5 &amp; ~(v5&lt;&lt;1)) is the two colours' sum, in two
     ///   popcounts a word where the colours take four.
     /// Rule 1 (columns): eq[y] = ~(row[y] ^ row[y-1]) marks columns whose
-    ///   vertical run continues at row y; v5[y] = eq[y] &amp; eq[y-1] &amp; eq[y-2] &amp; eq[y-3]
-    ///   is the vertical analog of y5, kept in a 4-deep rolling window; vertical
+    ///   vertical run continues at row y. v5[y] = eq[y] &amp; eq[y-1] &amp; eq[y-2] &amp; eq[y-3]
+    ///   is the vertical analog of y5, kept in a 4-deep rolling window. Vertical
     ///   run starts are isolated against the previous v5.
     /// Rule 2 (2x2 blocks): all-equal(a[x], a[x+1], b[x], b[x+1]) ⟺
     ///   eqh_a[x] &amp; eqv[x] &amp; eqv[x+1], eqh = ~(a ^ (a>>1)), eqv = ~(a ^ b).
@@ -714,7 +708,7 @@ internal static partial class ModulePlacer
     /// </summary>
     /// <param name="words">
     /// The rows from <paramref name="rows"/>, three words a row (entry <paramref name="rows"/> + 3y + k holds columns 64k.. of row y), with
-    /// every bit at or past <paramref name="size"/> clear; the rows are overwritten. From <paramref name="scratch"/>, 3 * <paramref name="size"/>
+    /// every bit at or past <paramref name="size"/> clear. The rows are overwritten. From <paramref name="scratch"/>, 3 * <paramref name="size"/>
     /// entries the scorer writes before it reads them.
     /// </param>
     /// <param name="rows">The first row's entry.</param>
@@ -873,17 +867,12 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Column rules 1 and 3 of <see cref="CalculateScorePacked"/>, one word column at a time: whole words of neighbouring rows, as in
-    /// <see cref="CalculateScore64"/>. The scratch holds the rows' light modules; it becomes the light run from row t down and the rows
+    /// <see cref="CalculateScore64"/>. The scratch holds the rows' light modules. It becomes the light run from row t down and the rows
     /// the core from row t down (ascending, as in CalculateScore64).
     /// </summary>
     /// <remarks>
-    /// Left to tiered compilation, unlike its callers, so on the x64 JIT of .NET 8 and later its first calls run Tier0 code. With
-    /// <c>AggressiveOptimization</c> mask selection with hardware intrinsics off took 1.10 times its time without
-    /// it on .NET 10 and 1.05 to 1.06 on .NET 8 (x64, 2026-10-08): on .NET 10 the Tier1 code inlines the software popcount and <see cref="Row192.MaskLow"/>,
-    /// which the fully optimized first compile leaves as calls. The callers keep the attribute, so with hardware intrinsics off on x64 their row
-    /// loops hold 10 or 15 calls to the software popcount. Leaving them to tiering, or a popcount of the file's own where the hardware
-    /// has none, was not measured. On 32-bit x86 with hardware intrinsics off, .NET 8 and 10 compiled this method fully optimized at its
-    /// first call, and neither it nor its callers called the software popcount (2026-10-08).
+    /// Left to tiered compilation, unlike its callers. With hardware intrinsics off on x64, .NET 10's Tier1 code inlines the software
+    /// popcount and <see cref="Row192.MaskLow"/>, which a fully optimized first compile leaves as calls.
     /// </remarks>
     private static int ScoreColumnWords(ulong[] words, int rows, int scratch, int size, int wordCount)
     {
@@ -995,7 +984,7 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Maps between machine byte order and the logical little-endian order the SWAR pack/unpack constants assume (memory offset k = ulong byte k).
-    /// The same swap works for both reads and writes; BitConverter.IsLittleEndian is a JIT-time constant, so little-endian codegen is unaffected.
+    /// The same swap works for both reads and writes. BitConverter.IsLittleEndian is a JIT-time constant, so little-endian codegen is unaffected.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong NormalizeEndianness(ulong value)

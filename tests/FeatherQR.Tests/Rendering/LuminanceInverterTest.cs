@@ -81,8 +81,8 @@ public class LuminanceInverterTest
     }
 
     /// <summary>
-    /// The three image decoders invert a buffer onto a rented one of the same length;
-    /// exact aliasing is the degenerate case of that and must still be a plain negate.
+    /// The three image decoders invert a buffer onto a rented one of the same length.
+    /// Exact aliasing is the degenerate case of that and must still be a plain negate.
     /// </summary>
     [Test]
     public async Task Invert_InPlace_NegatesEveryByteOnce()

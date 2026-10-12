@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// ZXing.Net reads the Kanji symbols <see cref="QRCodeGenerator"/> writes with <c>AllowKanji</c>, every encoder cell included.
-/// ZXing.Net applies CP932 to a Kanji segment; the two agree on every encoder cell, because the seven cells where they differ have none, so any disagreement here is a symbol one reader or the other gets wrong.
+/// ZXing.Net applies CP932 to a Kanji segment. The two agree on every encoder cell, because the seven cells where they differ have none, so any disagreement here is a symbol one reader or the other gets wrong.
 /// The symbols are read from their module matrix, not from an image: what is under test is the bit stream.
 /// </summary>
 public class KanjiZXingCrossTest

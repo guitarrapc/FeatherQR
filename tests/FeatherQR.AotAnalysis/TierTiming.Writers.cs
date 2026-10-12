@@ -4,8 +4,8 @@ using FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// The Standard QR Alphanumeric and Numeric payload writers (<c>--shape kernel/AlnumWriter</c>, <c>kernel/NumericWriter</c>): each tier
-/// entered directly beside the writer they replaced (<c>-old</c>), on runs of the lengths callers write, 13 bits into a word as after a
-/// mode and count indicator.
+/// entered directly beside the plain loop it is timed against (<c>-old</c>), on runs of the lengths callers write, 13 bits into a word as
+/// after a mode and count indicator.
 /// </summary>
 internal static partial class TierTiming
 {
@@ -45,7 +45,7 @@ internal static partial class TierTiming
         };
     }
 
-    /// <summary>The Alphanumeric writer the tiers replaced (QRBinaryEncoder.WriteAlphanumericData, 2026-10-05), verbatim: the reference.</summary>
+    /// <summary>The plain Alphanumeric loop, one write a pair: the reference the tiers are timed against.</summary>
     internal static void OldAlphanumeric(ref BitWriter writer, ReadOnlySpan<char> chars)
     {
         var length = chars.Length;
@@ -64,7 +64,7 @@ internal static partial class TierTiming
         }
     }
 
-    /// <summary>The Numeric writer the tiers replaced (QRBinaryEncoder.WriteNumericData, 2026-10-05), verbatim: the reference.</summary>
+    /// <summary>The plain Numeric loop, one write a group of three digits: the reference the tiers are timed against.</summary>
     internal static void OldNumeric(ref BitWriter writer, ReadOnlySpan<char> digits)
     {
         var i = 0;

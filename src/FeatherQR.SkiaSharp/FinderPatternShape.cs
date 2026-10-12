@@ -59,8 +59,7 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
         var wasAntialias = paint.IsAntialias;
         paint.IsAntialias = false;
 
-        // The 5×5 hole. Its edges are what the outer ring's bands meet, so the ring lands on the same
-        // pixels whether drawn as bands or, as it once was, as a light square over a dark one.
+        // The 5×5 hole. Its edges are what the outer ring's bands meet.
         var innerRect = SKRect.Create(
             rect.Left + moduleWidth,
             rect.Top + moduleHeight,
@@ -107,23 +106,21 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
-        // Ovals inscribed in the ring rects rather than circles: on a square area they are the
-        // same circles as before, and on a non-square one they keep following the module grid.
+        // Ovals inscribed in the ring rects rather than circles: on a square area they are
+        // circles, and on a non-square one they keep following the module grid.
         var moduleWidth = rect.Width / 7f;
         var moduleHeight = rect.Height / 7f;
 
         // The center (3x3), drawn on its own either way: SKSvgCanvas writes an oval as one
-        // <ellipse> and a path as thousands of flattened quadratics, so keeping it out of the
-        // path costs nothing and saves 5 KB of document per finder.
+        // <ellipse> and flattens a path into quadratics, so keeping it out of the path keeps
+        // the document small.
         var centerRect = SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3);
 
         // A circle's offset curve is another circle, so on a square area the ring between the 5x5
         // and 7x7 ovals is exactly a one-module stroke of the 6x6 one, and that is an <ellipse>
-        // too. Not so when the cells are not square: one stroke width cannot be one module on both
-        // axes, and the ring would spill past the short edges, so those fall back to the path.
-        // The tolerance is for the fit's own rounding, which leaves two of a Standard QR's three
-        // finders a few float ulps off square at most canvas sizes; a ring a ten-thousandth of a
-        // module out is not a ring anyone can see, and a real aspect difference is orders larger.
+        // too. One stroke width cannot be one module on both axes, so cells that are not square
+        // fall back to the path. The tolerance is for the fit's own rounding, which leaves a
+        // finder a few float ulps off square.
         if (Math.Abs(moduleWidth - moduleHeight) <= 1e-4f * Math.Max(moduleWidth, moduleHeight))
         {
             var style = paint.Style;
@@ -234,7 +231,6 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
         var moduleWidth = rect.Width / 7f;
         var moduleHeight = rect.Height / 7f;
 
-        // Corner radius for rounded rectangle
         var cornerRadius = Math.Min(rect.Width, rect.Height) * _cornerRadiusPercent;
 
         // One even-odd path: the outer rounded rectangle (7×7) with the ring (5×5) as a hole.
@@ -244,10 +240,10 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
         using var path = builder.Detach();
         canvas.DrawPath(path, paint);
 
-        // The center (3×3), an oval so it stays on the grid; a circle on a square area. Drawn on
+        // The center (3×3), an oval so it stays on the grid, which is a circle on a square area. Drawn on
         // its own rather than as a third contour: it sits strictly inside the hole, so the picture
         // is the same, and SKSvgCanvas writes it as one <ellipse> instead of flattening it into
-        // the path's quadratics, which is 5 KB of document per finder.
+        // the path's quadratics.
         canvas.DrawOval(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3), paint);
     }
 }

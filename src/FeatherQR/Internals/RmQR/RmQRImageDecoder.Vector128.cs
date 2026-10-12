@@ -31,7 +31,7 @@ internal static partial class RmQRImageDecoder
             var rowY = Vector128.Create(predictedY + halfV * svY);
             var ifDark = 0UL;
             var ifLight = 0UL;
-            // Lanes past the side are classified and masked off below; a certain lane is inside the image whatever its column
+            // Lanes past the side are classified and masked off below. A certain lane is inside the image whatever its column.
             for (var column = 0; column < side; column += 4)
             {
                 // (first + column) / 2 plus a lane's half is exact, as the scalar half is
@@ -48,7 +48,7 @@ internal static partial class RmQRImageDecoder
                 // "Not inside", as the scalar tier writes it, so a NaN lane is near the border too
                 var inside = Vector128.GreaterThan(xLow, minusOne) & Vector128.LessThan(xHigh, widths)
                     & Vector128.GreaterThan(yLow, minusOne) & Vector128.LessThan(yHigh, heights);
-                // Truncating, as the scalar cast does; a lane out of range or NaN is not inside and not read
+                // Truncating, as the scalar cast does. A lane out of range or NaN is not inside and not read.
                 var pxLow = VectorCast.ToInt32Native(xLow);
                 var pyLow = VectorCast.ToInt32Native(yLow);
                 var onePixel = Vector128.Equals(pxLow, VectorCast.ToInt32Native(xHigh)) & Vector128.Equals(pyLow, VectorCast.ToInt32Native(yHigh));
@@ -83,10 +83,10 @@ internal static partial class RmQRImageDecoder
     /// <remarks>
     /// Exactness is by construction, and each step is chosen to preserve it: lanes keep the scalar's own association <c>((a1x*gridX) + a2x*gridY) + a3x</c> (folding the last two into a row constant would re-associate), there is no FMA contraction and no reciprocal multiply, and the affine variant only skips a division by exactly <c>1f</c>.
     /// That is also why this is a separate implementation from the Standard QR row kernel, which computes <c>1/d</c> once and multiplies twice: it rounds differently.
-    /// The overlapping tail block re-samples up to three already-written modules; it reads the same inputs and writes the same values.
+    /// The overlapping tail block re-samples up to three already-written modules. It reads the same inputs and writes the same values.
     /// <para>
     /// The clamp is what makes the unchecked gather safe: px and py are pinned to [0, width-1] and [0, height-1].
-    /// That relies on the caller having sliced <paramref name="luminance"/> to exactly width * height, as DecodeLuminance does — this method skips the bounds checks the scalar loop keeps, so a short span reads out of bounds here where it would throw there.
+    /// That relies on the caller having sliced <paramref name="luminance"/> to exactly width * height, as DecodeLuminance does. This method skips the bounds checks the scalar loop keeps, so a short span reads out of bounds here where it would throw there.
     /// </para>
     /// </remarks>
     internal static void SampleGridSimd128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
@@ -98,7 +98,7 @@ internal static partial class RmQRImageDecoder
         }
 
         // Affine frames have an exactly unit denominator, so both divisions drop out.
-        // This is not a heuristic about typical input: TryDecodeFrame builds the isotropic and anisotropic frames with perspectiveX = perspectiveY = 0, so every attempt before the perspective search lands here.
+        // This is not a heuristic about typical input: TryFrame and TryScaledFrame build the unrefined, isotropic and anisotropic frames with perspectiveX = perspectiveY = 0, so those attempts land here.
         if (transform.a13 == 0f && transform.a23 == 0f && transform.a33 == 1f)
         {
             SampleGridSimd128Affine(luminance, width, height, threshold, transform, columns, rows, modules);
@@ -147,7 +147,7 @@ internal static partial class RmQRImageDecoder
                 var indexHi = VectorCast.ToPixel(yHi, lastY) * widthVector
                     + VectorCast.ToPixel(xHi, lastX);
 
-                // Lane extraction beats spilling the index vector to the stack: the reload was measured on the critical path of every gather.
+                // Lane extraction, not a spill of the index vector to the stack: the reload sits on the critical path of every gather.
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + column);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(0)) < threshold ? (byte)1 : (byte)0;
                 Unsafe.Add(ref destination, 1) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(1)) < threshold ? (byte)1 : (byte)0;
@@ -182,10 +182,10 @@ internal static partial class RmQRImageDecoder
 
     /// <summary>
     /// Affine tier of <see cref="SampleGridSimd128"/>: the denominator is exactly 1f, so x / 1f == x and both divisions are dropped.
-    /// Everything else — the hoisted products, the clamp, the overlapping tail — matches the projective kernel, and the sampled bytes match <see cref="SampleGridScalar"/>.
+    /// Everything else (the hoisted products, the clamp, the overlapping tail) matches the projective kernel, and the sampled bytes match <see cref="SampleGridScalar"/>.
     /// </summary>
     /// <remarks>
-    /// A separate method rather than a branch inside the shared loop: this is the shape that was measured, and it keeps the projective kernel's constants out of the affine loop's register budget.
+    /// A separate method rather than a branch inside the shared loop: it keeps the projective kernel's constants out of the affine loop's register budget.
     /// </remarks>
     private static void SampleGridSimd128Affine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {

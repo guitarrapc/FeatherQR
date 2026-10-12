@@ -38,7 +38,7 @@ public class RmQRModulePlacerParityTest
     /// The ARM64 store tier (transpose blocks + row runs + single scatter) against the
     /// per-module reference, forced on rather than auto-selected, for every version ×
     /// ECC × message shape, on a dirty core and through both the tight and the strided
-    /// (quiet-zoned) destination — the strided path derives its own row pitch, so a
+    /// (quiet-zoned) destination. The strided path derives its own row pitch, so a
     /// tier that is byte-exact at stride == width can still be wrong at stride > width.
     /// </summary>
     [Test]
@@ -75,7 +75,7 @@ public class RmQRModulePlacerParityTest
             RmQRModulePlacer.PlaceSymbol(tight, width, version, ecc, message, RmQRModulePlacer.PlaceKernel.Neon);
             await Assert.That(tight).IsEquivalentTo(expected, CollectionOrdering.Matching);
 
-            // Strided: 4 modules of quiet zone on every side; the bytes between rows
+            // Strided: 4 modules of quiet zone on every side. The bytes between rows
             // must survive untouched.
             const int Quiet = 4;
             var stride = width + 2 * Quiet;
@@ -130,7 +130,7 @@ public class RmQRModulePlacerParityTest
             await Assert.That(portable).IsEquivalentTo(expected, CollectionOrdering.Matching);
 
             // Strided as well as tight. `ScatterPairs` branches on `strided` and derives
-            // its own row pitch, so the two arms are different code; pinning only the
+            // its own row pitch, so the two arms are different code. Pinning only the
             // tight one leaves the strided portable arm unexercised wherever `Auto` picks
             // a vector tier, which on ARM64 is everywhere.
             const int PortableQuiet = 3;
@@ -189,7 +189,7 @@ public class RmQRModulePlacerParityTest
     [Test]
     public async Task FastPath_IsRepeatable_AcrossEccAndVersionsSharingTables()
     {
-        // the per-version cache serves both ECC levels and repeated calls; alternate them
+        // the per-version cache serves both ECC levels and repeated calls, so alternate them
         var v = RmQRVersion.R11x59;
         var total = RmQRConstants.GetTotalCodewordCount(v);
         var size = RmQRConstants.GetWidth(v) * RmQRConstants.GetHeight(v);

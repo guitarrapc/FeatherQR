@@ -11,7 +11,7 @@ using FeatherQR.Tests;
 /// <summary>
 /// With <c>--parity</c>: vector tiers held to their scalar forms on the build itself, for the code a test run never executes:
 /// a platform instruction inside a portable tier (<c>PackedSimd</c> on WebAssembly) and the code ILC emits for a native build.
-/// Shared by the NativeAOT gate and the WebAssembly report (tests/FeatherQR.WasmReport links this file); the unit tests hold
+/// Shared by the NativeAOT gate and the WebAssembly report (tests/FeatherQR.WasmReport links this file). The unit tests hold
 /// the same tiers to the same forms under the JIT.
 /// </summary>
 internal static class SimdParity
@@ -105,7 +105,7 @@ internal static class SimdParity
             var native = VectorCast.ToInt32Native(Vector128.Create(lanes));
             for (var lane = 0; lane < 4; lane++)
             {
-                // The pixel the scalar samplers take; the unclamped conversion only where the lattice reads it
+                // The pixel the scalar samplers take, and the unclamped conversion only where the lattice reads it
                 var value = lanes[lane];
                 if (pixel.GetElement(lane) != PixelIndex.Clamp(value, CastLimit))
                     mismatches.Add($"{value:R}: pixel {pixel.GetElement(lane)}, scalar {PixelIndex.Clamp(value, CastLimit)}");
@@ -261,8 +261,8 @@ internal static class SimdParity
 
     /// <summary>
     /// The finder search's candidates with the edge-list row kernel against the scalar walk's, bit for bit and in order: symbols from
-    /// under two pixels a module up, crisp and blurred, every row and strided; noise at widths around the 16-pixel compares, the
-    /// 64-pixel words and the eight-window steps, thresholds at the extremes, the grey second look on and off; and a finder flush
+    /// under two pixels a module up, crisp and blurred, every row and strided. Noise at widths around the 16-pixel compares, the
+    /// 64-pixel words and the eight-window steps, thresholds at the extremes, the grey second look on and off. A finder flush
     /// against the right edge behind bars that move a row's last window across every lane of a step.
     /// </summary>
     private static List<string> FinderEdgeListMismatches()
@@ -596,7 +596,7 @@ internal static class SimdParity
             LuminanceConverter.Convert(pixels, width, height, rowBytes, layout.Layout, premultiplied, actual);
             if (!expected.AsSpan().SequenceEqual(actual))
                 mismatches.Add($"{label}, {layout.Layout}, premultiplied {premultiplied}");
-            // The tier takes rows of one block or more; its dispatch keeps narrower ones scalar
+            // The tier takes rows of one block or more, and its dispatch keeps narrower ones scalar
             if (width < 16)
                 return;
             Array.Clear(actual);
@@ -774,7 +774,7 @@ internal static class SimdParity
     /// The Alphanumeric and Numeric payload writers, every tier this build runs entered directly, against the writers they replaced
     /// (<see cref="TierTiming.OldAlphanumeric"/>, <see cref="TierTiming.OldNumeric"/>): lengths 0 to 300 and long runs, after 0 to 30 bits
     /// of a pattern (every third, every seventh past 300 characters), the whole buffer and the bit position, each run alone and as a slice of a longer text whose next characters are in
-    /// the alphabet (as a plan passes a segment, so a step that reads past the run writes it); for Alphanumeric also every character
+    /// the alphabet (as a plan passes a segment, so a step that reads past the run writes it). For Alphanumeric also every character
     /// outside the alphabet up to 0xFF, and some past it, in the lanes of the vector steps, which must throw after the same bits. The old
     /// writers read CharacterSets' value table too, so the table is held to the alphabet itself. The one run of the WebAssembly tier.
     /// </summary>

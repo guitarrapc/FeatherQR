@@ -18,7 +18,7 @@ namespace QRInteropFixtures;
 /// compared with the one the pinned balancing encoder writes for the same text and level,
 /// which is the same definition (the whole text's bytes in the set's charset) and so must
 /// be the same byte. A Kanji set (written with <c>AllowKanji</c>) has no oracle here, since
-/// the oracle writes UTF-8; it is told apart by what zxing-cpp reads, not by its parity: no
+/// the oracle writes UTF-8. It is told apart by what zxing-cpp reads, not by its parity: no
 /// symbol carries an ECI and the raw bytes are the text's Shift_JIS bytes. Its parity must then
 /// be their XOR, and every other set's the oracle's, so each set is held to one value.
 /// Findings are recorded in specs/qrcode-test-fixtures.md.
@@ -148,7 +148,7 @@ public static class StructuredAppendSpotCheck
                         // Which set this is comes from the stream zxing-cpp read, never from the parity under test: a Kanji set
                         // declares no ECI and carries the text's Shift_JIS bytes, where they differ from its UTF-8 bytes (an ASCII
                         // text's are the same either way, and so is its parity). A Kanji set's parity is the XOR of those bytes,
-                        // which CodeGlyphX's Kanji set of the Japanese case also carries (176); any other set's is the oracle's.
+                        // which CodeGlyphX's Kanji set of the Japanese case also carries (176). Any other set's is the oracle's.
                         var shiftJis = ShiftJisBytes(caseDefinition.PayloadText);
                         var kanjiSet = !anyEci && shiftJis is not null
                             && !shiftJis.AsSpan().SequenceEqual(System.Text.Encoding.UTF8.GetBytes(caseDefinition.PayloadText))

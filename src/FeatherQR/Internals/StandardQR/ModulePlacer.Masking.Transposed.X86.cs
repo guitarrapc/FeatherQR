@@ -10,17 +10,12 @@ namespace FeatherQR.Internals.StandardQR;
 /// <summary>
 /// Transposed mask selection for versions 12-40 on AVX2, four rows or columns per vector (the design is in ModulePlacer.Masking.Transposed.cs).
 /// </summary>
-/// <remarks>
-/// Measured against the SoA tiers it replaced: 0.82 to 0.90 of their mask selection time at versions 12 to 27 and 0.36 to 0.44 at
-/// 28 to 40 on the JIT (2026-10-04). Full per-pattern tables instead of the periodic ones gained 1 to 4 % for eight times the memory,
-/// and the scalar 64x64 transpose was 7 to 16 % slower.
-/// </remarks>
 internal static partial class ModulePlacer
 {
     /// <summary>Mask selection for versions 12-40 on AVX2: scores all eight candidates transposed, applies the winner to <paramref name="buffer"/>, returns it.</summary>
     internal static int MaskCodeTransposed(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        // The per-version tables come from the version's canonical blocked mask; every production caller passes that mask.
+        // The per-version tables come from the version's canonical blocked mask. Every production caller passes that mask.
         var layout = GetTransposedLayout(version, size);
         System.Diagnostics.Debug.Assert(blockedMask.SequenceEqual(GetLayout(version).BlockedMask), "MaskCodeTransposed requires the version's canonical blocked mask");
         if (buffer.Length < size * size)
@@ -221,7 +216,7 @@ internal static partial class ModulePlacer
         }
         FinishRowPlanes(r, layout, version);
 
-        // Block (kr, kc) of R is rows 64kr.. of word kc; transposed it is columns 64kc.. of word kr in C.
+        // Block (kr, kc) of R is rows 64kr.. of word kc. Transposed it is columns 64kc.. of word kr in C.
         for (var kr = 0; kr < words; kr++)
         {
             for (var kc = 0; kc < words; kc++)

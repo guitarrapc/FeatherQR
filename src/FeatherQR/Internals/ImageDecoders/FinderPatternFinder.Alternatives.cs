@@ -17,14 +17,14 @@ internal static partial class FinderPatternFinder
         private readonly Span<FinderPattern> _candidates;
         private readonly ReadOnlySpan<FinderPattern> _selected;
 
-        /// <summary>Index of the least confirmed member of the triples being handed out; the other two come from before it.</summary>
+        /// <summary>Index of the least confirmed member of the triples being handed out. The other two come from before it.</summary>
         private int _weakest;
 
         private float _lastScore;
         private int _lastFirst;
         private int _lastSecond;
 
-        /// <summary>Orders <paramref name="candidates"/> in place, most confirmed first; <paramref name="selected"/> is the triple already tried, which is never handed out again.</summary>
+        /// <summary>Orders <paramref name="candidates"/> in place, most confirmed first. <paramref name="selected"/> is the triple already tried, which is never handed out again.</summary>
         public AlternativeTriples(Span<FinderPattern> candidates, ReadOnlySpan<FinderPattern> selected)
         {
             // Insertion sort, stable so that equal heights keep the scan order: netstandard2.0 has no Span.Sort, and the list is tiny (≤ 32)
@@ -49,7 +49,7 @@ internal static partial class FinderPatternFinder
             _lastSecond = -1;
         }
 
-        /// <summary>Writes the next triple into <paramref name="triple"/>; false when none is left.</summary>
+        /// <summary>Writes the next triple into <paramref name="triple"/>. False when none is left.</summary>
         public bool TryNext(scoped Span<FinderPattern> triple)
         {
             while (_weakest < _candidates.Length)
@@ -96,7 +96,7 @@ internal static partial class FinderPatternFinder
             return false;
         }
 
-        // A candidate the selected triple holds; by the merge rule, since the complementary rescan can merge more rows into a candidate after the stride pass selected it
+        // A candidate the selected triple holds by the merge rule, since the complementary rescan can merge more rows into a candidate after the stride pass selected it
         private readonly bool IsSelected(in FinderPattern candidate)
         {
             foreach (var selected in _selected)

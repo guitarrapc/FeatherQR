@@ -8,10 +8,10 @@ namespace FeatherQR.Internals.BinaryEncoders;
 
 /// <summary>
 /// Vectorized Reed-Solomon kernels for x86/x64.
-/// Selected at runtime by <see cref="EccBinaryEncoder.CalculateECC"/>; every kernel produces byte-identical output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
+/// Selected at runtime by <see cref="EccBinaryEncoder.CalculateECC"/>. Every kernel produces byte-identical output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
 /// </summary>
 /// <remarks>
-/// Shared architecture of both kernels (result of a measured 13-round optimization loop)
+/// Shared architecture of both kernels:
 ///
 /// - The ≤32-byte remainder register lives in one (eccCount ≤ 16) or two vector
 ///   registers for the whole block, no message buffer, no store/load round-trips.
@@ -23,10 +23,10 @@ namespace FeatherQR.Internals.BinaryEncoders;
 ///   PRE-update register using composed T∘U tables, which keeps the whole vector
 ///   update off the critical dependency chain (same idea as multi-bit CRC tables).
 /// - The register update multiplies the (shifted) generator vector by each factor:
-///   GFNI does this in one gf2p8affineqb per factor; the SSSE3 kernel uses the
+///   GFNI does this in one gf2p8affineqb per factor. The SSSE3 kernel uses the
 ///   classic PSHUFB nibble-split multiply (2 shuffles per factor) instead.
 ///
-/// Table cost: 2 KB of GFNI matrices baked into the assembly as constant data (no runtime build), ~8 KB SSSE3 nibble-split table, plus ~8-18 KB per distinct eccCount actually used (QR uses at most 13 values; a typical app touches one or two).
+/// Table cost: 2 KB of GFNI matrices baked into the assembly as constant data (no runtime build), ~8 KB SSSE3 nibble-split table, plus ~8-18 KB per distinct eccCount actually used (QR uses at most 13 values, and a typical app touches one or two).
 /// All runtime-built tables build lazily on first use, so GFNI machines never pay for the SSSE3 table.
 /// </remarks>
 internal static partial class EccBinaryEncoder
@@ -44,8 +44,8 @@ internal static partial class EccBinaryEncoder
             return;
         }
 #endif
-        // Covers all pre-GFNI x86 (AVX2-only CPUs included; wider vectors measured
-        // slower than dual 128-bit registers for this kernel).
+        // Covers all pre-GFNI x86, AVX2-only CPUs included: wider vectors are slower than
+        // dual 128-bit registers for this kernel.
         CalculateEccSsse3(data, ecc, eccCount);
     }
 
@@ -172,8 +172,8 @@ internal static partial class EccBinaryEncoder
         var genS3HiB = Vector128.LoadUnsafe(ref nibRef, NibGenS3HiB);
 
         // Remainder register as two 128-bit halves: lo = ecc[0..15], hi = ecc[16..31].
-        // Measured faster than one 256-bit register (no cross-lane shift, no table
-        // broadcast on the dependency chain).
+        // One 256-bit register would put a cross-lane shift and a table broadcast on the
+        // dependency chain.
         var lo = Vector128<byte>.Zero;
         var hi = Vector128<byte>.Zero;
 
@@ -276,9 +276,8 @@ internal static partial class EccBinaryEncoder
     /// (eccCount ≤ 16), one at a time otherwise. Caller guarantees Ssse3.IsSupported and eccCount ≤ 32.
     /// </summary>
     /// <remarks>
-    /// Two blocks' chains in one loop took 0.72 of one at a time at version 6-M (16 codewords). Above 16, a pair that read its sixteen generator vectors from
-    /// the nibble table at every step took 0.90 to 1.06 at versions 10-M to 40-L (26 to 30 codewords; 17 to 24 were not measured), so those go one at a
-    /// time; a pair holding them in registers was not tried (.NET 10 on Zen 4, the kernels called directly, one run, 2026-10-07).
+    /// Above 16 codewords a pair that reads its sixteen generator vectors from the nibble table at every step gains nothing over one block
+    /// at a time, so those go one at a time.
     /// </remarks>
     internal static void CalculateEccSsse3Group(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks, int length)
     {
@@ -536,9 +535,7 @@ internal static partial class EccBinaryEncoder
     /// Caller guarantees Gfni.IsSupported and eccCount ≤ 32.
     /// </summary>
     /// <remarks>
-    /// One block's chain waits on its own register every step. Four chains in one loop took 0.68 to 0.80 of one block at a time over the blocks of
-    /// versions 6-M, 10-M, 19-M, 26-M, 39-H and 40-L in three runs, but for 0.86 at 39-H in one, and two chains 0.72 to 0.81 (.NET 10 on Zen 4, the
-    /// kernels called directly, 2026-10-07).
+    /// One block's chain waits on its own register every step, so the chains of several blocks overlap in one loop.
     /// </remarks>
     internal static void CalculateEccGfniGroup(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks, int length)
     {
@@ -849,12 +846,12 @@ internal static partial class EccBinaryEncoder
 #endif
 
     // ---------------------------------------------------------------------------
-    // Table construction (all lazy, per eccCount). Benign races: concurrent builders
-    // produce identical arrays and the losing build is garbage. Publication uses
-    // Volatile.Write so readers on weakly-ordered hardware can never observe a
-    // partially initialized array; plain reads suffice because the element loads are
-    // address-dependent on the reference load.
+    // Table construction (all lazy, per eccCount)
     // ---------------------------------------------------------------------------
+
+    // Benign races: concurrent builders produce identical arrays, and Volatile.Write
+    // publishes only a filled one. Plain reads suffice because the element loads are
+    // address-dependent on the reference load.
 
     // Normal-domain generator coefficients (generator[1..eccCount], leading 1
     // dropped), zero-padded to 32 bytes. GF-multiplying zero padding contributes 0,
@@ -903,7 +900,7 @@ internal static partial class EccBinaryEncoder
 
     // Shuffle-ready nibble split of (gen >> s bytes) for s = 0..3, each as
     // [loA|hiA|loB|hiB] 16-byte blocks (A = gen bytes 0..15, B = 16..31).
-    // Offsets below; 256 bytes per eccCount.
+    // Offsets below. 256 bytes per eccCount.
     private const nuint NibGenLoA = 0;
     private const nuint NibGenHiA = 16;
     private const nuint NibGenLoB = 32;
@@ -1048,8 +1045,7 @@ internal static partial class EccBinaryEncoder
 
 #if NET10_0_OR_GREATER
     // Fused per-eccCount blob for the GFNI kernel: quad-factor tables, composed TU
-    // tables and the padded generator behind a single pointer chase (measured ~13%
-    // on the smallest QR block vs separate arrays).
+    // tables and the padded generator behind a single pointer chase.
     private const nint BlobQf = 0;      // 4 × 256 uints (4096 bytes)
     private const nint BlobTu = 4096;   // 4 × 256 uints (4096 bytes)
     private const nuint BlobGen = 8192; // 40 bytes: padded generator + shift headroom

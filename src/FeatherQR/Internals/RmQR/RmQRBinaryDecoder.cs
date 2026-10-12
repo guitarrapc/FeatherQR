@@ -35,7 +35,7 @@ internal static class RmQRBinaryDecoder
     /// <param name="version">The rMQR version, which sets the character count indicator widths.</param>
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    /// <param name="fnc1">The FNC1 mode when the stream carries one, with its application indicator in second position; default otherwise.</param>
+    /// <param name="fnc1">The FNC1 mode when the stream carries one, with its application indicator in second position, and default otherwise.</param>
     public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, RmQRVersion version, Span<char> destination, out int charsWritten, out Fnc1Mode fnc1)
     {
         charsWritten = 0;
@@ -145,7 +145,7 @@ internal static class RmQRBinaryDecoder
                     case ModeFnc1Second:
                         {
                             // The same placement, then one 8-bit application indicator in the ranges
-                            // of ISO/IEC 18004 6.4.8.2; anything else is malformed.
+                            // of ISO/IEC 18004 6.4.8.2. Anything else is malformed.
                             if (dataSegmentSeen || fnc1.IsActive || totalBits - reader.BitPosition < 8)
                                 return DecodeStatus.InvalidBitstream;
                             var indicator = reader.Reads(8);

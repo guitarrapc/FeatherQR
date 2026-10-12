@@ -7,7 +7,7 @@ using FeatherQR;
 /// </summary>
 internal static class Verify
 {
-    /// <summary>Null when the result is right; otherwise why the process's timings do not count.</summary>
+    /// <summary>Null when the result is right, otherwise why the process's timings do not count.</summary>
     public static string? Check(ManifestEntry entry, JsonElement output)
     {
         var status = output.TryGetProperty("status", out var s) ? s.GetString() : null;
@@ -88,7 +88,7 @@ internal static class Verify
 
     /// <summary>
     /// Null when every timed call succeeded. <see cref="Check"/> sees one call, and a library can fail the calls after it: ZXing's matrix
-    /// decoder unmasks the matrix it is given and leaves it so, and decoding the same matrix again failed (2026-10-05).
+    /// decoder unmasks the matrix it is given and leaves it so, and decoding the same matrix again fails.
     /// </summary>
     public static string? FailedCalls(JsonElement output)
     {

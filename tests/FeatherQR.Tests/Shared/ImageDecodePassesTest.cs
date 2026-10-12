@@ -27,11 +27,11 @@ public class ImageDecodePassesTest
         public int Count(string pass) => Calls.Count(call => call.Pass == pass);
     }
 
-    /// <summary>What the stand-in writes on every call; the passes zero it unless the result is a read.</summary>
+    /// <summary>What the stand-in writes on every call. The passes zero it unless the result is a read.</summary>
     private const int Written = 7;
 
     /// <summary>
-    /// The stand-in: its info names the attempt the result came from, 1 and 2 for the global positive and negative, 3 and 4 for the regional, 5 and 6 for the midpoint; -1 is not detected.
+    /// The stand-in: its info names the attempt the result came from, 1 and 2 for the global positive and negative, 3 and 4 for the regional, 5 and 6 for the midpoint, and -1 is not detected.
     /// Its global pass takes the threshold and levels from the histogram, as the decoders do.
     /// </summary>
     private readonly struct RecordingPass(Script script, bool midpointPass, bool reducedScale) : ISymbolPass<int>

@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// The generators answer "how big is this" only as a <c>Try</c>
 /// (specs/qrcode-symbologies.md, Public API direction), because for a caller handling
 /// arbitrary content "it does not fit" is an ordinary answer. A test that has chosen its
-/// own content knows it fits, and would rather crash than branch — so the throw lives
+/// own content knows it fits, and would rather crash than branch, so the throw lives
 /// here, once, where it is obviously a test assertion and not a library contract.
 ///
 /// Do not use this in a test whose subject <em>is</em> the fit: assert on

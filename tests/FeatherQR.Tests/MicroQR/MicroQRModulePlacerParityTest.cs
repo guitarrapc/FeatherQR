@@ -13,9 +13,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// The reference is an independent transcription of ISO/IEC 18004 Micro QR
-/// placement (the pre-optimization implementation), kept naive on purpose:
-/// per-module function predicate, per-bit indexed stream reads, per-module mask
-/// switch. It shares no code with the production fast path.
+/// placement, kept naive on purpose: per-module function predicate, per-bit
+/// indexed stream reads, per-module mask switch. It shares no code with the
+/// production fast path.
 /// </remarks>
 public class MicroQRModulePlacerParityTest
 {
@@ -82,7 +82,7 @@ public class MicroQRModulePlacerParityTest
 
     /// <summary>
     /// The scalar-unpack fallback (taken at runtime when SSSE3 is unavailable)
-    /// must match the reference too, on SIMD-capable test machines it is
+    /// must match the reference too. On SIMD-capable test machines it is
     /// exercised through this named internal entry point.
     /// </summary>
     [Test]
@@ -125,13 +125,11 @@ public class MicroQRModulePlacerParityTest
     /// unpack) must match the reference on machines that support it.
     /// </summary>
     /// <remarks>
-    /// Deliberately gated on instruction SUPPORT only, not on the production
-    /// dispatch's fast-PEXT vendor/family check: named-entry parity tests exist
-    /// precisely to cover tiers the local dispatch would not take (the SSSE3
-    /// and scalar tests run on BMI2 machines for the same reason), and PEXT/PDEP
-    /// results are identical where they are merely microcoded (pre-Zen 3 AMD) —
-    /// only slower, by well under a millisecond across this whole data source
-    /// (~96 BMI ops per placement call).
+    /// Gated on instruction support only, not on the production dispatch's
+    /// fast-PEXT vendor/family check. Named-entry parity tests cover tiers the
+    /// local dispatch would not take (the SSSE3 and scalar tests run on BMI2
+    /// machines for the same reason), and PEXT/PDEP give the same results where
+    /// they are microcoded (pre-Zen 3 AMD).
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(AllCombinationsAndSeeds))]
@@ -285,7 +283,7 @@ public class MicroQRModulePlacerParityTest
     /// A pinned mask pattern (<see cref="MicroQRCodeGeneratorOptions.MaskPattern"/>)
     /// rides the same fused pipeline with the edge scoring skipped, so for every
     /// pattern the output must equal the reference with that pattern applied
-    /// directly. Covers the dispatch tier; the scalar test below covers the
+    /// directly. Covers the dispatch tier. The scalar test below covers the
     /// shared packed-rows path on machines whose dispatch prefers BMI2.
     /// </summary>
     [Test]
@@ -367,7 +365,7 @@ public class MicroQRModulePlacerParityTest
     public enum Tier { Dispatch, Scalar, Bmi2, Ssse3, AdvSimd }
 
     // Every tier at every size, with rows 1, 2, 4 and 50 bytes apart past the core width: a quiet zone's margins are 2q bytes. The
-    // 16-module steps run up to 15 bytes past a row (size 17), into the bytes between rows and the next row; the BMI2 tier's 32-module
+    // 16-module steps run up to 15 bytes past a row (size 17), into the bytes between rows and the next row. The BMI2 tier's 32-module
     // store runs 32 - size bytes past, which with rows under 16 bytes apart (sizes 11 and 13 here) reaches the row after the next.
     public static IEnumerable<(Tier tier, MicroQRVersion version, MicroQREccLevel ecc, int seed, int gap)> StridedCases()
     {
@@ -470,7 +468,7 @@ public class MicroQRModulePlacerParityTest
     [Test]
     public async Task PlaceSymbol_StridedMatrixShortOfTheLastRow_Throws()
     {
-        // The last row ends at (size - 1) x stride + size; one byte short must be refused, not written past.
+        // The last row ends at (size - 1) x stride + size. One byte short must be refused, not written past.
         var matrix = new byte[12 * 20 + 13 - 1];
         await Assert.That(() => MicroQRModulePlacer.PlaceSymbol(matrix, 13, 20, new byte[5], new byte[5], 40, MicroQRVersion.M2, MicroQREccLevel.L))
             .Throws<ArgumentException>();
@@ -510,8 +508,8 @@ public class MicroQRModulePlacerParityTest
     [Test]
     public async Task PlaceSymbol_StreamLengthMismatch_Throws()
     {
-        // M2-L expects 40 data bits + 5 ecc bytes = 80 bits for 80 free modules;
-        // one ecc byte short must be rejected instead of underfilling silently.
+        // M2-L expects 40 data bits + 5 ecc bytes = 80 bits for 80 free modules.
+        // One ecc byte short must be rejected instead of underfilling silently.
         var matrix = new byte[13 * 13];
         await Assert.That(() => MicroQRModulePlacer.PlaceSymbol(matrix, 13, new byte[5], new byte[4], 40, MicroQRVersion.M2, MicroQREccLevel.L))
             .Throws<ArgumentException>();

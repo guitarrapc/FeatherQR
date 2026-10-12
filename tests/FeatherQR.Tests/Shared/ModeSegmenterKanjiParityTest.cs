@@ -98,7 +98,7 @@ public class ModeSegmenterKanjiParityTest
             await Assert.That(actual).IsEqualTo(expected).Because(because);
             await Assert.That(actualState).IsEqualTo(expectedState).Because(because);
 
-            // The cost-only loop is a different body; it must say the same thing.
+            // The cost-only loop is a different body. It must say the same thing.
             var costOnly = ModeSegmenter.ComputeCostsKanji(text, widths.ModeIndicator, widths.Numeric, widths.Alnum, widths.Byte, widths.Kanji, default, out var costOnlyState);
             await Assert.That(costOnly).IsEqualTo(expected).Because(because);
             await Assert.That(costOnlyState).IsEqualTo(expectedState).Because(because);

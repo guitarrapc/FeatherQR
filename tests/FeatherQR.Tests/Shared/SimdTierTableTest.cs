@@ -140,7 +140,7 @@ public class SimdTierTableTest
         foreach (var row in SimdTiers.Expected())
         {
             var tiers = kernels[row.Kernel].Tiers;
-            // A portable tier with a PackedSimd operation in it is named for that; without one, the portable tier itself
+            // A portable tier with a PackedSimd operation in it is named for that, and without one, the portable tier itself
             SimdTier[] expected = tiers.Any(t => t.Tier == SimdTier.PackedSimd) ? [SimdTier.PackedSimd]
                 : tiers.Any(t => t.Tier == SimdTier.Vector128) ? [SimdTier.Vector128] : [SimdTier.Scalar];
 
@@ -162,7 +162,7 @@ public class SimdTierTableTest
         await Assert.That(problems).IsEmpty().Because($"{matching.Single()}: {string.Join("; ", problems)}");
     }
 
-    /// <summary>Every CPU the build class allows: each group it leaves to the CPU there or not; the other tiers as the class fixes them.</summary>
+    /// <summary>Every CPU the build class allows: each group it leaves to the CPU there or not, and the other tiers as the class fixes them.</summary>
     private static IEnumerable<(SimdTier Tier, bool Available)[]> States(SimdBuildClass buildClass)
     {
         var (present, _, leftToCpu) = SimdTiers.Definition(buildClass);

@@ -1,7 +1,7 @@
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Renders a styled symbol: every dark module outside the finders a dot of <c>diameter</c> modules, its centre shifted by (<c>shiftU</c>, <c>shiftV</c>) modules off the module's centre, and each finder three concentric rings (centre disc, dark ring) on the grid; turned about the centre of a square canvas, 4×4 supersampled.
+/// Renders a styled symbol: every dark module outside the finders a dot of <c>diameter</c> modules, its centre shifted by (<c>shiftU</c>, <c>shiftV</c>) modules off the module's centre, and each finder three concentric rings (centre disc, dark ring) on the grid. It is turned about the centre of a square canvas, 4×4 supersampled.
 /// </summary>
 internal static class DottedRenderer
 {

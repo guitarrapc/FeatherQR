@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="VectorCast.ToPixel"/> lands every lane on the pixel <see cref="PixelIndex.Clamp(float, int)"/> takes, for any float,
-/// which is what keeps the 128-bit samplers byte-identical to their scalar tiers; <see cref="VectorCast.ToInt32Native"/> truncates
+/// which is what keeps the 128-bit samplers byte-identical to their scalar tiers. <see cref="VectorCast.ToInt32Native"/> truncates
 /// exactly from -1 (exclusive) up to 2^31, the only lanes the sub-finder lattice reads.
 /// </summary>
 public class VectorCastParityTest

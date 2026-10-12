@@ -7,7 +7,7 @@ namespace QRInteropFixtures;
 /// Structured Append lineage backed by the pinned Net.Codecrete.QrCodeGenerator package:
 /// a balancing encoder that picks the symbol count and a shared version itself. It does
 /// not expose per-symbol text or the parity byte, so the sanity gate sources both from
-/// the reader. Runs in-process; always available.
+/// the reader. Runs in-process and is always available.
 /// </summary>
 public sealed class QrCodeGeneratorStructuredAppendFixtureGenerator : IStructuredAppendFixtureGenerator
 {
@@ -42,7 +42,7 @@ public sealed class QrCodeGeneratorStructuredAppendFixtureGenerator : IStructure
                 Version = code.Version,
                 Width = size,
                 Height = size,
-                // Boosted per symbol by this encoder; record what each symbol actually carries.
+                // Boosted per symbol by this encoder, so record what each symbol actually carries.
                 ErrorCorrectionLevel = FromEcc(code.ErrorCorrectionLevel),
                 Mode = "Unknown", // filled by the gate from the reader when it can tell, else left
                 MaskPattern = code.Mask,

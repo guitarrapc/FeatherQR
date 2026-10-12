@@ -139,7 +139,7 @@ public class MaskPatternOverrideTest
     [Test]
     public async Task PinnedMask_WithEccBoost_BoostsTheLevelAndKeepsTheMask()
     {
-        // "HELLO" at L boosts to H within version 1; the pinned mask must survive
+        // "HELLO" at L boosts to H within version 1. The pinned mask must survive
         // the rewritten format information.
         var qr = QRCodeGenerator.Create("HELLO", QREccLevel.L, new QRCodeGeneratorOptions { BoostEccLevel = true, MaskPattern = 6 });
 

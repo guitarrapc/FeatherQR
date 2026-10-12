@@ -10,13 +10,13 @@ namespace FeatherQR.SkiaSharp;
 /// Configures a linear gradient applied across the whole symbol, flowing in one of the directions of <see cref="GradientDirection"/>.
 /// </para>
 /// <para>
-/// For a simple two-colour gradient pass two colours; for more, add colours and optionally the stops they sit at.
+/// For a simple two-colour gradient pass two colours. For more, add colours and optionally the stops they sit at.
 /// </para>
 /// <para>
 /// An instance is immutable through its API: the constructor copies the arrays it is given and no member hands one back, so a shared instance such as <see cref="Default"/> cannot be repainted by one caller for everyone else.
 /// </para>
 /// <para>
-/// A <c>with</c> expression varies the direction of an existing gradient — <c>GradientOptions.Default with { Direction = GradientDirection.BottomToTop }</c> — and the copy shares the colour array with the original, which is safe for the same reason: neither instance exposes it.
+/// A <c>with</c> expression varies the direction of an existing gradient, as in <c>GradientOptions.Default with { Direction = GradientDirection.BottomToTop }</c>, and the copy shares the colour array with the original, which is safe for the same reason: neither instance exposes it.
 /// </para>
 /// <para>
 /// <see cref="Direction"/> is the only <c>init</c> member, which is a rule rather than an omission: <see cref="Colors"/> and <see cref="ColorPositions"/> have to agree in length, and <c>with</c> sets one member at a time, so allowing <c>with { Colors = … }</c> would let a caller build a gradient whose stops no longer match its colours and only find out when it is drawn.
@@ -47,7 +47,7 @@ public sealed record class GradientOptions
     /// </remarks>
     /// <param name="colors">Gradient colors. At least 2 are required.</param>
     /// <param name="direction">Gradient direction.</param>
-    /// <param name="colorPositions">Color stop positions (0.0 to 1.0); leave it empty to distribute the colors evenly.</param>
+    /// <param name="colorPositions">Color stop positions (0.0 to 1.0). Leave it empty to distribute the colors evenly.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="colors"/> has fewer than 2 elements, or when <paramref name="colorPositions"/> is non-empty and of a different length.</exception>
     public GradientOptions(ReadOnlySpan<SKColor> colors, GradientDirection direction = GradientDirection.LeftToRight, ReadOnlySpan<float> colorPositions = default)
     {
@@ -69,13 +69,10 @@ public sealed record class GradientOptions
     /// The gradient flows from the first color to the last in the direction given by <see cref="Direction"/>.
     /// </remarks>
     // "Immutable through its API", not "immutable": MemoryMarshal and reflection both
-    // reach the array. Not worth warning callers about, but do not treat it as
-    // unreachable here.
-    //
-    // System.Text.Json also cannot serialize a span getter. Accepted: SKColor serializes
-    // as {Alpha,Red,Green,Blue}, so anyone persisting a gradient wants their own DTO with
-    // #RRGGBB strings (the Playground has one), and a converter would add a
-    // System.Text.Json dependency to the netstandard builds.
+    // reach the array.
+    // System.Text.Json cannot serialize a span getter. A converter would add a
+    // System.Text.Json dependency to the netstandard builds, and SKColor serializes as
+    // {Alpha,Red,Green,Blue}, so a caller persisting a gradient wants its own DTO anyway.
     public ReadOnlySpan<SKColor> Colors => _colors;
 
     /// <summary>
@@ -83,7 +80,7 @@ public sealed record class GradientOptions
     /// </summary>
     /// <remarks>
     /// Determines the start and end points of the gradient across the symbol area.
-    /// This is the member a <c>with</c> expression varies; the colours are chosen at construction.
+    /// This is the member a <c>with</c> expression varies. The colours are chosen at construction.
     /// </remarks>
     public GradientDirection Direction { get; init; }
 
@@ -117,7 +114,7 @@ public sealed record class GradientOptions
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        // Arrays hash by reference, so the elements are folded in by hand; two gradients
+        // Arrays hash by reference, so the elements are folded in by hand. Two gradients
         // that compare equal have to hash equal. FNV-1a, because System.HashCode is not
         // available on every target framework here.
         unchecked
@@ -135,10 +132,10 @@ public sealed record class GradientOptions
     /// <summary>
     /// The record printer, written by hand: the generated one would print a <see cref="ReadOnlySpan{T}"/> member as its type name, and would have to compile against a ref struct on every target framework.
     /// </summary>
-#pragma warning disable IDE0051 // the generated ToString calls it; the analyzer does not see that
+#pragma warning disable IDE0051 // the generated ToString calls it, but the analyzer does not see that
     private bool PrintMembers(System.Text.StringBuilder builder)
     {
-        // Append(Direction) binds to Append(object) and boxes the enum; no numeric overload
+        // Append(Direction) binds to Append(object) and boxes the enum. No numeric overload
         // accepts one, and ToString() is what the generated printer would have called anyway.
         builder.Append(_colors.Length).Append(" colors, Direction = ").Append(Direction.ToString());
         if (_colorPositions.Length != 0)

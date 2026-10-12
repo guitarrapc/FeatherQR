@@ -2,7 +2,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Renders a module grid whose dark area is grown or shrunk by a fixed distance at every edge, as ink spread or a thin print draws it: every dark run along any line is longer or shorter by the same amount, and every light run the other way.
-/// The grid is turned about its centre and sampled 4 × 4 a pixel; a 4-module quiet zone surrounds it.
+/// The grid is turned about its centre and sampled 4 × 4 a pixel. A 4-module quiet zone surrounds it.
 /// </summary>
 internal static class SpreadRenderer
 {
@@ -11,7 +11,7 @@ internal static class SpreadRenderer
     /// <param name="rows">Modules down.</param>
     /// <param name="pixelsPerModule">Scale.</param>
     /// <param name="degrees">Turn, clockwise.</param>
-    /// <param name="spreadModules">How far every dark edge moves outward, in modules; negative shrinks the dark area.</param>
+    /// <param name="spreadModules">How far every dark edge moves outward, in modules. Negative shrinks the dark area.</param>
     /// <param name="binarized">Each pixel 0 or 255 at its sampled coverage's midpoint, as a camera that thresholds does.</param>
     public static (byte[] Luminance, int Width, int Height) Render(Func<int, int, bool> isDark, int columns, int rows, float pixelsPerModule, float degrees, float spreadModules, bool binarized)
     {

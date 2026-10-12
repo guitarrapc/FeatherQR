@@ -3,8 +3,8 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The renderer-neutral geometry surface (<c>GetModuleRectangles</c> family) across all
-/// three symbologies. The contract is three invariants — rectangles are disjoint, cover
-/// only dark modules, and cover every dark module — verified with a witness grid against
+/// three symbologies. The contract is three invariants (rectangles are disjoint, cover
+/// only dark modules, and cover every dark module), verified with a witness grid against
 /// the public indexer. Decomposition shape and ordering are deliberately not asserted:
 /// they are documented as unspecified so the merge algorithm can change.
 /// </summary>
@@ -92,7 +92,7 @@ public class ModuleRectanglesTest
         var data = QRCodeGenerator.Create("https://example.com/", QREccLevel.M, in options);
         var rects = data.GetModuleRectangles();
 
-        // With no quiet zone the finder corner is the origin; shape-independent
+        // With no quiet zone the finder corner is the origin. Shape-independent
         // minimum-coordinate check, same rationale as StandardQr_Rectangles_AreMerged.
         await Assert.That(rects.Min(r => r.X)).IsEqualTo(0);
         await Assert.That(rects.Min(r => r.Y)).IsEqualTo(0);
@@ -141,7 +141,7 @@ public class ModuleRectanglesTest
     [Test]
     public async Task MaxCount_IsIndependentOfQuietZone()
     {
-        // The bound depends only on the core matrix; the quiet zone contributes no runs.
+        // The bound depends only on the core matrix. The quiet zone contributes no runs.
         var withQz = QRCodeGenerator.Create("https://example.com/", QREccLevel.M);
         var options = new QRCodeGeneratorOptions { QuietZoneSize = 0 };
         var withoutQz = QRCodeGenerator.Create("https://example.com/", QREccLevel.M, in options);

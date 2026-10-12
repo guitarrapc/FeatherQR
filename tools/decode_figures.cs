@@ -14,10 +14,10 @@ using FeatherQR;
 //   dotnet run tools/decode_figures.cs -- <directory> --preview      also a page of every figure, light and dark
 //
 // Each input class is also rendered to pixels and decoded through the public API, and the run fails
-// unless it decodes. The figures carry pictures and labels only; their text is in the symbology's
+// unless it decodes. The figures carry pictures and labels only. Their text is in the symbology's
 // design record (.github/docs/specs/*-decoder.md), whose numbered notes match the numbers on the boxes.
 // A box is green when, without its stage, the input would not read, or would read only after more grids
-// fail than with it; a grid is one sampling, and its transposed, coverage and module-space reads are the same grid.
+// fail than with it. A grid is one sampling, and its transposed, coverage and module-space reads are the same grid.
 // The boxes follow the image-level outline in the symbology's spec-to-code map.
 
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
@@ -124,7 +124,7 @@ CheckMicro("grey edges", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2),
 CheckMicro("snapped scale", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2), MicroSnapPx, 1);
 CheckMicro("low density", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2), MicroLowPx, 1);
 
-// rMQR: an R11x77 for most figures; each input is a map in image pixels and the image's size
+// rMQR: an R11x77 for most figures. Each input is a map in image pixels and the image's size.
 const string RmqrPayload = "FEATHERQR RMQR";
 var r11 = RmqrMatrix(RmQRCodeGenerator.Create(RmqrPayload, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x77, QuietZoneSize = 0 }));
 // The strip draws a shorter symbol, so its panels stay legible
@@ -624,7 +624,7 @@ string Card(int width, int height, string defs = "")
 
 // ---------- The input figures ----------
 
-// The image-level outline's stages, in its order; the matrix decode every grid goes through is the bar under them
+// The image-level outline's stages, in its order. The matrix decode every grid goes through is the bar under them.
 string[] qrBoxes =
 [
     "Binarization pass",
@@ -641,11 +641,11 @@ string[] qrBoxes =
     "Parallelogram or frame grid",
     "Alternative triples",
 ];
-// The matrix decode under the stages, in marks; its state is the last in a states string
+// The matrix decode under the stages, in marks. Its state is the last in a states string.
 const int Bar = -1;
 
 // The picture on the left, the path through the outline's stages on the right. marks lists the boxes
-// that carry the design record's numbered notes, in the notes' order; Bar is the matrix decode.
+// that carry the design record's numbered notes, in the notes' order. Bar is the matrix decode.
 void InputFigure(string path, string[] boxes, Func<StringBuilder, double, double, double, string[]> picture, int[] marks, string states, int dashedFrom, string defs = "")
     => Figure(path, boxes, (sb, x, y, w, h) => picture(sb, x, y, w), 0, marks, states, dashedFrom, defs);
 
@@ -707,7 +707,7 @@ void Figure(string path, string[] boxes, Func<StringBuilder, double, double, dou
         list.Add(i + 1);
     }
 
-    // Rows of four stages, then the matrix decode every grid goes through; beside the picture, or under a wide one
+    // Rows of four stages, then the matrix decode every grid goes through, beside the picture, or under a wide one
     var FX = wide ? PX : PX + PS + 32;
     var FY = wide ? ly + 28 : PY;
     (double X, double Y) At(int b) => (FX + (b % 4) * (BW + BG), FY + (b / 4) * (BH + RG));
@@ -997,7 +997,7 @@ string[] microBoxes =
 // Past the first size's grid, every stage runs only when the grids before it failed
 const int MicroDashedFrom = 3;
 
-// A render drawn pixel by pixel, filling the picture, each pixel at its own grey; returns the size of one pixel
+// A render drawn pixel by pixel, filling the picture, each pixel at its own grey. Returns the size of one pixel.
 double Raster(StringBuilder sb, bool[,] m, int px, int supersample, bool blur, double x, double y, double s)
 {
     var dim = m.GetLength(0);
@@ -1188,7 +1188,7 @@ H WideMap((H Map, int Width, int Height) input, double x, double y)
     return input.Map.Scaled(k, x + (WidePanel - input.Width * k) / 2, y + 20);
 }
 
-// A rendered input drawn pixel by pixel in the panel, each pixel at its own grey; returns the size of one pixel
+// A rendered input drawn pixel by pixel in the panel, each pixel at its own grey. Returns the size of one pixel.
 double RasterWide(StringBuilder sb, bool[,] m, (H Map, int Width, int Height) input, int supersample, bool blur, double x, double y)
 {
     var raster = Render(m, input.Map, input.Width, input.Height, supersample, null, false, blur);
@@ -1237,7 +1237,7 @@ string FormatCopy(H map)
 (double U, double V) rFinder = (3.5, 3.5), rSub = (77 - 2.5, 11 - 2.5);
 
 // A tick across the edge at each end of every dark run of an R11x77 the perimeter trace meets: the top row from the first
-// column past the separator, the left column below the finder, and the bottom row; drawn mirrored left to right when asked
+// column past the separator, the left column below the finder, and the bottom row. Drawn mirrored left to right when asked.
 string TracedRunEnds(H map, bool[,] m, bool mirrored)
 {
     (double X, double Y) At(double column, double row) => map.Map(mirrored ? 77 - column : column, row);
@@ -1466,7 +1466,7 @@ static (H Map, int Width, int Height) RectRotated(bool[,] m, double pitch, doubl
 }
 
 // The same in perspective: one edge ('T', 'B', 'L' or 'R') of the symbol with its quiet zone shortened by
-// shrink of its length, half at each end; the rMQR tests give that half as their tilt
+// shrink of its length, half at each end. The rMQR tests give that half as their tilt.
 static (H Map, int Width, int Height) RectKeystone(bool[,] m, double pitch, double shrink, char edge, int qz = 2)
 {
     var rows = m.GetLength(0); var cols = m.GetLength(1);
@@ -1530,7 +1530,7 @@ static H Rotated(int dim, double x, double y, double size, double degrees, int q
 }
 
 // The same, tilted away at the bottom: the far edge shorter by shrink of the near one. Standard QR's
-// envelope counts the whole shrink; the perspective tests of all three give the half at each end as their tilt
+// envelope counts the whole shrink. The perspective tests of all three give the half at each end as their tilt.
 static H Keystone(int dim, double x, double y, double size, double shrink, int qz = 4)
 {
     var inset = shrink * size / 2;
@@ -1570,7 +1570,7 @@ static int Otsu(byte[] pixels)
     return threshold;
 }
 
-// The five runs through (x, y) along (dx, dy) at the threshold, dark centre first, as a cross-check walks them; null off a dark pixel
+// The five runs through (x, y) along (dx, dy) at the threshold, dark centre first, as a cross-check walks them. Null off a dark pixel.
 static int[]? FinderRuns(byte[] image, int size, int x, int y, int dx, int dy, int threshold)
 {
     bool Inside(int px, int py) => px >= 0 && py >= 0 && px < size && py < size;

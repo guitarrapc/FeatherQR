@@ -90,7 +90,7 @@ internal static partial class QRImageDecoder
                 var dark = Vector128.LessThan(Vector128.CreateScalar(pixels).AsByte(), limitVector) & one;
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, rowBase + u), dark.AsUInt64().ToScalar());
             }
-            // row tail: 1 module for even versions and 5 for odd ones; the reference's scalar body on the same per-run floats
+            // row tail: 1 module for even versions and 5 for odd ones, with the reference's scalar body on the same per-run floats
             for (; u < dimension; u++)
             {
                 var c = firstOf[u];

@@ -89,7 +89,7 @@ public class RmQRSegmentPlannerUnitTest
 
     /// <summary>
     /// Minimal payload bits over every partition of the content into runs and every
-    /// mode assignment. Deliberately quadratic and string-based; nothing here is
+    /// mode assignment. Deliberately quadratic and string-based. Nothing here is
     /// shared with the production planner.
     /// </summary>
     private static int ReferenceMinimumBits(string text, EciMode charset, int cciNumeric, int cciAlnum, int cciByte)
@@ -178,7 +178,7 @@ public class RmQRSegmentPlannerUnitTest
 
             foreach (var charset in new[] { EciMode.Default, EciMode.Utf8 })
             {
-                // ISO-8859-1 and Default cost the same one byte per character; the
+                // ISO-8859-1 and Default cost the same one byte per character. The
                 // Utf8 pass is what exercises the multi-byte and surrogate model.
                 if (charset == EciMode.Default && text.Any(c => c > 255))
                     continue;
@@ -489,7 +489,7 @@ public class RmQRSegmentPlannerUnitTest
     /// <summary>
     /// The 361-character planning limit is a rejection rule, not just a work cap:
     /// content above it is declared impossible rather than merely unplanned. The
-    /// narrowest count indicator widths are pinned above; this pins the other side,
+    /// narrowest count indicator widths are pinned above. This pins the other side,
     /// that 362 characters really do fit nowhere. The margin is three bits, so a capacity
     /// table change could silently make the constant unsound or over-strict.
     /// </summary>

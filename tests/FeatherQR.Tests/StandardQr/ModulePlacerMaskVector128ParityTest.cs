@@ -11,8 +11,8 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class ModulePlacerMaskVector128ParityTest
 {
-    // 1..11 the lane-per-pattern tier (11 = size 61, the last one-word version); 12, 27, 28 and 40 the transposed tier at each end of its
-    // two-word and three-word sizes (ModulePlacerMaskTransposedParityTest has every version)
+    // 1..11 the lane-per-pattern tier (11 = size 61, the last one-word version). 12, 27, 28 and 40 the transposed tier at each end of its
+    // two-word and three-word sizes (ModulePlacerMaskTransposedParityTest has every version).
     public static IEnumerable<int> Versions => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 27, 28, 40];
 
     [Test]
@@ -70,7 +70,7 @@ public class ModulePlacerMaskVector128ParityTest
         }
 
         // The tier caches its tables per version, so a size that does not belong to the version must be rejected before the cache is
-        // touched; a short buffer before the wide row loads.
+        // touched, and a short buffer before the wide row loads.
         var (buffer, blockedMask, size) = BuildFixture(1, seed: 0);
         await Assert.That(() => ModulePlacer.MaskCode64Vector128(buffer, 25, 1, blockedMask, QREccLevel.M)).Throws<ArgumentException>();
         await Assert.That(() => ModulePlacer.MaskCode64Vector128(buffer, size, 12, blockedMask, QREccLevel.M)).Throws<ArgumentException>();

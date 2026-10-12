@@ -36,7 +36,7 @@ public static class MicroQRCorpus
         new("m4-m-byte-short", "m4 pads", "M", 4, "Byte"),
         new("m4-q-byte-max", "bytes!!!!", "Q", 4, "Byte"),
 
-        // UTF-8 byte payload (Micro QR has no ECI; readers detect UTF-8
+        // UTF-8 byte payload (Micro QR has no ECI, so readers detect UTF-8
         // heuristically). libzint rejects non-ASCII input through the ZXingCpp
         // wrapper, so this case comes from the qrtool lineage only.
         new("m4-l-utf8-japanese", "こんにちは", "L", 4, "Byte", Utf8: true),

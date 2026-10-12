@@ -32,7 +32,7 @@ internal static partial class StructuredAppendScanner
         if (a < n && CharacterSets.IsAlphanumeric(text[a]))
         {
             // Each byte holds the membership bits of eight ASCII characters.
-            // TBL returns zero beyond this 128-character table; saturating narrowing prevents a wide UTF-16 character from aliasing an ASCII member through its low byte.
+            // TBL returns zero beyond this 128-character table. Saturating narrowing prevents a wide UTF-16 character from aliasing an ASCII member through its low byte.
             var alphabet = Vector128.Create((byte)0, 0, 0, 0, 0x31, 0xEC, 0xFF, 0x07, 0xFE, 0xFF, 0xFF, 0x07, 0, 0, 0, 0);
             while (a <= n - 16)
             {

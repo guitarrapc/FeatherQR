@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The single-finder axis recovery Micro QR and rMQR rely on under rotation. The first
 /// orientation candidate is the axis fitted to the whole angular sweep: the shortest span
-/// alone is a flat minimum that pixel noise moved 5-11 degrees at 3 px/module. Its sizes are
+/// alone is a flat minimum that pixel noise moves by degrees at 3 px/module. Its sizes are
 /// measured on rays that took no part in choosing it, so they are not the low outlier that
 /// won the choice.
 /// </summary>
@@ -46,8 +46,8 @@ public class FinderAxisEstimatorTest
     /// <summary>
     /// One direction of the walk from the centre of a pixel-aligned finder: the dark ring's inner
     /// edge 2.5 modules out and its outer edge 3.5. The module size pairs a forward walk with a
-    /// backward one, so a probe half a pixel off shifts the two the opposite way and cancels there;
-    /// each walk on its own does not.
+    /// backward one, so a probe half a pixel off shifts the two the opposite way and cancels there.
+    /// Each walk on its own does not.
     /// </summary>
     [Test]
     [Arguments(1)]

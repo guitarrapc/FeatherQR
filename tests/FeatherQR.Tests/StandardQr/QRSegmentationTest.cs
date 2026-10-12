@@ -79,7 +79,7 @@ public class QRSegmentationTest
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         if (optimal.Version != single.Version)
-            return; // a genuine gain; the round-trip test covers it
+            return; // a genuine gain, and the round-trip test covers it
 
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
@@ -170,7 +170,7 @@ public class QRSegmentationTest
     public async Task Optimal_LeadingBom_DecodesLikeSingle()
     {
         // A content-leading U+FEFF is stream-initial under Single too, so both arms
-        // drop it on decode; the run-at-offset-0 exemption keeps the split allowed
+        // drop it on decode. The run-at-offset-0 exemption keeps the split allowed
         // and the two must decode identically (not necessarily to the input). The
         // version assertion is strict: the split genuinely wins here, so losing the
         // exemption (which silently falls back to the identical single-mode
@@ -189,7 +189,7 @@ public class QRSegmentationTest
     public async Task Optimal_TrailingBomNoSingleModeHolds_IsPlannedBehindTheDigitBeforeIt()
     {
         // No single mode holds 5,001 characters. The unconstrained minimum opens a
-        // Byte run at the trailing U+FEFF, where the decoder would consume it; the
+        // Byte run at the trailing U+FEFF, where the decoder would consume it. The
         // plan takes the last digit into that run instead, eight bits dearer.
         var content = new string('1', 5000) + "\uFEFF";
         var options = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
@@ -206,19 +206,18 @@ public class QRSegmentationTest
 
 #if !DEBUG
     /// <summary>
-    /// The span destination is the library's zero-allocation path; the mixed-mode
+    /// The span destination is the library's zero-allocation path, and the mixed-mode
     /// planner must keep it that way, pooled branches included (the plan buffer
-    /// rents above 64 characters, the parent table above 73). Debug builds are
-    /// excluded per repo notes.
+    /// rents above 64 characters, the parent table above 73). A Debug build allocates
+    /// where a Release build does not, so this runs in Release only.
     /// </summary>
     /// <remarks>
     /// Runs alone. Pooled branches take their buffers from <see cref="System.Buffers.ArrayPool{T}"/>,
     /// whose per-core stacks are shared with every other thread: a test running concurrently can
     /// empty the bucket between this thread's return and its next rent, and the rent that would
     /// have hit the cache allocates a fresh array instead. That shows up here as a multiple of one
-    /// array (measured: 1,048 bytes and up, in a full parallel run roughly one time in three) and it
-    /// is the pool being a shared resource, not the encoder allocating. Exclusivity is the fix rather
-    /// than a tolerance, which would blunt the guard this test exists to be.
+    /// array, and it is the pool being a shared resource, not the encoder allocating. A tolerance
+    /// would blunt the guard, so the test runs alone instead.
     /// </remarks>
     [Test]
     [NotInParallel]
@@ -266,7 +265,7 @@ public class QRSegmentationTest
     public async Task Optimal_ExplicitUtf8Eci_RoundTripsAndNeverGrows(string content)
     {
         // An explicitly requested UTF-8 charset forces the 12-bit ECI prefix into
-        // the planned cost; the split must still round-trip and never grow.
+        // the planned cost. The split must still round-trip and never grow.
         var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = QRSegmentation.Optimal };
         var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, options);
@@ -324,7 +323,7 @@ public class QRSegmentationTest
     [Test]
     public async Task Optimal_WithUtf8Bom_EmitsTheSingleModeStream()
     {
-        // The BOM is a stream-level prefix; a split would relocate it into the middle
+        // The BOM is a stream-level prefix. A split would relocate it into the middle
         // of the decoded text, so the combination falls back to the single-mode stream.
         var content = "日本語1234567890123456789012345678901234567890";
         var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Utf8Bom = true });
@@ -337,7 +336,7 @@ public class QRSegmentationTest
     [Test]
     public async Task Optimal_VersionRangeBelowTheGain_EmitsTheSingleModeSymbol()
     {
-        // The single-mode fit is version 4 and the mixed-mode fit version 3; a range
+        // The single-mode fit is version 4 and the mixed-mode fit version 3. A range
         // that starts at 4 excludes the gain, so the single-mode stream is emitted.
         var content = "https://example.com/item?id=123456789012345678901234567890";
         var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = new QRVersionRange(4, 40) });
@@ -351,7 +350,7 @@ public class QRSegmentationTest
     public async Task Optimal_RequestedVersion_FitsWhereSingleModeDoesNot()
     {
         // At version 3-M the single Byte-mode stream overflows, but the mixed plan
-        // fits; requesting that exact version must succeed under Optimal.
+        // fits, so requesting that exact version must succeed under Optimal.
         var content = "https://example.com/item?id=123456789012345678901234567890";
         Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 }));
 
@@ -374,7 +373,7 @@ public class QRSegmentationTest
     public async Task Optimal_TooLongForEveryVersion_ThrowsLikeSingle()
     {
         // 8,000 characters exceed even the all-Numeric maximum (7,089), so no plan
-        // exists; the error must be the single-mode path's exact exception type.
+        // exists. The error must be the single-mode path's exact exception type.
         var content = new string('1', 7000) + new string('x', 1000);
         Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(content, QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal }));
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal })).IsFalse();

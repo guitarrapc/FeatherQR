@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// A grid that fails by the threshold is read again in module space: each module's luminance the mean of nine samples over its middle, the module dark when no lighter than the mean of the modules around it.
 /// The level a module is split at then follows the light across the symbol, where a threshold over the image, global or regional, is set in pixels and reads one pixel a module.
-/// At the global pass the grey image is the one read; at the regional pass it is the image the binarization was made from, handed to the pass with its polarity.
+/// At the global pass the grey image is the one read. At the regional pass it is the image the binarization was made from, handed to the pass with its polarity.
 /// </summary>
 public class ModuleSpaceDecodeTest
 {
@@ -52,7 +52,7 @@ public class ModuleSpaceDecodeTest
 
     /// <summary>
     /// A small symbol at 2.2 to 3 px/module, anti-aliased, with a deep shadow across it: neither global polarity reads it, and the regional binarization places the symbol without its one pixel a module reading it.
-    /// The same grid read in module space from the grey image reads; negated, the negative's binarization does, from the same grey image with its polarity turned.
+    /// The same grid read in module space from the grey image reads. Negated, the negative's binarization does, from the same grey image with its polarity turned.
     /// The shots were chosen from a sweep of versions, densities, turns and lights where the regional pass reads with the grey image and not without.
     /// </summary>
     [Test]
@@ -211,7 +211,7 @@ public class ModuleSpaceDecodeTest
         var destroyed = new bool[qr.Size * qr.Size];
         for (var i = 0; i < destroyed.Length; i++)
             destroyed[i] = random.Next(2) == 0;
-        // Past the finders, their separators, the timing patterns and the format information, and clear of the alignment pattern; the quiet zone is 4 modules
+        // Past the finders, their separators, the timing patterns and the format information, and clear of the alignment pattern. The quiet zone is 4 modules.
         var inner = qr.Size - 8;
         bool IsData(int row, int column) => row >= 4 + 9 && column >= 4 + 9 && row < 4 + inner && column < 4 + inner && !(Math.Abs(row - (4 + inner - 7)) <= 2 && Math.Abs(column - (4 + inner - 7)) <= 2);
         bool IsDark(int row, int column) => destroyData && IsData(row, column) ? destroyed[row * qr.Size + column] : qr[row, column];

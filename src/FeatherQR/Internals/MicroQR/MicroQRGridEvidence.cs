@@ -5,9 +5,9 @@ namespace FeatherQR.Internals.MicroQR;
 /// </summary>
 /// <remarks>
 /// Evidence is counted in bits: the negative log of the chance that a grid sampled on anything other than this symbol comes out at least this close.
-/// Reed-Solomon gives <c>8·ecc − log2 V(n, e)</c> for a read with <c>e</c> corrections, <c>V</c> the number of words within <c>e</c> codewords of one codeword;
-/// the format word, among the words within 3 bits of a candidate, the share within <c>d</c>; the timing patterns the tail of their mismatch count at even odds;
-/// and the quiet-zone line the tail of its dark count at <see cref="QuietZoneDarkShare"/>, lower than even because texture beside a finder is often margin.
+/// Reed-Solomon gives <c>8·ecc − log2 V(n, e)</c> for a read with <c>e</c> corrections, <c>V</c> the number of words within <c>e</c> codewords of one codeword.
+/// The format word gives, among the words within 3 bits of a candidate, the share within <c>d</c>. The timing patterns give the tail of their mismatch count at even odds.
+/// The quiet-zone line gives the tail of its dark count at <see cref="QuietZoneDarkShare"/>, lower than even because texture beside a finder is often margin.
 /// A read is kept when the sum reaches <see cref="ThresholdBits"/>, so a grid that shows its structure may use every correction its level allows, and one that does not may use fewer or none.
 /// </remarks>
 internal static class MicroQRGridEvidence
@@ -36,7 +36,7 @@ internal static class MicroQRGridEvidence
     private static readonly int[] timing = BuildTail(static size => 2 * (size - 8), MaxTimingModules, 0.5);
     private static readonly int[] quietZone = BuildTail(static size => 2 * size + 1, MaxQuietZoneModules, QuietZoneDarkShare);
 
-    /// <summary>The most corrections a read may use, or -1 when the grid cannot be kept at any count; the quiet zone counts only when read (not <see cref="QuietZoneUnread"/>).</summary>
+    /// <summary>The most corrections a read may use, or -1 when the grid cannot be kept at any count. The quiet zone counts only when read (not <see cref="QuietZoneUnread"/>).</summary>
     public static int MaxCorrections(MicroQRVersion version, MicroQREccLevel eccLevel, int formatDistance, int timingMismatches, int quietZoneDark)
     {
         var v = (int)version - 1;

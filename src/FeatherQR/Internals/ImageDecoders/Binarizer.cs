@@ -23,7 +23,7 @@ internal static partial class Binarizer
     /// Suits clean inputs with clear bimodal contrast.
     /// </summary>
     /// <param name="luminance">Grayscale pixels.</param>
-    /// <param name="grey">The levels a pixel between the two classes is read against; disabled when the image holds no such pixel.</param>
+    /// <param name="grey">The levels a pixel between the two classes is read against. Disabled when the image holds no such pixel.</param>
     /// <returns>The threshold: a pixel is dark when its luminance is below it.</returns>
     internal static byte ComputeOtsuThreshold(ReadOnlySpan<byte> luminance, out GreyLevels grey)
     {
@@ -36,7 +36,7 @@ internal static partial class Binarizer
     /// The threshold and the grey levels of <see cref="ComputeOtsuThreshold(ReadOnlySpan{byte}, out GreyLevels)"/> from a histogram already filled: both are functions of the bins alone.
     /// </summary>
     /// <param name="histogram">Counts per luminance, as <see cref="FillHistogram"/> leaves them.</param>
-    /// <param name="grey">The levels a pixel between the two classes is read against; disabled when the image holds no such pixel.</param>
+    /// <param name="grey">The levels a pixel between the two classes is read against. Disabled when the image holds no such pixel.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="histogram"/> holds fewer than 256 bins.</exception>
     internal static byte ComputeOtsuThresholdFromHistogram(ReadOnlySpan<int> histogram, out GreyLevels grey)
     {
@@ -82,7 +82,7 @@ internal static partial class Binarizer
         return (byte)threshold;
     }
 
-    /// <summary>Bins in a luminance histogram; what a caller that keeps one between two calls allocates.</summary>
+    /// <summary>Bins in a luminance histogram, and what a caller that keeps one between two calls allocates.</summary>
     internal const int HistogramBins = 256;
 
     /// <summary>
@@ -101,15 +101,15 @@ internal static partial class Binarizer
     /// </summary>
     /// <remarks>
     /// A per-pixel <c>histogram[value]++</c> serializes on store-forwarding whenever consecutive pixels hit the same bin, and a rendered symbol is two values in long runs.
-    /// The vector tier never sends those two values through memory; the scalar tier folds a uniform group of eight into one addition, which pays only where runs happen to start on a multiple of eight pixels.
-    /// ARM64 has its own tier: the same blocks without a movemask, and the dense blocks spread over four sub-histograms, which its larger L1 holds where x64's lost to them.
+    /// The vector tier never sends those two values through memory. The scalar tier folds a uniform group of eight into one addition, which pays only where runs happen to start on a multiple of eight pixels.
+    /// ARM64 has its own tier: the same blocks without a movemask, and the dense blocks spread over four sub-histograms, which fit its larger L1 and not x64's.
     /// Every tier produces the same 256 bins, and the threshold and the grey levels are functions of the bins alone.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="histogram"/> holds fewer than 256 bins.</exception>
     internal static void FillHistogram(ReadOnlySpan<byte> luminance, Span<int> histogram)
     {
 #if NET8_0_OR_GREATER
-        // A 512-bit tier was measured and left out; ARM64 has its own tier. See the decoder spec.
+        // No 512-bit tier: it would be the library's only one, and no CI runner is sure to execute it.
         if (Vector256.IsHardwareAccelerated)
         {
             FillHistogramVector256(luminance, histogram);
@@ -149,14 +149,13 @@ internal static partial class Binarizer
 
 #if NET8_0_OR_GREATER
     // A block with more pixels than this that are neither 0 nor 255 goes to the scalar groups: walking a full
-    // mask costs more a pixel than the increment it replaces. 12 and 20 of 32 measured the same; 6 sent
-    // blocks rich in the two counted values back through memory and lost a third on resampled images.
+    // mask costs more a pixel than the increment it replaces. A cut-over much lower sends blocks rich in the
+    // two counted values back through memory.
     private const int DenseBlock = 12;
 
     // After two blocks in a row holding neither counted value, this many blocks are taken untested: a photo-like
-    // image is such blocks end to end, and the test in front of every one made its threshold 8 to 11 % slower than
-    // the scalar walk alone. A rendered or resampled symbol almost never has such a block, so a stretch does not
-    // start on one. 7 left 2 to 3 %; 31 measured level with the scalar walk end to end.
+    // image is such blocks end to end, and the test in front of every one is cost with no gain there. A rendered
+    // or resampled symbol almost never has such a block, so a stretch does not start on one.
     private const int UntestedBlocks = 31;
 #endif
 
@@ -167,7 +166,7 @@ internal static partial class Binarizer
     private static void CountGroup(ref int h, ulong v)
     {
         // All 8 bytes equal ⟺ rotating by one byte is a fixed point
-        // (netstandard has no BitOperations.RotateRight; the JIT emits ror)
+        // (netstandard has no BitOperations.RotateRight, but the JIT emits ror)
         if (v == ((v >> 8) | (v << 56)))
         {
             Unsafe.Add(ref h, (byte)v) += 8;
@@ -184,7 +183,7 @@ internal static partial class Binarizer
         Unsafe.Add(ref h, (byte)(v >> 56))++;
     }
 
-    /// <summary>The bins are indexed by a byte through an unchecked reference, which 256 of them make safe; the slice is what refuses fewer.</summary>
+    /// <summary>The bins are indexed by a byte through an unchecked reference, which 256 of them make safe. The slice is what refuses fewer.</summary>
     private static ref int ClearedBins(Span<int> histogram)
     {
         histogram = histogram.Slice(0, HistogramBins);

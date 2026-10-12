@@ -9,7 +9,7 @@ namespace FeatherQR.Internals;
 internal static class KanjiCells
 {
     /// <summary>Throws for the first character of <paramref name="chars"/> that <see cref="ShiftJisKanjiReverseTable"/> has no cell for.</summary>
-    /// <remarks>Outlined so the writers' loops keep only an OR and a sign test; the scan runs on the failure path alone.</remarks>
+    /// <remarks>Outlined so the writers' loops keep only an OR and a sign test. The scan runs on the failure path alone.</remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static void ThrowCharacterWithoutCell(ReadOnlySpan<char> chars)
     {

@@ -41,7 +41,7 @@ public class MicroQRCodeGeneratorUnitTest
     // ---------------------------------------------------------------
 
     [Test]
-    [Arguments("123456", MicroQREccLevel.ErrorDetectionOnly)] // over M1 capacity; EDO cannot escalate past M1
+    [Arguments("123456", MicroQREccLevel.ErrorDetectionOnly)] // over M1 capacity, and EDO cannot escalate past M1
     [Arguments("HELLO", MicroQREccLevel.ErrorDetectionOnly)]  // alphanumeric not available on M1
     [Arguments("bytes", MicroQREccLevel.ErrorDetectionOnly)]  // byte not available on M1
     [Arguments("123456789012345678901234567890123456", MicroQREccLevel.L)] // over M4-L numeric capacity (36 digits)
@@ -73,7 +73,7 @@ public class MicroQRCodeGeneratorUnitTest
     [Test]
     public async Task Create_AutoVersion_TooLongByte_MessageStatesLengthMaximumAndRemedy()
     {
-        // 37 lowercase bytes; ECC M byte capacity tops out at 13 (M4-M)
+        // 37 lowercase bytes. ECC M byte capacity tops out at 13 (M4-M).
         var text = "this text is way too long for microqr";
         var ex = Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create(text, MicroQREccLevel.M));
 
@@ -87,7 +87,7 @@ public class MicroQRCodeGeneratorUnitTest
     [Test]
     public async Task Create_AutoVersion_TooLongNumeric_MessageStatesDigitMaximum()
     {
-        // 36 digits; ECC L numeric capacity tops out at 35 (M4-L)
+        // 36 digits. ECC L numeric capacity tops out at 35 (M4-L).
         var ex = Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create("123456789012345678901234567890123456", MicroQREccLevel.L));
 
         await Assert.That(ex.Message).Contains("too long for Micro QR");
@@ -174,7 +174,7 @@ public class MicroQRCodeGeneratorUnitTest
 
         // Read the 15 placed format modules back (ISO order: bit14..bit8 along
         // row 8 cols 1..7, bit7 at (8,8), bits 6..0 down col 8 rows 7..1) and
-        // compare against the expected pattern for every mask; exactly one mask
+        // compare against the expected pattern for every mask. Exactly one mask
         // must match, proving format info placement is self-consistent.
         ushort placed = 0;
         for (var col = 1; col <= 8; col++)

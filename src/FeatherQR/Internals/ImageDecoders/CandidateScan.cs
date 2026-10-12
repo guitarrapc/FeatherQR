@@ -15,7 +15,7 @@ internal interface ICandidateDecoder<TInfo>
     /// <summary>The bytes of module buffer a candidate's decode samples its grids into: the largest symbol's modules.</summary>
     int ModuleBufferLength { get; }
 
-    /// <summary>Where the symbol a result read lies in the image; empty when the result carries no corners.</summary>
+    /// <summary>Where the symbol a result read lies in the image. Empty when the result carries no corners.</summary>
     SymbolCorners Corners(in TInfo info);
 
     /// <summary>The result with its corners stripped, as the scan reports every result but a read.</summary>
@@ -23,7 +23,7 @@ internal interface ICandidateDecoder<TInfo>
 
     /// <summary>
     /// One finder candidate's grids and searches, each failure kept in <paramref name="result"/>, which is this candidate's own.
-    /// Ends at a terminal result; a read that does not fit the destination carries its corners, for the scan to skip the
+    /// Ends at a terminal result. A read that does not fit the destination carries its corners, for the scan to skip the
     /// candidates inside it.
     /// </summary>
     DecodeStatus DecodeCandidate(in ImageView image, FinderPattern candidate, Span<byte> modules, Span<char> destination, out int charsWritten, out TInfo info, ref SearchResult<TInfo> result);
@@ -31,13 +31,13 @@ internal interface ICandidateDecoder<TInfo>
 
 /// <summary>
 /// The scan of the decoders that read around a single finder: a strided finder scan, then a full sweep unless it read a symbol
-/// or read one too long for the destination; in each, the first eight candidates, most confirmed first, less any inside a symbol
+/// or read one too long for the destination. In each, the first eight candidates, most confirmed first, less any inside a symbol
 /// that read but did not fit the destination. A successful decode ends the scan, a read that did not fit ends its candidate,
-/// and each candidate's grids see only its own results; otherwise each finder scan reports the result that went furthest, and
+/// and each candidate's grids see only its own results. Otherwise each finder scan reports the result that went furthest, and
 /// the scan the sweep's if it settled, the strided scan's if not.
 /// </summary>
 /// <remarks>
-/// The rules and why they are so are in the architecture record (qrcode-symbologies.md, single-finder candidate scan); what each decoder does with one
+/// The rules and why they are so are in the architecture record (qrcode-symbologies.md, single-finder candidate scan). What each decoder does with one
 /// candidate is its own.
 /// </remarks>
 internal static class CandidateScan
@@ -45,11 +45,11 @@ internal static class CandidateScan
     /// <summary>Candidates actually tried, most confirmed first (false hits rank behind).</summary>
     public const int MaxCandidatesToTry = 8;
 
-    /// <summary>The largest module buffer taken from the stack; a larger one is rented, since the scan sits under the public image entry point.</summary>
+    /// <summary>The largest module buffer taken from the stack. A larger one is rented, since the scan sits under the public image entry point.</summary>
     private const int MaxStackModuleBuffer = 512;
 
     /// <summary>
-    /// The strided scan, then the sweep unless it read a symbol or read one too long for the destination, at the global threshold of <paramref name="histogram"/>;
+    /// The strided scan, then the sweep unless it read a symbol or read one too long for the destination, at the global threshold of <paramref name="histogram"/>.
     /// <paramref name="noFinder"/> when neither found a finder candidate, with the threshold and grey levels they used.
     /// </summary>
     /// <remarks>
@@ -68,18 +68,15 @@ internal static class CandidateScan
         Span<FinderPattern> tried = stackalloc FinderPattern[MaxCandidatesToTry];
         var status = Scan<TDecoder, TInfo>(ref decoder, image, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount, out var stridedFound);
         noFinder = false;
-        // Terminal, not just successful: DestinationTooSmall is only reached after the symbol has been located, sampled,
-        // RS-corrected and its segment found to fit the bitstream. (That ordering is a precondition, not a given: the segment
-        // decoders check bitstream sufficiency before destination sufficiency precisely so a malformed count cannot masquerade as
-        // a short buffer here; they check the content after it.) A sized call stops at that symbol as a read, so no sweep runs
-        // here either, which keeps a probe for the buffer's size as cheap as a sized call; the price is a second symbol that
-        // fits and that only the sweep finds. A verdict on the content does not end it: the sweep can find another symbol that
-        // reads.
+        // Terminal, not just successful: DestinationTooSmall means the symbol was read, so no sweep runs and a probe for the
+        // buffer's size costs what a sized call does. That relies on the segment decoders checking the bitstream before the
+        // destination, so a malformed count never reports a short buffer. A verdict on the content does not end the scan:
+        // the sweep can find another symbol that reads.
         if (AttemptStatus.IsTerminal(status))
             return status;
 
         // A candidate equal to one the strided scan tried (same position and module size, to the bit) decodes the same way in the
-        // sweep, so it is not tried again; unless that scan settled, when every candidate stays
+        // sweep, so it is not tried again, unless that scan settled, when every candidate stays
         var skip = AttemptStatus.IsSettled(status) ? default : tried.Slice(0, triedCount);
         var sweptStatus = Scan<TDecoder, TInfo>(ref decoder, image, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _, out var sweptFound);
         noFinder = stridedFound == 0 && sweptFound == 0;
@@ -92,12 +89,12 @@ internal static class CandidateScan
             return sweptStatus;
         }
 
-        // Both failed: the strided scan's diagnostic, the one whose candidates the caller would have seen before the sweep existed
+        // Both failed: the strided scan's diagnostic
         return status;
     }
 
     /// <summary>
-    /// One finder scan, strided or a full sweep, and the candidates it ranks first (<see cref="DecodeRanked"/>);
+    /// One finder scan, strided or a full sweep, and the candidates it ranks first (<see cref="DecodeRanked"/>).
     /// <paramref name="found"/> is how many candidates it found.
     /// </summary>
     public static DecodeStatus Scan<TDecoder, TInfo>(ref TDecoder decoder, in ImageView image, Span<char> destination, out int charsWritten, out TInfo info, bool fullSweep, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount, out int found)
@@ -113,7 +110,7 @@ internal static class CandidateScan
 
     /// <summary>
     /// The first eight of the <paramref name="ranked"/> candidates, less those equal to one in <paramref name="skip"/> and those
-    /// inside a symbol that read but did not fit the destination; each one decoded is written to <paramref name="tried"/>.
+    /// inside a symbol that read but did not fit the destination. Each one decoded is written to <paramref name="tried"/>.
     /// </summary>
     /// <remarks>
     /// A candidate's decode depends only on its position and module size, the image and the threshold, so a candidate tried by a

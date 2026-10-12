@@ -10,10 +10,10 @@ namespace FeatherQR.Tests;
 /// <remarks>
 /// <para>
 /// A single Kanji segment at a fixed version and level has one valid stream, so another encoder's symbol of the same text is an oracle for the whole of this library's: the stream, the error correction, the placement and the format.
-/// The mask is the one thing an encoder chooses, so Standard QR and Micro QR pin it to the one the fixture's manifest records (ZXing.Net reports its own; for qrtool's Micro QR symbols the zxing-cpp gate read it); rMQR has one mask.
+/// The mask is the one thing an encoder chooses, so Standard QR and Micro QR pin it to the one the fixture's manifest records (ZXing.Net reports its own, and for qrtool's Micro QR symbols the zxing-cpp gate read it). rMQR has one mask.
 /// </para>
 /// <para>
-/// qrtool 0.13.2 never writes the last h − 10 modules of an rMQR placement walk (column 1, rows 8 to h − 3) on symbols 11 or more modules high, a defect recorded in qrcode-test-fixtures.md; those modules are left out of the comparison and every other module must match.
+/// qrtool 0.13.2 never writes the last h − 10 modules of an rMQR placement walk (column 1, rows 8 to h − 3) on symbols 11 or more modules high, a defect recorded in qrcode-test-fixtures.md. Those modules are left out of the comparison and every other module must match.
 /// A fixture whose text has a character without an encoder cell (the seven cells CP932 reads differently) is not Kanji output of this library and is left out, by name.
 /// </para>
 /// </remarks>
@@ -43,7 +43,7 @@ public class KanjiEncoderOracleTest
 
     // ---- Coverage: every count-indicator width of every symbology -------------------
 
-    /// <summary>Standard QR's Kanji count indicator is 8, 10 or 12 bits by version band (1-9, 10-26, 27-40); each band has a fixture.</summary>
+    /// <summary>Standard QR's Kanji count indicator is 8, 10 or 12 bits by version band (1-9, 10-26, 27-40). Each band has a fixture.</summary>
     [Test]
     public async Task StandardQr_KanjiFixtures_CoverEveryCountWidth()
     {
@@ -55,7 +55,7 @@ public class KanjiEncoderOracleTest
         await Assert.That(widths).IsEquivalentTo(new[] { 8, 10, 12 }, CollectionOrdering.Matching);
     }
 
-    /// <summary>Micro QR's Kanji count indicator is 3 bits at M3 and 4 at M4; each has a fixture.</summary>
+    /// <summary>Micro QR's Kanji count indicator is 3 bits at M3 and 4 at M4. Each has a fixture.</summary>
     [Test]
     public async Task MicroQr_KanjiFixtures_CoverEveryCountWidth()
     {

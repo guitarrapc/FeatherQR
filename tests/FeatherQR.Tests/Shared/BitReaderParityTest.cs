@@ -92,8 +92,8 @@ public class BitReaderParityTest
     }
 
     /// <summary>
-    /// A read that does not fit throws before it consumes anything. The bit loop used to consume
-    /// what was left and then throw, which left a caller that catches with a reader it cannot reason about.
+    /// A read that does not fit throws before it consumes anything, so a caller that catches
+    /// holds a reader at the position it had.
     /// </summary>
     [Test]
     [Arguments(0, 9)]

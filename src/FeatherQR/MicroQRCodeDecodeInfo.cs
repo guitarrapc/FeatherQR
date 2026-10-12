@@ -4,7 +4,7 @@ namespace FeatherQR;
 /// Diagnostic information produced by a Micro QR code decode attempt.
 /// </summary>
 /// <remarks>
-/// Statuses are shared with the Standard QR decoder (<see cref="DecodeStatus"/>); version, ECC level and mask pattern use the Micro QR domains.
+/// Statuses are shared with the Standard QR decoder (<see cref="DecodeStatus"/>). Version, ECC level and mask pattern use the Micro QR domains.
 /// </remarks>
 public readonly record struct MicroQRCodeDecodeInfo
 {
@@ -45,6 +45,6 @@ public readonly record struct MicroQRCodeDecodeInfo
     /// <summary>Number of codeword errors corrected by Reed-Solomon decoding.</summary>
     public int ErrorsCorrected { get; }
 
-    /// <summary>Where the symbol sits in the image, when decoded from one; see <see cref="SymbolCorners"/>. Empty for a matrix-level decode or a failed one.</summary>
+    /// <summary>Where the symbol sits in the image, when decoded from one. See <see cref="SymbolCorners"/>. Empty for a matrix-level decode or a failed one.</summary>
     public SymbolCorners Corners { get; }
 }

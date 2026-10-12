@@ -13,7 +13,7 @@ internal static partial class AlignmentPatternFinder
         (byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
 
     /// <summary>
-    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask; runs are walked via trailing-zero counts, evaluating the same (light, dark, light) triple at every light→dark transition as the scalar walk.
+    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask. Runs are walked via trailing-zero counts, evaluating the same (light, dark, light) triple at every light→dark transition as the scalar walk.
     /// </summary>
     private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, ref NearestHit best)
     {
@@ -21,7 +21,7 @@ internal static partial class AlignmentPatternFinder
         Span<ulong> mask = stackalloc ulong[((length + 63) >> 6) + 1];
         mask.Clear();
 
-        // Build the dark bitmask (bit i = pixel minX+i is dark);
+        // Build the dark bitmask (bit i = pixel minX+i is dark).
         // threshold == 0 means nothing is dark, so the compare loops can skip.
         var row = luminance.Slice(y * width + minX, length);
         var i = 0;
@@ -45,7 +45,7 @@ internal static partial class AlignmentPatternFinder
                 var thr = Vector128.Create(threshold);
                 if (AdvSimd.Arm64.IsSupported)
                 {
-                    // NEON has no movemask; fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, then a chain of pairwise adds reduces them (simdjson bulk-movemask shape).
+                    // NEON has no movemask, so fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, then a chain of pairwise adds reduces them (the bulk-movemask shape).
                     for (; i + 64 <= length; i += 64)
                     {
                         var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)i), thr) & NeonBitWeights;
@@ -71,7 +71,7 @@ internal static partial class AlignmentPatternFinder
                 mask[i >> 6] |= 1ul << (i & 63);
         }
 
-        // Walk dark runs; a leading dark run is skipped (the scalar walk waits for the first light pixel before opening a window).
+        // Walk dark runs. A leading dark run is skipped (the scalar walk waits for the first light pixel before opening a window).
         var pos = NextBit(mask, 0, length, set: false);
         var lightStart = pos;
         var previousDarkLength = 0;

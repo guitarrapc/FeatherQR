@@ -7,7 +7,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// A symbol lit unevenly has no single threshold between its modules; the decoders binarize again against each region's level when the global threshold reads nothing.
+/// A symbol lit unevenly has no single threshold between its modules, so the decoders binarize again against each region's level when the global threshold reads nothing.
 /// </summary>
 public class UnevenLightingDecodeTest
 {
@@ -26,7 +26,7 @@ public class UnevenLightingDecodeTest
     public enum Symbology { StandardQR, MicroQR, RmQR }
 
     /// <summary>
-    /// The lighting of <see cref="Lighting"/> a global threshold still reads, per symbology; every other case needs the regional pass.
+    /// The lighting of <see cref="Lighting"/> a global threshold still reads, per symbology. Every other case needs the regional pass.
     /// Standard QR reads the ramps at 135°, 225° and 315° at the global threshold through a third finder inferred from the two the threshold keeps (<see cref="InferredFinderDecodeTest"/>), and the ramps and shadows at 0° and 90°, whose three finders the threshold keeps, through the grid read again in module space (<see cref="ModuleSpaceDecodeTest"/>).
     /// </summary>
     private static readonly Dictionary<Symbology, (UnevenLight, float)[]> ReadByGlobalThreshold = new()
@@ -220,7 +220,7 @@ public class UnevenLightingDecodeTest
     }
 
     /// <summary>
-    /// The case is only one of this group if neither global polarity reads it, sweep included; otherwise the regional attempt is never reached.
+    /// The case is only one of this group if neither global polarity reads it, sweep included. Otherwise the regional attempt is never reached.
     /// </summary>
     private static async Task AssertGlobalAttemptsFail(bool microQr, byte[] luminance, int width, int height)
         => await Assert.That(GlobalAttemptsRead(microQr ? Symbology.MicroQR : Symbology.RmQR, luminance, width, height)).IsFalse();
@@ -303,7 +303,7 @@ public class UnevenLightingDecodeTest
     }
 
     /// <summary>
-    /// Another symbology's image binarized regionally passes an M1 check on some grids; that is not a read.
+    /// Another symbology's image binarized regionally passes an M1 check on some grids. That is not a read.
     /// </summary>
     [Test]
     [Arguments("2553", RmQREccLevel.M, 270f)]
@@ -323,7 +323,7 @@ public class UnevenLightingDecodeTest
     }
 
     /// <summary>
-    /// Another symbology's texture can correct to a read at M3-M's limit; the regional pass refuses M3-M and M4-M reads at their limit.
+    /// Another symbology's texture can correct to a read at M3-M's limit. The regional pass refuses M3-M and M4-M reads at their limit.
     /// </summary>
     public static IEnumerable<(bool RmQR, string Payload, QREccLevel Level, float PixelsPerModule, float Turn, float OffsetX, float OffsetY, UnevenLight Light, float LightDegrees, float Depth)> ForeignImagesAtTheCorrectionLimit()
     {
@@ -420,7 +420,7 @@ public class UnevenLightingDecodeTest
     }
 
     /// <summary>
-    /// A real symbol shows its structure, so it may use every correction its level allows: reads at every level's limit, one short of it, and a one-character read that needed correction are kept; a short destination reports a short destination.
+    /// A real symbol shows its structure, so it may use every correction its level allows: reads at every level's limit, one short of it, and a one-character read that needed correction are kept, and a short destination reports a short destination.
     /// </summary>
     [Test]
     [Arguments("12345", MicroQREccLevel.M, MicroQRVersion.M3, new[] { 14, 14, 14, 12, 14, 10, 14, 8 })]

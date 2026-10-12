@@ -3,22 +3,18 @@ using System.Reflection;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Types that outlive the feature they described. The <c>Compression</c> enum was one:
-/// it named a serialization feature removed before 1.0.0, shipped unused through 1.1.1,
-/// was deprecated in 1.2.0 and removed in 2.0.0.
+/// Types that outlive the feature they described.
 /// </summary>
 /// <remarks>
-/// A shape test, not a behaviour test. What survives the removal is the general guard,
-/// because the way a vestigial type gets noticed is a rule that looks for it, not a
-/// reviewer remembering that it exists.
+/// A shape test, not a behaviour test. A vestigial type gets noticed by a rule that looks
+/// for it, not by a reviewer remembering that it exists.
 /// </remarks>
 public class VestigialSurfaceTest
 {
     /// <summary>
     /// An exported type with nothing a caller can touch is not an API, it is an accident:
     /// a helper class whose members all went internal, or a type left behind by a feature
-    /// that was removed. <c>EciModeExtensions</c> was exactly that, and shipped that way
-    /// through 1.1.1 because nothing looked for it.
+    /// that was removed.
     /// </summary>
     /// <remarks>
     /// Enums always carry their members and delegates their signature, so no exemption

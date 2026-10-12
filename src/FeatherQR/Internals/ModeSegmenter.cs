@@ -10,26 +10,26 @@ namespace FeatherQR.Internals;
 
 /// <summary>
 /// Splits content into the minimal-bit Numeric / Alphanumeric / Byte runs and reconstructs them as a <see cref="ModeSegment"/> plan.
-/// Shared by the Standard QR, Micro QR and rMQR planners, which differ in the header widths passed in and (Micro QR) mode availability; version scans and bounds stay in those planners.
+/// Shared by the Standard QR, Micro QR and rMQR planners, which differ in the header widths passed in and (Micro QR) mode availability. Version scans and bounds stay in those planners.
 /// </summary>
 /// <remarks>
 /// A run's cost is not a per-character constant, so the dynamic program carries the packing-group remainder in its state: Numeric with 0, 1 or 2 digits in the open group, Alphanumeric with 0 or 1 characters in the open pair, Byte, and a virtual start.
-/// The six costs live in locals and each target is the cheaper of continuing its run or opening it from the cheapest state, so a character is a handful of adds and mins; the program used to relax every state from every state through two stack arrays, which cost six times as much per character as the arithmetic.
-/// The common shapes get their own loop: a Latin charset (every character one byte) with Byte allowed, for costs, for costs with parents, and for the prefix walk; everything else (UTF-8, a Micro QR version without a mode) shares one general loop per entry point. A run outside the alphanumeric alphabet leaves only Byte reachable, so every loop steps such a run as one add per character.
-/// Micro QR restricts modes per version (M1 is Numeric-only, M2 has no Byte mode); its planner disables the missing transitions via <c>allowAlnum</c>/<c>allowByte</c>, and a character no allowed mode encodes leaves the cost at <see cref="Unreachable"/>.
-/// Ties are broken as the all-states relaxation did (the lowest predecessor state wins), so the reconstructed plan is the same plan; <c>ModeSegmenterByteRunParityTest</c> holds every loop to that reference.
+/// The six costs live in locals and each target is the cheaper of continuing its run or opening it from the cheapest state, so a character is a handful of adds and mins. Relaxing every state from every state through arrays would cost far more in memory traffic than the arithmetic.
+/// The common shapes get their own loop: a Latin charset (every character one byte) with Byte allowed, for costs, for costs with parents, and for the prefix walk. Everything else (UTF-8, a Micro QR version without a mode) shares one general loop per entry point. A run outside the alphanumeric alphabet leaves only Byte reachable, so every loop steps such a run as one add per character.
+/// Micro QR restricts modes per version (M1 is Numeric-only, M2 has no Byte mode). Its planner disables the missing transitions via <c>allowAlnum</c>/<c>allowByte</c>, and a character no allowed mode encodes leaves the cost at <see cref="Unreachable"/>.
+/// Ties go to the lowest predecessor state, as in an all-states relaxation, so the reconstructed plan is the same plan. <c>ModeSegmenterByteRunParityTest</c> holds every loop to that reference.
 /// With parents, a state is carried as a key: its cost shifted up three bits with the state's number below it. The minimum of keys is the minimum cost and, among equal costs, the lowest state, so the predecessor is the low bits of the minimum the cost-only loop takes anyway.
-/// Only three predecessors vary (those of Numeric1, Alnum1 and Byte; the others are constants of the packing groups), so the table is two bytes a character, and the walk back steps from one place a run can begin to the one before it rather than from character to character.
+/// Only three predecessors vary (those of Numeric1, Alnum1 and Byte, while the others are constants of the packing groups), so the table is two bytes a character, and the walk back steps from one place a run can begin to the one before it rather than from character to character.
 /// </remarks>
 internal static partial class ModeSegmenter
 {
     /// <summary>Bytes of the predecessor table per character: the predecessor of Byte, then those of Numeric1 (low three bits) and Alnum1 in one byte.</summary>
     public const int ParentBytesPerChar = 2;
 
-    /// <summary>Parent bytes that fit the stack budget (256 characters); longer content rents.</summary>
+    /// <summary>Parent bytes that fit the stack budget (256 characters). Longer content rents.</summary>
     public const int MaxStackParents = 512;
 
-    /// <summary>The longest content the keyed loops take; a key is a cost times eight, and this leaves it far below the overflow.</summary>
+    /// <summary>The longest content the keyed loops take. A key is a cost times eight, and this leaves it far below the overflow.</summary>
     private const int MaxTrackedChars = 1 << 20;
 
     // An unreachable state as a key, below any number a few additions could overflow.
@@ -42,9 +42,9 @@ internal static partial class ModeSegmenter
     internal const char ByteOrderMark = (char)0xFEFF;
 
     /// <summary>
-    /// Cost returned by <see cref="ComputeCosts"/> when no allowed mode set encodes the content; small enough that adding a transition cost cannot overflow.
+    /// Cost returned by <see cref="ComputeCosts"/> when no allowed mode set encodes the content, small enough that adding a transition cost cannot overflow.
     /// </summary>
-    /// <remarks>An unreachable state keeps a value at or above this; the value may drift upward by a few bits per character, which the longest content any caller passes leaves far below the overflow.</remarks>
+    /// <remarks>An unreachable state keeps a value at or above this. The value may drift upward by a few bits per character, which the longest content any caller passes leaves far below the overflow.</remarks>
     public const int Unreachable = int.MaxValue / 4;
 
     // Numeric and Alphanumeric states carry the number of characters already
@@ -60,7 +60,7 @@ internal static partial class ModeSegmenter
     // The eighth state, reached only by the program for a Kanji-eligible text (ComputeCostsKanji).
     private const int StateKanji = 7;
 
-    // Character classes of the table below; 1 is the alphanumeric alphabet outside the digits.
+    // Character classes of the table below, where 1 is the alphanumeric alphabet outside the digits.
     internal const int ClassOther = 0;
     internal const int ClassDigit = 2;
 
@@ -122,7 +122,7 @@ internal static partial class ModeSegmenter
     }
 
     /// <summary>
-    /// The longest prefix of <paramref name="text"/> whose minimal plan costs at most <paramref name="budgetBits"/>, in characters; 0 when not even the first character fits.
+    /// The longest prefix of <paramref name="text"/> whose minimal plan costs at most <paramref name="budgetBits"/>, in characters, or 0 when not even the first character fits.
     /// </summary>
     /// <remarks>
     /// One forward pass of the program <see cref="ComputeCosts"/> runs: the optimum of every prefix falls out of the sweep, and it is monotone in the prefix length (a plan for a longer prefix restricted to a shorter one is a plan for the shorter at no more cost), so the pass stops at the first prefix over budget.
@@ -221,7 +221,7 @@ internal static partial class ModeSegmenter
         return Best(n0, n1, n2, a0, a1, b, out finalState);
     }
 
-    /// <summary>The keys after the first character, which whatever encodes it opens from the start; its predecessors say so. Numeric0, Numeric2 and Alnum0 are never reachable there.</summary>
+    /// <summary>The keys after the first character, which whatever encodes it opens from the start, and its predecessors say so. Numeric0, Numeric2 and Alnum0 are never reachable there.</summary>
     private static void OpenFromStart(ReadOnlySpan<char> text, EciMode charset, int openNumeric, int openAlnum, int openByte, bool allowAlnum, bool allowByte, Span<byte> table, out int n1, out int a1, out int b)
     {
         var cls = ClassOf(text[0]);
@@ -232,7 +232,7 @@ internal static partial class ModeSegmenter
         table[1] = StateStart | (StateStart << 3);
     }
 
-    /// <summary>The cost and the state of the cheapest key; <see cref="Unreachable"/> and Byte when no allowed mode set encodes the content, as the cost-only loops answer.</summary>
+    /// <summary>The cost and the state of the cheapest key, or <see cref="Unreachable"/> and Byte when no allowed mode set encodes the content, as the cost-only loops answer.</summary>
     private static int FromKey(int key, out int state)
     {
         if (key >= UnreachableKey)
@@ -247,7 +247,7 @@ internal static partial class ModeSegmenter
 
     /// <summary>
     /// Keys with parents from the second character on, one byte per character, Byte allowed: the per-symbol plan of every Latin symbol. Returns the cheapest key.
-    /// The widths are keys already (bits times eight), <paramref name="openByte"/> with its first character in; the table is read and written <paramref name="stride"/> bytes a character.
+    /// The widths are keys already (bits times eight), <paramref name="openByte"/> with its first character in. The table is read and written <paramref name="stride"/> bytes a character.
     /// </summary>
     private static int TrackedLatin(ReadOnlySpan<char> text, int n1, int a1, int b, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> table, int stride)
     {
@@ -257,7 +257,7 @@ internal static partial class ModeSegmenter
         for (var i = 1; i < length; i++)
         {
             var cls = ClassOf(text[i]);
-            // The cheapest state of each denser mode; a key carries its state, so the lowest wins a tie.
+            // The cheapest state of each denser mode. A key carries its state, so the lowest wins a tie.
             var numeric = Math.Min(Math.Min(n0, n1), n2);
             var alnum = Math.Min(a0, a1);
             var byteKey = Math.Min(Math.Min(numeric, alnum) + openByte, b + 64);
@@ -319,7 +319,7 @@ internal static partial class ModeSegmenter
                 if (!allowByte)
                 {
                     b = U | StateByte;
-                    continue; // nothing encodes it; every state stays unreachable from here on
+                    continue; // nothing encodes it, so every state stays unreachable from here on
                 }
 
                 var key = (text[i] == ByteOrderMark ? b : Math.Min(Math.Min(numeric, alnum) + openByte, b)) + (ByteCost(text, i, charset) << 6);
@@ -459,18 +459,18 @@ internal static partial class ModeSegmenter
         return text.Length;
     }
 
-    /// <summary>The end a walk had accepted when the prefix through <paramref name="i"/> went over budget: before a pair whose second half is at <paramref name="i"/>, since its first half was never judged; else <paramref name="i"/>.</summary>
+    /// <summary>The end a walk had accepted when the prefix through <paramref name="i"/> went over budget: before a pair whose second half is at <paramref name="i"/>, since its first half was never judged, or else <paramref name="i"/>.</summary>
     private static int StoppedBefore(ReadOnlySpan<char> text, int i)
         => i > 0 && char.IsLowSurrogate(text[i]) && char.IsHighSurrogate(text[i - 1]) ? i - 1 : i;
 
     /// <summary>
     /// <see cref="ComputeCosts"/> for a Kanji-eligible text (<see cref="TextAnalysisResult.KanjiPlannable"/>: every character ASCII or with an encoder cell), with the eighth state, Kanji, beside the seven.
-    /// An ASCII character reaches Numeric, Alphanumeric and Byte at one byte, as under a Latin charset; a character with a cell reaches only Kanji, since Byte could carry it only under an ECI header, which a plan with Kanji runs never has.
+    /// An ASCII character reaches Numeric, Alphanumeric and Byte at one byte, as under a Latin charset. A character with a cell reaches only Kanji, since Byte could carry it only under an ECI header, which a plan with Kanji runs never has.
     /// Every mode is allowed: Micro QR plans Kanji only from M3, where all four exist.
     /// </summary>
     /// <remarks>
     /// After any character either Kanji or the other six states are reachable, never both, so Kanji's predecessor takes the byte Byte's takes at an ASCII position: the table stays <see cref="ParentBytesPerChar"/> bytes a character, and <see cref="WalkBack"/> steps a Kanji run the way it steps a Byte run.
-    /// A program of its own rather than a flag on the seven-state loops, so every text that is not eligible runs exactly the program it ran before.
+    /// A program of its own rather than a flag on the seven-state loops, so a text that is not eligible pays nothing for the eighth state.
     /// </remarks>
     public static int ComputeCostsKanji(ReadOnlySpan<char> text, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, int cciKanji, Span<byte> parents, out int finalState)
     {
@@ -639,7 +639,7 @@ internal static partial class ModeSegmenter
         const int stride = ParentBytesPerChar;
         int n0 = U | StateNumeric0, n1 = U | StateNumeric1, n2 = U | StateNumeric2, a0 = U | StateAlnum0, a1 = U | StateAlnum1, b = U | StateByte, k = U | StateKanji;
 
-        // The first character opens whatever encodes it from the start; its predecessors say so.
+        // The first character opens whatever encodes it from the start, and its predecessors say so.
         var first = text[0];
         if (first >= 0x80)
         {
@@ -665,7 +665,7 @@ internal static partial class ModeSegmenter
             var alnum = Math.Min(a0, a1);
             if (c >= 0x80)
             {
-                // Continued from Kanji (13 bits), or opened from the cheapest ASCII state; only one side is reachable.
+                // Continued from Kanji (13 bits), or opened from the cheapest ASCII state. Only one side is reachable.
                 var kanjiKey = Math.Min(k + 104, Math.Min(Math.Min(numeric, alnum), b) + openKanji);
                 table[i * stride] = (byte)(kanjiKey & 7);
                 k = (kanjiKey & ~7) | StateKanji;
@@ -722,7 +722,7 @@ internal static partial class ModeSegmenter
         return Math.Min(Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b)), k);
     }
 
-    /// <summary>The cheapest state to end in, and its cost; <see cref="Unreachable"/> exactly when no allowed mode set encodes the content. The lowest state wins a tie.</summary>
+    /// <summary>The cheapest state to end in, and its cost, which is <see cref="Unreachable"/> exactly when no allowed mode set encodes the content. The lowest state wins a tie.</summary>
     private static int Best(int n0, int n1, int n2, int a0, int a1, int b, out int state)
     {
         var best = Unreachable;
@@ -764,7 +764,7 @@ internal static partial class ModeSegmenter
         => WalkBack(length, parents, ParentBytesPerChar, finalState, default, materialise: false, out _, out runsNumeric, out runsAlnum, out runsByte, out runsKanji);
 
     /// <summary>
-    /// The walk back, run by run. A run of Numeric can only begin where the state is Numeric1, every third character of the run, and a run of Alphanumeric where it is Alnum1, every second; a run of Byte or Kanji begins at the first entry that does not say Byte or Kanji.
+    /// The walk back, run by run. A run of Numeric can only begin where the state is Numeric1, every third character of the run, and a run of Alphanumeric where it is Alnum1, every second. A run of Byte or Kanji begins at the first entry that does not say Byte or Kanji.
     /// Each step reads whether the run continued at the place before, whose address is the position alone, so no load waits for the one before it.
     /// The first character's predecessor is the start, which no run continues from, so every search lands at or after it.
     /// </summary>
@@ -835,7 +835,7 @@ internal static partial class ModeSegmenter
     /// <summary>
     /// Whether the plan opens a Byte run at a mid-content U+FEFF.
     /// The shared byte-segment decoder consumes a leading BOM of every segment without an explicit ISO-8859-1 declaration, so such a plan would decode with the character silently dropped.
-    /// Under UTF-8 the program builds no such plan (<see cref="ByteOrderMark"/>), and the rMQR and Micro QR planners keep this as the refusal of a model that disagreed; neither plans a text holding the mark under any other charset.
+    /// Under UTF-8 the program builds no such plan (<see cref="ByteOrderMark"/>), and the rMQR and Micro QR planners keep this as the refusal of a model that disagreed. Neither plans a text holding the mark under any other charset.
     /// (A run at offset 0 is exempt: there the single-mode stream starts with the same bytes and behaves identically.)
     /// </summary>
     public static bool HasBomRelocatedToARunStart(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments)
@@ -987,7 +987,7 @@ internal static partial class ModeSegmenter
     /// </summary>
     /// <remarks>
     /// No run of a Kanji plan crosses from one kind of stretch to the other (Kanji holds no ASCII, and no other mode holds a character with a cell), so each stretch opens at least one run, and a planner's screen adds a header per stretch rather than one in all.
-    /// For interleaved text that is most of the plan's cost, and the one-header screen let through versions its plan could not fit.
+    /// For interleaved text that is most of the plan's cost, and a one-header screen would let through versions its plan cannot fit.
     /// </remarks>
     public static int CheapestSixthsKanji(ReadOnlySpan<char> text, out int utf8Sixths, out int cellRuns, out int asciiRuns)
     {
@@ -1023,7 +1023,7 @@ internal static partial class ModeSegmenter
 
     /// <summary>
     /// Encoded byte length of one character in Byte mode.
-    /// Latin-1 charsets are one byte per character; UTF-8 mirrors what <see cref="Encoding.UTF8"/> emits, including its greedy surrogate pairing (a paired high surrogate carries all four bytes and its low surrogate none, an unpaired surrogate costs the three bytes of the replacement character).
+    /// Latin-1 charsets are one byte per character. UTF-8 mirrors what <see cref="Encoding.UTF8"/> emits, including its greedy surrogate pairing (a paired high surrogate carries all four bytes and its low surrogate none, an unpaired surrogate costs the three bytes of the replacement character).
     /// </summary>
     internal static int ByteCost(ReadOnlySpan<char> text, int index, EciMode charset)
     {

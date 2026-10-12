@@ -30,7 +30,7 @@ public class ModeSegmenterLaneParityTest
 
         var random = new Random(seed);
         const string alphabet = "0AZ xéλあ\uFEFF\uD800\uDC00";
-        // Below, at and above the 1.5x useful-work boundary; both four-lane groups,
+        // Below, at and above the 1.5x useful-work boundary. Both four-lane groups,
         // inactive lanes, a singleton, and several lanes ending on the same character.
         int[][] shapes = [[1], [1, 1], [3, 7, 11], [1, 1, 1, 100], [6, 1, 1, 1], [6, 1, 1, 2],
             [7, 7, 7, 7, 1], [8, 8, 8, 8, 6, 3], [9, 9, 9, 9, 6, 2, 1], [31, 32, 33, 34, 1, 2, 3, 4]];
@@ -69,7 +69,7 @@ public class ModeSegmenterLaneParityTest
             return;
 
         // Each value follows a Byte character and is followed by a dense run. This
-        // makes an erroneous TBL class observable; the first character uses scalar setup.
+        // makes an erroneous TBL class observable. The first character uses scalar setup.
         for (var first = 0; first < 65536; first += 1024)
         {
             var chunks = new string[4];

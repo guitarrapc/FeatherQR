@@ -5,8 +5,8 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The <c>SKBitmap</c> decode overloads live in the rendering package as C# 14 extension
-/// members on the core decoders. A C# 14 consumer writes <c>QRCodeDecoder.TryDecode(bitmap, ...)</c>;
-/// a C# 12 or 13 consumer (net8.0's default) can only name the enclosing class,
+/// members on the core decoders. A C# 14 consumer writes <c>QRCodeDecoder.TryDecode(bitmap, ...)</c>.
+/// A C# 12 or 13 consumer (net8.0's default) can only name the enclosing class,
 /// <c>QRCodeImageDecoder.TryDecode(bitmap, ...)</c>, which is the documented spelling.
 /// Both forms, both overloads, all three symbologies, plus the argument contract that
 /// moved with them.
@@ -97,7 +97,7 @@ public class ImageDecoderCallFormTest
         await Assert.That(() => RmQRCodeImageDecoder.TryDecode((SKBitmap)null!, out _, out _)).Throws<ArgumentNullException>();
     }
 
-    /// <summary>Below the smallest symbol, nothing is scanned or rented; the answer is a plain false.</summary>
+    /// <summary>Below the smallest symbol, nothing is scanned or rented, and the answer is a plain false.</summary>
     [Test]
     public async Task BitmapSmallerThanTheSmallestSymbol_ReturnsFalse()
     {

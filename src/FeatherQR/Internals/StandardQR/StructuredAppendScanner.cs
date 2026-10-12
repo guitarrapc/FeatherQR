@@ -8,7 +8,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// <summary>Character boundaries used by the single-mode Structured Append cost model.</summary>
 internal static partial class StructuredAppendScanner
 {
-    /// <summary>The leading Numeric and Alphanumeric lengths; digits belong to both alphabets.</summary>
+    /// <summary>The leading Numeric and Alphanumeric lengths. Digits belong to both alphabets.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void ModeBoundaries(ReadOnlySpan<char> text, out int digits, out int alnum)
     {

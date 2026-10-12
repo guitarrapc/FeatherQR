@@ -99,18 +99,13 @@ internal static class GaloisField
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static byte Multiply(byte a, byte b)
     {
-        // We don't do bitwise multiplication or mod operation, but use properties of Galois field instead.
-        // Galois field has following properties:
-        // a = α^i
-        // b = α^j
-        // a * b = α^(i+j)
-
+        // Zero is no power of α, so it has no log.
         if (a == 0 || b == 0) return 0;
 
         var expSpan = expTable.AsSpan();
         var logSpan = logTable.AsSpan();
 
-        // While `expSpan[(logSpan[a] + logSpan[b]) % 255];` is mathematically correct, we already extended expTable to 512 elements to avoid the modulo operation.
+        // No % 255: two logs sum to at most 508, and the exp table repeats up to 511.
         return expSpan[(logSpan[a] + logSpan[b])];
     }
 
@@ -130,9 +125,7 @@ internal static class GaloisField
         var expSpan = expTable.AsSpan();
         var logSpan = logTable.AsSpan();
 
-        // Use galois field properties for division:
-        // a / b = α^i / α^j = α^(i - j)
-
+        // Adding 255 keeps the exponent from going negative.
         return expSpan[(logSpan[a] + 255 - logSpan[b]) % 255];
     }
 
@@ -144,27 +137,21 @@ internal static class GaloisField
         var expSpan = expTable.AsSpan();
         var logSpan = logTable.AsSpan();
 
-        // This initialization is based on the properties of GF(256):
-        // α^255 = 1
-        // a^0 = 1
-        // Each subsequent value is found by multiplying the previous value by 2 (the generator)
+        // Each power is the one before doubled, and reduced by the primitive polynomial when it leaves 8 bits.
         var x = 1;
         for (var i = 0; i < 255; i++)
         {
             expSpan[i] = (byte)x;
             logSpan[x] = (byte)i;
 
-            x <<= 1; // x *= 2
+            x <<= 1;
             if (x >= 0x100)
             {
-                x ^= 0x11d; // Reduce by primitive polynomial
+                x ^= 0x11d;
             }
         }
 
-        // Because GF(256) has `α^(i+255) = α^i`, we can use a lookup table for exponents and logarithms.
-        // This means we can extend the exp table to 512 elements to avoid modulo operations during multiplication and division.
-
-        // Extend exp table for easy modulo operations
+        // α^(i + 255) = α^i, so the table repeats past 254 and a sum of two logs indexes it without a modulo.
         for (var i = 255; i < 512; i++)
         {
             expSpan[i] = expSpan[i - 255];

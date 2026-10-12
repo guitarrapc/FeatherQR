@@ -22,7 +22,7 @@ public enum DecodeStatus
 
     /// <summary>
     /// The bitstream is well-formed but uses a feature this decoder does not support: an ECI assignment it does not map to a charset (it reads 1, 3 and 27 as ISO-8859-1, 26 as UTF-8 and 20 as Shift_JIS).
-    /// A property of the symbol's structure, not of its text; see <see cref="UnmappedCharacter"/> for the per-character case.
+    /// A property of the symbol's structure, not of its text. See <see cref="UnmappedCharacter"/> for the per-character case.
     /// </summary>
     UnsupportedContent,
 
@@ -36,7 +36,7 @@ public enum DecodeStatus
     /// The symbol was read correctly, but one character has no mapping under the charset this decoder applies, so no text is produced.
     /// </summary>
     /// <remarks>
-    /// Today this means a Kanji mode cell outside JIS X 0208 — in practice one of the 83 characters Microsoft CP932 adds in NEC row 13 (circled digits, roman numerals, unit ligatures).
+    /// Today this means a Kanji mode cell outside JIS X 0208, in practice one of the 83 characters Microsoft CP932 adds in NEC row 13 (circled digits, roman numerals, unit ligatures).
     /// It is deliberately distinct from <see cref="UnsupportedContent"/>: that says the symbol uses a feature this library does not implement, and no reader choice changes it, whereas this says the symbol is well formed and a CP932-capable reader would read it.
     /// A caller that wants to fall back to such a reader should branch on exactly this status.
     /// </remarks>

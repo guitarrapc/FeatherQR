@@ -9,8 +9,8 @@ namespace FeatherQR.Tests;
 /// Full-pipeline structural verification: reads the generated matrix BACK —
 /// format info by exhaustive match, unmasking, inverse zigzag extraction, and
 /// checks that the recovered codewords equal the bit-stream encoder's output and
-/// that recomputed Reed-Solomon ECC matches the placed ECC. Until the Micro QR
-/// decoder (Phase 3) and external fixtures exist, this is the guard that the
+/// that recomputed Reed-Solomon ECC matches the placed ECC. Apart from the Micro QR
+/// decoder and the external fixtures, this is the guard that the
 /// placement/mask/format stages are mutually consistent rather than each stage
 /// being its own oracle.
 /// </summary>

@@ -13,7 +13,7 @@ namespace FeatherQR.Tests;
 /// <c>{stem}.Vector256.cs</c> and <c>{stem}.Vector128.cs</c> portable
 /// vectors of that width or narrower, where <c>{stem}</c> is the type, or the type and a feature
 /// (<c>ModulePlacer.Masking</c>). <c>{stem}.Simd.cs</c> holds a vector tier that picks its instructions per
-/// instruction set inside one method (WebAssembly's <c>PackedSimd</c> among them), so no single family's file can take it; a file whose code one family's
+/// instruction set inside one method (WebAssembly's <c>PackedSimd</c> among them), so no single family's file can take it. A file whose code one family's
 /// file could take is named for that family instead. Every other file, the stem file among them, holds the
 /// entry, the dispatch and the scalar tier, and uses no vector instruction at all.
 /// </para>
@@ -129,7 +129,7 @@ public class SimdLayoutTest
     ];
 
     /// <summary>
-    /// What the file breaks: a family its name does not allow; for a family file, none of its own family; for a
+    /// What the file breaks: a family its name does not allow. For a family file, none of its own family. For a
     /// <c>.Simd.cs</c> file, code that one family's file could take.
     /// </summary>
     private static IEnumerable<string> Violations(string relative, string source)
@@ -177,7 +177,7 @@ public class SimdLayoutTest
     private static readonly Regex Vector128Use = new(@"\bVector(?:128|64)(?:<[^>]*>)?\.(?!IsHardwareAccelerated\b)[A-Z]\w*|\bVector(?:128|64)<", RegexOptions.CultureInvariant);
     private static readonly Regex LaneCount = new(@"\bVector(?:64|128|256|512)<\w+>\.Count\b", RegexOptions.CultureInvariant);
 
-    /// <summary>The source with comments and string literals blanked; line breaks are kept.</summary>
+    /// <summary>The source with comments and string literals blanked. Line breaks are kept.</summary>
     private static string StripCommentsAndStrings(string source)
     {
         var chars = source.ToCharArray();

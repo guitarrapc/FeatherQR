@@ -7,7 +7,7 @@ namespace QRInteropFixtures;
 /// rMQR fixture generator backed by the Rust <c>qrtool</c> CLI (qrcode2 crate),
 /// the second external encoder lineage, independent of zint and of the ZXing
 /// family. Uses the prebuilt release binary pinned by version and SHA-256 (see
-/// <c>get-qrtool.ps1</c>); no Rust toolchain is required. The module matrix is
+/// <c>get-qrtool.ps1</c>), so no Rust toolchain is required. The module matrix is
 /// read from the tool's ASCII output (2 characters per module, <c>##</c> dark),
 /// which is exact, no image parsing involved. rMQR is selected with
 /// <c>--variant rmqr --symbol-version H W</c> (verified by <c>probe-rmqr</c>).
@@ -61,7 +61,7 @@ public sealed class QrtoolRmQRFixtureGenerator : IRmQRFixtureGenerator
         string output;
         try
         {
-            // Kanji mode takes raw Shift_JIS bytes; every other mode takes UTF-8 text.
+            // Kanji mode takes raw Shift_JIS bytes, and every other mode takes UTF-8 text.
             if (caseDefinition.Mode == KanjiPayload.ModeName)
                 File.WriteAllBytes(payloadFile, KanjiPayload.ToShiftJisBytes(caseDefinition.PayloadText, caseDefinition.ShiftJisHex));
             else

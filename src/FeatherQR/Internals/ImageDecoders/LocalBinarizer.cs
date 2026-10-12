@@ -4,7 +4,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// Regional binarization for a symbol lit unevenly: each pixel is read against its neighbourhood's level instead of one global threshold.
 /// </summary>
 /// <remarks>
-/// An 8 × 8 block's black point is its mean, or for a flat block (range at most <see cref="MinDynamicRange"/>) half its minimum, raised to the 1:2:1 mean of its top, left and top-left neighbours when its minimum is below that mean (off the first block row and column); each pixel is read against the mean black point of the 5 × 5 blocks around its block.
+/// An 8 × 8 block's black point is its mean, or for a flat block (range at most <see cref="MinDynamicRange"/>) half its minimum, raised to the 1:2:1 mean of its top, left and top-left neighbours when its minimum is below that mean (off the first block row and column). Each pixel is read against the mean black point of the 5 × 5 blocks around its block.
 /// </remarks>
 internal static partial class LocalBinarizer
 {
@@ -18,11 +18,11 @@ internal static partial class LocalBinarizer
 
     private const int Neighbourhood = (2 * Radius + 1) * (2 * Radius + 1);
 
-    /// <summary>Luminance a pixel is written with when dark and when light; the histogram of the output holds these two bins only.</summary>
+    /// <summary>Luminance a pixel is written with when dark and when light. The histogram of the output holds these two bins only.</summary>
     internal const byte Dark = 0;
     internal const byte Light = 255;
 
-    /// <summary>The number of ints <see cref="TryBinarize"/> needs as scratch; 0 when the image is under 5 blocks a side, where there is no neighbourhood to average.</summary>
+    /// <summary>The number of ints <see cref="TryBinarize"/> needs as scratch, or 0 when the image is under 5 blocks a side, where there is no neighbourhood to average.</summary>
     internal static int ScratchLength(int width, int height)
     {
         var columns = (width + BlockSize - 1) / BlockSize;
@@ -39,7 +39,7 @@ internal static partial class LocalBinarizer
     /// <param name="height">Image height in pixels.</param>
     /// <param name="negative">Binarize the negative: each pixel is read as 255 minus its value, and the negative is never written out.</param>
     /// <param name="globalThreshold">The global threshold the decoder already failed on in that polarity (dark: luminance &lt; threshold).</param>
-    /// <param name="binarized">Receives one byte a pixel; may not alias <paramref name="luminance"/>.</param>
+    /// <param name="binarized">Receives one byte a pixel. May not alias <paramref name="luminance"/>.</param>
     /// <param name="scratch"><see cref="ScratchLength"/> ints.</param>
     /// <param name="darkCount">Pixels written <see cref="Dark"/>.</param>
     /// <returns>
@@ -48,7 +48,7 @@ internal static partial class LocalBinarizer
     internal static bool TryBinarize(ReadOnlySpan<byte> luminance, int width, int height, bool negative, byte globalThreshold, Span<byte> binarized, Span<int> scratch, out int darkCount)
         => TryBinarizeCore(luminance, width, height, negative ? (byte)0xFF : (byte)0, globalThreshold, binarized, scratch, vector: true, out darkCount);
 
-    /// <summary>The scalar form of <see cref="TryBinarize"/>, whatever the hardware; the reference its vector form is held to.</summary>
+    /// <summary>The scalar form of <see cref="TryBinarize"/>, whatever the hardware, and the reference its vector form is held to.</summary>
     internal static bool TryBinarizeScalar(ReadOnlySpan<byte> luminance, int width, int height, bool negative, byte globalThreshold, Span<byte> binarized, Span<int> scratch, out int darkCount)
         => TryBinarizeCore(luminance, width, height, negative ? (byte)0xFF : (byte)0, globalThreshold, binarized, scratch, vector: false, out darkCount);
 
@@ -68,7 +68,7 @@ internal static partial class LocalBinarizer
         var blackPoints = scratch.Slice(0, columns * rows);
         var thresholds = scratch.Slice(columns * rows, columns);
 
-        // Blocks that start on their own 8-pixel column; the last one starts earlier when the width is not a multiple of 8
+        // Blocks that start on their own 8-pixel column. The last one starts earlier when the width is not a multiple of 8.
         var alignedColumns = width % BlockSize == 0 ? columns : columns - 1;
 
         for (var blockY = 0; blockY < rows; blockY++)
@@ -158,7 +158,7 @@ internal static partial class LocalBinarizer
     /// <summary>A block's statistics until <see cref="ApplyFlatRule"/> reads them: range, minimum and mean in one int.</summary>
     private static int Pack(int min, int max, int sum) => (max - min) << 16 | min << 8 | sum / (BlockSize * BlockSize);
 
-    /// <summary>Turns a block row's packed statistics into black points; a flat block reads its top, left and top-left neighbours, which are final by then.</summary>
+    /// <summary>Turns a block row's packed statistics into black points. A flat block reads its top, left and top-left neighbours, which are final by then.</summary>
     private static void ApplyFlatRule(Span<int> blackPoints, int columns, int blockY)
     {
         for (var blockX = 0; blockX < columns; blockX++)

@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Symbols under 2 px/module drawn with grey edges: an anti-aliased path, or a 1 px/module image scaled up bilinearly.
-/// Sampled through their true geometry they read; what fails is the frame (finder centres from thresholded runs are good to half a pixel, a third of a module here) and a single pixel against a threshold that edge greys pull toward light.
+/// Sampled through their true geometry they read. What fails is the frame (finder centres from thresholded runs are good to half a pixel, a third of a module here) and a single pixel against a threshold that edge greys pull toward light.
 /// </summary>
 public class SubPixelFrameDecodeTest
 {
@@ -196,7 +196,7 @@ public class SubPixelFrameDecodeTest
     }
 
     /// <summary>
-    /// Scaled up bilinearly to about 2.5 px/module, the finder's light ring keeps one pixel above the global threshold, which edge greys pull toward light, and no line reads 1:1:3:1:1 at it, by its runs or by its like edges; halfway between the two levels the ring is its width.
+    /// Scaled up bilinearly to about 2.5 px/module, the finder's light ring keeps one pixel above the global threshold, which edge greys pull toward light, and no line reads 1:1:3:1:1 at it, by its runs or by its like edges. Halfway between the two levels the ring is its width.
     /// The premise is asserted: no finder candidate at the global threshold, one at the midpoint.
     /// </summary>
     [Test]
@@ -231,7 +231,7 @@ public class SubPixelFrameDecodeTest
         await Assert.That(text).IsEqualTo(content);
     }
 
-    /// <summary>Turned off the image axes, the centre square's window has to follow the symbol's axes; one along the image axes takes in a corner of the light ring and pulls the centre off.</summary>
+    /// <summary>Turned off the image axes, the centre square's window has to follow the symbol's axes. One along the image axes takes in a corner of the light ring and pulls the centre off.</summary>
     [Test]
     [Arguments(MicroQRVersion.M4, 1.5102993f, 315.6054f, 0.86167276f, 0.4975676f)]
     [Arguments(MicroQRVersion.M3, 1.6059713f, 46.342644f, 0.98668975f, 0.4381953f)]

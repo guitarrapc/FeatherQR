@@ -16,7 +16,7 @@ using SkiaSharp;
 ///   none-noise    : 740 x 740 noise, no symbol: the failure path, both polarities
 ///   none-gradient : 740 x 740 smooth ramp, no symbol: the histogram's worst case, both polarities
 ///
-/// Luminance is the span overload and must stay allocation-free; Bitmap is the SKBitmap entry, so the RGBA conversion is inside the measurement.
+/// Luminance is the span overload and must stay allocation-free. Bitmap is the SKBitmap entry, so the RGBA conversion is inside the measurement.
 /// </summary>
 public class QRCodeImageDecodeEndToEnd
 {

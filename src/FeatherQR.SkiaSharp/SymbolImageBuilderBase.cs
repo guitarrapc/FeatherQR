@@ -43,7 +43,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     // ─── Symbology hooks ───
 
     /// <summary>
-    /// Resolves the symbol to render (encoding the configured content when the builder was not given pre-built data) and reports its matrix side length including the quiet zone (width and height; equal for square symbologies).
+    /// Resolves the symbol to render (encoding the configured content when the builder was not given pre-built data) and reports its matrix side length including the quiet zone (width and height, which are equal for square symbologies).
     /// Called exactly once per output operation.
     /// </summary>
     private protected abstract object ResolveSymbol(out int matrixWidth, out int matrixHeight);
@@ -71,7 +71,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// On its own, the symbol is fitted into the canvas with one uniform module scale and centered, whatever the canvas aspect ratio: modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The module size follows from the canvas, so it can be fractional and shifts when the version changes.
     /// Combined with <see cref="WithModulePixelSize(int)"/> this is the canvas alone and the modules decide the content size.
     /// Either way the content is centered and the leftover canvas is padded, in the clear color when one is set and the background color otherwise.
-    /// A canvas smaller than the content on either side is an error, but only when the module size is pinned; on its own this method has no size it cannot fit.
+    /// A canvas smaller than the content on either side is an error, but only when the module size is pinned. On its own this method has no size it cannot fit.
     /// </remarks>
     /// <param name="width">Width in pixels.</param>
     /// <param name="height">Height in pixels.</param>
@@ -144,8 +144,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <remarks>
     /// Both are required, so this call sets exactly the two colors it names and leaves the clear color alone.
-    /// To change one color on its own use <see cref="WithCodeColor(SKColor)"/> or <see cref="WithBackgroundColor(SKColor)"/>;
-    /// the code color's interaction with <see cref="WithGradient(GradientOptions?)"/> is described there.
+    /// To change one color on its own use <see cref="WithCodeColor(SKColor)"/> or <see cref="WithBackgroundColor(SKColor)"/>.
+    /// The code color's interaction with <see cref="WithGradient(GradientOptions?)"/> is described there.
     /// </remarks>
     /// <param name="codeColor">The dark modules.</param>
     /// <param name="backgroundColor">Behind the symbol, quiet zone included.</param>
@@ -161,7 +161,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <remarks>
     /// A gradient set with <see cref="WithGradient(GradientOptions?)"/> takes precedence over this color whatever
-    /// the order of the two calls, so this is not the way to replace a gradient with a solid color; pass
+    /// the order of the two calls, so this is not the way to replace a gradient with a solid color. Pass
     /// <see langword="null"/> to <see cref="WithGradient(GradientOptions?)"/> for that, or a gradient whose
     /// direction is <see cref="GradientDirection.None"/>, which paints this color.
     /// </remarks>
@@ -225,10 +225,10 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Draws the finder patterns as a shape of their own.
     /// </summary>
     /// <remarks>
-    /// The built-in shapes reshape the concentric rings without breaking them, so they stay detectable; what a decoder needs is that the rings are continuous, not that they are square. Not calling this leaves the plain square the standards define, which is always the safest to scan, and it is also what a styled symbol gets: a shaped module never reaches a finder pattern.
+    /// The built-in shapes reshape the concentric rings without breaking them, so they stay detectable. What a decoder needs is that the rings are continuous, not that they are square. Not calling this leaves the plain square the standards define, which is always the safest to scan, and it is also what a styled symbol gets: a shaped module never reaches a finder pattern.
     /// A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.
     /// </remarks>
-    /// <param name="finderPatternShape">The shape to draw. <see cref="RectangleFinderPatternShape.Default"/> for the plain squares a builder starts with; it renders pixel for pixel as not calling this at all, on any background, though the two take different paths, so an SVG names the finder patterns as five rectangles each instead of merging them into the module runs.</param>
+    /// <param name="finderPatternShape">The shape to draw. <see cref="RectangleFinderPatternShape.Default"/> for the plain squares a builder starts with. It renders pixel for pixel as not calling this at all, on any background, though the two take different paths, so an SVG names the finder patterns as five rectangles each instead of merging them into the module runs.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="finderPatternShape"/> is <see langword="null"/>.</exception>
     public TSelf WithFinderPatternShape(FinderPatternShape finderPatternShape)
     {
@@ -244,7 +244,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <remarks>
     /// A gradient takes precedence over the code color whatever the order of the calls, so a later
-    /// <see cref="WithCodeColor(SKColor)"/> does not turn it back into a solid color; this setter's own
+    /// <see cref="WithCodeColor(SKColor)"/> does not turn it back into a solid color. This setter's own
     /// <see langword="null"/> does, as does a gradient whose direction is <see cref="GradientDirection.None"/>.
     /// </remarks>
     /// <param name="gradientOptions">The gradient to paint, or <see langword="null"/> for no gradient, which paints the modules in the code color.</param>
@@ -291,7 +291,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
         using var image = GenerateImage();
         using var data = image.Encode(_format, _quality);
 
-        // Write in writer-provided segments; a single GetSpan for the whole payload
+        // Write in writer-provided segments. A single GetSpan for the whole payload
         // would force segmented writers (e.g. PipeWriter) into one contiguous buffer.
         writer.Write(data.AsSpan());
     }
@@ -302,8 +302,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <remarks>
     /// The symbol is drawn as vector shapes, so it scales without losing quality, and the colors, shapes, gradients and icons all apply, on a background of any alpha.
     /// The root element carries a <c>viewBox</c>, so the document resizes when embedded at another size.
-    /// Plain square modules get <c>shape-rendering="crispEdges"</c> to avoid antialiasing seams; custom shapes keep antialiasing for smooth curves.
-    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> does not apply, since SVG is not a raster format; the size options set the viewport instead.
+    /// Plain square modules get <c>shape-rendering="crispEdges"</c> to avoid antialiasing seams. Custom shapes keep antialiasing for smooth curves.
+    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> does not apply, since SVG is not a raster format. The size options set the viewport instead.
     /// </remarks>
     /// <param name="output">Where to write. Left open afterwards.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
@@ -390,7 +390,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <remarks>
     /// <see cref="SKSvgCanvas"/> writes <c>width</c>/<c>height</c> on the root element but no <c>viewBox</c>.
     /// Without a viewBox, an SVG embedded at a different size (img element, CSS) keeps its content at the original coordinates instead of scaling, the main reason to use SVG in the first place.
-    /// <see cref="SvgRootAttributeInjectorStream"/> inserts the attributes right after the <c>&lt;svg </c> marker while the canvas streams to the output, so the document is never buffered as a whole; if the marker is not found (unexpected upstream format change), the document passes through unpatched.
+    /// <see cref="SvgRootAttributeInjectorStream"/> inserts the attributes right after the <c>&lt;svg </c> marker while the canvas streams to the output, so the document is never buffered as a whole. If the marker is not found (unexpected upstream format change), the document passes through unpatched.
     /// </remarks>
     private void RenderSvg(Stream output)
     {
@@ -412,7 +412,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
 
     /// <summary>
     /// Antialiasing between adjacent vector shapes produces visible hairline seams when the SVG is scaled to non-integer sizes.
-    /// For plain rectangular modules crispEdges removes the seams; custom shapes keep antialiasing for smooth curves.
+    /// For plain rectangular modules crispEdges removes the seams. Custom shapes keep antialiasing for smooth curves.
     /// The symbology hook adds conditions the shared options cannot see (custom finder shapes, drawn icon overlays).
     /// </summary>
     private bool UseCrispEdges()

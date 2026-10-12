@@ -21,7 +21,7 @@ public enum EciMode
     // EciMode.Iso8859_1
     // ┌──────────┬────────────┬──────────┬────────────────┬──────────┐
     // │ ECI(4b)  │ Value(8b)  │ Mode(4b) │ Count(8b)      │ Data     │
-    // │ 0111     │ 00000100   │ 0100     │ 00000010       │ ...      │
+    // │ 0111     │ 00000011   │ 0100     │ 00000010       │ ...      │
     // └──────────┴────────────┴──────────┴────────────────┴──────────┘
     // 4 + 8 + 4 + 8 + (2 * 8) = 40 bits
     //
@@ -29,7 +29,7 @@ public enum EciMode
     // 1. Padding
     // public void WritePadding(int targetBitCount)
     // {
-    //     var remaining = targetBitCount - _builder.Length; // <- - different due to ECI header
+    //     var remaining = targetBitCount - _writer.BitPosition; // <- - different due to ECI header
     //     ....
     // }
     //
@@ -60,7 +60,7 @@ public enum EciMode
     /// </summary>
     /// <remarks>
     /// The ECI header costs 12 bits in Standard QR and 11 in rMQR.
-    /// Emoji, CJK and Cyrillic cannot be encoded; use <see cref="Utf8"/> for those.
+    /// Emoji, CJK and Cyrillic cannot be encoded. Use <see cref="Utf8"/> for those.
     /// </remarks>
     Iso8859_1 = 3,
     /// <summary>
@@ -68,7 +68,7 @@ public enum EciMode
     /// </summary>
     /// <remarks>
     /// The ECI header costs 12 bits in Standard QR and 11 in rMQR, and each character takes 1 to 4 bytes.
-    /// For Western European text <see cref="Iso8859_1"/> is denser, and for Japanese text the Kanji mode <see cref="Default"/> writes with the generator's <c>AllowKanji</c> option is; asking for UTF-8 keeps such text in UTF-8 whatever that option says.
+    /// For Western European text <see cref="Iso8859_1"/> is denser, and for Japanese text the Kanji mode <see cref="Default"/> writes with the generator's <c>AllowKanji</c> option is. Asking for UTF-8 keeps such text in UTF-8 whatever that option says.
     /// </remarks>
     Utf8 = 26
 }
@@ -98,7 +98,7 @@ internal static class EciModeExtensions
     {
         if (eciMode == EciMode.Default)
         {
-            return 0; // No ECI header
+            return 0;
         }
 
         // ECI mode indicator (4 bits) + ECI assignment number (8 bits for 0-127)

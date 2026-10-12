@@ -13,10 +13,10 @@ namespace FeatherQR.Internals.StandardQR;
 /// </summary>
 /// <remarks>
 /// The probes of a budget search walk the same text from the same start and differ only in the budget they close their chunks at, so they are independent instances of one program and share its control: while every lane is at the same character, which is nearly always, a step is the scalar loop's class lookup and branches over vector adds and mins, at about the cost of one scalar step for the eight of them.
-/// A lane whose chunk closes re-reads the character that did not fit, so it falls behind the others: by one step, by two when it closed on the second half of a pair. A cut kept off a run of U+FEFF moves the chunk's start back to the character ahead of the run. When marks lie between that character and the one that did not fit, the vector loop prices that character and the marks in closed form, one Byte run, and the lane re-reads only the character that did not fit; a cut at the run's first mark re-reads from the character ahead, two steps back, three when that character is a pair. While the lanes are apart they are stepped with the class and the byte cost taken per lane in scalar code, and the lanes ahead wait, keeping their states, until the one furthest behind is level with them; left apart, lanes whose closes cost them differently never share a character again. Closing a chunk is itself scalar code, a dozen times per lane in a walk of thousands of steps.
-/// A lane that has failed keeps closing chunks at its own budget, unrecorded, until it meets a character it cannot place; from there it walks on without closing.
-/// The walk prices exactly what <see cref="CountChunks(ReadOnlySpan{char}, EciMode, bool, QRSegmentation, int, int, int, Span{int}, bool)"/> prices (the single-mode shortcuts of <see cref="LongestChunkEnd"/> are the program's own answers on the content they apply to), which <c>StructuredAppendLaneWalkTest</c> holds lane by lane. The byte order mark <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for is not handled here, since its chunk is priced by another rule; the caller keeps those walks scalar.
-/// The eight 32-bit lanes use accelerated <c>Vector256</c>; ARM64 uses eight saturating 16-bit NEON lanes, and every other 128-bit target the same lanes on portable vectors. Without accelerated vectors, or when a chunk averages under the backend's minimum length (the lanes then spend too many steps apart), nothing here runs and the caller's scalar probes do.
+/// A lane whose chunk closes re-reads the character that did not fit, so it falls behind the others: by one step, by two when it closed on the second half of a pair. A cut kept off a run of U+FEFF moves the chunk's start back to the character ahead of the run. When marks lie between that character and the one that did not fit, the vector loop prices that character and the marks in closed form, one Byte run, and the lane re-reads only the character that did not fit. A cut at the run's first mark re-reads from the character ahead, two steps back, three when that character is a pair. While the lanes are apart they are stepped with the class and the byte cost taken per lane in scalar code, and the lanes ahead wait, keeping their states, until the one furthest behind is level with them. Left apart, lanes whose closes cost them differently never share a character again. Closing a chunk is itself scalar code, a dozen times per lane in a walk of thousands of steps.
+/// A lane that has failed keeps closing chunks at its own budget, unrecorded, until it meets a character it cannot place. From there it walks on without closing.
+/// The walk prices exactly what <see cref="CountChunks(ReadOnlySpan{char}, EciMode, bool, QRSegmentation, int, int, int, Span{int}, bool)"/> prices (the single-mode shortcuts of <see cref="LongestChunkEnd"/> are the program's own answers on the content they apply to), which <c>StructuredAppendLaneWalkTest</c> holds lane by lane. The byte order mark <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for is not handled here, since its chunk is priced by another rule. The caller keeps those walks scalar.
+/// The eight 32-bit lanes use accelerated <c>Vector256</c>. ARM64 uses eight saturating 16-bit NEON lanes, and every other 128-bit target the same lanes on portable vectors. Without accelerated vectors, or when a chunk averages under the backend's minimum length (the lanes then spend too many steps apart), nothing here runs and the caller's scalar probes do.
 /// </remarks>
 internal static partial class StructuredAppendPlanner
 {
@@ -27,7 +27,7 @@ internal static partial class StructuredAppendPlanner
     // conservative cutoff: setup and frequent divergent steps can outweigh batching below it.
     private const int MinNeonLaneChunkChars = 20;
 
-    // The portable 16-bit lanes on x64 without AVX; below this they lost to the scalar probes.
+    // The portable 16-bit lanes on x64 without AVX. Below this they lost to the scalar probes.
     private const int MinVector128LaneChunkChars = 40;
 
     // On WebAssembly the interpreter needs longer chunks than AOT-compiled code, and one flag gates both.
@@ -49,7 +49,7 @@ internal static partial class StructuredAppendPlanner
     private const int Lanes = 8;
 
     // Where the first batch puts its budgets above the floor. A balanced budget sits within 22 bits
-    // of the floor on one-byte content; a three-byte character is 24 bits that cannot be cut and a
+    // of the floor on one-byte content. A three-byte character is 24 bits that cannot be cut and a
     // pair 32, so UTF-8 content reaches 46.
     private static ReadOnlySpan<int> OneByteLaneOffsets => [3, 7, 11, 15, 19, 23, 27, 31];
     private static ReadOnlySpan<int> Utf8LaneOffsets => [5, 11, 17, 23, 29, 35, 41, 47];
@@ -140,7 +140,7 @@ internal static partial class StructuredAppendPlanner
             }
             walked = true;
 
-            // Cuts kept off runs of U+FEFF can leave the answer above every budget near the floor, by up to the longest run; one more batch from the highest that failed reaches that far, and the texts whose answer is near the floor keep their first batch as it was.
+            // Cuts kept off runs of U+FEFF can leave the answer above every budget near the floor, by up to the longest run. One more batch from the highest that failed reaches that far, and the texts whose answer is near the floor keep their first batch as it was.
             // Under a ceiling not known to hold the count the answer can be past it, and a batch the ceiling cuts to a few budgets is then a walk the caller's fallback repeats, so it is taken only when at least half of it fits.
             if (!fromFloor || firstHeld < used || spread > 0)
                 return true;
@@ -157,7 +157,7 @@ internal static partial class StructuredAppendPlanner
 #if NET8_0_OR_GREATER
     /// <summary>
     /// Walks the text at up to eight budgets from <paramref name="start"/>, with <paramref name="placed"/> chunks already placed.
-    /// counts[lane] receives the walk's chunk count, or limit + 1 when it needs more; laneEnds[lane * MaxSymbols + k] the end of chunk k for k at or past placed.
+    /// counts[lane] receives the walk's chunk count, or limit + 1 when it needs more, and laneEnds[lane * MaxSymbols + k] the end of chunk k for k at or past placed.
     /// False when some character fits no chunk at some budget, which the scalar walk reports. <paramref name="apartSteps"/> counts the steps taken with the lanes at different characters, the slow ones, which the waiting keeps to a few per chunk.
     /// </summary>
     internal static bool WalkLanes(ReadOnlySpan<char> text, EciMode charset, int version, ReadOnlySpan<int> budgets, int limit, int placed, int start, Span<int> counts, Span<int> laneEnds, out int apartSteps)
@@ -171,7 +171,7 @@ internal static partial class StructuredAppendPlanner
                 ? WalkLanesNeon<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)
                 : WalkLanesNeon<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
         }
-        // Without 256-bit vectors the 32-bit walk hands budgets that fit 16 bits to the portable 16-bit lanes; this dispatch keeps its size, at which it is inlined.
+        // Without 256-bit vectors the 32-bit walk hands budgets that fit 16 bits to the portable 16-bit lanes. This dispatch keeps its size, at which it is inlined.
         return charset == EciMode.Utf8
             ? WalkLanes<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)
             : WalkLanes<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);

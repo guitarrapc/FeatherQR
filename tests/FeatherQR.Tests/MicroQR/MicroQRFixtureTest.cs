@@ -11,7 +11,7 @@ namespace FeatherQR.Tests;
 /// <c>dotnet run --project tools/QRInteropFixtures -- regenerate</c>
 /// (the qrtool binary comes from <c>tools/QRInteropFixtures/get-qrtool.ps1</c>).
 /// <para>
-/// Both the matrix path and the PNG image path (Phase 4b image detection) are
+/// Both the matrix path and the PNG image path (image detection) are
 /// exercised against every fixture.
 /// </para>
 /// </summary>

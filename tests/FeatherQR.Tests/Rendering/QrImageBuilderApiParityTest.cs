@@ -20,9 +20,8 @@ public class QrImageBuilderApiParityTest
     /// overlays, so an icon is Standard QR-only. ECC boost is Standard QR-only for
     /// related reasons: Micro QR ties the legal ECC levels to the version (M1 has
     /// none, M4 alone offers Q), and rMQR's two levels leave a single M→H step that
-    /// has not been asked for; both can join later without changing the contract.
-    /// <c>WithFinderPatternShape</c> used to be here, back when it was a Standard QR
-    /// decoration. It is shared now because it is the only way to style a finder
+    /// has not been asked for. Both can join later without changing the contract.
+    /// <c>WithFinderPatternShape</c> is not here. It is the only way to style a finder
     /// pattern without destroying it, and every symbology has one to protect.
     /// </summary>
     private static readonly string[] standardOnlyMembers =
@@ -34,7 +33,7 @@ public class QrImageBuilderApiParityTest
     /// <summary>
     /// rMQR-only fluent options: version fit is two-dimensional (design record
     /// specs/rmqr-encoder.md), so the rMQR builder alone exposes the fit strategy and
-    /// the fixed-height constraint; and the symbol is rectangular, so the width-only
+    /// the fixed-height constraint. The symbol is rectangular, so the width-only
     /// sizing rule (height from the aspect ratio) is a builder option of its own.
     /// </summary>
     private static readonly string[] rmqrOnlyMembers =
@@ -45,13 +44,13 @@ public class QrImageBuilderApiParityTest
     ];
 
     // WithSegmentation is shared by all three builders (each with its own
-    // segmentation enum, canonicalized to SEGMENTATION below), so no per-symbology
-    // exclusion list is needed for it any more.
+    // segmentation enum, canonicalized to SEGMENTATION below), so it needs no
+    // per-symbology exclusion list.
 
     /// <summary>
     /// Options the two symbologies with a totally ordered version set have and rMQR does
     /// not. rMQR's 32 versions have no min/max relation (R7x43, R9x43 and R7x59 cannot be
-    /// ordered), so a version range has no meaning there; it constrains its fit with
+    /// ordered), so a version range has no meaning there. It constrains its fit with
     /// <c>WithFitStrategy</c> and <c>WithHeight</c> instead.
     /// </summary>
     /// <remarks>
@@ -140,7 +139,7 @@ public class QrImageBuilderApiParityTest
     public async Task VersionRangeOverload_ExistsOnStandardAndMicro_AndNotOnRmqr()
     {
         // The version constraint is one concept, so it is one method name with two
-        // overloads rather than two names; rMQR has only the pinned one.
+        // overloads rather than two names. rMQR has only the pinned one.
         await Assert.That(HasVersionOverload(typeof(QRCodeImageBuilder), typeof(QRVersionRange))).IsTrue();
         await Assert.That(HasVersionOverload(typeof(MicroQRCodeImageBuilder), typeof(MicroQRVersionRange))).IsTrue();
 
@@ -200,7 +199,7 @@ public class QrImageBuilderApiParityTest
 
     /// <summary>
     /// WithVersion legitimately differs in parameter type (int sentinel vs the
-    /// symbology version enums); all canonicalize to VERSION for that member only.
+    /// symbology version enums), so all canonicalize to VERSION for that member only.
     /// </summary>
     private static string NormalizeParameter(Type type, string memberName)
     {

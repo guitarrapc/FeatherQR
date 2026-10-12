@@ -4,10 +4,10 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// rMQR version fit (design record: exact version, or <see cref="RmQRFitStrategy"/>
+/// rMQR version fit (exact version, or <see cref="RmQRFitStrategy"/>
 /// within an optional <see cref="RmQRHeight"/> constraint), the capacity arithmetic
 /// behind it, and the actionable error messages. Expected versions are hand-derived
-/// from the capacity table (specs/rmqr-encoder.md); areas: R7x43 = 301,
+/// from the capacity table (specs/rmqr-encoder.md). Areas: R7x43 = 301,
 /// R11x27 = 297, R13x27 = 351, R9x43 = 387, R7x59 = 413, R15x43 = 645, R11x59 = 649.
 /// </summary>
 public class RmQRVersionSelectorUnitTest
@@ -75,15 +75,15 @@ public class RmQRVersionSelectorUnitTest
     // ---- automatic fit --------------------------------------------------------
 
     [Test]
-    [Arguments(12, RmQRFitStrategy.MinimizeArea, RmQRVersion.R11x27)]    // R7x43 (301) also fits; 297 wins
+    [Arguments(12, RmQRFitStrategy.MinimizeArea, RmQRVersion.R11x27)]    // R7x43 (301) also fits, but 297 wins
     [Arguments(12, RmQRFitStrategy.MinimizeWidth, RmQRVersion.R11x27)]
     [Arguments(12, RmQRFitStrategy.MinimizeHeight, RmQRVersion.R7x43)]
     [Arguments(13, RmQRFitStrategy.MinimizeArea, RmQRVersion.R11x27)]    // R7x43 (12) no longer fits
     [Arguments(13, RmQRFitStrategy.MinimizeHeight, RmQRVersion.R7x59)]
-    [Arguments(15, RmQRFitStrategy.MinimizeArea, RmQRVersion.R13x27)]    // R11x27 (14) out; 351 < 387 (R9x43) < 413 (R7x59)
+    [Arguments(15, RmQRFitStrategy.MinimizeArea, RmQRVersion.R13x27)]    // R11x27 (14) out. 351 < 387 (R9x43) < 413 (R7x59).
     [Arguments(15, RmQRFitStrategy.MinimizeWidth, RmQRVersion.R13x27)]
     [Arguments(15, RmQRFitStrategy.MinimizeHeight, RmQRVersion.R7x59)]
-    [Arguments(27, RmQRFitStrategy.MinimizeArea, RmQRVersion.R11x43)]    // R7x59 / R9x43 / R13x27 (26) out; 473 < 531 (R9x59) < 539 (R7x77)
+    [Arguments(27, RmQRFitStrategy.MinimizeArea, RmQRVersion.R11x43)]    // R7x59 / R9x43 / R13x27 (26) out. 473 < 531 (R9x59) < 539 (R7x77).
     [Arguments(27, RmQRFitStrategy.MinimizeWidth, RmQRVersion.R11x43)]   // width 43: shortest of R11/R13/R15/R17x43
     [Arguments(27, RmQRFitStrategy.MinimizeHeight, RmQRVersion.R7x77)]
     [Arguments(361, RmQRFitStrategy.MinimizeArea, RmQRVersion.R17x139)]  // only the largest fits
@@ -195,7 +195,7 @@ public class RmQRVersionSelectorUnitTest
     /// The table-driven auto fit (best-first version order per strategy, precomputed
     /// capacities, height bitmask) must pick exactly what the definitional scan picks:
     /// among all versions of the allowed height that <see cref="RmQRVersionSelector.Fits"/>,
-    /// the one no other candidate <see cref="RmQRVersionSelector.IsBetter"/> than — for
+    /// the one no other candidate <see cref="RmQRVersionSelector.IsBetter"/> than, for
     /// every mode × ECC × strategy × height filter × data length up to the largest
     /// capacity plus a margin (where nothing fits, both must fail).
     /// </summary>

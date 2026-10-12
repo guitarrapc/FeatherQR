@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The square symbologies used to stretch the symbol across a non-square canvas. Module centres stayed correct and nothing threw, so what broke was detection: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio holds on one axis only once the cells stop being square. Where that starts is not a constant worth pinning — measured on Standard QR with this library and ZXing.Net, failures start around 1.25:1 and neither reads anything past 1.8:1 — so these cases assert decodability well inside the band rather than hunting for the edge.
+/// A symbol stretched across a non-square canvas keeps its module centres correct and throws nothing. What breaks is detection: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio holds on one axis only once the cells stop being square. Where that starts is not a constant worth pinning, so these cases assert decodability well inside the range where a stretch fails rather than hunting for its edge.
 /// </para>
 /// <para>
 /// Aspect ratio, not size: <see cref="SymbolImageBuilderBase{TSelf}.WithSize(int, int)"/> has no lower bound, and a canvas too small for the symbol gives it sub-pixel modules that nothing reads. Every canvas here is large enough that the module scale is not the variable under test.
@@ -23,7 +23,7 @@ public class ImageBuilderCanvasFitTest
 {
     private const string Content = "https://githu";
 
-    /// <summary>Canvases whose aspect ratio the fill behaviour could not survive, in both orientations.</summary>
+    /// <summary>Canvases whose aspect ratio a stretched symbol does not survive, in both orientations.</summary>
     public static IEnumerable<(string, int, int)> NonSquareCanvases()
     {
         foreach (var symbology in new[] { "qr", "microqr", "rmqr" })
@@ -69,7 +69,7 @@ public class ImageBuilderCanvasFitTest
     }
 
     /// <summary>
-    /// The fitted grid is one hypothesis about where the symbol is; the drawn pixels are another.
+    /// The fitted grid is one hypothesis about where the symbol is, and the drawn pixels are another.
     /// A stretched render keeps its module centres correct too, so only a measurement that does
     /// not assume the grid can tell the two apart: the dark modules of a square symbology span a
     /// square, whatever the canvas.
@@ -103,9 +103,8 @@ public class ImageBuilderCanvasFitTest
     }
 
     /// <summary>
-    /// Styling narrows the aspect window well below what plain rendering survives, and it is where
-    /// the fill behaviour failed first, so the same canvases have to hold with a circle-based
-    /// module and finder shape.
+    /// Styling narrows the aspect window a stretched symbol survives well below plain rendering's,
+    /// so the same canvases have to hold with a circle-based module and finder shape.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(NonSquareCanvases))]
@@ -147,7 +146,7 @@ public class ImageBuilderCanvasFitTest
     /// <summary>
     /// A canvas the symbol fits exactly must carry no pad at all.
     /// </summary>
-    /// <remarks>Rounding can leave the centering offset just below zero, and flooring that gives -1: the symbol shifts a pixel and the far edges grow a band of pad. The pad is the background by default, so seeing it needs a clear colour that differs; these versions are ones whose ratio actually overshoots.</remarks>
+    /// <remarks>Rounding can leave the centering offset just below zero, and flooring that gives -1: the symbol shifts a pixel and the far edges grow a band of pad. The pad is the background by default, so seeing it needs a clear colour that differs. These versions are ones whose ratio actually overshoots.</remarks>
     [Test]
     [Arguments(5, 400)]
     [Arguments(6, 450)]
@@ -332,7 +331,7 @@ public class ImageBuilderCanvasFitTest
     }
 
     /// <summary>
-    /// Transparent surroundings with an opaque symbol background stay available; they are now
+    /// Transparent surroundings with an opaque symbol background are available. They are
     /// asked for rather than assumed.
     /// </summary>
     [Test]
@@ -347,8 +346,7 @@ public class ImageBuilderCanvasFitTest
 
     /// <summary>
     /// The pad that <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize(int)"/> leaves
-    /// follows the same rule. This is the one place where the default changes without the
-    /// geometry changing: it used to be transparent.
+    /// follows the same rule: the background, not transparent, unless a clear colour is set.
     /// </summary>
     [Test]
     public async Task ModulePixelSizePad_DefaultsToTheBackgroundColour()
@@ -416,7 +414,7 @@ public class ImageBuilderCanvasFitTest
     }
 
     /// <summary>The slack absorbed before flooring has to stay under the smallest gap a real offset can leave below a whole pixel, at every matrix size the data types accept.</summary>
-    /// <remarks>The off-centre axis has an offset that is a multiple of <c>1 / (2 × the dimension that constrained the fit)</c>, so a larger matrix can sit closer to a boundary; a square one never can, since that makes the offsets multiples of a half. <see cref="SymbolImageBuilderBase{TSelf}.WithQuietZone(int)"/> caps at 10 modules, but the generator options and the data constructors go to 10,000, which reaches a 20,000-module matrix and a gap of about 2.5e-5. Both geometries here sit within 1e-3 of a boundary.</remarks>
+    /// <remarks>The off-centre axis has an offset that is a multiple of <c>1 / (2 × the dimension that constrained the fit)</c>, so a larger matrix can sit closer to a boundary. A square one never can, since that makes the offsets multiples of a half. <see cref="SymbolImageBuilderBase{TSelf}.WithQuietZone(int)"/> caps at 10 modules, but the generator options and the data constructors go to 10,000, which reaches a 20,000-module matrix and a gap of about 2.5e-5. Both geometries here sit within 1e-3 of a boundary.</remarks>
     [Test]
     [Arguments(RmQRVersion.R7x139, 195, 533, 402, 0)]
     [Arguments(RmQRVersion.R9x139, 10, 806, 661, 256)]
@@ -454,7 +452,7 @@ public class ImageBuilderCanvasFitTest
 
     /// <summary>
     /// A pinned module size is a promise the canvas can contradict, and it can contradict it on
-    /// one axis alone. The existing negatives are all too small on both, so either half of the
+    /// one axis alone. The other negative cases are too small on both, so either half of the
     /// guard satisfies them by itself.
     /// </summary>
     [Test]

@@ -65,7 +65,7 @@ internal static class SupersampledRenderer
 
     /// <summary>
     /// <see cref="SpanCorners(int, int, float, float, float, out int)"/> with the keystone along a direction <paramref name="tiltDegrees"/> from the symbol's own vertical.
-    /// The span is turned by the tilt, the box round it is narrowed at the top by the keystone as a plane in perspective, and the result is turned by <paramref name="degrees"/>; the box's height and bottom edge keep their length, so the depth ratio between the span's nearest and farthest points is 1/(1 − keystone) at every tilt.
+    /// The span is turned by the tilt, the box round it is narrowed at the top by the keystone as a plane in perspective, and the result is turned by <paramref name="degrees"/>. The box's height and bottom edge keep their length, so the depth ratio between the span's nearest and farthest points is 1/(1 − keystone) at every tilt.
     /// </summary>
     public static float[] SpanCorners(int columns, int rows, float pixelsPerModule, float degrees, float keystone, float tiltDegrees, out int side)
     {
@@ -78,7 +78,7 @@ internal static class SupersampledRenderer
         {
             side = (int)(Math.Max(symbolWidth, symbolHeight) * 1.45f) + 8;
 
-            // Destination corners (TL, TR, BR, BL); the top edge shrinks by the keystone
+            // Destination corners (TL, TR, BR, BL). The top edge shrinks by the keystone.
             var top = halfWidth * (1f - keystone);
             corners = [-top, -halfHeight, top, -halfHeight, halfWidth, halfHeight, -halfWidth, halfHeight];
         }

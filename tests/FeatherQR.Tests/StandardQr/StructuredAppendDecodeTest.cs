@@ -120,7 +120,7 @@ public class StructuredAppendDecodeTest
     [Test]
     public async Task TruncatedHeader_IsInvalidBitstream()
     {
-        // Mode indicator followed by 8 header bits; the byte padding makes it 12 of the 16.
+        // Mode indicator followed by 8 header bits. The byte padding makes it 12 of the 16.
         var data = Build((ModeStructuredAppend, 4), (0, 4), (1, 4));
 
         var status = Decode(data, out _, out _);
@@ -196,7 +196,7 @@ public class StructuredAppendDecodeTest
         return status;
     }
 
-    /// <summary>Packs (value, bit count) fields MSB-first; the last byte is zero-padded.</summary>
+    /// <summary>Packs (value, bit count) fields MSB-first. The last byte is zero-padded.</summary>
     private static byte[] Build(params (int Value, int Bits)[] fields)
     {
         var totalBits = fields.Sum(f => f.Bits);

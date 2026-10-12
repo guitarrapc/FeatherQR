@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The Standard QR image decoder searches an image again at reduced scale when nothing reads at full size: a symbol under a texture finer than its modules reads halved, with its corners reported in the image it was given.
-/// The texture is a renderer's (<see cref="FineTextureRenderer"/>); what the search reads of photographs is measured by the decode sweep's photograph sets.
+/// The texture is a renderer's (<see cref="FineTextureRenderer"/>). What the search reads of photographs is measured by the decode sweep's photograph sets.
 /// </summary>
 public class ReducedScaleDecodeTest
 {
@@ -162,7 +162,7 @@ public class ReducedScaleDecodeTest
         await Assert.That(searched.Log.Calls[0]).IsEqualTo((width, height, DecodeStatus.Success));
     }
 
-    /// <summary>The symbol with the lower half of its data inverted, which no error correction recovers; the function patterns stay.</summary>
+    /// <summary>The symbol with the lower half of its data inverted, which no error correction recovers. The function patterns stay.</summary>
     private static Func<int, int, bool> DamagedPastCorrection(QRCodeData qr)
     {
         var layout = ModulePlacer.GetLayout(3);

@@ -8,10 +8,10 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// What <see cref="SegmentDecoders.DecodeBytePayload"/> makes of a byte segment, against the rule
-/// written out here from the specification of the behaviour: ISO-8859-1 widens; a declared UTF-8
-/// segment, or one that opens with a BOM, decodes as UTF-8 and substitutes what is invalid; a
+/// written out here from the specification of the behaviour: ISO-8859-1 widens. A declared UTF-8
+/// segment, or one that opens with a BOM, decodes as UTF-8 and substitutes what is invalid. A
 /// declared Shift_JIS segment is read through the JIS X 0208 cells and refused where it is not well
-/// formed or holds a cell outside them; an undeclared one is UTF-8 when every sequence is well
+/// formed or holds a cell outside them. An undeclared one is UTF-8 when every sequence is well
 /// formed, else Shift_JIS when the guess written out below holds, and ISO-8859-1 otherwise.
 /// </summary>
 /// <remarks>

@@ -13,7 +13,7 @@ namespace FeatherQR.Tests;
 /// <remarks>
 /// Kanji mode is written only when the caller sets <c>AllowKanji</c>: Android's own scanners read none of it, so by default every generator writes what it wrote before Kanji mode existed, UTF-8 behind an ECI header (none on Micro QR, which has no ECI).
 /// With the option a text is eligible when the library chose the charset and chose UTF-8, and every character is ASCII or has an encoder cell.
-/// A single mode writes Kanji only when every character has a cell. An eligible text with ASCII in it stays UTF-8 under <see cref="QRSegmentation.Single"/>, and under <see cref="QRSegmentation.Optimal"/> takes a Kanji plan where that plan needs a smaller version; <c>KanjiOptimalTest</c> holds that rule whole.
+/// A single mode writes Kanji only when every character has a cell. An eligible text with ASCII in it stays UTF-8 under <see cref="QRSegmentation.Single"/>, and under <see cref="QRSegmentation.Optimal"/> takes a Kanji plan where that plan needs a smaller version. <c>KanjiOptimalTest</c> holds that rule whole.
 /// </remarks>
 public class KanjiEligibilityTest
 {
@@ -72,7 +72,7 @@ public class KanjiEligibilityTest
         var optimal = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
         await Assert.That(StandardCore(text, QREccLevel.M, optimal)).IsEquivalentTo(StandardCore(text, QREccLevel.M, optimal with { EciMode = EciMode.Utf8 }), CollectionOrdering.Matching);
 
-        // A version range or the boost takes the path that resolves version and level ahead of the encode; it is UTF-8 there too.
+        // A version range or the boost takes the path that resolves version and level ahead of the encode. It is UTF-8 there too.
         foreach (var options in new[] { new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(40) }, new QRCodeGeneratorOptions { BoostEccLevel = true } })
             await Assert.That(StandardCore(text, QREccLevel.M, options)).IsEquivalentTo(StandardCore(text, QREccLevel.M, options with { EciMode = EciMode.Utf8 }), CollectionOrdering.Matching).Because($"{options.Version} boost {options.BoostEccLevel}");
     }
@@ -123,7 +123,7 @@ public class KanjiEligibilityTest
             await Assert.That(StandardCore(text, QREccLevel.M, options)).IsEquivalentTo(ExpectedStandard([new Run('E', "26"), new Run('U', text)], QREccLevel.M), CollectionOrdering.Matching).Because($"AllowKanji {options.AllowKanji}");
     }
 
-    /// <summary>Without <c>AllowKanji</c>, Optimal plans such a text as UTF-8, which is what the explicit charset writes; 「東京タワー333m」 included, whose Kanji plan would be smaller.</summary>
+    /// <summary>Without <c>AllowKanji</c>, Optimal plans such a text as UTF-8, which is what the explicit charset writes. That includes 「東京タワー333m」, whose Kanji plan would be smaller.</summary>
     [Test]
     [MethodDataSource(nameof(EligibleWithAscii))]
     public async Task StandardQr_EligibleWithAsciiByDefault_OptimalIsTheUtf8Plan(string text)
@@ -368,7 +368,7 @@ public class KanjiEligibilityTest
     }
 
     /// <summary>
-    /// ErrorDetectionOnly allows M1 alone. A Kanji text's refusal names Kanji among the modes M3 adds; every other text's refusal, and the same text's without <c>AllowKanji</c>, is word for word what it was before Kanji mode was written.
+    /// ErrorDetectionOnly allows M1 alone. A Kanji text's refusal names Kanji among the modes M3 adds. Every other text's refusal, and the same text's without <c>AllowKanji</c>, is word for word what it was before Kanji mode was written.
     /// </summary>
     [Test]
     public async Task MicroQr_ErrorDetectionOnlyRefusal_NamesKanjiOnlyForKanji()
@@ -389,7 +389,7 @@ public class KanjiEligibilityTest
         await Assert.That(bytes!.Message).IsEqualTo(ByteRefusal);
     }
 
-    /// <summary>A version that does not offer Kanji says so, listing Kanji where M3 adds it; a Byte text's refusal, and the same text's without <c>AllowKanji</c>, is unchanged.</summary>
+    /// <summary>A version that does not offer Kanji says so, listing Kanji where M3 adds it. A Byte text's refusal, and the same text's without <c>AllowKanji</c>, is unchanged.</summary>
     [Test]
     public async Task MicroQr_ExactVersionWithoutTheMode_NamesKanjiOnlyForKanji()
     {
@@ -405,7 +405,7 @@ public class KanjiEligibilityTest
         await Assert.That(bytes!.Message).StartsWith(ByteRefusal);
     }
 
-    /// <summary>With <c>AllowKanji</c> nine kanji fill M4-L and ten are refused in characters, not bytes; without it the same nine are 27 UTF-8 bytes and do not fit at all.</summary>
+    /// <summary>With <c>AllowKanji</c> nine kanji fill M4-L and ten are refused in characters, not bytes. Without it the same nine are 27 UTF-8 bytes and do not fit at all.</summary>
     [Test]
     public async Task MicroQr_CapacityWithAllowKanji_IsTheKanjiColumn()
     {
@@ -504,11 +504,11 @@ public class KanjiEligibilityTest
             await Assert.That(RmQrCore(text, options)).IsEquivalentTo(ExpectedRmQr([new Run('E', "3"), new Run('B', text)]), CollectionOrdering.Matching).Because($"AllowKanji {options.AllowKanji}");
     }
 
-    /// <summary>With <c>AllowKanji</c> the automatic fit picks the Kanji stream's version, sizing agrees, and a refusal counts characters; without it the same text is UTF-8 and does not fit R7x43.</summary>
+    /// <summary>With <c>AllowKanji</c> the automatic fit picks the Kanji stream's version, sizing agrees, and a refusal counts characters. Without it the same text is UTF-8 and does not fit R7x43.</summary>
     [Test]
     public async Task RmQr_FitSizingAndRefusal_FollowTheOption()
     {
-        var text = Cells(0, 3);   // R7x43-M holds 3 Kanji; as UTF-8 (6 bytes or more behind an ECI header) it does not fit R7x43
+        var text = Cells(0, 3);   // R7x43-M holds 3 Kanji. As UTF-8 (6 bytes or more behind an ECI header) it does not fit R7x43.
         var minimizeHeight = new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight };
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out var size, minimizeHeight with { AllowKanji = true })).IsTrue();
         await Assert.That(size.Version).IsEqualTo(RmQRVersion.R7x43);

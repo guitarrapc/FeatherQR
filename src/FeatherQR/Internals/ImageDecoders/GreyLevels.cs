@@ -15,7 +15,7 @@ internal readonly struct GreyLevels
     /// <summary>1 / (light − dark), 0 when disabled.</summary>
     private readonly float _scale;
 
-    /// <summary>Halfway between the two levels, disabled or not; 0 for an image of one class.</summary>
+    /// <summary>Halfway between the two levels, disabled or not. It is 0 for an image of one class.</summary>
     private readonly float _edge;
 
     /// <summary>The two classes have to be apart for a level between them to mean coverage.</summary>
@@ -41,7 +41,7 @@ internal readonly struct GreyLevels
     public float Midpoint => _light - 0.5f / _scale;
 
     /// <summary>
-    /// The luminance an edge between the two classes is located at, from samples either side of it: <see cref="Midpoint"/>, also on an image with no grey pixel; <paramref name="threshold"/> on an image of one class.
+    /// The luminance an edge between the two classes is located at, from samples either side of it: <see cref="Midpoint"/>, also on an image with no grey pixel, and <paramref name="threshold"/> on an image of one class.
     /// Not the threshold otherwise: on a two-level image it lies a level above the dark one, which puts every edge on the centre of its dark pixel, half a pixel into the dark.
     /// </summary>
     public float EdgeLevel(int threshold) => IsEnabled ? Midpoint : _edge > 0f ? _edge : threshold;

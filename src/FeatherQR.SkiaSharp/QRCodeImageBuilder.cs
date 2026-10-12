@@ -23,7 +23,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     private int? _maskPattern;
     private QRSegmentation _segmentation = QRSegmentation.Single;
 
-    // rendering (Standard QR-only option; Micro QR and rMQR have no ECC headroom for overlays)
+    // rendering (Standard QR-only option, since Micro QR and rMQR have no ECC headroom for overlays)
     private IconData? _iconData;
 
     /// <summary>
@@ -43,7 +43,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// <summary>
     /// Starts a builder that draws a QR code you have already generated.
     /// The QR code is used exactly as given, so only the appearance options apply.
-    /// Most encoding options throw <see cref="InvalidOperationException"/> on a builder created this way; <see cref="WithErrorCorrection"/> and <see cref="WithEciMode"/> are accepted and then ignored, because they shipped that way in 1.1.1.
+    /// Most encoding options throw <see cref="InvalidOperationException"/> on a builder created this way. <see cref="WithErrorCorrection"/> and <see cref="WithEciMode"/> are accepted and then ignored.
     /// </summary>
     /// <param name="qrCodeData">The QR code to draw.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="qrCodeData"/> is null.</exception>
@@ -323,7 +323,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// Raise the error correction level above the one configured with <see cref="WithErrorCorrection(QREccLevel)"/> when the chosen version's capacity allows it, without changing the version or the QR code size.
     /// Recommended together with <see cref="WithIcon(IconData?)"/>: the spare capacity absorbs the modules the icon covers.
     /// </summary>
-    /// <param name="boostEccLevel">Whether to boost; see <see cref="QRCodeGeneratorOptions.BoostEccLevel"/>.</param>
+    /// <param name="boostEccLevel">Whether to boost. See <see cref="QRCodeGeneratorOptions.BoostEccLevel"/>.</param>
     /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made QR code.</exception>
     public QRCodeImageBuilder WithErrorCorrectionBoost(bool boostEccLevel = true)
     {
@@ -367,7 +367,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// <summary>
     /// Narrows the versions the generator may choose from, for a QR code that has to reach or stay under a physical size.
     /// </summary>
-    /// <param name="versionRange">The versions to choose from; the smallest that holds the content wins.</param>
+    /// <param name="versionRange">The versions to choose from. The smallest that holds the content wins.</param>
     /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made QR code.</exception>
     public QRCodeImageBuilder WithVersion(QRVersionRange versionRange)
     {
@@ -379,7 +379,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     }
 
     /// <summary>
-    /// Pin one of the eight data mask patterns (0-7) instead of the automatic penalty-scored selection; see <see cref="QRCodeGeneratorOptions.MaskPattern"/>.
+    /// Pin one of the eight data mask patterns (0-7) instead of the automatic penalty-scored selection. See <see cref="QRCodeGeneratorOptions.MaskPattern"/>.
     /// </summary>
     /// <param name="maskPattern">Mask pattern (0-7), or null for automatic selection.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-7 or null.</exception>
@@ -452,7 +452,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     }
 
     /// <summary>
-    /// Curved finder shapes require antialiasing; a square one does not, and neither do the built-in icon shapes, which only draw rectangles, bitmaps, and text.
+    /// Curved finder shapes require antialiasing. A square one does not, and neither do the built-in icon shapes, which only draw rectangles, bitmaps, and text.
     /// </summary>
     private protected override bool UseCrispEdgesCore()
     {

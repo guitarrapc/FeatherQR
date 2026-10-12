@@ -11,7 +11,7 @@ namespace FeatherQR.Tests;
 /// The 12-bit band was unguarded when Kanji decoding shipped: the committed Kanji
 /// fixtures are versions 1, 2 and 12, and <see cref="QRBinaryDecoderUnitTest"/> builds
 /// every hand-made stream at version 1, so nothing reached versions 27-40. Deleting
-/// that band (returning 10 for 27-40) passed the entire suite; the 10-bit band was
+/// that band (returning 10 for 27-40) passed the entire suite. The 10-bit band was
 /// covered, but by exactly one fixture (`kanji-long-q`, version 12). These tests pin
 /// every band and both boundaries, at the accessor and through the decoder, because
 /// the accessor alone would not catch a caller that stopped using it.

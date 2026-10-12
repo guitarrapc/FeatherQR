@@ -11,7 +11,7 @@ using System.Xml.Linq;
 //   dotnet run tools/filter_public_docs.cs -- <documentation.xml>...            trim + verify
 //   dotnet run tools/filter_public_docs.cs -- --check <documentation.xml>...    verify only
 //
-// The assembly is the .dll beside each file; pass several with a shell glob. Visibility comes
+// The assembly is the .dll beside each file. Pass several with a shell glob. Visibility comes
 // from its metadata tables, so this needs no package reference and never loads the assembly.
 
 var check = args.Length > 0 && args[0] == "--check";
@@ -45,7 +45,7 @@ bool Process(string documentationPath, bool verifyOnly)
     }
     catch (System.Xml.XmlException e)
     {
-        // Deleted so the next build regenerates it; the compiler would otherwise stay up to date.
+        // Deleted so the next build regenerates it. The compiler would otherwise stay up to date.
         if (!verifyOnly) File.Delete(documentationPath);
         Console.Error.WriteLine($"{documentationPath} was not valid XML ({e.Message}). Run the build again to regenerate it.");
         return false;
@@ -85,7 +85,7 @@ bool Process(string documentationPath, bool verifyOnly)
                 visible.Add($"{typeName}.{reader.GetString(field.Name)}");
         }
 
-        // Properties and events have no accessibility of their own; one visible accessor is
+        // Properties and events have no accessibility of their own. One visible accessor is
         // enough to make the member reachable.
         foreach (var propertyHandle in type.GetProperties())
         {
@@ -145,7 +145,7 @@ bool Process(string documentationPath, bool verifyOnly)
     return true;
 
     // "M:Ns.Type`1.Method``1(System.Int32@)~T" -> "Ns.Type`1.Method". A type's single backtick
-    // arity is part of its metadata name; only the method's double one is cut.
+    // arity is part of its metadata name, so only the method's double one is cut.
     static string KeyOf(string? id)
     {
         if (id is null || id.Length < 3 || id[1] != ':') return "";

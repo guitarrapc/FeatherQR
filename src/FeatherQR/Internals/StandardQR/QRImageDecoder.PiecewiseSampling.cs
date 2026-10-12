@@ -140,7 +140,7 @@ internal static partial class QRImageDecoder
 #endif
 
     /// <summary>
-    /// The lengths the unchecked loops rely on. Throws for a buffer too small to hold what the dimensions say; returns false for a mesh the stack tables cannot hold, which the caller hands to the reference.
+    /// The lengths the unchecked loops rely on. Throws for a buffer too small to hold what the dimensions say, and returns false for a mesh the stack tables cannot hold, which the caller hands to the reference.
     /// </summary>
     private static bool CheckPiecewiseArguments(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {
@@ -163,12 +163,12 @@ internal static partial class QRImageDecoder
         return Math.Max(0, Math.Min(meshSize - 3, first));
     }
 
-    /// <summary>The slope from the first of three values on a lattice line to the second; <paramref name="toSecond"/> is 1 over the spacing of those two nodes.</summary>
+    /// <summary>The slope from the first of three values on a lattice line to the second. <paramref name="toSecond"/> is 1 over the spacing of those two nodes.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static float SlopeOfThree(float p0, float p1, float toSecond)
         => (p1 - p0) * toSecond;
 
-    /// <summary>The curvature through three values on a lattice line, how the slope changes from the first pair to the second, a module; <paramref name="toThird"/> is 1 over the spacing of the last two nodes and <paramref name="across"/> 1 over that of the first and the last.</summary>
+    /// <summary>The curvature through three values on a lattice line, how the slope changes from the first pair to the second, a module. <paramref name="toThird"/> is 1 over the spacing of the last two nodes and <paramref name="across"/> 1 over that of the first and the last.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static float CurveOfThree(float slope, float p1, float p2, float toThird, float across)
         => ((p2 - p1) * toThird - slope) * across;

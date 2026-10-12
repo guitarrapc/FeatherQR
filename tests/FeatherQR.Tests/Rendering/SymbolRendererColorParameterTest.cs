@@ -9,16 +9,16 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The colours are the one place where the rule "<see langword="null"/> means the option is absent, never the default value"
-/// used to be broken on the static surface: two required parameters typed <c>SKColor?</c>, where <see langword="null"/> meant black and white.
+/// The rule is "<see langword="null"/> means the option is absent, never the default value", so the renderer's two required
+/// colours are not <c>SKColor?</c> parameters where <see langword="null"/> would mean black and white.
 /// The extensions keep their optional <c>SKColor?</c> parameters, because a C# optional parameter needs a constant default and
 /// <c>default(SKColor)</c> is transparent, and resolve them before forwarding.
 /// </para>
 /// <para>
-/// These tests pin that resolution and the two things a caller who now has to write a code colour needs to know about it.
+/// These tests pin that resolution and the two things a caller who writes a code colour needs to know about it.
 /// A gradient takes precedence over it, the way a shader takes precedence over <c>SKPaint.Color</c>, except a gradient of
 /// <see cref="GradientDirection.None"/>, which paints it. And a colour is drawn as given, transparent included, because
-/// nothing is substituted for it any more.
+/// nothing is substituted for it.
 /// </para>
 /// </remarks>
 public class SymbolRendererColorParameterTest
@@ -94,12 +94,12 @@ public class SymbolRendererColorParameterTest
     }
 
     /// <summary>
-    /// A colour is drawn as given, transparent included: the renderer substitutes nothing any more.
+    /// A colour is drawn as given, transparent included: the renderer substitutes nothing.
     /// </summary>
     /// <remarks>
     /// This is the contract that makes <c>default(SKColor)</c> a transparent symbol rather than a black one.
-    /// While the parameters were <c>SKColor?</c> the renderer resolved a missing colour itself, and the literal
-    /// <c>default</c> in those positions meant <see langword="null"/>, so the same source text drew black on white.
+    /// Were the parameters <c>SKColor?</c>, the literal <c>default</c> in those positions would mean
+    /// <see langword="null"/>, and the same source text would draw black on white.
     /// </remarks>
     [Test]
     [Arguments("qr")]
@@ -143,7 +143,7 @@ public class SymbolRendererColorParameterTest
 
     /// <summary>
     /// A gradient whose direction is <see cref="GradientDirection.None"/> paints the modules in the code colour,
-    /// the same pixels as no gradient at all; the control shows the colour is the one named, not a default.
+    /// the same pixels as no gradient at all. The control shows the colour is the one named, not a default.
     /// </summary>
     [Test]
     [Arguments("qr")]
@@ -213,7 +213,7 @@ public class SymbolRendererColorParameterTest
         return bitmap;
     }
 
-    /// <summary>A canvas around <see cref="Area"/>, cleared to <paramref name="ground"/> — transparent unless a test needs to see what the renderer leaves alone.</summary>
+    /// <summary>A canvas around <see cref="Area"/>, cleared to <paramref name="ground"/>, which is transparent unless a test needs to see what the renderer leaves alone.</summary>
     private static SKBitmap Canvas(Action<SKCanvas> draw, SKColor? ground = null)
     {
         var bitmap = new SKBitmap(new SKImageInfo((int)Area.Right + 20, (int)Area.Bottom + 20, SKColorType.Rgba8888, SKAlphaType.Premul));

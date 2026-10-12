@@ -7,7 +7,7 @@ namespace FeatherQR.SkiaSharp;
 
 /// <summary>
 /// Decodes QR codes from SkiaSharp bitmaps.
-/// Extends <see cref="QRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>QRCodeDecoder.TryDecode(bitmap, ...)</c>; on older language versions call them on this class.
+/// Extends <see cref="QRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>QRCodeDecoder.TryDecode(bitmap, ...)</c>. On older language versions call them on this class.
 /// </summary>
 public static class QRCodeImageDecoder
 {

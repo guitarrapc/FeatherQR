@@ -61,7 +61,7 @@ public sealed class ZintFnc1FixtureGenerator : IFnc1FixtureGenerator
             version = (matrix.Width - 17) / 4;
         }
 
-        // libzint reports neither its segmentation nor its mask; the gate takes the mask from the reader.
+        // libzint reports neither its segmentation nor its mask, so the gate takes the mask from the reader.
         return new GeneratedFixture(Fnc1Manifests.Build(Name, Fnc1Writers.ZintVersion, caseDefinition, matrix, version, versionName, mode: "Unknown", maskPattern: -1), matrix.Modules);
     }
 }

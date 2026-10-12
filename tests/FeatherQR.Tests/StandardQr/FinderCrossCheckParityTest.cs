@@ -4,12 +4,12 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity test for the bounded walk of the axis cross-checks.
-/// <see cref="FinderPatternFinder.MeasureRunsBounded"/> measures the centre run first and gives the walk up the moment a run passes what any accepted cross section allows; the reference walks all five runs and lets the verdict refuse.
+/// <see cref="FinderPatternFinder.MeasureRunsBounded"/> measures the centre run first and gives the walk up the moment a run passes what any accepted cross section allows. The reference walks all five runs and lets the verdict refuse.
 /// The two may differ only where the verdict is a refusal, so they are compared at the cross-check itself (the returned centre and total, bit for bit) and at the walk (equal runs whenever the bounded walk finishes, a refusal by the reference whenever it does not).
 /// </summary>
 public class FinderCrossCheckParityTest
 {
-    // Columns are independent run sequences, so the image is read along its columns; the row walk reads the same sequences through the transposed image.
+    // Columns are independent run sequences, so the image is read along its columns. The row walk reads the same sequences through the transposed image.
     private static readonly (int Lines, int Length)[] sizes = [(41, 97), (97, 41), (8, 160)];
 
     [Test]
@@ -23,7 +23,6 @@ public class FinderCrossCheckParityTest
         {
             foreach (var module in new[] { 1, 2, 3, 4, 7 })
             {
-                // One scene a size and module: of the bound and walk faults planted by hand, a second seed caught none this one misses
                 var columns = BuildRunColumns(lines, length, module, seed: 17);
                 var rows = Transpose(columns, lines, length);
                 foreach (var expected in ExpectedTotals(module))
@@ -49,7 +48,7 @@ public class FinderCrossCheckParityTest
     {
         // With the grey levels of the image, near misses are measured again from coverage, the one accept path the bounds were not derived from directly.
         // The box-filtered columns are what reach it: their whole-pixel runs miss the ratio by a rounding their edges keep. The blur along the line
-        // spreads each edge evenly over the pixels beside it, so coverage measures the whole-pixel runs again; those columns hold the grey refusals.
+        // spreads each edge evenly over the pixels beside it, so coverage measures the whole-pixel runs again. Those columns hold the grey refusals.
         var compared = 0L;
         var handedBack = 0L;
         var byLikeEdges = 0L;
@@ -196,7 +195,7 @@ public class FinderCrossCheckParityTest
 
     /// <summary>
     /// <paramref name="lines"/> columns of <paramref name="length"/> pixels, each its own sequence of dark and light runs.
-    /// A third of the sequences are 1:1:3:1:1 at the module size with every run moved by up to half a module and a pixel, so they sit on both sides of every tolerance, half of them with every dark run longer or shorter by one amount up to 0.6 of a module and the light runs the other way, around the like-edge bounds; the rest are data-like runs of one to four modules.
+    /// A third of the sequences are 1:1:3:1:1 at the module size with every run moved by up to half a module and a pixel, so they sit on both sides of every tolerance, half of them with every dark run longer or shorter by one amount up to 0.6 of a module and the light runs the other way, around the like-edge bounds. The rest are data-like runs of one to four modules.
     /// </summary>
     private static byte[] BuildRunColumns(int lines, int length, int module, int seed)
     {

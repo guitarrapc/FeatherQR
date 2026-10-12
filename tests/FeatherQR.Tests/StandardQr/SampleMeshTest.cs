@@ -54,7 +54,7 @@ public class SampleMeshTest
         await Assert.That(worst).IsLessThan(Tolerance).Because($"node ({worstNode % meshSize}, {worstNode / meshSize}) is {worst:F3} modules off");
     }
 
-    /// <summary>Versions 2 to 6 have a single node with a pattern, the bottom-right one the four-point transform already uses; no alignment pattern is searched.</summary>
+    /// <summary>Versions 2 to 6 have a single node with a pattern, the bottom-right one the four-point transform already uses. No alignment pattern is searched.</summary>
     [Test]
     [Arguments(2)]
     [Arguments(6)]
@@ -77,7 +77,7 @@ public class SampleMeshTest
         const int Version = 10;
         var qr = QRCodeGenerator.Create("FQR MESH 0123", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(Version), QuietZoneSize = 0 });
         var lattice = LatticeCoordinates(Version);
-        // Interior nodes in search order: (1, 1), (2, 1), (1, 2), (2, 2); the first ones painted light
+        // Interior nodes in search order: (1, 1), (2, 1), (1, 2), (2, 2). The first ones are painted light.
         var centres = new[] { (lattice[1], lattice[1]), (lattice[2], lattice[1]), (lattice[1], lattice[2]), (lattice[2], lattice[2]) };
         bool IsDark(int row, int column)
         {
@@ -100,7 +100,7 @@ public class SampleMeshTest
         await Assert.That(built).IsEqualTo(expected);
     }
 
-    /// <summary>A symbol bowed three and a half modules at its middle puts the middle nodes further from where the frame and their neighbours put them than the tight window reaches; the wider one finds them, each where the render drew it.</summary>
+    /// <summary>A symbol bowed three and a half modules at its middle puts the middle nodes further from where the frame and their neighbours put them than the tight window reaches. The wider one finds them, each where the render drew it.</summary>
     [Test]
     [Arguments(11, 3.739f, 324.42f, 3.480f)]
     [Arguments(13, 5.757f, 253.34f, 3.389f)]

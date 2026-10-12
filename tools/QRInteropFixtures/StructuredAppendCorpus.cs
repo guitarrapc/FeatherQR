@@ -4,7 +4,7 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// One Structured Append set. <c>MinVersion</c>/<c>MaxVersion</c> bound the version a
-/// balancing encoder may choose; <c>Parts</c> is the split an explicit-parts encoder is
+/// balancing encoder may choose. <c>Parts</c> is the split an explicit-parts encoder is
 /// handed (equal character counts), chosen so every part fits within <c>MaxVersion</c>.
 /// </summary>
 public sealed record StructuredAppendCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, int MinVersion, int MaxVersion, int Parts);
@@ -18,7 +18,7 @@ public interface IStructuredAppendFixtureGenerator
     bool IsAvailable { get; }
 
     /// <summary>
-    /// Symbols in wire order. Manifests carry what the encoder itself reports; the sanity
+    /// Symbols in wire order. Manifests carry what the encoder itself reports. The sanity
     /// gate fills whatever the encoder does not expose (per-symbol text, parity) from the
     /// reader and cross-checks the rest.
     /// </summary>

@@ -15,14 +15,9 @@ internal static partial class MicroQRModulePlacer
         rows = rows.Slice(0, size);
         var mask = BuildPackedRows(rows, size, stream, version, eccLevel, forcedMask);
 
-        // Unpack with the mask applied on the fly, 16 modules per SIMD step
-        // (SSSE3 or NEON, see WriteExpand16).
-        // Rows 0..size-2 may overrun past their end, by at most 15 bytes (size
-        // 17), which is less than the stride. Bits >= size are zero, so the
-        // overrun writes light modules: into the bytes between the rows, which
-        // stay light, and into the following row, whose own unpack comes next
-        // in ascending order and replaces them. The last row (buffer edge) uses
-        // the scalar-safe tail instead.
+        // Rows 0..size-2 may run past their end, by at most 15 bytes (size 17), which is less than the stride.
+        // Bits >= size are zero, so the overrun writes light modules: into the bytes between the rows, which stay light, and into the following row, whose own unpack comes next and replaces them.
+        // The last row ends at the buffer edge and takes the exact tail instead.
         ref var buf = ref MemoryMarshal.GetReference(matrix);
         var last = size - 1;
         var rowOffset = 0;
@@ -60,8 +55,8 @@ internal static partial class MicroQRModulePlacer
 
     /// <summary>
     /// Expands 16 bits to 16 (0/1) module bytes: broadcast the 16-bit lane, shuffle byte 0/1 across the halves, then per-lane bit test (byte k = 1 iff bit k set).
-    /// Caller (via <see cref="PlaceCoreVector"/> dispatch) guarantees SSSE3 or AdvSimd.Arm64; IsSupported is a JIT constant so the untaken branch is eliminated. x86: PSHUFB + PAND + PCMPEQB, beat the GFNI bit-expand in the kernel benchmark loop (GFNI's matrix-operand preparation outweighs its single-instruction expand).
-    /// ARM64: TBL + CMTST, CMTST (compare-test: 0xFF iff (a &amp; b) != 0) fuses the AND+CMEQ pair; x86 has no per-lane bit-test compare.
+    /// Caller (via <see cref="PlaceCoreVector"/> dispatch) guarantees SSSE3 or AdvSimd.Arm64. IsSupported is a JIT constant so the untaken branch is eliminated. x86: PSHUFB + PAND + PCMPEQB. A GFNI bit-expand is slower here, because preparing its matrix operand outweighs the single-instruction expand.
+    /// ARM64: TBL + CMTST. CMTST (compare-test: 0xFF iff (a &amp; b) != 0) fuses the AND+CMEQ pair. x86 has no per-lane bit-test compare.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteExpand16(ref byte p, uint bits16)

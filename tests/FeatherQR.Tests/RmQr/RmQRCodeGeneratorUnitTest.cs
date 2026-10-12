@@ -4,11 +4,10 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Public rMQR generator surface (design record: signatures frozen in Phase 5.0):
-/// class / span / span-destination / <c>TryGetRequiredBufferSize</c> agreement, the
-/// default fit strategy decision (MinimizeArea, matching both external encoders'
-/// automatic choice), argument validation, actionable capacity messages, and
-/// Release-only zero allocation on the span path.
+/// Public rMQR generator surface: class / span / span-destination /
+/// <c>TryGetRequiredBufferSize</c> agreement, the default fit strategy (MinimizeArea,
+/// matching both external encoders' automatic choice), argument validation, actionable
+/// capacity messages, and Release-only zero allocation on the span path.
 /// </summary>
 public class RmQRCodeGeneratorUnitTest
 {
@@ -27,7 +26,7 @@ public class RmQRCodeGeneratorUnitTest
     public async Task DefaultFit_IsMinimizeArea_MatchingExternalEncoders()
     {
         // 12 digits at M fit R7x43 (301 modules) but R11x27 (297) is smaller: the default
-        // (and libzint / qrtool auto) choose R11x27; MinimizeHeight gives the flatter R7x43.
+        // (and libzint / qrtool auto) choose R11x27, and MinimizeHeight gives the flatter R7x43.
         await Assert.That(RmQRCodeGenerator.Create("012345678901", RmQREccLevel.M).Version).IsEqualTo(RmQRVersion.R11x27);
         await Assert.That(RmQRCodeGenerator.Create("012345678901", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight }).Version).IsEqualTo(RmQRVersion.R7x43);
         await Assert.That(RmQRCodeGenerator.Create(new string('0', 100), RmQREccLevel.M).Version).IsEqualTo(RmQRVersion.R11x77);
@@ -231,7 +230,7 @@ public class RmQRCodeGeneratorUnitTest
     public async Task Create_SpanDestination_IsAllocationFree()
     {
         // Steady-state span-destination encoding (Latin-1 and UTF-8, largest version) must
-        // not allocate; Debug builds are excluded per repo notes.
+        // not allocate.
         var latin = "the quick brown fox jumps over the lazy dog?! the quick brown fox jumps over the lazy dog?! the quick brown fox";
         var utf8 = "rMQR 矩形コード ✓ naïve café";
         var size = Sizing.Required(latin.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });

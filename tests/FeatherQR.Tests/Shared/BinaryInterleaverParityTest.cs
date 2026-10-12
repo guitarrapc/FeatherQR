@@ -61,7 +61,7 @@ public class BinaryInterleaverParityTest
     public async Task InterleaveCodewords_DirtyOutputBuffer_RemainderTailIsZeroed(int version, QREccLevel level)
     {
         // The remainder-bits byte is placed into the matrix by PlaceDataWords and must
-        // be 0 per ISO/IEC 18004 — the function must not rely on the caller handing
+        // be 0 per ISO/IEC 18004. The function must not rely on the caller handing
         // over a pre-zeroed buffer (SkipLocalsInit stackalloc, pooled arrays).
         var eccInfo = GetEccInfo(version, level);
         var dataLen = eccInfo.TotalDataCodewords;
@@ -149,7 +149,7 @@ public class BinaryInterleaverParityTest
 
     /// <summary>
     /// Naive reference: round-robin over rows with per-element index multiplication
-    /// and per-element range conditions (the pre-optimization implementation shape).
+    /// and per-element range conditions.
     /// </summary>
     private static void ReferenceInterleaveCodewords(ReadOnlySpan<byte> data, ReadOnlySpan<byte> ecc, Span<byte> output, in ECCInfo eccInfo)
     {

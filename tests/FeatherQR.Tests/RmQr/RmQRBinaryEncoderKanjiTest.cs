@@ -79,7 +79,7 @@ public class RmQRBinaryEncoderKanjiTest
 
     /// <summary>
     /// The count widths of all four modes against the published transcription of ISO/IEC 23941 Table 3.
-    /// The Kanji column had rested on a derivation (the narrowest field that holds the M-level capacity) and on fixtures at widths 4, 5 and 7; this is a second, independent reading of widths 2, 3 and 6.
+    /// For the Kanji column, widths 2, 3 and 6 among them, this is a reading independent of the derivation (the narrowest field that holds the M-level capacity).
     /// </summary>
     [Test]
     public async Task CountWidths_MatchThePublishedTable()
@@ -177,7 +177,7 @@ public class RmQRBinaryEncoderKanjiTest
         await Assert.That(() => EncodeSegmented(RmQRVersion.R17x139, RmQREccLevel.M, [new Run('N', "1"), new Run('K', "～")])).Throws<ArgumentException>();
     }
 
-    /// <summary>The writer that emits an ECI header has no Kanji arm: Kanji is written only by the writer without one (plan K4).</summary>
+    /// <summary>The writer that emits an ECI header has no Kanji arm: Kanji is written only by the writer without one.</summary>
     [Test]
     [Arguments(EciMode.Utf8)]
     [Arguments(EciMode.Iso8859_1)]
@@ -191,7 +191,7 @@ public class RmQRBinaryEncoderKanjiTest
         }).Throws<ArgumentException>();
     }
 
-    /// <summary>Kanji beside an ECI header is out of scope (plan K4): the segmented writer refuses a plan that would write it.</summary>
+    /// <summary>Kanji beside an ECI header is out of scope: the segmented writer refuses a plan that would write it.</summary>
     [Test]
     [Arguments(EciMode.Utf8)]
     [Arguments(EciMode.Iso8859_1)]

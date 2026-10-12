@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// rMQR format information decoding: each 18-bit copy is matched against the 64
 /// valid words of its side (finder-side / sub-finder-side XOR masks), up to 3 bit
-/// errors corrected (BCH(18,6) minimum distance ≥ 7); with two copies the closer
+/// errors corrected (BCH(18,6) minimum distance ≥ 7). With two copies the closer
 /// valid one wins (ties → finder side). Verified exhaustively against a naive
 /// nearest-candidate reference over the full 18-bit space for both sides.
 /// </summary>

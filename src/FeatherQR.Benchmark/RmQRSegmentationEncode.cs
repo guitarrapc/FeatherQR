@@ -1,12 +1,12 @@
 /// <summary>
 /// What <c>RmQRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same content through the same zero-allocation span path.
 ///
-/// The Ratio column is the end-to-end multiplier a caller actually pays, which is the number worth quoting — but note it is not the planning cost in isolation.
+/// The Ratio column is the end-to-end multiplier a caller actually pays, which is the number worth quoting. But note it is not the planning cost in isolation.
 /// On the rows where the split wins, the Optimal arm lands on a smaller version and therefore also does less ECC, placement and module writing, so the ratio nets planning against a cheaper encode and understates the planning overhead.
 /// Seven of the thirteen shapes below change version between the two arms.
 ///
 /// This is a separate class from <see cref="RmQREncodeEndToEnd"/> on purpose.
-/// That one varies version and mode, and ranks everything against one baseline row; this one varies content shape, and every row is meaningless without its same-run partner.
+/// That one varies version and mode, and ranks everything against one baseline row. This one varies content shape, and every row is meaningless without its same-run partner.
 /// Mixing them would make both tables harder to read and both filters slower to run.
 ///
 /// The shapes are chosen to separate the two things that drive planning cost:
@@ -14,7 +14,7 @@
 ///   Length, shape held fixed   : mixed-20 / -60 / -120 / -150 (half letters, half digits)
 ///   Shape, length held at 120  : numeric / alnum / byte / mixed / alt1 / alt10
 ///
-/// and to cover every filter the scan can terminate in (measured DP passes per encode in brackets — the scan is bounded before it is priced, so most shapes never build a table at all):
+/// and to cover every filter the scan can terminate in (DP passes per encode in brackets. The scan is bounded before it is priced, so most shapes never build a table at all):
 ///
 ///   numeric-*  : all digits, so one mode is provably optimal and the short-circuit
 ///                returns before any bound is computed [0 passes]
@@ -24,16 +24,16 @@
 ///   alt1-120   : alternating every character. The trivial bound cannot rule this out
 ///                (it prices each digit at the numeric rate, ignoring that switching
 ///                every character never pays), so the floor runs and then rejects
-///                everything — it plans and gains nothing [1 pass]
+///                everything. It plans and gains nothing [1 pass]
 ///   alt10-120  : alternating every ten, where a per-version cost run is what decides
 ///                the version rather than a bound [3 passes]
-///   mixed-*    : the common shape; the upper bound accepts without a per-version run
+///   mixed-*    : the common shape. The upper bound accepts without a per-version run
 ///                [2 passes: floor + building the chosen plan]
 ///   url-38     : a realistic payload (R11x77 as one run, R15x43 split) [2 passes]
 ///   utf8-60    : Japanese with digits, UTF-8 behind an ECI prefix under both (R13x139):
 ///                no split of it is smaller
 ///   kanji-60   : the same text with AllowKanji: Single still writes UTF-8 (R13x139), since
-///                the digits are ASCII; Optimal a Kanji plan, Kanji runs beside Numeric runs (R17x77)
+///                the digits are ASCII. Optimal writes a Kanji plan, Kanji runs beside Numeric runs (R17x77)
 ///
 /// Every fixture fits under Single too, so no row is comparing a success with a throw.
 /// ECC M only: the H capacities shift which version wins but not the shape of the work.

@@ -13,7 +13,7 @@ namespace FeatherQR;
 /// Kanji is mapped through JIS X 0208, so a cell outside that repertoire fails the whole rMQR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
 /// Reed-Solomon runs at full block strength, correcting up to ⌊ecc/2⌋ codewords per block, and reports the count in <see cref="RmQRCodeDecodeInfo.ErrorsCorrected"/>.
 /// FNC1 in first position (GS1 data) and in second position (an industry format with its application indicator) are read: the text is the element string with each separator as U+001D, a <c>%%</c> in an Alphanumeric segment is one <c>%</c>, and the mode is reported on <see cref="RmQRCodeDecodeInfo.Fnc1"/>.
-/// Both a plain matrix and one with a quiet zone are accepted; the border is located and stripped automatically.
+/// Both a plain matrix and one with a quiet zone are accepted. The border is located and stripped automatically.
 /// Image scanning is a separate entry point, and <see cref="QRCodeDecoder"/> keeps scanning Standard QR only.
 /// </remarks>
 public static class RmQRCodeDecoder
@@ -98,7 +98,7 @@ public static class RmQRCodeDecoder
     /// <param name="width">Width in modules, quiet zone included.</param>
     /// <param name="height">Height in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">How many characters were written; 0 when the matrix does not decode, though <paramref name="destination"/> may still hold the characters read before the failure.</param>
+    /// <param name="charsWritten">How many characters were written, or 0 when the matrix does not decode, though <paramref name="destination"/> may still hold the characters read before the failure.</param>
     /// <param name="info">What the attempt found: status, version, level and corrections, and on success the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
@@ -166,7 +166,7 @@ public static class RmQRCodeDecoder
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> (with <see cref="RmQRVersion.R17x139"/> when the version is unknown) to size it.</param>
-    /// <param name="charsWritten">How many characters were written; 0 when the image does not decode, though <paramref name="destination"/> may still hold text from an attempt that was not kept.</param>
+    /// <param name="charsWritten">How many characters were written, or 0 when the image does not decode, though <paramref name="destination"/> may still hold text from an attempt that was not kept.</param>
     /// <param name="info">What the attempt found: status, version, level and corrections, and on success where the symbol sits in the image (Corners) and the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
@@ -222,7 +222,7 @@ public static class RmQRCodeDecoder
     }
 
     /// <summary>
-    /// Locates the core inside an input that may carry a light border. rMQR has dark modules at all four core corners (finder top-left, corner pattern top-right and bottom-left, sub-finder bottom-right) and timing patterns on every edge, so the dark bounding box IS the core; the border need not be uniform.
+    /// Locates the core inside an input that may carry a light border. rMQR has dark modules at all four core corners (finder top-left, corner pattern top-right and bottom-left, sub-finder bottom-right) and timing patterns on every edge, so the dark bounding box IS the core. The border need not be uniform.
     /// The box must be an rMQR size.
     /// </summary>
     private static bool TryLocateCore(ReadOnlySpan<byte> modules, int width, int height, out int left, out int top, out int coreWidth, out int coreHeight)

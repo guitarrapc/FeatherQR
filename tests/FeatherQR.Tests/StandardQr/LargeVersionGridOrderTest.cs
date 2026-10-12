@@ -4,7 +4,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Which grid reads a version 14+ symbol: the four-point transform when the bottom-right alignment pattern anchors it, since a plane in perspective is one projective map that four correct points fix; the mesh over the alignment lattice when nothing anchors that corner, and after an anchored grid that does not read.
+/// Which grid reads a version 14+ symbol: the four-point transform when the bottom-right alignment pattern anchors it, since a plane in perspective is one projective map that four correct points fix. The mesh over the alignment lattice when nothing anchors that corner, and after an anchored grid that does not read.
 /// </summary>
 public class LargeVersionGridOrderTest
 {
@@ -61,7 +61,7 @@ public class LargeVersionGridOrderTest
     }
 
     /// <summary>
-    /// A symbol bowed off the plane is anchored like a flat one, but no single projective map reads it; the mesh, tried after the anchored transform fails, follows the bow through the lattice.
+    /// A symbol bowed off the plane is anchored like a flat one, but no single projective map reads it. The mesh, tried after the anchored transform fails, follows the bow through the lattice.
     /// </summary>
     [Test]
     [Arguments(14, 5f, 0f, 1f)]

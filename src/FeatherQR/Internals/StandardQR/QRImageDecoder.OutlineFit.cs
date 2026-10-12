@@ -4,13 +4,13 @@ namespace FeatherQR.Internals.StandardQR;
 
 internal static partial class QRImageDecoder
 {
-    /// <summary>The dimension the plane is fitted below: version 7, the first with an alignment lattice for the mesh to follow, where the fitted plane reads no photograph more and costs a large grid's samplings.</summary>
+    /// <summary>The dimension the plane is fitted below: version 7, the first with an alignment lattice for the mesh to follow.</summary>
     private const int OutlineFitBelowDimension = 17 + 4 * 7;
 
     /// <summary>
     /// The grid-to-pixel plane that best fits the corners of the three finders' inner outlines, the square five modules a side each dark ring encloses.
-    /// A grid through three centres and a fourth point takes each finder as a point and leans on the fourth; this one takes each finder as a shape, whose four corners carry the perspective where the finder stands, so nothing is extrapolated from a single point across the symbol.
-    /// Where the alignment search anchored, <paramref name="anchoredFit"/> is the plane fitted to those corners and the anchor as one more point; each reads symbols the other does not.
+    /// A grid through three centres and a fourth point takes each finder as a point and leans on the fourth. This one takes each finder as a shape, whose four corners carry the perspective where the finder stands, so nothing is extrapolated from a single point across the symbol.
+    /// Where the alignment search anchored, <paramref name="anchoredFit"/> is the plane fitted to those corners and the anchor as one more point. Each reads symbols the other does not.
     /// False from version 7, and when an outline cannot be measured, as on a finder drawn round or an inferred one.
     /// </summary>
     internal static bool TryFitToFinderOutlines(in ImageView image, in FinderFrame frame, int dimension, bool anchored, in PerspectiveTransform anchoredTransform, out PerspectiveTransform fitted, out PerspectiveTransform anchoredFit)

@@ -54,7 +54,7 @@ public class ModulePlacerStreamPlacementParityTest
                 System.Buffers.ArrayPool<ulong>.Shared.Return(junk);
                 var pattern = ModulePlacer.MaskCodeTransposedFromStream(actual, version, stream, ecc);
 
-                // The stream form writes the version information with the rest, from its column template; the placed path gets it from
+                // The stream form writes the version information with the rest, from its column template. The placed path gets it from
                 // PlaceVersion, as the encoder calls it after that path only.
                 ModulePlacer.PlaceVersion(expected, size, QRCodeConstants.GetVersionBits(version));
 

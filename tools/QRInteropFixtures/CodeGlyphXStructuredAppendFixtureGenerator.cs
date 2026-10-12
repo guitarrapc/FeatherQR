@@ -8,7 +8,7 @@ namespace QRInteropFixtures;
 /// Structured Append lineage backed by the pinned CodeGlyphX package: an explicit-parts
 /// encoder, handed the case's text split into <c>Parts</c> equal character runs, each
 /// symbol versioned on its own within the case's bounds. Per-symbol text is therefore
-/// known here; the parity byte is still reader-sourced by the gate. Runs in-process;
+/// known here, but the parity byte is still reader-sourced by the gate. Runs in-process and is
 /// always available.
 /// </summary>
 public sealed class CodeGlyphXStructuredAppendFixtureGenerator : IStructuredAppendFixtureGenerator

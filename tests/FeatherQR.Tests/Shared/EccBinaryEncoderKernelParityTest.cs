@@ -152,8 +152,8 @@ public class EccBinaryEncoderKernelParityTest
     [Test]
     public async Task GfniMatrixTable_MatchesGaloisFieldMultiply()
     {
-        // EccBinaryEncoder.GfniMatrix is baked into the assembly as constant data;
-        // this recomputes every entry from GaloisField.Multiply so the constant can
+        // EccBinaryEncoder.GfniMatrix is baked into the assembly as constant data.
+        // This recomputes every entry from GaloisField.Multiply so the constant can
         // never drift from the field definition. gf2p8affineqb convention: qword
         // byte (7-i) = matrix row for result bit i, row bit k = bit i of f·2^k.
         var table = EccBinaryEncoder.GfniMatrix.ToArray();
@@ -182,7 +182,7 @@ public class EccBinaryEncoderKernelParityTest
     [Test]
     public async Task CalculateECC_EccCountAboveVectorLimit_UsesScalarPath()
     {
-        // eccCount > 32 bypasses the vector kernels; verify the dispatch stays correct.
+        // eccCount > 32 bypasses the vector kernels, so verify the dispatch stays correct.
         var data = new byte[50];
         new Random(7).NextBytes(data);
         var eccCount = 40;
@@ -198,7 +198,7 @@ public class EccBinaryEncoderKernelParityTest
 
     [Test]
     [Arguments(254)] // largest eccCount whose generator is log-domain representable
-    [Arguments(255)] // generator degenerates to x^255 + 1 (zero coefficients) — naive fallback
+    [Arguments(255)] // generator degenerates to x^255 + 1 (zero coefficients): naive fallback
     public async Task CalculateECC_MaxEccCounts_MatchesNaiveReference(int eccCount)
     {
         // eccCount == 255 is the only count whose generator polynomial has zero

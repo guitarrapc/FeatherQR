@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// A small symbol photographed at a tilt from close by, blurred, at 3 to 4 px/module: its three finder centres measure well, and every grid through them and one more point, the alignment anchor or the parallelogram's corner, the finders' frame, the fourth point from the finders' edges, leaves the far corner where no read survives.
 /// The plane fitted to the corners of the three finders' inner outlines, with the anchor where there is one, takes each finder as a shape that carries the perspective where it stands, and reads.
-/// The shots were chosen from a sweep of versions, levels, tilts, axes and distances, with the alignment pattern kept and painted over, where the read needs the fitted plane.
+/// The shots vary version, level, tilt, axis and distance, with the alignment pattern kept and painted over, and each one's read needs the fitted plane, which its premise check holds.
 /// </summary>
 public class FinderOutlineFitDecodeTest
 {
@@ -32,7 +32,7 @@ public class FinderOutlineFitDecodeTest
     /// <summary>
     /// A small symbol with its alignment pattern, on a card bent three modules round a cylinder and tilted: the alignment search anchors, and neither the grid through the three centres and the anchor nor the parallelogram of the centres reads a surface no four points fix.
     /// The plane fitted to the outlines and the anchor, the anchor counted three times against the twelve corners, splits the bend between them and reads.
-    /// The shots were chosen from a sweep of tilts, bends, blurs and noise where the read needs the fitted plane after an anchored grid.
+    /// Each shot's read needs the fitted plane after an anchored grid, which its premise check holds.
     /// </summary>
     [Test]
     [Arguments(2, QREccLevel.L, 6f, 35f, 90f, 2.5f, 3f, 1f)]

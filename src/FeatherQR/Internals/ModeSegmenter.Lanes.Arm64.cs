@@ -96,7 +96,7 @@ internal static partial class ModeSegmenter
         var costBits = Vector128.Create(~7);
 
         // ASCII 32..95 contains every supported nonzero class. Underflow wraps to
-        // a large ushort; saturation maps every other UTF-16 character outside TBL.
+        // a large ushort, and saturation maps every other UTF-16 character outside TBL.
         var ct0 = Vector128.Create(characterClass.Slice(32, 16));
         var ct1 = Vector128.Create(characterClass.Slice(48, 16));
         var ct2 = Vector128.Create(characterClass.Slice(64, 16));
@@ -128,7 +128,7 @@ internal static partial class ModeSegmenter
                 var noOpen = Vector128<int>.Zero;
                 if (TBytes.Utf8)
                 {
-                    // A lane at a byte order mark only continues its Byte run; past its first character it has one.
+                    // A lane at a byte order mark only continues its Byte run. Past its first character it has one.
                     noOpen = Vector128.Equals(chars, Vector128.Create((int)ByteOrderMark)) & Vector128.Create(U);
                     if (Vector128.EqualsAny(chars & Vector128.Create(0xF800), Vector128.Create(0xD800)))
                     {
@@ -138,7 +138,7 @@ internal static partial class ModeSegmenter
                     }
                     else
                     {
-                        // One byte, one more above U+007F, one more above U+07FF; a compare is all ones, so it takes one off.
+                        // One byte, one more above U+007F, one more above U+07FF. A compare that holds is all ones, which is -1, so subtracting it adds one.
                         byteBits = (Vector128.Create(1) - Vector128.GreaterThan(chars, Vector128.Create(0x7F)) - Vector128.GreaterThan(chars, Vector128.Create(0x7FF))) << 6;
                     }
                 }

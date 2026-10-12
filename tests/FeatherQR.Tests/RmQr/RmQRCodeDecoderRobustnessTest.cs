@@ -81,12 +81,9 @@ public class RmQRCodeDecoderRobustnessTest
     {
         var info = RmQRConstants.GetEccInfo(version, ecc);
         var blocks = info.BlocksInGroup1 + info.BlocksInGroup2;
-        // Deliberately the Reed-Solomon strength, NOT GetErrorCorrectionCapacity: this
-        // is the test that pins "rMQR reserves no misdecode-protection codewords p", so
-        // it must fail if the decoder's capacity ever drops below full RS strength.
-        // Deriving t from the API under test makes it self-consistent with any wrong
-        // (lower) capacity — verified by mutation: capacity - 1 leaves this whole class
-        // green. RmQRConstantsUnitTest pins the capacity table against the same value.
+        // The Reed-Solomon strength, not GetErrorCorrectionCapacity. rMQR reserves no
+        // misdecode-protection codewords, and a t taken from the API under test would
+        // agree with any lower capacity the decoder used.
         var t = info.ECCPerBlock / 2;
         var (modules, width, height, text) = Symbol(version, ecc);
 
@@ -116,7 +113,7 @@ public class RmQRCodeDecoderRobustnessTest
         var t = info.ECCPerBlock / 2; // Reed-Solomon strength, see the within-capacity test
         var (modules, width, height, _) = Symbol(version, ecc);
 
-        // t + 1 data codewords of block 0 flipped (needs at least t + 1 data codewords in the block; else flip ECC codewords too).
+        // t + 1 data codewords of block 0 flipped (needs at least t + 1 data codewords in the block, or else flip ECC codewords too).
         var damaged = (byte[])modules.Clone();
         var blocks = info.BlocksInGroup1 + info.BlocksInGroup2;
         var dataInBlock0 = info.CodewordsInGroup1;
@@ -129,9 +126,9 @@ public class RmQRCodeDecoderRobustnessTest
         }
 
         var ok = RmQRCodeDecoder.TryDecode(damaged, width, height, out _, out var decodeInfo);
-        // RS cannot correct t + 1 errors; the overwhelmingly likely outcome is detection
+        // RS cannot correct t + 1 errors. The overwhelmingly likely outcome is detection
         // (DataUncorrectable). A silent miscorrection to a *different* payload would be a
-        // decode "success" with wrong text; assert we never claim success with the original.
+        // decode "success" with wrong text, so assert we never claim success with the original.
         await Assert.That(ok && decodeInfo.ErrorsCorrected <= t).IsFalse().Because($"{version}-{ecc}: {t + 1} errors in one block must not decode cleanly");
         if (!ok)
             await Assert.That(decodeInfo.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
@@ -174,18 +171,18 @@ public class RmQRCodeDecoderRobustnessTest
         FlipSubFinderSide(bothBeyond, 15);
         var ok = RmQRCodeDecoder.TryDecode(bothBeyond, width, height, out _, out var i3);
         // 15 flips per copy may by chance land within 3 bits of another word (then the
-        // version cross-check or RS rejects it); a clean success with the original text is impossible.
+        // version cross-check or RS rejects it). A clean success with the original text is impossible.
         await Assert.That(ok).IsFalse();
         await Assert.That(i3.Status == DecodeStatus.FormatInformationInvalid || i3.Status == DecodeStatus.DataUncorrectable).IsTrue();
     }
 
     /// <summary>
     /// One copy miscorrected toward ANOTHER version's word (distance 2 to the impostor,
-    /// 6 to the truth; the two words are 8 apart) while the other copy carries 3
+    /// 6 to the truth, and the two words are 8 apart) while the other copy carries 3
     /// correctable errors: a "closer copy wins" arbitration would name the wrong
     /// version whichever side carries the impostor, but the copy that agrees with the
     /// physical dimensions is valid, so the symbol must still decode ("either copy
-    /// alone suffices"). Both roles are exercised and both regress under the old rule.
+    /// alone suffices"). The impostor is tried on each side.
     /// </summary>
     [Test]
     [Arguments(true)]
@@ -267,7 +264,7 @@ public class RmQRCodeDecoderRobustnessTest
     [Test]
     public async Task RemainderBits_Set_AreIgnored()
     {
-        // R11x99 has 7 remainder bits at the end of the walk; setting them dark must not matter.
+        // R11x99 has 7 remainder bits at the end of the walk. Setting them dark must not matter.
         var version = RmQRVersion.R11x99;
         var (modules, width, height, text) = Symbol(version, RmQREccLevel.M);
         var total = RmQRConstants.GetTotalCodewordCount(version);

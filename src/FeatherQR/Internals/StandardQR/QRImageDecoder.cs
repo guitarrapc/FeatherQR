@@ -12,8 +12,8 @@ namespace FeatherQR.Internals.StandardQR;
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, then the regional binarization, which a verdict on the content from either earlier pass also skips.
 /// When no pass settles at full size, an image with grey levels is read again halved, and halved again, through the same passes (<see cref="ImageDecodePasses"/>).
-/// Each grid is decoded through the matrix level as soon as it is sampled, then transposed unless that settles it; the first grid that settles ends the pass.
-/// The list gives the stages in order with their main conditions; each method states its own in full.
+/// Each grid is decoded through the matrix level as soon as it is sampled, then transposed unless that settles it. The first grid that settles ends the pass.
+/// The list gives the stages in order with their main conditions. Each method states its own in full.
 /// <code>
 /// 1. Finder triple
 /// 2. Corner from the triangle, and from that corner:
@@ -26,7 +26,7 @@ namespace FeatherQR.Internals.StandardQR;
 ///       timing patterns alternating), then, each with both re-reads, the parallelogram after an anchored grid
 ///       or, when nothing anchored, the frame grid where the frame foreshortens and the grid through the fourth
 ///       point from the finders' edges, and last the planes fitted to the finders' outlines, with the anchor
-///       and without it; none at the runner-up
+///       and without it. None at the runner-up.
 /// 3. When that does not settle, a-d from each other corner whose timing patterns read
 /// 4. When the selected triple does not settle and more than three candidates were found, the next two triples: each a-d once, from the first of its corners whose timing patterns read, or skipped when none does
 /// </code>
@@ -124,7 +124,7 @@ internal static partial class QRImageDecoder
             var result = NewResult();
             result.Main(status, charsWritten, info);
 
-            // The strided scan's triple failed. Where the stride could not have confirmed its finders, or the list is crowded, the rows between are scanned and the completed list selected from again; the stages below are judged on how many rows confirmed each candidate, which only a list of every row's says.
+            // The strided scan's triple failed. Where the stride could not have confirmed its finders, or the list is crowded, the rows between are scanned and the completed list selected from again. The stages below are judged on how many rows confirmed each candidate, which only a list of every row's says.
             if (!everyRowScanned)
             {
                 if (!FinderPatternFinder.IsUndersampled(patterns, height) && !IsCrowded(candidates.Slice(0, candidateCount)))
@@ -194,7 +194,7 @@ internal static partial class QRImageDecoder
         /// <summary>Modules each grid has room for.</summary>
         private int _capacity;
 
-        /// <summary>Makes room for three grids of <paramref name="dimension"/>, renting a larger array when the one held is too small; any grid taken before is no longer valid then.</summary>
+        /// <summary>Makes room for three grids of <paramref name="dimension"/>, renting a larger array when the one held is too small. Any grid taken before is no longer valid then.</summary>
         public void Reserve(int dimension)
         {
             var length = dimension * dimension;
@@ -252,13 +252,13 @@ internal static partial class QRImageDecoder
     /// How many other triples a failed decode verifies, best confirmed first.
     /// </summary>
     /// <remarks>
-    /// When the stride pass selected the triple and returned, the list it hands back counts each finder on a third of its rows, once or twice, and the order is coarse: three renders in 1,600 past 20 % keystone needed the second triple, and eight or 64 read none more.
-    /// Sweeping the rest of the rows first made the first triple enough, and cost a failing image a sweep each attempt: 740 × 740 noise doubled, 3.1 to 6.2 ms.
+    /// When the stride pass selected the triple and returned, the list it hands back counts each finder on a third of its rows, once or twice, and the order is coarse. Past 20 % keystone the second triple can be the symbol's, and verifying more than two reads no more symbols.
+    /// Sweeping the rest of the rows first would make the first triple enough, and would cost a failing image a sweep each attempt.
     /// </remarks>
     private const int MaxAlternativeTriples = 2;
 
     /// <summary>
-    /// After the selected triple failed, the candidate list's other triples, best confirmed first (<see cref="FinderPatternFinder.AlternativeTriples"/>): each decoded only from a corner whose timing patterns read through its own frame (<see cref="TryCornerByTimingPatterns"/>); otherwise <paramref name="status"/> and the selected triple's diagnostics stand.
+    /// After the selected triple failed, the candidate list's other triples, best confirmed first (<see cref="FinderPatternFinder.AlternativeTriples"/>): each decoded only from a corner whose timing patterns read through its own frame (<see cref="TryCornerByTimingPatterns"/>). Otherwise <paramref name="status"/> and the selected triple's diagnostics stand.
     /// </summary>
     internal static DecodeStatus DecodeAlternativeTriples<TAttempt>(ref TAttempt attempt, in ImageView image, Span<FinderPattern> candidates, ReadOnlySpan<FinderPattern> selected, ref ModuleWorkspace modules, Span<char> destination, DecodeStatus status, ref int charsWritten, ref QRCodeDecodeInfo info)
         where TAttempt : struct, ICornerAttempt
@@ -284,8 +284,8 @@ internal static partial class QRImageDecoder
     /// Whether a triple's two timing patterns read through the frame of its own centres and sizes: the check a triple from <see cref="FinderPatternFinder.AlternativeTriples"/>, or another corner of a triple that failed, passes before it costs a decode.
     /// </summary>
     /// <remarks>
-    /// A timing pattern runs between two real finders and nowhere else, and the frame follows perspective, so this holds past 40 % keystone where the triple's shape says little: through their own frames the drawn triples of those renders read no timing module wrong, and triples holding a false candidate read 20 to 49 % wrong, near the half that texture reads.
-    /// The centres are not refined for it; a grid through them misses the timing modules by under a module.
+    /// A timing pattern runs between two real finders and nowhere else, and the frame follows perspective, so this holds past 40 % keystone where the triple's shape says little. There a real triple still reads its timing modules through its own frame, and a triple holding a false candidate reads them near half wrong, as texture does.
+    /// The centres are not refined for it. A grid through them misses the timing modules by under a module.
     /// </remarks>
     internal static bool TimingPatternsRead(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
     {
@@ -295,12 +295,12 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// The corner of a triple its timing patterns name: the vertex the triangle's shape names first (<see cref="OrderFinderPatterns"/>), then the other two, each taken once the two timing patterns from it read through its own frame (<see cref="TimingPatternsRead"/>); false when none do.
+    /// The corner of a triple its timing patterns name: the vertex the triangle's shape names first (<see cref="OrderFinderPatterns"/>), then the other two, each taken once the two timing patterns from it read through its own frame (<see cref="TimingPatternsRead"/>). False when none do.
     /// </summary>
     /// <remarks>
     /// A plane tilted toward the top-left finder draws that finder nearest and the corner without one farthest, and past about 43 % keystone a leg of the image triangle is longer than its hypotenuse, so the vertex opposite the longest side is another finder.
     /// Three centres cannot tell, since a projective map puts a triangle's right angle at any of its vertices.
-    /// What only the true corner has is the two timing patterns running from it; from either other vertex one of the two lines crosses the data.
+    /// What only the true corner has is the two timing patterns running from it. From either other vertex one of the two lines crosses the data.
     /// </remarks>
     internal static bool TryCornerByTimingPatterns(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> triple, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
     {
@@ -324,7 +324,7 @@ internal static partial class QRImageDecoder
 
     /// <summary>
     /// One finder triple, in any order: from the corner the triangle's shape names, and when that does not settle, from each other corner whose timing patterns read (<see cref="TryCornerByTimingPatterns"/>).
-    /// A symbol decodes from its shape's corner at no extra cost; the other corners are paid for only by a triple that failed.
+    /// A symbol decodes from its shape's corner at no extra cost. The other corners are paid for only by a triple that failed.
     /// </summary>
     internal static DecodeStatus DecodeTriple<TAttempt>(ref TAttempt attempt, in ImageView image, ReadOnlySpan<FinderPattern> patterns, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
         where TAttempt : struct, ICornerAttempt
@@ -355,7 +355,7 @@ internal static partial class QRImageDecoder
     private static DecodeStatus DecodeCorners(in ImageView image, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         // Under about 1.5 px/module a crisp module is 1 or 2 px wide and a sample has an eighth of a pixel to spare, which no grid extrapolated from the finder centres keeps. The
-        // timing patterns mark every module boundary between the finders. First, because where both grids read, this one's corners are the symbol's own edges and the other's are extrapolated to within a module; two lines that do not read cost a few hundred pixels.
+        // timing patterns mark every module boundary between the finders. First, because where both grids read, this one's corners are the symbol's own edges and the other's are extrapolated to within a module, and two lines that do not read cost a few hundred pixels.
         // Tried ahead of the main path, the grids from the finders, which it does not replace unless it settles
         var frameStatus = DecodeThroughTimingFrame(image, topLeft, topRight, bottomLeft, ref modules, destination, out var frameCharsWritten, out var frameInfo);
         if (IsSettled(frameStatus))
@@ -380,7 +380,7 @@ internal static partial class QRImageDecoder
         return result.Report(out charsWritten, out info);
     }
 
-    /// <summary>Each finder's centre moved to the centroid of its centre square's darkness; true when any moved.</summary>
+    /// <summary>Each finder's centre moved to the centroid of its centre square's darkness. True when any moved.</summary>
     internal static bool RefineFinderCentres(ReadOnlySpan<byte> luminance, int width, int height, in GreyLevels grey, in FinderModuleSizes moduleSizes, ref FinderPattern topLeft, ref FinderPattern topRight, ref FinderPattern bottomLeft)
     {
         var uLength = Distance(topLeft, topRight);
@@ -405,7 +405,7 @@ internal static partial class QRImageDecoder
     /// <summary>
     /// Module sizes measured along the finder-to-finder lines: each finder's own along each line it is on, since one size does not fit a keystoned symbol, and their mean.
     /// A finder's run widths along the image rows would not do: a turn lengthens them by up to √2.
-    /// <see cref="SubPixelAlongU"/> and <see cref="SubPixelAlongV"/> are true when both sizes on that line came from sub-pixel edges, fine enough to measure how the size changes along it; false, both came from whole-pixel runs.
+    /// <see cref="SubPixelAlongU"/> and <see cref="SubPixelAlongV"/> are true when both sizes on that line came from sub-pixel edges, fine enough to measure how the size changes along it. When false, both came from whole-pixel runs.
     /// </summary>
     internal readonly record struct FinderModuleSizes(float TopLeftAlongU, float TopLeftAlongV, float TopRight, float BottomLeft, float Mean, bool SubPixelAlongU, bool SubPixelAlongV)
     {
@@ -441,12 +441,12 @@ internal static partial class QRImageDecoder
 
         if (!estimated)
         {
-            // Snapped finders at versions 39-40 measure a few percent small, which puts the estimate past the largest version; the count does not depend on it.
+            // Snapped finders at versions 39-40 measure a few percent small, which puts the estimate past the largest version. The count does not depend on it.
             if (moduleSize >= 1f)
             {
                 timingDimension = CountTimingDimension(image.Luminance, image.Width, image.Height, image.Threshold, topLeft, topRight, bottomLeft, moduleSize);
                 timingCounted = true;
-                // A turned symbol under 3 px/module breaks the counted runs; its timing modules still alternate on the right grid
+                // A turned symbol under 3 px/module breaks the counted runs, but its timing modules still alternate on the right grid
                 if (timingDimension == 0)
                     timingDimension = matchedDimension = MatchTimingDimension(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, topLeft, topRight, bottomLeft, moduleSizes, frame);
             }
@@ -490,7 +490,7 @@ internal static partial class QRImageDecoder
             }
         }
 
-        // The dimension estimate can land between two valid sizes (module-size measurement quantizes to pixels); when a plausible runner-up exists, one retry with it rescues estimates that snapped to the wrong version.
+        // The dimension estimate can land between two valid sizes (module-size measurement quantizes to pixels). When a plausible runner-up exists, one retry with it rescues estimates that snapped to the wrong version.
         // A guess gets no finder fallback: on a wrong size it only doubles the failure's cost.
         if (secondaryDimension != 0 && secondaryDimension != versionDimension && secondaryDimension != timingDimension && secondaryDimension != matchedDimension && secondaryDimension != namedDimension)
         {
@@ -587,10 +587,10 @@ internal static partial class QRImageDecoder
 
     /// <summary>
     /// Samples the module grid at the given dimension and decodes it, retrying once transposed for mirrored images (e.g. front-camera captures): finder geometry is identical but data is transposed.
-    /// The mirror retry triggers on any unsettled decode failure; a permuted format pattern may fall within BCH distance of a wrong candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
+    /// The mirror retry triggers on any unsettled decode failure, because a permuted format pattern may fall within BCH distance of a wrong candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
     /// DestinationTooSmall is terminal because the non-mirrored symbol has already been read successfully through RS correction.
     /// On failure, versionDimension is the dimension the sampled version information names when it differs from the one sampled, else 0.
-    /// <paramref name="finderFallback"/> allows the resample through the finders alone, their parallelogram when the alignment-anchored grid fails and their frame when nothing anchored the fourth corner; off for a dimension that is only a guess.
+    /// <paramref name="finderFallback"/> allows the resample through the finders alone, their parallelogram when the alignment-anchored grid fails and their frame when nothing anchored the fourth corner. It is off for a dimension that is only a guess.
     /// </summary>
     private static DecodeStatus SampleAndDecode(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderFrame frame, int dimension, float moduleSize, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension, bool finderFallback = true)
     {
@@ -604,7 +604,7 @@ internal static partial class QRImageDecoder
         var meshFirstCharsWritten = 0;
         QRCodeDecodeInfo meshFirstInfo = default;
 
-        // Nothing anchored the fourth corner, so the transform below is the finders' parallelogram; the rest of the alignment lattice anchors the mesh.
+        // Nothing anchored the fourth corner, so the transform below is the finders' parallelogram. The rest of the alignment lattice anchors the mesh.
         // Tried ahead of the main path, the grid through the transform, which it does not replace unless it settles
         if (!alignmentAnchored)
         {
@@ -678,7 +678,7 @@ internal static partial class QRImageDecoder
             return result.Report(out charsWritten, out info);
         }
 
-        // Nothing anchored the fourth corner, so the parallelogram above assumed the symbol flat; the finders' foreshortening places it under perspective.
+        // Nothing anchored the fourth corner, so the parallelogram above assumed the symbol flat. The finders' foreshortening places it under perspective.
         // Not first, because on a flat symbol under 2 px/module that foreshortening is measurement noise of a percent or two
         if (!frame.IsAffine)
             DecodeOtherGrid(image, frame.Transform(dimension), dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
@@ -745,7 +745,7 @@ internal static partial class QRImageDecoder
     private static DecodeStatus DecodeByCoverage(in ImageView image, in PerspectiveTransform transform, int dimension, ReadOnlySpan<byte> transposedFailure, Span<byte> modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         SampleGridByCoverage(image.Luminance, image.Width, image.Height, image.Grey.Midpoint, transform, dimension, modules);
-        // The grid that already failed decodes the same way again; the mirror retry left it transposed.
+        // The grid that already failed decodes the same way again. The mirror retry left it transposed.
         // Reported as not tried, which it was: a failure made up for it would outrank the grid's own under the rule Micro QR and rMQR report by
         if (IsTransposeOf(modules, transposedFailure, dimension))
         {
@@ -828,7 +828,7 @@ internal static partial class QRImageDecoder
 
     /// <summary>
     /// The module buffers this thread has out, and the most it has had out at once since a test last cleared <see cref="ModuleBuffersPeak"/>.
-    /// No decode reads them; tests that pin how many a scan holds do. One increment and one decrement a buffer.
+    /// No decode reads them, but tests that pin how many a scan holds do. One increment and one decrement a buffer.
     /// </summary>
     [ThreadStatic]
     internal static int ModuleBuffersOut, ModuleBuffersPeak;
@@ -913,7 +913,7 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Assigns the three finder centers to their corners: the two farthest apart span the diagonal (top-right / bottom-left), the remaining one is top-left; the cross product resolves which diagonal end is which.
+    /// Assigns the three finder centers to their corners: the two farthest apart span the diagonal (top-right / bottom-left), the remaining one is top-left, and the cross product resolves which diagonal end is which.
     /// Tilted strongly toward the top-left finder, a symbol's diagonal is not the longest side, and this names another corner (<see cref="TryCornerByTimingPatterns"/>).
     /// </summary>
     internal static void OrderFinderPatterns(ReadOnlySpan<FinderPattern> patterns, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
@@ -930,7 +930,7 @@ internal static partial class QRImageDecoder
         return d02 >= d01 && d02 >= d12 ? 1 : 0;
     }
 
-    /// <summary>The corners with <paramref name="corner"/> as the top-left; the cross product resolves which of the other two is top-right.</summary>
+    /// <summary>The corners with <paramref name="corner"/> as the top-left. The cross product resolves which of the other two is top-right.</summary>
     private static void OrderAroundCorner(ReadOnlySpan<FinderPattern> patterns, int corner, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
     {
         topLeft = patterns[corner];
@@ -975,7 +975,7 @@ internal static partial class QRImageDecoder
 
         var estimate = EstimateModules(topLeft, topRight, bottomLeft, moduleSizes, frame);
 
-        // Snap to the nearest valid dimension, clamped to the version range so an estimate just past version 40 (or below 1) still snaps; reject wild ones
+        // Snap to the nearest valid dimension, clamped to the version range so an estimate just past version 40 (or below 1) still snaps, but reject wild ones
         var versionExact = (estimate - 17f) / 4f;
         var version = Math.Min(40, Math.Max(1, (int)Math.Round(versionExact)));
 
@@ -1005,7 +1005,7 @@ internal static partial class QRImageDecoder
     /// Where the frame is the parallelogram, the symbol has one module size and both lines divide by the mean of all four.
     /// Otherwise each line divides by the geometric mean of its own two ends, which is the count the frame itself implies:
     /// with the far end at weight w the near end measures w·L/(n − 7) and the far end L/(w·(n − 7)), so their product is (L/(n − 7))². Their plain mean is larger by (w + 1/w)/2 and puts the count short, 6 % at a size ratio of 2 and 13 % at 3, which at version 40 is five versions.
-    /// A line the frame takes as flat beside one it foreshortens divides by its own sizes too, not by the mean of four: that mean holds the other line's far end, 40 % large on a symbol at 20 % keystone, and put a version 40 two versions short.
+    /// A line the frame takes as flat beside one it foreshortens divides by its own sizes too, not by the mean of four: that mean holds the other line's far end, 40 % large on a symbol at 20 % keystone, which puts a version 40 two versions short.
     /// </remarks>
     internal static float EstimateModules(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, in FinderFrame frame)
     {
@@ -1097,11 +1097,11 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// The dimension within four versions of the finders' estimate whose grid puts both timing patterns on alternating modules, sampled through the finders' frame; 0 when none leaves under an eighth of them wrong.
+    /// The dimension within four versions of the finders' estimate whose grid puts both timing patterns on alternating modules, sampled through the finders' frame, or 0 when none leaves under an eighth of them wrong.
     /// </summary>
     /// <remarks>
     /// The estimate it searches around is <see cref="EstimateModules"/>, the frame's own count along each line: under strong keystone a count from the mean size is short by more than the four versions searched.
-    /// A dimension is given up as soon as its wrong modules are as many as the best so far allows, which a false triple's timing lines, about half wrong, reach within a few dozen modules; the result is the full count's.
+    /// A dimension is given up as soon as its wrong modules are as many as the best so far allows, which a false triple's timing lines, about half wrong, reach within a few dozen modules. The result is the full count's.
     /// </remarks>
     internal static int MatchTimingDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, in FinderFrame frame)
     {
@@ -1199,7 +1199,7 @@ internal static partial class QRImageDecoder
             if (dark == previousDark)
                 continue;
 
-            // A run just ended at step i; the first dark run is the finder's and is not checked
+            // A run just ended at step i. The first dark run is the finder's and is not checked.
             var runLength = (i - runStart) * step;
             if (runStart > 0 && (runLength < minRun || runLength > maxRun))
                 return 0;
@@ -1228,7 +1228,7 @@ internal static partial class QRImageDecoder
     /// </summary>
     private static PerspectiveTransform MeshAnchoredTransform(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension)
     {
-        // Finder centres sit at grid 3.5 / dimension − 3.5; the last lattice coordinate is dimension − 6.5.
+        // Finder centres sit at grid 3.5 / dimension − 3.5, and the last lattice coordinate is dimension − 6.5.
         // When that node was not found it is already placed, where the frame and its neighbours' offsets put it
         var last = meshSize - 1;
         var lastGrid = gridCoords[last];
@@ -1247,7 +1247,7 @@ internal static partial class QRImageDecoder
 
     /// <summary>
     /// Reference sampler: every module center through the mesh, one module at a time.
-    /// Not on the decode path; it is what the tiers behind <see cref="SampleGridPiecewise"/> are held to, pixel for pixel.
+    /// Not on the decode path. It is what the tiers behind <see cref="SampleGridPiecewise"/> are held to, pixel for pixel.
     /// </summary>
     /// <remarks>
     /// A coordinate is interpolated through three nodes of its lattice line, the two of the cell it falls in and the one beyond the nearer of them, in Newton's form: the first node's position, the slope to the second and the curvature through the third, each spacing of the lattice entering as its reciprocal. First down the lattice columns to the module's row, then along that row.
@@ -1352,7 +1352,7 @@ internal static partial class QRImageDecoder
                 frame.Axes(dimension - 6.5f, dimension - 6.5f, dimension, out axisX, out axisY);
             }
 
-            // Expanding search window; mild perspective shifts the true position
+            // Expanding search window, since mild perspective shifts the true position
             // further from the parallelogram prediction as the tilt grows.
             foreach (var allowance in stackalloc float[] { 4f, 8f, 16f })
             {

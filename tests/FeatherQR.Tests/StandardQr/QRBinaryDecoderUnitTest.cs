@@ -102,7 +102,7 @@ public class QRBinaryDecoderUnitTest
     [Test]
     public async Task EciTwoByteDesignator_Parses()
     {
-        // 2-byte designator form: 10xxxxxx xxxxxxxx; value 26 = UTF-8
+        // 2-byte designator form: 10xxxxxx xxxxxxxx, value 26 = UTF-8
         var data = Build(
             (ModeEci, 4), (0x80, 8), (26, 8),
             (ModeByte, 4), (1, 8), ('X', 8),
@@ -138,14 +138,14 @@ public class QRBinaryDecoderUnitTest
     /// <summary>
     /// Every mode's count indicator has to be bounded from the NEAR side, one bit
     /// short, not only by leaving no room at all. A guard weakened by one bit lets
-    /// <see cref="BitReader"/> read past the buffer — <c>totalBits</c> is
-    /// <c>data.Length * 8</c> here, so capacity and buffer end together — and it throws
+    /// <see cref="BitReader"/> read past the buffer (<c>totalBits</c> is
+    /// <c>data.Length * 8</c> here, so capacity and buffer end together), and it throws
     /// <see cref="InvalidOperationException"/> out of a bool-returning <c>TryDecode</c>.
     /// </summary>
     /// <remarks>
     /// Each stream is 32 bits: a complete leading segment, the mode indicator under
     /// test, and filler that is one bit short of that mode's count width. The filler is
-    /// never read — the guard fires first — so its content does not matter.
+    /// never read, since the guard fires first, so its content does not matter.
     /// </remarks>
     [Test]
     [Arguments("0010" + "000000001" + "001010", ModeNumeric, 9)]        // 10-bit numeric count, 9 bits left
@@ -173,7 +173,7 @@ public class QRBinaryDecoderUnitTest
     [Test]
     public async Task KanjiSegment_DecodesToJisX0208()
     {
-        // Version 1 Kanji count indicator is 8 bits; 7 characters at 13 bits each.
+        // Version 1 Kanji count indicator is 8 bits. 7 characters at 13 bits each.
         var data = Build(
             (ModeKanji, 4), (7, 8),
             (Kanji(0x82B1), 13), (Kanji(0x82F1), 13), (Kanji(0x82C9), 13),
@@ -410,7 +410,7 @@ public class QRBinaryDecoderUnitTest
             var data = new byte[random.Next(0, 80)];
             random.NextBytes(data);
 
-            // Any status is fine; throwing is not.
+            // Any status is fine, but throwing is not.
             QRBinaryDecoder.DecodeBitStream(data, random.Next(1, 41), destination, out _, out _, out _);
         }
     }

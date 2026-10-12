@@ -26,7 +26,7 @@ internal static class MicroQRDestinationRenders
     }
 
     /// <summary>
-    /// The big symbol at 8 px/module, whose finder is confirmed on more rows, and the small one at 5, one above the other; the
+    /// The big symbol at 8 px/module, whose finder is confirmed on more rows, and the small one at 5, one above the other, with the
     /// small one turned about its centre by <paramref name="smallDegrees"/>, in a cell wide enough for any turn. Without
     /// <paramref name="drawBig"/>, the small one alone where it would be.
     /// </summary>
@@ -59,7 +59,7 @@ internal static class MicroQRDestinationRenders
     /// <summary>
     /// A symbol turned about the image centre, each pixel the mean of 2 × 2 point samples of the modules (dark 20, light 235), then
     /// uniform noise of up to <paramref name="noise"/> drawn from <paramref name="seed"/>, in a square image half as wide again as
-    /// the symbol and its quiet zone; transposed, a mirrored capture, as a front camera takes one.
+    /// the symbol and its quiet zone. Transposed, a mirrored capture, as a front camera takes one.
     /// </summary>
     public static (byte[] Luminance, int Width, int Height) RenderTurnedSupersampled(MicroQRVersion version, string content, MicroQREccLevel eccLevel, double pixelsPerModule, double degrees, bool mirrored = false, double noise = 0, int seed = 0)
     {

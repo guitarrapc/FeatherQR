@@ -15,7 +15,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// Two checks. The compiled one reads the library's build for every target framework, so code under a framework's <c>#if</c>
-/// is read in the build that compiles it; code under a configuration's (<c>#if DEBUG</c>, and a call to a
+/// is read in the build that compiles it. Code under a configuration's (<c>#if DEBUG</c>, and a call to a
 /// <c>[Conditional("DEBUG")]</c> method such as <c>Debug.Assert</c>, arguments and all) is read only in the configuration the
 /// tests run in, Release on CI. A build older than a source of the library is not read: its case is skipped, or fails on CI,
 /// which builds the solution first. It holds whatever the source spelled: a <c>using</c> of any kind, a global import, a
@@ -75,7 +75,7 @@ public class SymbologyDependencyTest
 
     /// <summary>
     /// The compiled check reads each kind of reference: each probe names its targets in one place of the metadata
-    /// (SymbologyDependencyProbes.cs), each target with a case of its own, so a kind the reader stops reading fails its case; a pinned local and a call through a function pointer have no probe.
+    /// (SymbologyDependencyProbes.cs), each target with a case of its own, so a kind the reader stops reading fails its case. A pinned local and a call through a function pointer have no probe.
     /// </summary>
     [Test]
     [Arguments("BaseProbe", "BaseTarget")]
@@ -181,7 +181,7 @@ public class SymbologyDependencyTest
 
     private static readonly Regex BlockComment = new(@"/\*.*?\*/", RegexOptions.Singleline);
 
-    // A directive may have spaces after its '#'; only a condition of false alone, a comment after it, is dead code
+    // A directive may have spaces after its '#'. Only a condition of false alone, a comment after it, is dead code.
     private static readonly Regex IfFalse = new(@"^#\s*if\s+false\s*(//.*)?$");
 
     private static readonly Regex Directive = new(@"^#\s*(if|elif|else|endif)\b");
@@ -442,8 +442,8 @@ public class SymbologyDependencyTest
                 if (length == 0 || text + length > value.Length)
                     continue;
                 // A generic type's name carries its arguments' names in brackets, separated by commas, an argument of another
-                // assembly in brackets of its own with its assembly's name; an array's or a pointer's name is its element's
-                // followed by brackets or a star
+                // assembly in brackets of its own with its assembly's name. An array's or a pointer's name is its element's
+                // followed by brackets or a star.
                 foreach (var part in Encoding.UTF8.GetString(value, text, length).Split('[', ']', ',', '*'))
                 {
                     if (names.TryGetValue(part.Trim(), out var named))
@@ -487,7 +487,7 @@ public class SymbologyDependencyTest
         return (reader.GetString(type.Name), reader.GetString(type.Namespace));
     }
 
-    /// <summary>The assembly's own type definitions a signature names; types of other assemblies are not the rule's.</summary>
+    /// <summary>The assembly's own type definitions a signature names. Types of other assemblies are not the rule's.</summary>
     private sealed class DefinitionCollector : ISignatureTypeProvider<ImmutableArray<TypeDefinitionHandle>, object?>
     {
         private static readonly ImmutableArray<TypeDefinitionHandle> None = [];

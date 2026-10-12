@@ -11,7 +11,7 @@ public class PerspectiveGridSamplerParityTest
 {
     /// <summary>
     /// Micro QR's four sizes and Standard QR sizes: Micro QR samples its perspective search through the same tiers, and its
-    /// sizes leave the scalar tails Standard QR's do not (after 8-wide steps, 3 at 11 and 7 at 15; after the 128-bit tier's
+    /// sizes leave the scalar tails Standard QR's do not (after 8-wide steps, 3 at 11 and 7 at 15, and after the 128-bit tier's
     /// steps, 3 at 11 and 15, where every Standard QR size leaves 1).
     /// </summary>
     private static readonly int[] Dimensions = [11, 13, 15, 17, 21, 33, 77, 177];

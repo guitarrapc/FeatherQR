@@ -43,7 +43,7 @@ public static class StandardQrCorpus
         // Kanji mode (ISO/IEC 18004 8.4.5): the other encoder's symbols this library's decoder reads
         // and its encoder is compared with, module for module (KanjiEncoderOracleTest).
         // ZXing.Net encodes through .NET CP932, so payloads stay clear of the seven
-        // cells where CP932 and JIS X 0208 disagree; those live in the qrtool-generated
+        // cells where CP932 and JIS X 0208 disagree. Those live in the qrtool-generated
         // rMQR case, where the corpus supplies the Shift_JIS bytes directly.
         cases.Add(new("kanji-hello-m", "こんにちは世界", "M", Mode: "Kanji"));
         cases.Add(new("kanji-hello-h", "こんにちは世界", "H", Mode: "Kanji"));

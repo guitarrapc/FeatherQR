@@ -10,8 +10,8 @@ namespace FeatherQR.Internals.RmQR;
 /// run compression (<see cref="Emit"/>), with NEON's three instructions that have no portable form replaced.
 /// </summary>
 /// <remarks>
-/// A pair's two columns are adjacent bytes, so one 16-bit lane holds both and <c>x | x &gt;&gt; 7</c> merges them where NEON unzips;
-/// the lanes stay 16-bit, so no widening feeds the accumulator. The row insert is a shift and an OR where NEON has SLI, and the
+/// A pair's two columns are adjacent bytes, so one 16-bit lane holds both and <c>x | x &gt;&gt; 7</c> merges them where NEON unzips.
+/// The lanes stay 16-bit, so no widening feeds the accumulator. The row insert is a shift and an OR where NEON has SLI, and the
 /// row-reversed word is four swap steps where NEON has RBIT and REV32, once per block.
 /// </remarks>
 internal static partial class RmQRMatrixDecoder
@@ -80,7 +80,7 @@ internal static partial class RmQRMatrixDecoder
 
         while (current >= 0)
         {
-            // With a single block left the step overlaps the block above it, which has already been emitted; the emit below skips it.
+            // With a single block left the step overlaps the block above it, which has already been emitted, so the emit below skips it.
             var start = current >= 1 ? current - 1 : 0;
             var upper = Vector128<ushort>.Zero;
             var lower = Vector128<ushort>.Zero;

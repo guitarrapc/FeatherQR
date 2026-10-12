@@ -1,7 +1,7 @@
 using QRInteropFixtures;
 
 // ZXing.Net resolves Shift_JIS through static initializers that run on first use, so
-// the CodePages provider has to be registered before any encoding happens; otherwise
+// the CodePages provider has to be registered before any encoding happens. Otherwise
 // Kanji-mode cases silently fall back to Byte mode.
 _ = KanjiPayload.ShiftJis;
 
@@ -59,7 +59,6 @@ if (command == "probe-kanji-mapping")
 if (command == "probe-kanji")
 {
     // Which external encoder lineages can emit Kanji mode, per symbology.
-    // Backs the fixture plan for Kanji decode support.
     return KanjiProbe.Run();
 }
 if (command == "spot-check-structured-append")
@@ -211,7 +210,7 @@ var standardQrRoot = Path.Combine(fixturesBase, "StandardQr");
 var generators = new IFixtureGenerator[]
 {
     new ZXingNetFixtureGenerator(),
-    // Future generators plug in here. They require external toolchains; see the
+    // Future generators plug in here. They require external toolchains, so see the
     // oracle matrix in .github/docs/specs/qrcode-test-fixtures.md before adding one.
 };
 

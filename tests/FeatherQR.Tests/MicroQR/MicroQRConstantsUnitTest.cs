@@ -6,7 +6,7 @@ public class MicroQRConstantsUnitTest
 {
     // The 32 Micro QR format information patterns (ISO/IEC 18004: BCH(15,5) with
     // generator 0x537, XOR mask 0x4445), indexed by (symbolNumber << 2 | mask).
-    // Values are independently derivable from the ISO definition; index 0
+    // Values are independently derivable from the ISO definition. Index 0
     // (data 00000 -> 0x0000 ^ 0x4445) and index 1 (data 00001 -> 0x0537 ^ 0x4445)
     // are verified by hand in the naive reference test below.
     private static readonly ushort[] expectedFormatInfos =

@@ -32,7 +32,7 @@ public class StructuredAppendStreamTest
             var stream = new Stream(DataCodewords(symbols[i]));
             var header = stream.ReadSetHeader();
             await Assert.That(stream.ReadEci()).IsEqualTo(26).Because($"symbol {i}");
-            // The first symbol opens with a Byte run whose first three bytes are the mark; no later Byte run opens with one.
+            // The first symbol opens with a Byte run whose first three bytes are the mark, and no later Byte run opens with one.
             var opensInByteMode = stream.Read(4) == 0b0100;
             if (i == 0)
                 await Assert.That(opensInByteMode).IsTrue();
@@ -107,7 +107,7 @@ public class StructuredAppendStreamTest
     [Test]
     public async Task Boost_UnderOptimal_IsDecidedByWhatThePlansCost()
     {
-        // Two symbols of version 10 whose plans leave room for level M; as single-mode streams they do not.
+        // Two symbols of version 10 whose plans leave room for level M. As single-mode streams they do not.
         var text = Repeat("id" + new string('7', 40), 600);
         var optimal = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(10), Segmentation = QRSegmentation.Optimal, BoostEccLevel = true });
         var plain = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(10), Segmentation = QRSegmentation.Optimal });
@@ -152,15 +152,15 @@ public class StructuredAppendStreamTest
     [Arguments("order-lines", OrderLine, 2_600, 10, QREccLevel.M, EciMode.Default, false, 12, 0, 2, 0)]
     // Three are the fewest a pass takes.
     [Arguments("three", OrderLine, 650, 10, QREccLevel.M, EciMode.Default, false, 3, 0, 1, 0)]
-    // A label-sized set of two, below what a pass takes, so planned alone; its plan rules out one symbol, so the question is not asked.
+    // A label-sized set of two, below what a pass takes, so planned alone. Its plan rules out one symbol, so the question is not asked.
     [Arguments("label", OrderLine, 400, 10, QREccLevel.M, EciMode.Default, false, 2, 2, 0, 0)]
     // Seventeen bytes at version 1-L are one symbol only without the set header, which the question finds.
     [Arguments("one-symbol", "a", 17, 1, QREccLevel.L, EciMode.Default, false, 1, 0, 0, 1)]
     // A plan of 150 bits (three bytes, then thirty digits) and the 12 of a declared charset are past 152 at 1-L, which rules the question out.
     [Arguments("declared", "xyz012345678901234567890123456789", 33, 1, QREccLevel.L, EciMode.Utf8, false, 2, 1, 0, 0)]
-    // Under a byte order mark only the first symbol writes its single-mode stream; the other eleven still go through two passes.
+    // Under a byte order mark only the first symbol writes its single-mode stream, and the other eleven still go through two passes.
     [Arguments("order-lines-marked", OrderLine, 2_600, 10, QREccLevel.M, EciMode.Utf8, true, 12, 0, 2, 0)]
-    // With ten, the other nine are one pass of eight and one alone; were the first given a lane too, two would be alone.
+    // With ten, the other nine are one pass of eight and one alone. Were the first given a lane too, two would be alone.
     [Arguments("order-lines-marked-ten", OrderLine, 2_000, 10, QREccLevel.M, EciMode.Utf8, true, 10, 1, 1, 0)]
     // Where no plan helps the bound is the stream's: seventeen bytes (148 bits) and the charset's 12 are past 152,
     [Arguments("stream-declared", "a", 17, 1, QREccLevel.L, EciMode.Utf8, false, 2, 0, 0, 0)]
@@ -191,7 +191,7 @@ public class StructuredAppendStreamTest
     [Test]
     public async Task PlanThatFillsASymbolToTheBit_IsWrittenAsPlanned()
     {
-        // The first chunk's plan is the symbol's capacity exactly (152 bits); its single-mode stream is not (176), so it has to be the plan that is written.
+        // The first chunk's plan is the symbol's capacity exactly (152 bits). Its single-mode stream is not (176), so it has to be the plan that is written.
         var text = "ab1234567ab1234567ab1234567ab12345";
         var symbols = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(1), Segmentation = QRSegmentation.Optimal });
 
@@ -258,7 +258,7 @@ public class StructuredAppendStreamTest
         Assert.Throws<ArgumentException>(() => QRCodeGenerator.CreateStructuredAppend(text, ecc, options));
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
-        // A copy is two bytes a character; the message and the exception are a few kilobytes.
+        // A copy is two bytes a character. The message and the exception are a few kilobytes.
         await Assert.That(allocated).IsLessThan(text.Length);
     }
 
@@ -298,7 +298,7 @@ public class StructuredAppendStreamTest
     public async Task TextWhosePlanFillsASymbolToTheBit_IsThatSymbol()
     {
         // The planner says which texts are worth asking the one-symbol question of, by the whole text's plan
-        // against the symbol without the set header; a plan that fills a symbol exactly is the edge of that.
+        // against the symbol without the set header. A plan that fills a symbol exactly is the edge of that.
         // Every tail of up to four characters over a digit, an alphanumeric and a byte: some fill a symbol to the bit.
         var tails = new List<string> { "" };
         for (var from = 0; tails[from].Length < 4; from++)
@@ -340,7 +340,7 @@ public class StructuredAppendStreamTest
     [Test]
     public async Task LongestTextAPlanHoldsInOneSymbol_IsThatSymbol()
     {
-        // Under Optimal the one symbol may be held by its plan alone; the longest such text is found, not guessed.
+        // Under Optimal the one symbol may be held by its plan alone. The longest such text is found, not guessed.
         var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(5), Segmentation = QRSegmentation.Optimal };
         var longest = 0;
         for (var length = 100; length <= 400; length++)
@@ -421,7 +421,7 @@ public class StructuredAppendStreamTest
     [Test]
     public async Task MarkInsideTheText_ComesBackWhereverTheSplitFalls()
     {
-        // The split walks across the mark as the text before it grows a character at a time; the
+        // The split walks across the mark as the text before it grows a character at a time. The
         // character ahead of the mark is one UTF-16 unit, or a pair that the cut has to clear whole.
         foreach (var ahead in new[] { "", "\U0001F600" })
         {
@@ -498,7 +498,7 @@ public class StructuredAppendStreamTest
     [Test]
     public async Task MarkAfterADigitRun_CostsTheSetNoSymbolAndNoVersion()
     {
-        // The unconstrained plan opens a Byte run at such a mark; the plan written takes the digit before it
+        // The unconstrained plan opens a Byte run at such a mark. The plan written takes the digit before it
         // into the run instead, eight bits dearer, and the set is the unmarked text's in count and version.
         // Forty-eight thousand characters are sixteen symbols of version 40, with nothing to spare for a set priced any dearer.
         var optimal = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
@@ -584,7 +584,7 @@ public class StructuredAppendStreamTest
     [Test]
     public async Task Parity_IsOfTheBytesWritten_WhenAForcedCharsetDoesNotHoldTheText()
     {
-        // A euro sign under a forced ISO-8859-1 is written as whatever the Byte writer makes of it; the parity is of that byte.
+        // A euro sign under a forced ISO-8859-1 is written as whatever the Byte writer makes of it, and the parity is of that byte.
         var text = Repeat("price 12€ ", 310);
         var set = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(5), EciMode = EciMode.Iso8859_1 });
 
@@ -709,7 +709,7 @@ public class StructuredAppendStreamTest
     [Test]
     public async Task OneRiskyMark_DoesNotPriceTheWholeSetAsSingle()
     {
-        // A mark right after an alphanumeric moves one run of one chunk by a character; the split is priced by plans
+        // A mark right after an alphanumeric moves one run of one chunk by a character. The split is priced by plans
         // all the same, and the other forty thousand characters keep theirs.
         var body = Repeat("1234567890123456789012345678;", 40_000);
         var optimal = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
@@ -768,7 +768,7 @@ public class StructuredAppendStreamTest
         await Assert.That(QRCodeGenerator.CreateStructuredAppend("ab" + new string(Mark, 7), QREccLevel.M, two).Length).IsEqualTo(1);
 
         // No run is too long for a symbol, but cuts kept off the marks leave every symbol a unit of ten bytes, and seventeen
-        // units are one symbol too many; the same units with an ordinary character in the marks' place are fourteen symbols.
+        // units are one symbol too many. The same units with an ordinary character in the marks' place are fourteen symbols.
         var units = Repeat("a" + new string(Mark, 3), 17 * 4);
         await Assert.That(QRCodeGenerator.CreateStructuredAppend(units.Substring(0, 16 * 4), QREccLevel.L, one).Length).IsEqualTo(16);
         var byCuts = Refused(units, one);

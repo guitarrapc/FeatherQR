@@ -44,7 +44,7 @@ internal static partial class StructuredAppendPlanner
         return (byte)parity;
     }
 
-    /// <summary>The portable parity kernel; UTF-8 is folded per code point without a temporary byte buffer.</summary>
+    /// <summary>The portable parity kernel. UTF-8 is folded per code point without a temporary byte buffer.</summary>
     internal static byte ParityScalar(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom)
     {
         var parity = utf8Bom ? 0xEF ^ 0xBB ^ 0xBF : 0;

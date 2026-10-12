@@ -14,12 +14,12 @@ internal static partial class FinderPatternFinder
         (byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
 
     /// <summary>
-    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask; runs are walked via trailing-zero counts.
+    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask, and runs are walked via trailing-zero counts.
     /// The 1:1:3:1:1 window is evaluated at the end of every dark run from the third onward, exactly the positions and order the scalar walk evaluates, so the result is bit-identical.
     /// </summary>
     private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
-        // The mask covers a full row; keep the common case on the stack (512 B covers rows up to ~4000 px) and rent for wider images.
+        // The mask covers a full row, so keep the common case on the stack (512 B covers rows up to ~4000 px) and rent for wider images.
         var maskLength = ((width + 63) >> 6) + 1;
         ulong[]? rented = maskLength > 64 ? ArrayPool<ulong>.Shared.Rent(maskLength) : null;
         Span<ulong> mask = rented is null ? stackalloc ulong[64] : rented;
@@ -28,8 +28,8 @@ internal static partial class FinderPatternFinder
 
         try
         {
-            // Build the dark bitmask (bit i = pixel i of this row is dark);
-            // threshold == 0 means nothing is dark, so the compare loops can skip.
+            // Bit i is set where pixel i of this row is dark. At a threshold of 0 nothing is dark, and the min identity
+            // below would say the opposite, since t - 1 wraps to 255.
             var row = luminance.Slice(y * width, width);
             var i = 0;
             if (threshold > 0)
@@ -52,8 +52,8 @@ internal static partial class FinderPatternFinder
                     var thr = Vector128.Create(threshold);
                     if (AdvSimd.Arm64.IsSupported)
                     {
-                        // NEON has no movemask; fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, 3 pairwise adds reduce them (simdjson bulk-movemask shape).
-                        // Measured ~8-11% over per-16 ExtractMostSignificantBits and 3.3-4.1x over the scalar walk on Apple M2
+                        // NEON has no movemask, so fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, 3 pairwise adds reduce them.
+                        // That is faster than ExtractMostSignificantBits every 16 pixels.
                         for (; i + 64 <= width; i += 64)
                         {
                             var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)i), thr) & NeonBitWeights;

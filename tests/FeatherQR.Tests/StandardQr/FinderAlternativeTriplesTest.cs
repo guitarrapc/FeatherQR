@@ -3,7 +3,7 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The triples a failed decode tries after the selected one (<see cref="FinderPatternFinder.AlternativeTriples"/>): by the height their least confirmed member was seen over, in modules, then by the selection score; never the selected triple again.
+/// The triples a failed decode tries after the selected one (<see cref="FinderPatternFinder.AlternativeTriples"/>): by the height their least confirmed member was seen over, in modules, then by the selection score, and never the selected triple again.
 /// </summary>
 public class FinderAlternativeTriplesTest
 {
@@ -56,7 +56,7 @@ public class FinderAlternativeTriplesTest
 
         var seen = HandedOut([e, d, c, b, a], [a, b, c]);
 
-        // (a, b, c) is the selected triple and never comes again; d's three triples come next in score order, then e's six
+        // (a, b, c) is the selected triple and never comes again, and d's three triples come next in score order, then e's six
         await Assert.That(seen.Any(t => Holds(t, a) && Holds(t, b) && Holds(t, c))).IsFalse();
         await Assert.That(seen.Count).IsEqualTo(3 + 6);
         FinderPattern[][] withD = [[a, c, d], [a, b, d], [b, c, d]];
@@ -68,7 +68,7 @@ public class FinderAlternativeTriplesTest
             await Assert.That(Score(seen[i])).IsGreaterThanOrEqualTo(Score(seen[i - 1]) - 1e-6f);
     }
 
-    /// <summary>Three candidates at one point make no triangle and are never handed out; the next member's triples still are.</summary>
+    /// <summary>Three candidates at one point make no triangle and are never handed out, but the next member's triples still are.</summary>
     [Test]
     public async Task CoincidentCandidates_AreNeverATriple()
     {

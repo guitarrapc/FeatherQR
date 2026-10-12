@@ -5,11 +5,11 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Which corners of a finder triple the image decoder decodes from: the one the triangle's shape names, and after it only a corner whose two timing patterns read.
-/// The corner steps are a recording stand-in, so what is asserted is the decoder's own decisions. The check before another corner changes no read an image can show, since a decode from a wrong corner fails anyway; what it saves is that decode, and only a recording can see it.
+/// The corner steps are a recording stand-in, so what is asserted is the decoder's own decisions. The check before another corner changes no read an image can show, since a decode from a wrong corner fails anyway. What it saves is that decode, and only a recording can see it.
 /// </summary>
 public class FinderTripleCornersTest
 {
-    /// <summary>Centres 0 to 2 are a right isosceles triangle whose shape names vertex 0; 3 closes the square.</summary>
+    /// <summary>Centres 0 to 2 are a right isosceles triangle whose shape names vertex 0, and 3 closes the square.</summary>
     private static readonly FinderPattern[] Points = [Finder(100, 100), Finder(300, 100), Finder(100, 300), Finder(300, 300)];
 
     private static FinderPattern Finder(float x, float y) => new() { X = x, Y = y, ModuleSize = 4f, Count = 3 };
@@ -27,7 +27,7 @@ public class FinderTripleCornersTest
         /// <summary>The corners whose timing patterns read.</summary>
         public string[] Reading;
 
-        /// <summary>What a decode from a corner returns; a corner not listed fails.</summary>
+        /// <summary>What a decode from a corner returns. A corner not listed fails.</summary>
         public Dictionary<string, DecodeStatus> Results;
 
         public readonly bool ReadsTimingPatterns(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)

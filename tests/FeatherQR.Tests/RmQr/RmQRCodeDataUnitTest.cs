@@ -6,9 +6,9 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="RmQRCodeData"/>: rectangular bit-packed core with a virtual quiet
-/// zone, and the "QRX" symbol-type-2 serialization container. No encoder exists
-/// yet, so matrices come from the committed external-encoder corpus (Fixtures/RmQr)
-/// and from synthetic patterns.
+/// zone, and the "QRX" symbol-type-2 serialization container. Matrices come from
+/// the committed external-encoder corpus (Fixtures/RmQr) and from synthetic
+/// patterns, not from the encoder.
 /// </summary>
 public class RmQRCodeDataUnitTest
 {
@@ -237,7 +237,7 @@ public class RmQRCodeDataUnitTest
         data.SetCoreData(SyntheticCore(RmQRVersion.R7x43, 3));
         var raw = data.GetRawData();
 
-        // 301 bits → 38 bytes, 3 padding bits; dirty padding must not survive a round trip.
+        // 301 bits → 38 bytes, 3 padding bits. Dirty padding must not survive a round trip.
         var dirty = (byte[])raw.Clone();
         dirty[^1] |= 0x07;
         var restored = new RmQRCodeData(dirty, 0);
@@ -259,7 +259,7 @@ public class RmQRCodeDataUnitTest
     public async Task CoreAccessors_AreAllocationFree()
     {
         // Steady-state SetCoreData / GetCoreData / GetCoreModule / GetRawData(IBufferWriter)
-        // must not allocate (Debug builds are excluded per repo notes).
+        // must not allocate. Release only: Debug allocates where Release does not.
         var (modules, width, height, version) = LoadFixture("zint-libzint/r17x139-m-numeric-max");
         var data = new RmQRCodeData(version, 2);
         var back = new byte[modules.Length];

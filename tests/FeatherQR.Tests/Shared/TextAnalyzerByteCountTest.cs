@@ -87,7 +87,7 @@ public class TextAnalyzerByteCountTest
     [MethodDataSource(nameof(Texts))]
     public async Task Encode_ForcedLatin1_IsWellFormed_EvenOverContentItCannotRepresent(string name, string text)
     {
-        // The text is not preserved, which is the caller's choice; the symbol still has to
+        // The text is not preserved, which is the caller's choice, but the symbol still has to
         // be one a reader can take apart, so the count and the bytes written must agree.
         var symbol = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
 

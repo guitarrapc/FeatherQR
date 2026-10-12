@@ -7,9 +7,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// Symbols like this reach the decoders from thermal printers, laser markers and perspective, but the
-/// library no longer draws one by accident: the builders and the renderer fit any area they are given
-/// into a square. A canvas scale over the symbol's own area is the one way left to stretch it, so the
-/// decoder tests go through here and check the stretch is really in the pixels.
+/// library draws none: the builders and the renderer fit any area they are given into a square.
+/// A canvas scale over the symbol's own area is the one way to stretch it, so the decoder tests go
+/// through here and check the stretch is really in the pixels.
 /// </remarks>
 internal static class StretchedSymbol
 {

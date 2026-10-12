@@ -127,7 +127,7 @@ public class RmQRNearestCrossingParityTest
     private static bool FullScan(ReadOnlySpan<byte> luminance, int width, int height, float level, float x, float y, float dx, float dy, float half, bool toDark, out float crossingX, out float crossingY)
         => FullScan(luminance, width, height, level, x, y, dx, dy, half, toDark, out crossingX, out crossingY, out _);
 
-    /// <summary>Every sample in order, the nearest crossing kept, the first of those as near; <paramref name="asNear"/> counts the crossings that near.</summary>
+    /// <summary>Every sample in order, the nearest crossing kept, the first of those as near. <paramref name="asNear"/> counts the crossings that near.</summary>
     private static bool FullScan(ReadOnlySpan<byte> luminance, int width, int height, float level, float x, float y, float dx, float dy, float half, bool toDark, out float crossingX, out float crossingY, out int asNear)
     {
         crossingX = 0f;

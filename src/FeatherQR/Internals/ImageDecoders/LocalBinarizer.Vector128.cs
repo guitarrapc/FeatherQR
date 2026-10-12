@@ -55,7 +55,7 @@ internal static partial class LocalBinarizer
         var blockX = 0;
         for (; blockX + 2 <= alignedColumns; blockX += 2)
         {
-            // Thresholds are means of bytes, so they fit a byte; dark is luminance <= threshold
+            // Thresholds are means of bytes, so they fit a byte. Dark is luminance <= threshold.
             var threshold = Vector128.Create(Vector64.Create((byte)thresholds[blockX]), Vector64.Create((byte)thresholds[blockX + 1]));
             var offset = (nuint)(top * width + blockX * BlockSize);
             for (var y = 0; y < BlockSize; y++, offset += (nuint)width)

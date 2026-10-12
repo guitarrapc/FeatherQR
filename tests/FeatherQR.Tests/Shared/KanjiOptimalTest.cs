@@ -12,7 +12,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every option here sets <c>AllowKanji</c>; without it the text keeps the UTF-8 plan, which <c>KanjiEligibilityTest</c> holds.
+/// Every option here sets <c>AllowKanji</c>. Without it the text keeps the UTF-8 plan, which <c>KanjiEligibilityTest</c> holds.
 /// The rule the expectations are written from: below the version the single-mode (UTF-8) stream needs, take the first version a plan fits, the Kanji plan (Kanji runs beside Numeric, Alphanumeric and Byte runs of ASCII, no ECI) where it fits and today's UTF-8 plan otherwise.
 /// So the output is never larger than <c>Single</c>, and never larger than the UTF-8 plan the same text got before Kanji plans existed.
 /// </para>
@@ -104,7 +104,7 @@ public class KanjiOptimalTest
     private static int StandardUtf8PlanBits(string text, int version)
         => QRSegmentPlanner.MinimumPayloadBits(text, EciMode.Utf8, StandardQrCountBits('N', version), StandardQrCountBits('A', version), StandardQrCountBits('B', version)) + StandardQrEciBits;
 
-    /// <summary>The first version below the single-mode fit a plan holds, Kanji first; the single-mode fit when none does; 0 when nothing fits.</summary>
+    /// <summary>The first version below the single-mode fit a plan holds, Kanji first, or the single-mode fit when none does, or 0 when nothing fits.</summary>
     private static (int Version, Run[]? KanjiRuns) ReferenceStandard(string text, QREccLevel ecc)
     {
         var single = SmallestStandardQrVersion([new Run('E', "26"), new Run('U', text)], ecc);
@@ -375,7 +375,7 @@ public class KanjiOptimalTest
     }
 
     /// <summary>
-    /// 「日本語12345」 is 14 UTF-8 bytes, which only M4-L holds; its Kanji plan fits M3-L.
+    /// 「日本語12345」 is 14 UTF-8 bytes, which only M4-L holds. Its Kanji plan fits M3-L.
     /// The seven-state screen, pricing each kanji as its three UTF-8 bytes, would have skipped M3.
     /// </summary>
     [Test]
@@ -392,7 +392,7 @@ public class KanjiOptimalTest
     }
 
     /// <summary>
-    /// 「日本語123456789」 is 18 UTF-8 bytes, more than any Micro QR symbol holds; its Kanji plan, Kanji(日本語) + Numeric(123456789), is 81 bits and fits M3-L.
+    /// 「日本語123456789」 is 18 UTF-8 bytes, more than any Micro QR symbol holds. Its Kanji plan, Kanji(日本語) + Numeric(123456789), is 81 bits and fits M3-L.
     /// With no single-mode fit the scan runs the whole range, so this is also the case where no ceiling stops it.
     /// </summary>
     [Test]
@@ -406,7 +406,7 @@ public class KanjiOptimalTest
     }
 
     /// <summary>
-    /// A two-byte character beside a lowercase letter is 24 bits as UTF-8 in one Byte run and 36 as a Byte run and a Kanji run at M4, so 「xЯxЯxЯ12345678」 has a UTF-8 plan (Byte, then the digits split off) that fits M4-L and a Kanji plan that does not; as one UTF-8 Byte run it is 17 bytes, which no Micro QR symbol holds.
+    /// A two-byte character beside a lowercase letter is 24 bits as UTF-8 in one Byte run and 36 as a Byte run and a Kanji run at M4, so 「xЯxЯxЯ12345678」 has a UTF-8 plan (Byte, then the digits split off) that fits M4-L and a Kanji plan that does not. As one UTF-8 Byte run it is 17 bytes, which no Micro QR symbol holds.
     /// The UTF-8 plan is what fits, and it is written: the Kanji plan does not get to refuse a text that fitted before.
     /// </summary>
     [Test]
@@ -462,7 +462,7 @@ public class KanjiOptimalTest
             RmQrCountBits('N', RmQrIndex(version)), RmQrCountBits('A', RmQrIndex(version)), RmQrCountBits('B', RmQrIndex(version))) + RmQrEciBits <= RmQrCapacity(version, ecc);
 
     /// <summary>
-    /// Every version priced from scratch, the best by the strategy among those the single stream or a plan fits; at the single stream's own version the single stream is written, and elsewhere the Kanji plan where it fits.
+    /// Every version priced from scratch, the best by the strategy among those the single stream or a plan fits. At the single stream's own version the single stream is written, and elsewhere the Kanji plan where it fits.
     /// </summary>
     private static (RmQRVersion? Version, Run[]? KanjiRuns) ReferenceRmQr(string text, RmQREccLevel ecc, RmQRFitStrategy strategy)
     {
@@ -559,7 +559,7 @@ public class KanjiOptimalTest
             await Assert.That(actual.Version).IsEqualTo(version!.Value).Because($"{strategy}");
         }
 
-        // R7x43 is the first rank by height; by area R11x27 (297 modules against 301, Kanji width 2 as well) comes first.
+        // R7x43 is the first rank by height. By area R11x27 (297 modules against 301, Kanji width 2 as well) comes first.
         var lowest = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true, Segmentation = RmQRSegmentation.Optimal, FitStrategy = RmQRFitStrategy.MinimizeHeight });
         await Assert.That(lowest.Version).IsEqualTo(RmQRVersion.R7x43);
     }

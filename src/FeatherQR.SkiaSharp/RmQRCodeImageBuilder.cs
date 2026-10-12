@@ -353,11 +353,11 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     }
 
     /// <summary>
-    /// Configure how the version is chosen among those that hold the content (default <see cref="RmQRFitStrategy.MinimizeArea"/>, fewest modules; note it may prefer a taller, narrower rMQR code, use <see cref="RmQRFitStrategy.MinimizeHeight"/> or <see cref="WithHeight"/> for the flattest fit).
+    /// Configure how the version is chosen among those that hold the content. The default, <see cref="RmQRFitStrategy.MinimizeArea"/>, takes the fewest modules and may prefer a taller, narrower rMQR code. Use <see cref="RmQRFitStrategy.MinimizeHeight"/> or <see cref="WithHeight"/> for the flattest fit.
     /// </summary>
     /// <param name="fitStrategy">Fit strategy.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the icon size, border or occupancy limit is out of range.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the rMQR code.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="fitStrategy"/> is not a defined strategy.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made rMQR code.</exception>
     public RmQRCodeImageBuilder WithFitStrategy(RmQRFitStrategy fitStrategy)
     {
         if (_data is not null)
@@ -407,7 +407,7 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     }
 
     /// <summary>
-    /// Configure the image width in pixels; the height follows the rMQR code aspect ratio (rounded to whole pixels), the background covers the whole image and the rMQR code is drawn at a uniform module scale inside it.
+    /// Configure the image width in pixels. The height follows the rMQR code aspect ratio (rounded to whole pixels), the background covers the whole image and the rMQR code is drawn at a uniform module scale inside it.
     /// This is the static helpers' sizing rule and the default (512) when no size is configured.
     /// <see cref="SymbolImageBuilderBase{TSelf}.WithSize"/> (letterbox into an exact canvas) or <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize"/> (exact matrix) take precedence when also called.
     /// </summary>
@@ -445,7 +445,7 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
         SymbolRenderer.Render(canvas, contentRect, (RmQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
     }
 
-    /// <summary>Only a custom finder shape needs antialiasing here; rMQR has no icon overlays.</summary>
+    /// <summary>Only a custom finder shape needs antialiasing here, since rMQR has no icon overlays.</summary>
     private protected override bool UseCrispEdgesCore() => _finderPatternShape?.RequiresAntialiasing != true;
 
     /// <summary>Default canvas: the configured (or 512) width, height from the rMQR code aspect ratio.</summary>

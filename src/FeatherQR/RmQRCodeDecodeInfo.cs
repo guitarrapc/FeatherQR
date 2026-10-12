@@ -32,7 +32,7 @@ public readonly record struct RmQRCodeDecodeInfo
     /// </summary>
     internal RmQRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, ErrorsCorrected, corners, Fnc1);
 
-    /// <summary>Decode outcome; <see cref="DecodeStatus.Success"/> when text was produced.</summary>
+    /// <summary>Decode outcome. <see cref="DecodeStatus.Success"/> when text was produced.</summary>
     public DecodeStatus Status { get; }
 
     /// <summary>The symbol version (from the physical dimensions), or 0 when the input is not an rMQR matrix.</summary>
@@ -44,9 +44,9 @@ public readonly record struct RmQRCodeDecodeInfo
     /// <summary>Total Reed-Solomon codeword corrections across all blocks (0 for a clean symbol).</summary>
     public int ErrorsCorrected { get; }
 
-    /// <summary>Where the symbol sits in the image, when decoded from one; see <see cref="SymbolCorners"/>. Empty for a matrix-level decode or a failed one.</summary>
+    /// <summary>Where the symbol sits in the image, when decoded from one. See <see cref="SymbolCorners"/>. Empty for a matrix-level decode or a failed one.</summary>
     public SymbolCorners Corners { get; }
 
-    /// <summary>The FNC1 mode, when the symbol carries one (GS1 data, or an industry format with its application indicator); see <see cref="Fnc1Mode"/>. <c>default</c>, neither position, for a symbol that carries none or a failed decode.</summary>
+    /// <summary>The FNC1 mode, when the symbol carries one (GS1 data, or an industry format with its application indicator). See <see cref="Fnc1Mode"/>. <c>default</c>, neither position, for a symbol that carries none or a failed decode.</summary>
     public Fnc1Mode Fnc1 { get; }
 }

@@ -179,7 +179,7 @@ internal static class RmQRNaiveReference
     /// <summary>
     /// Undoes Standard-QR-style block interleaving of the data codewords: blocks
     /// have <paramref name="shortBlockCount"/> blocks of <paramref name="shortLength"/>
-    /// codewords followed by the remaining blocks with one more codeword; returns the
+    /// codewords followed by the remaining blocks with one more codeword. Returns the
     /// data codewords of block 0.
     /// </summary>
     public static byte[] DeinterleaveFirstBlock(ReadOnlySpan<byte> stream, int blockCount, int shortBlockCount, int shortLength)

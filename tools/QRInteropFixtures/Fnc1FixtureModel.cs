@@ -31,7 +31,7 @@ public enum Fnc1Position
 /// input (see the fixture spec), this is the standard's reading of the symbol as written, and the
 /// manifest records the input beside it.
 /// </param>
-/// <param name="Utf8">Ask the writer for an ECI 26 header over the whole text; recorded as <c>eciCharset</c>.</param>
+/// <param name="Utf8">Ask the writer for an ECI 26 header over the whole text. Recorded as <c>eciCharset</c>.</param>
 /// <param name="RmQRVersion">rMQR only: the ISO/IEC 23941 version index + 1 (1 = R7x43 ... 32 = R17x139), pinned on the writer.</param>
 public sealed record Fnc1CaseDefinition(
     string Id,

@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 /// differ, the pixel under the module's centre is a little to the first text's side of the middle grey and the rest of the
 /// module fully on the second's: a grid thresholded at the module centres reads the first text, and one read by coverage, whose
 /// bilinear sample near that pixel's corner leans to the rest of the module, the second. Upright, every module centre sits
-/// <c>offset</c> pixels from its pixel's corner; turned, each sits where the turn puts it, and the premise has to be asserted.
+/// <c>offset</c> pixels from its pixel's corner. Turned, each sits where the turn puts it, and the premise has to be asserted.
 /// </summary>
 internal sealed class TwoTextRenderer
 {

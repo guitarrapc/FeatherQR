@@ -20,8 +20,8 @@ public sealed class MicroQRCodeData
     //
     // MicroQRCodeData stores CORE modules only (no quiet zone), bit-packed
     // MSB-first in flat row-major order, zero-padded to a whole byte, and the
-    // packed bits ARE the serialization payload. See QRCodeData for the
-    // measurements that motivate the layout.
+    // packed bits ARE the serialization payload. See QRCodeData for why
+    // the layout is not a byte per module.
     //
     //   bitIndex = coreRow * _baseSize + coreCol
     //   dark(coreRow, coreCol) = (_bits[bitIndex >> 3] >> (7 - (bitIndex & 7))) & 1
@@ -63,7 +63,7 @@ public sealed class MicroQRCodeData
     // 16│ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │
     //   └───┴───┴───┴───┴───┴───┴───┴───┴───┘
     //
-    // Q = QuietZone (VIRTUAL — not stored, indexer returns false)
+    // Q = QuietZone (VIRTUAL: not stored, indexer returns false)
     // C = Core modules (stored bit-packed in _bits)
     //
     // ┌─────────────────────────────────────────────────────────┐
@@ -232,7 +232,7 @@ public sealed class MicroQRCodeData
     /// </summary>
     /// <remarks>
     /// Writes a "QRX" header (3 bytes), the symbology (1 byte), the width and height (1 byte each), then the bit-packed modules.
-    /// The quiet zone is not written; pick its width again when restoring.
+    /// The quiet zone is not written, so pick its width again when restoring.
     /// </remarks>
     public byte[] GetRawData()
     {
@@ -278,12 +278,11 @@ public sealed class MicroQRCodeData
     /// <remarks>
     /// <para>
     /// Coordinates match the indexer: one unit is one module, the origin is the top-left corner including the quiet zone, <see cref="ModuleRect.X"/> is the column and <see cref="ModuleRect.Y"/> the row.
-    /// Scale by the pixel size of one module.
-    /// Consumers scale by the pixel size of one module; <see cref="Size"/> gives the total extent in modules.
+    /// Scale by the pixel size of one module. <see cref="Size"/> gives the total extent in modules.
     /// </para>
     /// <para>
     /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
-    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol; a styled one draws its finder patterns as whole patterns instead).
+    /// Currently they are maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol. A styled one draws its finder patterns as whole patterns instead.
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()

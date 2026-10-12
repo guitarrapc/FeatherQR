@@ -4,7 +4,7 @@ namespace FeatherQR.Internals.StandardQR;
 
 internal static partial class QRImageDecoder
 {
-    /// <summary>The best confirmed candidates paired for a third finder; the pairs of four are six, each with six hypotheses.</summary>
+    /// <summary>The best confirmed candidates paired for a third finder. The pairs of four are six, each with six hypotheses.</summary>
     private const int MaxInferenceFinders = 4;
 
     private const int MaxHypotheses = MaxInferenceFinders * (MaxInferenceFinders - 1) / 2 * 6;
@@ -17,7 +17,7 @@ internal static partial class QRImageDecoder
     /// <summary>How many hypotheses are decoded, the best read timing patterns first: a third is rarely worth a decode.</summary>
     private const int MaxInferredDecodes = 2;
 
-    /// <summary>How far the inferred centre is searched from its construction, in modules, a module at a time; then how far from there at the fine step.</summary>
+    /// <summary>How far the inferred centre is searched from its construction, in modules, a module at a time, then how far from there at the fine step.</summary>
     private const float InferredSearchModules = 2f;
 
     private const float InferredFineSearchModules = 0.5f;
@@ -34,7 +34,7 @@ internal static partial class QRImageDecoder
         /// <summary>Which finder is inferred: 0 top-left, 1 top-right, 2 bottom-left.</summary>
         public int Inferred;
 
-        /// <summary>The share of timing modules read wrong through the frame at the centre the search settled on; the least first.</summary>
+        /// <summary>The share of timing modules read wrong through the frame at the centre the search settled on, the least first.</summary>
         public float Wrong;
 
         public readonly FinderPattern InferredFinder => Inferred == 0 ? TopLeft : Inferred == 1 ? TopRight : BottomLeft;
@@ -54,7 +54,7 @@ internal static partial class QRImageDecoder
     /// Decodes with a third finder inferred from two, after the candidate list selected no triple that read: a finder under glare, damage or an odd drawing leaves two, and two finders of one symbol leave the third in one of six places.
     /// </summary>
     /// <remarks>
-    /// Two candidates that share an edge of the symbol put the third at the perpendicular of their edge from either of them, on either side; two on the diagonal put it half the perpendicular from their midpoint, on either side.
+    /// Two candidates that share an edge of the symbol put the third at the perpendicular of their edge from either of them, on either side. Two on the diagonal put it half the perpendicular from their midpoint, on either side.
     /// The construction is exact for a flat symbol seen square on and a module or two out under perspective, so the centre is searched around it for the position whose two timing patterns read best through the frame, a module at a time to two modules out and then a quarter module within half a module.
     /// Only candidates confirmed on more than one row are paired, the best confirmed four, and a hypothesis is decoded only where its timing patterns read.
     /// The lines through the inferred finder are taken flat, since its end cannot be measured: a line's foreshortening is lost, which bounds the keystone the read holds under and leaves the corner reported at the inferred finder where that flat line extrapolates it.
@@ -253,7 +253,7 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// The module sizes along the finder lines with one finder inferred: its ends are not measured, and take the size of the finder across the symbol's edge from it, as a flat line; the two real finders are measured as always.
+    /// The module sizes along the finder lines with one finder inferred: its ends are not measured, and take the size of the finder across the symbol's edge from it, as a flat line. The two real finders are measured as always.
     /// </summary>
     private static FinderModuleSizes MeasureInferredSizes(in ImageView image, in Hypothesis hypothesis)
     {

@@ -8,32 +8,30 @@ namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Vectorized mask pattern selection for x86/x64 with AVX2.
-/// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>; produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskSimdParityTest).
+/// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>. It produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskSimdParityTest).
 ///
 /// Architecture:
 /// - Versions 1-11 (one ulong per row) run lane-per-PATTERN: a Vector256&lt;ulong&gt;
 ///   holds the same row of four candidates, so every scoring pass is a plain
-///   row loop with no scalar tail and no per-pattern reduction; masking and
+///   row loop with no scalar tail and no per-pattern reduction. Masking and
 ///   format bits are one XOR / OR per row from per-version tables (see the
 ///   single-word tier below).
 /// - Versions 12-40 (two or three words per row) hold each candidate as row
 ///   words and as column words and score every rule along the word index
-///   (ModulePlacer.Masking.Transposed.X86.cs), which replaced the lane-per-row SoA
-///   tiers for both widths.
+///   (ModulePlacer.Masking.Transposed.X86.cs).
 /// - .NET has no VPOPCNTDQ intrinsic, so vector popcount is the Mula sequence
 ///   (2x vpshufb nibble LUT + vpsadbw), accumulated in weight-grouped vector
 ///   accumulators and reduced once per score.
 /// - Byte&lt;-&gt;bit edges are native SIMD: packing 0/1 bytes is pcmpeqb+pmovmskb
 ///   (32 modules per step), unpacking the winner's XOR delta is
 ///   broadcast+vpshufb+vpcmpeqb (32 modules per step).
-/// - Abort: no per-row threshold (measured, reduction cost eats the win), but
-///   each scorer checkpoints once before its last finder-window loop — the partial
+/// - Abort: no per-row threshold, since reducing the accumulators every row costs
+///   more than the abort saves. Each scorer checkpoints once before its last finder-window loop. The partial
 ///   score is a lower bound (the remaining terms are non-negative), so a pattern
 ///   already above the best total skips that loop without changing the selection
 ///   (the lane-per-pattern tier skips only when all four candidates in the
 ///   group are above). Evaluation order stays 0..7: mask totals sit too close
-///   together for win-frequency ordering to matter (measured, mask-order
-///   findings log).
+///   together for win-frequency ordering to matter.
 ///
 /// This file only executes under Avx2.IsSupported (x86/x64), so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
 /// </summary>
@@ -52,11 +50,9 @@ internal static partial class ModulePlacer
     // ---------------------------------
     // Shared SIMD pieces
     // ---------------------------------
-    // Operand-order note: the cross-platform helper Vector256.AndNot(left, right) computes left & ~right ("bitwise-and of a given vector and the ones complement of another vector").
-    // This is the OPPOSITE operand convention of the hardware intrinsic Avx2.AndNot(left, right) = ~left & right (vpandn) — the JIT swaps the operands when it emits vpandn for the helper.
-    // Every AndNot in this file is the cross-platform helper, so
-    // e.g. Vector256.AndNot(rowMask, x) == ~x & rowMask and Vector256.AndNot(y5, y5 << 1) == y5 & ~(y5 << 1),
-    // matching the scalar code (verified byte-for-byte by ModulePlacerMaskSimdParityTest).
+    // Every AndNot in this file is the cross-platform helper: Vector256.AndNot(left, right) is left & ~right.
+    // The hardware intrinsic Avx2.AndNot(left, right) is the opposite, ~left & right (vpandn).
+    // So Vector256.AndNot(rowMask, x) is ~x & rowMask, and Vector256.AndNot(y5, y5 << 1) is y5 & ~(y5 << 1).
 
     /// <summary>Nibble LUT for the Mula vector popcount (per-4-bit set-bit counts).</summary>
     private static readonly Vector256<byte> PopLut256 = Vector256.Create(
@@ -124,7 +120,7 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Triple-word SIMD row packer.
-    /// The 32-module chunks are 32-aligned so they never straddle a word boundary; the 16/8-module tails stay within a word for the same reason.
+    /// The 32-module chunks are 32-aligned so they never straddle a word boundary, and the 16/8-module tails stay within a word for the same reason.
     /// </summary>
     private static Row192 PackRowBits192Simd(ReadOnlySpan<byte> row)
     {
@@ -244,26 +240,15 @@ internal static partial class ModulePlacer
     // Single-word tier (versions 1-11)
     // ---------------------------------
     //
-    // Lane-per-PATTERN layout (second round of this tier): a Vector256<ulong> holds
-    // the same row of four candidate patterns, two groups (0-3, 4-7) per call. Every
-    // scorer pass is then a plain loop over rows — no scalar tails, no per-pattern
-    // horizontal reductions (each lane is its own accumulator) — and masking + format
-    // bits become one XOR / OR per row from per-version tables:
+    // A Vector256<ulong> holds the same row of four candidate patterns, two groups (0-3, 4-7) per call.
+    // Masking and format bits are one XOR / OR per row from per-version tables:
     //   pre[g][y]  = template[p][y % 12] & allowed[y] for the group's four patterns,
     //   fmt[e][g][y] = the ECC level's format-information bits that land in row y
     //                  (both copies), per lane.
-    // The tables are built once per version from the canonical blocked mask
-    // (ModulePlacer.GetLayout) and published with a volatile write. Precondition of
-    // this tier (guaranteed by the placement pipeline, not by the scalar tiers, which
-    // set-or-clear these bits): the 30 format-information modules are light on entry
-    // — they are reserved modules that no painter or data placement writes — so the
-    // overlay is an OR.
-    // Popcounts of provably disjoint bit sets (dark 5-run vs light 5-run markers,
-    // their run starts, the two finder-like orientations) are fused into one Mula
-    // popcount of the OR. Byte->bit packing reads 32 (rows <= 32) or 64 bytes per row
-    // for every row but the last (never past the buffer end).
-    // Measured over the previous lane-per-row tier: v1 1.86x, v2 1.87x, v6 1.64x,
-    // v10 1.58x (kernel), zero allocations after the one-time tables.
+    // The overlay is an OR, so the 30 format-information modules must be light on entry. They are
+    // reserved modules that no painter or data placement writes.
+    // Popcounts of disjoint bit sets (dark and light 5-run markers, their run starts, the two
+    // finder-like orientations) are fused into one popcount of the OR.
 
     private sealed class MaskLayout64
     {
@@ -330,7 +315,6 @@ internal static partial class ModulePlacer
         var blockedMask = GetLayout(version).BlockedMask;
         var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
 
-        // allowed[y] = ~blocked & rowMask, straight from the canonical bitmask
         var allowed = new ulong[size];
         for (var y = 0; y < size; y++)
         {
@@ -351,7 +335,7 @@ internal static partial class ModulePlacer
             }
         }
 
-        // format overlays: copy 1 at (FormatXs1[i], FormatYs1[i]), copy 2 at (size-1-i, 8) for i < 8 and (8, size-15+i) for i >= 8 — the same coordinates PokeFormatBits64 uses.
+        // format overlays: copy 1 at (FormatXs1[i], FormatYs1[i]), copy 2 at (size-1-i, 8) for i < 8 and (8, size-15+i) for i >= 8, the same coordinates PokeFormatBits64 uses.
         var fmt = new ulong[32 * size];
         for (var e = 0; e < 4; e++)
         {
@@ -373,19 +357,18 @@ internal static partial class ModulePlacer
 
     internal static int MaskCode64Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        // The per-version tables are derived from the version's canonical blocked mask, not from the parameter (kept for signature parity with the scalar and ARM tiers, which do read it): callers must pass that same mask, which every production caller does (WriteQRMatrix hands over layout.BlockedMask).
+        // The per-version tables come from the version's canonical blocked mask, not from the parameter, which is kept for signature parity with the scalar and ARM tiers that read it. Every production caller passes that mask.
         var layout = GetMaskLayout64(version, size);
         System.Diagnostics.Debug.Assert(blockedMask.SequenceEqual(GetLayout(version).BlockedMask), "MaskCode64Simd requires the version's canonical blocked mask");
 
-        // Defense in depth for the unchecked wide loads / table indexing below; the production caller already guarantees both.
+        // Defense in depth for the unchecked wide loads / table indexing below. The production caller already guarantees both.
         if (buffer.Length < size * size)
             throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
         if ((uint)eccLevel > 3)
             throw new ArgumentOutOfRangeException(nameof(eccLevel), eccLevel, "QREccLevel was out of range");
 
-        // Stack buffers are zeroed on every call, and that zeroing was a measurable share of a small symbol's
-        // selection, so they come in two constant sizes: 32 rows for versions 1-3, 64 above. (Skipping the
-        // zeroing with [SkipLocalsInit] was measured and is not used: see Decisions in specs/standardqr-encoder.md.)
+        // Stack buffers are zeroed on every call, which shows on a small symbol, so they come in two constant
+        // sizes: 32 rows for versions 1-3, 64 above. [SkipLocalsInit] is not used (see Decisions in specs/standardqr-encoder.md).
         Span<ulong> packed = size <= 32 ? stackalloc ulong[32] : stackalloc ulong[64];
         packed = packed[..size];
         PackRows64Wide(buffer, size, packed);
@@ -405,9 +388,9 @@ internal static partial class ModulePlacer
             }
         }
 
-        // rows4[y] = row y of the group's four candidates (masked, format bits in);
-        // scratch for the vertical-equality rows (the 5-run marker is a rolling register in the scorer, and the
-        // complements are computed where they are read: a third buffer cost more to zero than they cost to redo)
+        // rows4[y] is row y of the group's four candidates, masked and with the format bits in. eq4 is the scorer's
+        // scratch for the vertical-equality rows. The complements are computed where they are read: a third buffer
+        // costs more to zero than they cost to redo.
         Span<Vector256<ulong>> rows4 = size <= 32 ? stackalloc Vector256<ulong>[32] : stackalloc Vector256<ulong>[64];
         Span<Vector256<ulong>> eq4 = size <= 32 ? stackalloc Vector256<ulong>[32] : stackalloc Vector256<ulong>[64];
 
@@ -435,7 +418,6 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Apply the winner to the byte buffer: unpack the XOR delta 32 modules at a time.
         var preScalar = layout.PreScalar;
         var baseIdx = bestPatternIndex * size;
         for (var y = 0; y < size; y++)
@@ -447,7 +429,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Packs every row into bits with one (size &lt;= 32) or two 32-byte compare+movemask loads; rows 0..size-2 may read past their own end into the next row (masked off), the last row uses the exact-length packer so nothing is read past the buffer.
+    /// Packs every row into bits with one (size &lt;= 32) or two 32-byte compare+movemask loads. Rows 0..size-2 may read past their own end into the next row (masked off), and the last row uses the exact-length packer so nothing is read past the buffer.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void PackRows64Wide(ReadOnlySpan<byte> buffer, int size, Span<ulong> packed)
@@ -468,8 +450,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of four candidates; returns their four ISO/IEC 18004 penalty scores.
-    /// Same rule derivations as <see cref="CalculateScorePacked"/>; the accumulators are per lane, so no horizontal reduction happens until the end.
+    /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of four candidates. Returns their four ISO/IEC 18004 penalty scores.
+    /// Same rule derivations as <see cref="CalculateScorePacked"/>. The accumulators are per lane, so no horizontal reduction happens until the end.
     /// When all four lanes' partials exceed <paramref name="abortAbove"/> at the checkpoint, every lane reports int.MaxValue (pass int.MaxValue to disable, as for the first group).
     /// <paramref name="rows"/> is used as scratch for the column finder windows: the caller rebuilds it for each group.
     /// </summary>
@@ -529,7 +511,7 @@ internal static partial class ModulePlacer
             prev = cur;
         }
 
-        // Checkpoint (second group only): the remaining rule-3-column and balance terms are non-negative, so the partial is a lower bound of each lane's total — if every lane already exceeds the best total, skip the loop.
+        // Checkpoint (second group only): the remaining rule-3-column and balance terms are non-negative, so the partial is a lower bound of each lane's total. If every lane already exceeds the best total, skip the loop.
         if (abortAbove != int.MaxValue)
         {
             var partial = accOnes + Vector256.ShiftLeft(accTwos, 1)
