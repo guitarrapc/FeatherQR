@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
+    <ProjectReference Include="..\FeatherQR.Gs1\FeatherQR.Gs1.csproj" />
   </ItemGroup>
 
 </Project>

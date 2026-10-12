@@ -262,7 +262,7 @@ public class ByteSegmentShiftJisTest
         var data = Build([(0b0111, 4), (20, 8), (0b0100, 4), (payload.Length, 8), .. Bytes(payload), (0b0100, 4), (one.Length, 8), .. Bytes(one), (0b0000, 4)]);
 
         var destination = new char[64];
-        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _);
+        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _, out _);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo("ﾓﾊﾞﾓ");
@@ -277,7 +277,7 @@ public class ByteSegmentShiftJisTest
         var data = Build([(0b1000, 4), (1, 8), (0x09 * 0xC0 + 0x0F, 13), (0b0100, 4), (bytes.Length, 8), .. Bytes(bytes), (0b0000, 4)]);
 
         var destination = new char[64];
-        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _);
+        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _, out _);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo("外*ﾀﾞﾌﾞﾙQR*");
@@ -294,9 +294,9 @@ public class ByteSegmentShiftJisTest
         var undeclared = Build([(0b011, 3), (text.Length, countBits), .. Bytes(text), (0b000, 3)]);
 
         var destination = new char[64];
-        await Assert.That(RmQRBinaryDecoder.DecodeBitStream(declared, declared.Length * 8, version, destination, out var written)).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(RmQRBinaryDecoder.DecodeBitStream(declared, declared.Length * 8, version, destination, out var written, out _)).IsEqualTo(DecodeStatus.Success);
         await Assert.That(new string(destination, 0, written)).IsEqualTo("ﾓ");
-        await Assert.That(RmQRBinaryDecoder.DecodeBitStream(undeclared, undeclared.Length * 8, version, destination, out written)).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(RmQRBinaryDecoder.DecodeBitStream(undeclared, undeclared.Length * 8, version, destination, out written, out _)).IsEqualTo(DecodeStatus.Success);
         await Assert.That(new string(destination, 0, written)).IsEqualTo("日本語");
     }
 

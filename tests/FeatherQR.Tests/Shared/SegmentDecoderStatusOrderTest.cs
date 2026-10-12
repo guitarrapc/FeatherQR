@@ -212,7 +212,7 @@ public class SegmentDecoderStatusOrderTest
 
         // rMQR R11x27: 3-bit mode indicator, then a 4-bit numeric count. Count 15 needs
         // 50 bits, only 30 - 7 = 23 remain.
-        var rmqr = RmQRBinaryDecoder.DecodeBitStream(Bits("0011111"), 30, RmQRVersion.R11x27, new char[4], out _);
+        var rmqr = RmQRBinaryDecoder.DecodeBitStream(Bits("0011111"), 30, RmQRVersion.R11x27, new char[4], out _, out _);
         await Assert.That(rmqr).IsEqualTo(DecodeStatus.InvalidBitstream).Because("R11x27 numeric count 15 in 23 remaining bits");
     }
 

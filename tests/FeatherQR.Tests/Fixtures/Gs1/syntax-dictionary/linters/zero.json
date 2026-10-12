@@ -1,0 +1,22 @@
+{
+  "linter": "zero",
+  "source": "gs1-syntax-dictionary 2026-01-27 src/lint_zero.c unit tests",
+  "cases": [
+    {"value":"0","pass":true},
+    {"value":"00","pass":true},
+    {"value":"000","pass":true},
+    {"value":"","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"**"},
+    {"value":"1","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*1*"},
+    {"value":"01","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*01*"},
+    {"value":"10","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*10*"},
+    {"value":"001","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*001*"},
+    {"value":"010","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*010*"},
+    {"value":"011","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*011*"},
+    {"value":"100","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*100*"},
+    {"value":"101","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*101*"},
+    {"value":"110","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*110*"},
+    {"value":"X","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*X*"},
+    {"value":"0X","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*0X*"},
+    {"value":"X0","pass":false,"error":"GS1_LINTER_NOT_ZERO","markup":"*X0*"}
+  ]
+}

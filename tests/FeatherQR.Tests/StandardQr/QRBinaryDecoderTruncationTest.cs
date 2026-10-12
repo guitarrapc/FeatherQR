@@ -91,7 +91,7 @@ public class QRBinaryDecoderTruncationTest
         var stream = Pack(Binary(mode, 4) + Binary(count, countBits) + payload);
         var destination = new char[count];
 
-        var status = QRBinaryDecoder.DecodeBitStream(stream, 1, destination, out var written, out _);
+        var status = QRBinaryDecoder.DecodeBitStream(stream, 1, destination, out var written, out _, out _);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
         await Assert.That(written).IsEqualTo(expectedWritten);
@@ -121,7 +121,7 @@ public class QRBinaryDecoderTruncationTest
                     int written;
                     try
                     {
-                        status = QRBinaryDecoder.DecodeBitStream(stream.AsSpan(0, cut), versions[band], destination, out written, out _);
+                        status = QRBinaryDecoder.DecodeBitStream(stream.AsSpan(0, cut), versions[band], destination, out written, out _, out _);
                     }
                     catch (Exception ex)
                     {

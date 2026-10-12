@@ -51,7 +51,7 @@ jobs:
       # Same step release.yaml runs before packing, so a break shows up on the PR that caused it.
       - name: Trim XML documentation to the public surface
         shell: bash
-        run: dotnet run tools/filter_public_docs.cs -- src/FeatherQR/bin/Release/*/FeatherQR.xml src/FeatherQR.SkiaSharp/bin/Release/*/FeatherQR.SkiaSharp.xml
+        run: dotnet run tools/filter_public_docs.cs -- src/FeatherQR/bin/Release/*/FeatherQR.xml src/FeatherQR.SkiaSharp/bin/Release/*/FeatherQR.SkiaSharp.xml src/FeatherQR.Gs1/bin/Release/*/FeatherQR.Gs1.xml
       # The surface that ships is the one that was reviewed. A release built from a branch that never went through the PR gate would otherwise be the one way past it.
       - name: Check the public API against the approved listing
         if: ${{ matrix.rid == 'linux-x64' }}
@@ -59,6 +59,7 @@ jobs:
         run: |
           dotnet run tools/check_public_api.cs -- --check src/FeatherQR/PublicAPI.approved.txt src/FeatherQR/bin/Release/*/FeatherQR.dll
           dotnet run tools/check_public_api.cs -- --check src/FeatherQR.SkiaSharp/PublicAPI.approved.txt src/FeatherQR.SkiaSharp/bin/Release/*/FeatherQR.SkiaSharp.dll
+          dotnet run tools/check_public_api.cs -- --check src/FeatherQR.Gs1/PublicAPI.approved.txt src/FeatherQR.Gs1/bin/Release/*/FeatherQR.Gs1.dll
       # Package validation (EnablePackageValidation) only runs on Pack, not on Build, so a PR
       # would otherwise never see it. One runner is enough: the comparison is against the
       # baseline package on NuGet and does not depend on the host OS. SBOM generation is off

@@ -44,6 +44,10 @@ public sealed record FixtureManifest
     /// <summary>Structured Append header of this symbol; omitted when the symbol carries none.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public StructuredAppendManifest? StructuredAppend { get; init; }
+
+    /// <summary>FNC1 mode of this symbol (position, application indicator, the reader's symbology identifier); omitted when the symbol carries none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Fnc1Manifest? Fnc1 { get; init; }
 }
 
 /// <summary>

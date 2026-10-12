@@ -56,10 +56,12 @@ internal static partial class RmQRMatrixDecoder
         var data = stream.Slice(0, eccInfo.TotalDataCodewords);
 
         // 5. Bit stream → text
-        var status = RmQRBinaryDecoder.DecodeBitStream(data, eccInfo.TotalDataCodewords * 8, version, destination, out charsWritten);
+        var status = RmQRBinaryDecoder.DecodeBitStream(data, eccInfo.TotalDataCodewords * 8, version, destination, out charsWritten, out var fnc1);
         if (status != DecodeStatus.Success)
             charsWritten = 0; // only a read counts its characters, not the segments written before a failure
-        info = new RmQRCodeDecodeInfo(status, version, eccLevel, errorsCorrected);
+        info = status == DecodeStatus.Success
+            ? new RmQRCodeDecodeInfo(status, version, eccLevel, errorsCorrected, fnc1)
+            : new RmQRCodeDecodeInfo(status, version, eccLevel, errorsCorrected); // the mode is reported on a read only
         return status;
     }
 

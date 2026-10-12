@@ -1,0 +1,22 @@
+{
+  "id": "gs1-fnc1-then-eci-utf8-m",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 3,
+  "payloadText": "010952400005910910ABC",
+  "payloadUtf8Hex": "303130393532343030303035393130393130414243",
+  "eciCharset": "UTF-8",
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3",
+    "writerInput": "(01)09524000059109(10)ABC"
+  }
+}

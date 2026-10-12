@@ -1,0 +1,22 @@
+{
+  "id": "gs1-gs-gs-reads-one-percent-m",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 0,
+  "payloadText": "10AB%CD",
+  "payloadUtf8Hex": "31304142254344",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3",
+    "writerInput": "10AB\u001D\u001DCD"
+  }
+}

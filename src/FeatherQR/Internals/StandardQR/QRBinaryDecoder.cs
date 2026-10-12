@@ -11,7 +11,9 @@ namespace FeatherQR.Internals.StandardQR;
 /// Inverse of <see cref="QRBinaryEncoder"/>.
 /// Supports the segments the encoder can produce, Numeric, Alphanumeric, Byte (ISO-8859-1 / UTF-8), Kanji and ECI headers, plus multi-segment streams and Shift_JIS Byte segments from other encoders.
 /// Kanji mode is decoded as JIS X 0208, the mapping the encoder writes it with (with <c>AllowKanji</c>).
-/// FNC1 is recognized but reported as <see cref="DecodeStatus.UnsupportedContent"/>; a Structured Append header is read and returned to the caller.
+/// A Structured Append header and either FNC1 indicator (ISO/IEC 18004 6.4.8) are read and returned to the caller.
+/// FNC1 is accepted once and before the first data segment, with the ECI and Structured Append headers on either side of it. An indicator after a data segment, a second one, or an application indicator outside 00-99 and the letters is <see cref="DecodeStatus.InvalidBitstream"/>.
+/// While FNC1 is active a lone <c>%</c> in an Alphanumeric segment is the separator (U+001D) and <c>%%</c> is one <c>%</c>, read left to right within the segment, as every reader probed reads them. Byte, Numeric and Kanji segments are unchanged.
 /// <para>
 /// Byte segments without an ECI header have no declared charset (ISO/IEC 18004 defaults to ISO-8859-1, but UTF-8 payloads are common in the wild).
 /// The decoder uses UTF-8 when the payload validates as UTF-8 (or carries a BOM), Shift_JIS when the bytes give it away, and falls back to ISO-8859-1 otherwise, ASCII decodes identically either way.
@@ -49,13 +51,18 @@ internal static class QRBinaryDecoder
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
     /// <param name="structuredAppend">The Structured Append header when the stream carries one, accepted at any position; default otherwise.</param>
-    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten, out QRStructuredAppend structuredAppend)
+    /// <param name="fnc1">The FNC1 mode when the stream carries one, with its application indicator in second position; default otherwise.</param>
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten, out QRStructuredAppend structuredAppend, out Fnc1Mode fnc1)
     {
         charsWritten = 0;
         structuredAppend = default;
+        fnc1 = default;
         var reader = new BitReader(data);
         var totalBits = data.Length * 8;
         var charset = ByteSegmentCharset.Unspecified;
+        // FNC1 precedes the first data segment (6.4.8.1, 6.4.8.2): the mode changes how every
+        // Alphanumeric segment reads, so one that arrives later would re-read what came before.
+        var dataSegmentSeen = false;
 
         byte[]? rentedBytes = null;
         try
@@ -78,6 +85,7 @@ internal static class QRBinaryDecoder
                             if (totalBits - reader.BitPosition < countBits)
                                 return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
+                            dataSegmentSeen = true;
                             var status = SegmentDecoders.DecodeNumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
                             if (status != DecodeStatus.Success)
                                 return status;
@@ -89,7 +97,10 @@ internal static class QRBinaryDecoder
                             if (totalBits - reader.BitPosition < countBits)
                                 return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
-                            var status = SegmentDecoders.DecodeAlphanumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                            dataSegmentSeen = true;
+                            var status = fnc1.IsActive
+                                ? SegmentDecoders.DecodeAlphanumericPayloadFnc1(ref reader, totalBits, count, destination, ref charsWritten)
+                                : SegmentDecoders.DecodeAlphanumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
                             if (status != DecodeStatus.Success)
                                 return status;
                             break;
@@ -100,6 +111,7 @@ internal static class QRBinaryDecoder
                             if (totalBits - reader.BitPosition < countBits)
                                 return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
+                            dataSegmentSeen = true;
 
                             // Segment payload bytes are staged in a rented buffer (reused
                             // across segments) so the charset conversion sees them whole.
@@ -138,6 +150,7 @@ internal static class QRBinaryDecoder
                             if (totalBits - reader.BitPosition < countBits)
                                 return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
+                            dataSegmentSeen = true;
                             var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
                             if (status != DecodeStatus.Success)
                                 return status;
@@ -159,8 +172,25 @@ internal static class QRBinaryDecoder
                             break;
                         }
                     case ModeFnc1First:
+                        // 6.4.8.1: once, before the first data segment. No conforming encoder writes it
+                        // later, and a late one would change how the segments before it read.
+                        if (dataSegmentSeen || fnc1.IsActive)
+                            return DecodeStatus.InvalidBitstream;
+                        fnc1 = Fnc1Mode.FirstPosition;
+                        break;
                     case ModeFnc1Second:
-                        return DecodeStatus.UnsupportedContent;
+                        {
+                            // 6.4.8.2: the same placement, then one 8-bit application indicator: 00-99
+                            // as its value, or a letter as its ASCII value plus 100. Anything else is
+                            // malformed, as a count that overruns the stream is.
+                            if (dataSegmentSeen || fnc1.IsActive || totalBits - reader.BitPosition < 8)
+                                return DecodeStatus.InvalidBitstream;
+                            var indicator = reader.Reads(8);
+                            if (!Fnc1Mode.IsValidApplicationIndicator(indicator))
+                                return DecodeStatus.InvalidBitstream;
+                            fnc1 = Fnc1Mode.SecondPosition(indicator);
+                            break;
+                        }
                     default:
                         return DecodeStatus.InvalidBitstream;
                 }

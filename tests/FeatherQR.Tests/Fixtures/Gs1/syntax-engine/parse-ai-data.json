@@ -1,0 +1,839 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "GS1 Barcode Syntax Engine 1.4.1 unit tests, ai.c test_ai_parseAIdata",
+  "cases": [
+    {
+      "id": "parse-ai-data-000",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231",
+      "expected": {
+        "valid": true,
+        "output": "^0112345678901231"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231",
+        "elementString": "0112345678901231",
+        "bracketed": "(01)12345678901231",
+        "hri": [
+          "(01) 12345678901231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231",
+        "hri": "(01)12345678901231",
+        "digitalLink": "https://id.gs1.org/01/12345678901231",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231",
+        "hri": "(01)12345678901231"
+      }
+    },
+    {
+      "id": "parse-ai-data-001",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(10)12345",
+      "expected": {
+        "valid": true,
+        "output": "^1012345"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "1012345",
+        "hri": "(10)12345"
+      }
+    },
+    {
+      "id": "parse-ai-data-002",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(10)12345",
+      "note": "No FNC1 after (01)",
+      "expected": {
+        "valid": true,
+        "output": "^01123456789012311012345"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01123456789012311012345",
+        "elementString": "01123456789012311012345",
+        "bracketed": "(01)12345678901231(10)12345",
+        "hri": [
+          "(01) 12345678901231",
+          "(10) 12345"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231/10/12345"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01123456789012311012345",
+        "hri": "(01)12345678901231(10)12345",
+        "digitalLink": "https://id.gs1.org/01/12345678901231/10/12345",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012311012345",
+        "hri": "(01)12345678901231(10)12345"
+      }
+    },
+    {
+      "id": "parse-ai-data-003",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(3100)123456(10)12345",
+      "note": "No FNC1 after (3100)",
+      "expected": {
+        "valid": true,
+        "output": "^31001234561012345"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(3100)",
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "31001234561012345",
+        "hri": "(3100)123456(10)12345"
+      }
+    },
+    {
+      "id": "parse-ai-data-004",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(10)12345(11)991225",
+      "note": "FNC1 after (10)",
+      "expected": {
+        "valid": true,
+        "output": "^1012345^11991225"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(10)",
+          "MissingRequiredApplicationIdentifier(11)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "1012345\u001D11991225",
+        "hri": "(10)12345(11)991225"
+      }
+    },
+    {
+      "id": "parse-ai-data-005",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(3900)12345(11)991225",
+      "note": "FNC1 after (3900)",
+      "expected": {
+        "valid": true,
+        "output": "^390012345^11991225"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (11) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(3900)",
+          "MissingRequiredApplicationIdentifier(11)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "390012345\u001D11991225",
+        "hri": "(3900)12345(11)991225"
+      }
+    },
+    {
+      "id": "parse-ai-data-006",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(10)12345\\(11)991225",
+      "note": "Escaped bracket",
+      "expected": {
+        "valid": true,
+        "output": "^1012345(11)991225"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(10)",
+          "MissingRequiredApplicationIdentifier(10)",
+          "MissingRequiredApplicationIdentifier(11)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "1012345(11)991225",
+        "hri": "(10)12345(11)991225"
+      }
+    },
+    {
+      "id": "parse-ai-data-007",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(10)12345\\(",
+      "note": "At end if fine",
+      "expected": {
+        "valid": true,
+        "output": "^1012345("
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput",
+          "InvalidCharacter(10)",
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "1012345(",
+        "hri": "(10)12345("
+      }
+    },
+    {
+      "id": "parse-ai-data-008",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(235)ABC",
+      "note": "X..28, FNC1-required, single AI",
+      "expected": {
+        "valid": true,
+        "output": "^235ABC"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (235) are not satisfied: 01"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(235)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "235ABC",
+        "hri": "(235)ABC"
+      }
+    },
+    {
+      "id": "parse-ai-data-009",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(235)XYZ",
+      "note": "No FNC1 after (01) NO_FNC1",
+      "expected": {
+        "valid": true,
+        "output": "^0112345678901231235XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231235XYZ",
+        "elementString": "0112345678901231235XYZ",
+        "bracketed": "(01)12345678901231(235)XYZ",
+        "hri": [
+          "(01) 12345678901231",
+          "(235) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231/235/XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231235XYZ",
+        "hri": "(01)12345678901231(235)XYZ",
+        "digitalLink": "https://id.gs1.org/01/12345678901231/235/XYZ",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231235XYZ",
+        "hri": "(01)12345678901231(235)XYZ"
+      }
+    },
+    {
+      "id": "parse-ai-data-010",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(235)XYZ(10)BATCH",
+      "note": "FNC1 after (235) DO_FNC1",
+      "expected": {
+        "valid": true,
+        "output": "^0112345678901231235XYZ^10BATCH"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231235XYZ^10BATCH",
+        "elementString": "0112345678901231235XYZ\u001D10BATCH",
+        "bracketed": "(01)12345678901231(235)XYZ(10)BATCH",
+        "hri": [
+          "(01) 12345678901231",
+          "(235) XYZ",
+          "(10) BATCH"
+        ],
+        "digitalLinkError": "AI (235) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231235XYZ\u001D10BATCH",
+        "hri": "(01)12345678901231(235)XYZ(10)BATCH",
+        "digitalLink": "https://id.gs1.org/01/12345678901231/10/BATCH/235/XYZ",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231235XYZ10BATCH",
+        "hri": "(01)12345678901231(235)XYZ10BATCH"
+      }
+    },
+    {
+      "id": "parse-ai-data-011",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(235)ABCDEFGHIJKLMNOPQRSTUVWXYZ12",
+      "note": "X..28 at max",
+      "expected": {
+        "valid": true,
+        "output": "^235ABCDEFGHIJKLMNOPQRSTUVWXYZ12"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (235) are not satisfied: 01"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(235)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "235ABCDEFGHIJKLMNOPQRSTUVWXYZ12",
+        "hri": "(235)ABCDEFGHIJKLMNOPQRSTUVWXYZ12"
+      }
+    },
+    {
+      "id": "parse-ai-data-012",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(235)ABCDEFGHIJKLMNOPQRSTUVWXYZ123",
+      "note": "Over max",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (235) value is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(235)",
+          "MissingRequiredApplicationIdentifier(235)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (235) (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-013",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(10)(11)98765",
+      "note": "Value must not be empty",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(10)",
+          "DataTooShort(11)",
+          "InvalidData(11)",
+          "MissingRequiredApplicationIdentifier(10)",
+          "MissingRequiredApplicationIdentifier(11)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 258: Empty data field in input (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-014",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(10)12345(11)",
+      "note": "Value must not be empty",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(11)",
+          "MissingRequiredApplicationIdentifier(10)",
+          "MissingRequiredApplicationIdentifier(11)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 258: Empty data field in input (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-015",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(1A)12345",
+      "note": "AI must be numeric",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 1A"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput(1A)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 257: Invalid AI at position 1 in input (non-numeric characters in AI) (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-016",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "1(12345",
+      "note": "Must start with AI",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 855: Data does not start with an AI or Digital Link URI (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-017",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "12345",
+      "note": "Must start with AI",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(12)",
+          "InvalidData(12)",
+          "MissingRequiredApplicationIdentifier(12)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 855: Data does not start with an AI or Digital Link URI (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-018",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "()12345",
+      "note": "AI too short",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI:"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput()"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 256: Invalid AI at position 1 in input (AI too short) (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-019",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(1)12345",
+      "note": "AI too short",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 1"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput(1)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 256: Invalid AI at position 1 in input (AI too short) (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-020",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(12345)12345",
+      "note": "AI too long",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 12345"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput(12345)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 255: Invalid AI at position 1 in input (AI too long) (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-021",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(15",
+      "note": "AI must terminate",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 253: Malformed AI in input (brackets don't match) (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-022",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(1",
+      "note": "AI must terminate",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 253: Malformed AI in input (brackets don't match) (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-023",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(",
+      "note": "AI must terminate",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 253: Malformed AI in input (brackets don't match) (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-024",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(01)123456789012312(10)12345",
+      "note": "Fixed-length AI too long",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(01)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (01) (retval: 6)"
+      }
+    },
+    {
+      "id": "parse-ai-data-025",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(10)12345^",
+      "note": "Reject \"^\": Conflated with FNC1",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10) contains illegal ^ character"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(10)",
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "1012345^",
+        "hri": "(10)12345^"
+      }
+    },
+    {
+      "id": "parse-ai-data-026",
+      "group": "syntax-engine/parse-ai-data",
+      "source": "ai.c test_parseAIdata",
+      "inputKind": "Bracketed",
+      "input": "(17)9(90)217",
+      "note": "Should not parse to ^7990217",
+      "expected": {
+        "valid": false,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (17) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(17)",
+          "InvalidData(17)",
+          "MissingRequiredApplicationIdentifier(17)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (17) (retval: 6)"
+      }
+    }
+  ]
+}

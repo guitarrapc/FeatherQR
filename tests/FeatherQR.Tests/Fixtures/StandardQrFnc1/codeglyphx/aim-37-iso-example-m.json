@@ -1,0 +1,22 @@
+{
+  "id": "aim-37-iso-example-m",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 3,
+  "width": 29,
+  "height": 29,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 6,
+  "payloadText": "AA1234BBB112text text text text\r",
+  "payloadUtf8Hex": "414131323334424242313132746578742074657874207465787420746578740D",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "Second",
+    "applicationIndicator": 37,
+    "symbologyIdentifier": "]Q5"
+  }
+}

@@ -1,0 +1,887 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "GS1 Barcode Syntax Engine 1.4.1 unit tests, dl.c test_dl_generateDLuri",
+  "cases": [
+    {
+      "id": "generate-dl-uri-000",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(21)abc123",
+      "note": "stem: canonical; Canonical",
+      "expected": {
+        "valid": true,
+        "output": "https://id.gs1.org/01/12312312312326/21/abc123"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231232621abc123",
+        "elementString": "011231231231232621abc123",
+        "bracketed": "(01)12312312312326(21)abc123",
+        "hri": [
+          "(01) 12312312312326",
+          "(21) abc123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312326/21/abc123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231232621abc123",
+        "hri": "(01)12312312312326(21)abc123",
+        "digitalLink": "https://id.gs1.org/01/12312312312326/21/abc123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011231231231232621abc123",
+        "hri": "(01)12312312312326(21)abc123"
+      }
+    },
+    {
+      "id": "generate-dl-uri-001",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(21)abc123",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312326/21/abc123"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231232621abc123",
+        "elementString": "011231231231232621abc123",
+        "bracketed": "(01)12312312312326(21)abc123",
+        "hri": [
+          "(01) 12312312312326",
+          "(21) abc123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312326/21/abc123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231232621abc123",
+        "hri": "(01)12312312312326(21)abc123",
+        "digitalLink": "https://id.gs1.org/01/12312312312326/21/abc123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011231231231232621abc123",
+        "hri": "(01)12312312312326(21)abc123"
+      }
+    },
+    {
+      "id": "generate-dl-uri-002",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(22)ABC(10)DEF(21)GHI",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312326/22/ABC/10/DEF/21/GHI"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231232622ABC^10DEF^21GHI",
+        "elementString": "011231231231232622ABC\u001D10DEF\u001D21GHI",
+        "bracketed": "(01)12312312312326(22)ABC(10)DEF(21)GHI",
+        "hri": [
+          "(01) 12312312312326",
+          "(22) ABC",
+          "(10) DEF",
+          "(21) GHI"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312326/22/ABC/10/DEF/21/GHI"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231232622ABC\u001D10DEF\u001D21GHI",
+        "hri": "(01)12312312312326(22)ABC(10)DEF(21)GHI",
+        "digitalLink": "https://id.gs1.org/01/12312312312326/22/ABC/10/DEF/21/GHI",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011231231231232622ABC\u001D10DEF\u001D21GHI",
+        "hri": "(01)12312312312326(22)ABC(10)DEF(21)GHI"
+      }
+    },
+    {
+      "id": "generate-dl-uri-003",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(22)ABC(10)DEF(21)GHI(95)INT",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312326/22/ABC/10/DEF/21/GHI?95=INT"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231232622ABC^10DEF^21GHI^95INT",
+        "elementString": "011231231231232622ABC\u001D10DEF\u001D21GHI\u001D95INT",
+        "bracketed": "(01)12312312312326(22)ABC(10)DEF(21)GHI(95)INT",
+        "hri": [
+          "(01) 12312312312326",
+          "(22) ABC",
+          "(10) DEF",
+          "(21) GHI",
+          "(95) INT"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312326/22/ABC/10/DEF/21/GHI?95=INT"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231232622ABC\u001D10DEF\u001D21GHI\u001D95INT",
+        "hri": "(01)12312312312326(22)ABC(10)DEF(21)GHI(95)INT",
+        "digitalLink": "https://id.gs1.org/01/12312312312326/22/ABC/10/DEF/21/GHI?95=INT",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011231231231232622ABC\u001D10DEF\u001D21GHI\u001D95INT",
+        "hri": "(01)12312312312326(22)ABC(10)DEF(21)GHI(95)INT"
+      }
+    },
+    {
+      "id": "generate-dl-uri-004",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(21)XYZ(01)12312312312333(10)ABC123(99)XYZ",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312333/10/ABC123/21/XYZ?99=XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^21XYZ^011231231231233310ABC123^99XYZ",
+        "elementString": "21XYZ\u001D011231231231233310ABC123\u001D99XYZ",
+        "bracketed": "(21)XYZ(01)12312312312333(10)ABC123(99)XYZ",
+        "hri": [
+          "(21) XYZ",
+          "(01) 12312312312333",
+          "(10) ABC123",
+          "(99) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC123/21/XYZ?99=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "21XYZ\u001D011231231231233310ABC123\u001D99XYZ",
+        "hri": "(21)XYZ(01)12312312312333(10)ABC123(99)XYZ",
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC123/21/XYZ?99=XYZ",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "21XYZ\u001D011231231231233310ABC123\u001D99XYZ",
+        "hri": "(21)XYZ(01)12312312312333(10)ABC123(99)XYZ"
+      }
+    },
+    {
+      "id": "generate-dl-uri-005",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(99)XYZ789",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^99XYZ789",
+        "elementString": "99XYZ789",
+        "bracketed": "(99)XYZ789",
+        "hri": [
+          "(99) XYZ789"
+        ],
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "99XYZ789",
+        "hri": "(99)XYZ789",
+        "digitalLinkError": "At least one GS1 Digital Link primary Application Identifier is required.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "99XYZ789",
+        "hri": "(99)XYZ789"
+      }
+    },
+    {
+      "id": "generate-dl-uri-006",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312333(10)ABC+123(99)XYZ+QWERTY",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312333/10/ABC%2B123?99=XYZ%2BQWERTY"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231233310ABC+123^99XYZ+QWERTY",
+        "elementString": "011231231231233310ABC+123\u001D99XYZ+QWERTY",
+        "bracketed": "(01)12312312312333(10)ABC+123(99)XYZ+QWERTY",
+        "hri": [
+          "(01) 12312312312333",
+          "(10) ABC+123",
+          "(99) XYZ+QWERTY"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC%2B123?99=XYZ%2BQWERTY"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233310ABC+123\u001D99XYZ+QWERTY",
+        "hri": "(01)12312312312333(10)ABC+123(99)XYZ+QWERTY",
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC%2B123?99=XYZ%2BQWERTY",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011231231231233310ABC+123\u001D99XYZ+QWERTY",
+        "hri": "(01)12312312312333(10)ABC+123(99)XYZ+QWERTY"
+      }
+    },
+    {
+      "id": "generate-dl-uri-007",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(8017)795260646688514634(99)000001(253)9526064000028000001",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/8017/795260646688514634?99=000001&253=9526064000028000001"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8017795260646688514634^99000001^2539526064000028000001",
+        "elementString": "8017795260646688514634\u001D99000001\u001D2539526064000028000001",
+        "bracketed": "(8017)795260646688514634(99)000001(253)9526064000028000001",
+        "hri": [
+          "(8017) 795260646688514634",
+          "(99) 000001",
+          "(253) 9526064000028000001"
+        ],
+        "digitalLink": "https://id.gs1.org/8017/795260646688514634?99=000001&253=9526064000028000001"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8017795260646688514634\u001D99000001\u001D2539526064000028000001",
+        "hri": "(8017)795260646688514634(99)000001(253)9526064000028000001",
+        "digitalLink": "https://id.gs1.org/8017/795260646688514634?253=9526064000028000001&99=000001",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8017795260646688514634\u001D99000001\u001D2539526064000028000001",
+        "hri": "(8017)795260646688514634(99)000001(253)9526064000028000001"
+      }
+    },
+    {
+      "id": "generate-dl-uri-008",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(253)9526064000028000001(99)000001(8017)795260646688514634",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/253/9526064000028000001?99=000001&8017=795260646688514634"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^2539526064000028000001^99000001^8017795260646688514634",
+        "elementString": "2539526064000028000001\u001D99000001\u001D8017795260646688514634",
+        "bracketed": "(253)9526064000028000001(99)000001(8017)795260646688514634",
+        "hri": [
+          "(253) 9526064000028000001",
+          "(99) 000001",
+          "(8017) 795260646688514634"
+        ],
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001?99=000001&8017=795260646688514634"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2539526064000028000001\u001D99000001\u001D8017795260646688514634",
+        "hri": "(253)9526064000028000001(99)000001(8017)795260646688514634",
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001?8017=795260646688514634&99=000001",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2539526064000028000001\u001D99000001\u001D8017795260646688514634",
+        "hri": "(253)9526064000028000001(99)000001(8017)795260646688514634"
+      }
+    },
+    {
+      "id": "generate-dl-uri-009",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(98)ABC(253)9526064000028000001(99)000001(8017)795260646688514634",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/253/9526064000028000001?98=ABC&99=000001&8017=795260646688514634"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^98ABC^2539526064000028000001^99000001^8017795260646688514634",
+        "elementString": "98ABC\u001D2539526064000028000001\u001D99000001\u001D8017795260646688514634",
+        "bracketed": "(98)ABC(253)9526064000028000001(99)000001(8017)795260646688514634",
+        "hri": [
+          "(98) ABC",
+          "(253) 9526064000028000001",
+          "(99) 000001",
+          "(8017) 795260646688514634"
+        ],
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001?98=ABC&99=000001&8017=795260646688514634"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "98ABC\u001D2539526064000028000001\u001D99000001\u001D8017795260646688514634",
+        "hri": "(98)ABC(253)9526064000028000001(99)000001(8017)795260646688514634",
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001?8017=795260646688514634&98=ABC&99=000001",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "98ABC\u001D2539526064000028000001\u001D99000001\u001D8017795260646688514634",
+        "hri": "(98)ABC(253)9526064000028000001(99)000001(8017)795260646688514634"
+      }
+    },
+    {
+      "id": "generate-dl-uri-010",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(253)9526064000028000001(99)000001(01)12312312312326(10)DEF(95)INT",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/253/9526064000028000001?01=12312312312326&99=000001&10=DEF&95=INT"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^2539526064000028000001^99000001^011231231231232610DEF^95INT",
+        "elementString": "2539526064000028000001\u001D99000001\u001D011231231231232610DEF\u001D95INT",
+        "bracketed": "(253)9526064000028000001(99)000001(01)12312312312326(10)DEF(95)INT",
+        "hri": [
+          "(253) 9526064000028000001",
+          "(99) 000001",
+          "(01) 12312312312326",
+          "(10) DEF",
+          "(95) INT"
+        ],
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001?01=12312312312326&99=000001&10=DEF&95=INT"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2539526064000028000001\u001D99000001\u001D011231231231232610DEF\u001D95INT",
+        "hri": "(253)9526064000028000001(99)000001(01)12312312312326(10)DEF(95)INT",
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001?01=12312312312326&10=DEF&95=INT&99=000001",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2539526064000028000001\u001D99000001\u001D011231231231232610DEF\u001D95INT",
+        "hri": "(253)9526064000028000001(99)000001(01)12312312312326(10)DEF(95)INT"
+      }
+    },
+    {
+      "id": "generate-dl-uri-011",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(01)12312312312326(10)ABC123(99)XYZ789",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312326/10/ABC123?99=XYZ789"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112312312312326011231231231232610ABC123^99XYZ789",
+        "elementString": "0112312312312326011231231231232610ABC123\u001D99XYZ789",
+        "bracketed": "(01)12312312312326(01)12312312312326(10)ABC123(99)XYZ789",
+        "hri": [
+          "(01) 12312312312326",
+          "(01) 12312312312326",
+          "(10) ABC123",
+          "(99) XYZ789"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312326/10/ABC123?99=XYZ789"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312326011231231231232610ABC123\u001D99XYZ789",
+        "hri": "(01)12312312312326(01)12312312312326(10)ABC123(99)XYZ789",
+        "digitalLinkError": "Application Identifier '01' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112312312312326011231231231232610ABC123\u001D99XYZ789",
+        "hri": "(01)12312312312326(01)12312312312326(10)ABC123(99)XYZ789"
+      }
+    },
+    {
+      "id": "generate-dl-uri-012",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(10)ABC123(10)ABC123(99)XYZ789",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312326/10/ABC123?99=XYZ789"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231232610ABC123^10ABC123^99XYZ789",
+        "elementString": "011231231231232610ABC123\u001D10ABC123\u001D99XYZ789",
+        "bracketed": "(01)12312312312326(10)ABC123(10)ABC123(99)XYZ789",
+        "hri": [
+          "(01) 12312312312326",
+          "(10) ABC123",
+          "(10) ABC123",
+          "(99) XYZ789"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312326/10/ABC123?99=XYZ789"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231232610ABC123\u001D10ABC123\u001D99XYZ789",
+        "hri": "(01)12312312312326(10)ABC123(10)ABC123(99)XYZ789",
+        "digitalLinkError": "Application Identifier '10' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011231231231232610ABC123\u001D10ABC123\u001D99XYZ789",
+        "hri": "(01)12312312312326(10)ABC123(10)ABC123(99)XYZ789"
+      }
+    },
+    {
+      "id": "generate-dl-uri-013",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(10)ABC123(99)XYZ789(99)XYZ789",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312326/10/ABC123?99=XYZ789"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231232610ABC123^99XYZ789^99XYZ789",
+        "elementString": "011231231231232610ABC123\u001D99XYZ789\u001D99XYZ789",
+        "bracketed": "(01)12312312312326(10)ABC123(99)XYZ789(99)XYZ789",
+        "hri": [
+          "(01) 12312312312326",
+          "(10) ABC123",
+          "(99) XYZ789",
+          "(99) XYZ789"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312326/10/ABC123?99=XYZ789"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231232610ABC123\u001D99XYZ789\u001D99XYZ789",
+        "hri": "(01)12312312312326(10)ABC123(99)XYZ789(99)XYZ789",
+        "digitalLinkError": "Application Identifier '99' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011231231231232610ABC123\u001D99XYZ789\u001D99XYZ789",
+        "hri": "(01)12312312312326(10)ABC123(99)XYZ789(99)XYZ789"
+      }
+    },
+    {
+      "id": "generate-dl-uri-014",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(8010)0200(3133)333333(3300)000000(99)57(3133)333333(3300)000000(01)04065093955756(10)0(3133)333333(3300)000000(01)04065093955756",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/8010/0200?3133=333333&3300=000000&01=04065093955756&99=57&10=0"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^80100200^313333333333000000009957^313333333333000000000104065093955756100^313333333333000000000104065093955756",
+        "elementString": "80100200\u001D313333333333000000009957\u001D313333333333000000000104065093955756100\u001D313333333333000000000104065093955756",
+        "bracketed": "(8010)0200(3133)333333(3300)000000(99)57(3133)333333(3300)000000(01)04065093955756(10)0(3133)333333(3300)000000(01)04065093955756",
+        "hri": [
+          "(8010) 0200",
+          "(3133) 333333",
+          "(3300) 000000",
+          "(99) 57",
+          "(3133) 333333",
+          "(3300) 000000",
+          "(01) 04065093955756",
+          "(10) 0",
+          "(3133) 333333",
+          "(3300) 000000",
+          "(01) 04065093955756"
+        ],
+        "digitalLink": "https://id.gs1.org/8010/0200?3133=333333&3300=000000&01=04065093955756&99=57&10=0"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "80100200\u001D313333333333000000009957\u001D313333333333000000000104065093955756100\u001D313333333333000000000104065093955756",
+        "hri": "(8010)0200(3133)333333(3300)000000(99)57(3133)333333(3300)000000(01)04065093955756(10)0(3133)333333(3300)000000(01)04065093955756",
+        "digitalLinkError": "Application Identifier '3133' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "80100200\u001D313333333333000000009957\u001D313333333333000000000104065093955756100\u001D313333333333000000000104065093955756",
+        "hri": "(8010)0200(3133)333333(3300)000000(99)57(3133)333333(3300)000000(01)04065093955756(10)0(3133)333333(3300)000000(01)04065093955756"
+      }
+    },
+    {
+      "id": "generate-dl-uri-015",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(99)000001(8200)http://example.com(95)INT",
+      "note": "stem: https://example.com; (8200) is invalid as a data attribute",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231232699000001^8200http://example.com^95INT",
+        "elementString": "011231231231232699000001\u001D8200http://example.com\u001D95INT",
+        "bracketed": "(01)12312312312326(99)000001(8200)http://example.com(95)INT",
+        "hri": [
+          "(01) 12312312312326",
+          "(99) 000001",
+          "(8200) http://example.com",
+          "(95) INT"
+        ],
+        "digitalLinkError": "AI (8200) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231232699000001\u001D8200http://example.com\u001D95INT",
+        "hri": "(01)12312312312326(99)000001(8200)http://example.com(95)INT",
+        "digitalLinkError": "Application Identifier '8200' is not permitted as a GS1 Digital Link data attribute.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011231231231232699000001\u001D8200http://example.com\u001D95INT",
+        "hri": "(01)12312312312326(99)000001(8200)http://example.com(95)INT"
+      }
+    },
+    {
+      "id": "generate-dl-uri-016",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(235)TPX9526064(99)000001(22)ABC(95)INT",
+      "note": "stem: https://example.com; (235) used as qualifier for (01), therefore (22) is invalid as a data attribute",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112312312312326235TPX9526064^99000001^22ABC^95INT",
+        "elementString": "0112312312312326235TPX9526064\u001D99000001\u001D22ABC\u001D95INT",
+        "bracketed": "(01)12312312312326(235)TPX9526064(99)000001(22)ABC(95)INT",
+        "hri": [
+          "(01) 12312312312326",
+          "(235) TPX9526064",
+          "(99) 000001",
+          "(22) ABC",
+          "(95) INT"
+        ],
+        "digitalLinkError": "AI (235) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312326235TPX9526064\u001D99000001\u001D22ABC\u001D95INT",
+        "hri": "(01)12312312312326(235)TPX9526064(99)000001(22)ABC(95)INT",
+        "digitalLink": "https://id.gs1.org/01/12312312312326/22/ABC/235/TPX9526064?95=INT&99=000001",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112312312312326235TPX952606499000001\u001D22ABC\u001D95INT",
+        "hri": "(01)12312312312326(235)TPX952606499000001(22)ABC(95)INT"
+      }
+    },
+    {
+      "id": "generate-dl-uri-017",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(22)ABC(10)DEF(99)000001(235)TPX9526064(95)INT",
+      "note": "stem: https://example.com; (22)+(10) are qualifiers for (01), therefore (235) is invalid as a data attribute",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231232622ABC^10DEF^99000001^235TPX9526064^95INT",
+        "elementString": "011231231231232622ABC\u001D10DEF\u001D99000001\u001D235TPX9526064\u001D95INT",
+        "bracketed": "(01)12312312312326(22)ABC(10)DEF(99)000001(235)TPX9526064(95)INT",
+        "hri": [
+          "(01) 12312312312326",
+          "(22) ABC",
+          "(10) DEF",
+          "(99) 000001",
+          "(235) TPX9526064",
+          "(95) INT"
+        ],
+        "digitalLinkError": "AI (235) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231232622ABC\u001D10DEF\u001D99000001\u001D235TPX9526064\u001D95INT",
+        "hri": "(01)12312312312326(22)ABC(10)DEF(99)000001(235)TPX9526064(95)INT",
+        "digitalLink": "https://id.gs1.org/01/12312312312326/22/ABC/10/DEF/235/TPX9526064?95=INT&99=000001",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011231231231232622ABC\u001D10DEF\u001D99000001\u001D235TPX952606495INT",
+        "hri": "(01)12312312312326(22)ABC(10)DEF(99)000001(235)TPX952606495INT"
+      }
+    },
+    {
+      "id": "generate-dl-uri-018",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(99)000001(89)XXX(95)INT",
+      "note": "stem: https://example.com; Unknown AIs not permitted as DL URI data attributes...",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 89"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (89) (retval: 6)"
+      }
+    },
+    {
+      "id": "generate-dl-uri-019",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(99)000001(89)XXX(95)INT",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312326?99=000001&89=XXX&95=INT"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 89"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (89) (retval: 6)"
+      }
+    },
+    {
+      "id": "generate-dl-uri-020",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326(235)ABC(10)DEF",
+      "note": "stem: https://example.com",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112312312312326235ABC^10DEF",
+        "elementString": "0112312312312326235ABC\u001D10DEF",
+        "bracketed": "(01)12312312312326(235)ABC(10)DEF",
+        "hri": [
+          "(01) 12312312312326",
+          "(235) ABC",
+          "(10) DEF"
+        ],
+        "digitalLinkError": "AI (235) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312326235ABC\u001D10DEF",
+        "hri": "(01)12312312312326(235)ABC(10)DEF",
+        "digitalLink": "https://id.gs1.org/01/12312312312326/10/DEF/235/ABC",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112312312312326235ABC10DEF",
+        "hri": "(01)12312312312326(235)ABC10DEF"
+      }
+    },
+    {
+      "id": "generate-dl-uri-021",
+      "group": "syntax-engine/generate-dl-uri",
+      "source": "dl.c test_testGenerateDLuri",
+      "inputKind": "Bracketed",
+      "input": "(01)12312312312326",
+      "note": "stem: https://example.com/",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312326"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112312312312326",
+        "elementString": "0112312312312326",
+        "bracketed": "(01)12312312312326",
+        "hri": [
+          "(01) 12312312312326"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312326"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312326",
+        "hri": "(01)12312312312326",
+        "digitalLink": "https://id.gs1.org/01/12312312312326",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112312312312326",
+        "hri": "(01)12312312312326"
+      }
+    }
+  ]
+}

@@ -107,12 +107,13 @@ jobs:
       # Build separately, so the documentation is trimmed before pack picks it up. Fails the release if it cannot.
       - run: dotnet build -c Release
       - name: Trim XML documentation to the public surface
-        run: dotnet run tools/filter_public_docs.cs -- src/FeatherQR/bin/Release/*/FeatherQR.xml src/FeatherQR.SkiaSharp/bin/Release/*/FeatherQR.SkiaSharp.xml
+        run: dotnet run tools/filter_public_docs.cs -- src/FeatherQR/bin/Release/*/FeatherQR.xml src/FeatherQR.SkiaSharp/bin/Release/*/FeatherQR.SkiaSharp.xml src/FeatherQR.Gs1/bin/Release/*/FeatherQR.Gs1.xml
       # The surface that ships is the one that was reviewed. A release built from a branch that never went through the PR gate would otherwise be the one way past it.
       - name: Check the public API against the approved listing
         run: |
           dotnet run tools/check_public_api.cs -- --check src/FeatherQR/PublicAPI.approved.txt src/FeatherQR/bin/Release/*/FeatherQR.dll
           dotnet run tools/check_public_api.cs -- --check src/FeatherQR.SkiaSharp/PublicAPI.approved.txt src/FeatherQR.SkiaSharp/bin/Release/*/FeatherQR.SkiaSharp.dll
+          dotnet run tools/check_public_api.cs -- --check src/FeatherQR.Gs1/PublicAPI.approved.txt src/FeatherQR.Gs1/bin/Release/*/FeatherQR.Gs1.dll
       # pack (version comes from Directory.Build.props, verified against the tag in validate)
       - run: dotnet pack -c Release --no-build -o ./publish
       - name: Check package dependencies

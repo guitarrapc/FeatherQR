@@ -125,7 +125,7 @@ public class ByteSegmentAndEciBoundaryTest
             (0b0000, 4));
 
         Span<char> destination = stackalloc char[64];
-        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _);
+        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _, out _);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.UnsupportedContent);
         await Assert.That(charsWritten).IsEqualTo(0);
@@ -145,7 +145,7 @@ public class ByteSegmentAndEciBoundaryTest
             (0b0000, 4));
 
         var destination = new char[64];
-        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _);
+        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _, out _);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo("éÃ");

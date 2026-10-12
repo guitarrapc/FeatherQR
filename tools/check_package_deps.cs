@@ -4,14 +4,14 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 
-// Asserts the dependency graph of the three packed packages, at the artifact level.
+// Asserts the dependency graph of the four packed packages, at the artifact level.
 //
 //   dotnet run tools/check_package_deps.cs -- <directory-or-nupkg>...
 //
 // Opens each .nupkg, reads the nuspec dependency groups per target framework, and compares
 // them against the expectation below, exactly: nothing missing, nothing extra, in every group.
 // It also checks that the metapackage carries no lib/ folder and that no package but the
-// rendering one depends on anything named SkiaSharp. All three packages must be present.
+// rendering one depends on anything named SkiaSharp. All four packages must be present.
 //
 // This is the second regression guard for the core split. CoreAssemblyDependencyTest reads the
 // assembly references from metadata; this reads what a consumer's restore would resolve,
@@ -43,6 +43,16 @@ var expected = new Dictionary<string, Dictionary<string, string[]>>(StringCompar
         [".NETStandard2.1"] = ["FeatherQR", "SkiaSharp"],
         ["net8.0"] = ["FeatherQR", "SkiaSharp"],
         ["net10.0"] = ["FeatherQR", "SkiaSharp"],
+    },
+    // The GS1 data package depends on the core at the lockstep version and nothing else: it works on text,
+    // adds its entry points to the core generators, and brings the Apache-2.0 notice for its generated table
+    // (gs1-support-plan.md, G2 and G8). The netstandard shims arrive through FeatherQR.
+    ["FeatherQR.Gs1"] = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".NETStandard2.0"] = ["FeatherQR"],
+        [".NETStandard2.1"] = ["FeatherQR"],
+        ["net8.0"] = ["FeatherQR"],
+        ["net10.0"] = ["FeatherQR"],
     },
     // The compatibility metapackage is a dependency and nothing else.
     ["SkiaSharp.QrCode"] = new(StringComparer.OrdinalIgnoreCase)
@@ -89,7 +99,7 @@ foreach (var path in packages)
 
     if (!expected.TryGetValue(id, out var expectedGroups))
     {
-        failures.Add($"{id} {version}: not one of the three packages this repository ships.");
+        failures.Add($"{id} {version}: not one of the four packages this repository ships.");
         continue;
     }
 

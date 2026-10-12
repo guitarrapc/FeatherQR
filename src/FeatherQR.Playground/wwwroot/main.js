@@ -243,6 +243,24 @@ function symbolLabel(symbology, qrVersion) {
   return `QR version ${qrVersion}`;
 }
 
+/**
+ * The FNC1 mode of a decoded symbol, or '' without one: GS1 data in first position, or an AIM
+ * industry format in second position with its application indicator as the standard transmits
+ * it (two digits for 0-99, one letter for a letter's code plus 100).
+ */
+function fnc1Label(result) {
+  if (result.fnc1 === 'first') return ' · GS1 (FNC1 first position)';
+  if (result.fnc1 !== 'second') return '';
+  const n = result.applicationIndicator;
+  const indicator = n < 100 ? String(n).padStart(2, '0') : String.fromCharCode(n - 100);
+  return ` · FNC1 second position, application indicator ${indicator}`;
+}
+
+/** Decoded text for display: the GS1 separator (U+001D) is invisible, so it is shown as ␝ (U+241D). */
+function displayText(text) {
+  return text.replace(/\u001d/g, '␝');
+}
+
 /** Repopulates the ECC select for the symbology, keeping the value when still valid. */
 function populateEccSelect() {
   const prev = eccSelect.value;
@@ -956,7 +974,7 @@ async function decodeImageFile(file) {
     // rMQR has one fixed mask, so no mask pattern is reported for it.
     const maskLabel = result.maskPattern >= 0 ? ` · mask ${result.maskPattern}` : '';
     decodeResultEl.textContent =
-      `“${result.text}” · ${decodedLabel} · ECC ${result.ecc}${maskLabel}`
+      `“${displayText(result.text)}” · ${decodedLabel}${fnc1Label(result)} · ECC ${result.ecc}${maskLabel}`
       + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
   }
 

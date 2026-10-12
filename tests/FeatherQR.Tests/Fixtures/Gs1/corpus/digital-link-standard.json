@@ -1,0 +1,713 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "GS1 Digital Link Standard: URI Syntax, Release 1.7.0",
+  "cases": [
+    {
+      "id": "dl-gtin",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-brand-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://brand.example.com/01/09520123456788",
+      "note": "any stem",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://brand.example.com/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-stem-with-path",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://brand.example.com/some-extra/pathinfo/01/09520123456788",
+      "note": "a stem with a path",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://brand.example.com/some-extra/pathinfo/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-cpv",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/22/2A",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/22/2A",
+        "elementString": "0109520123456788222A",
+        "bracketed": "(01)09520123456788(22)2A",
+        "hri": [
+          "(01) 09520123456788",
+          "(22) 2A"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788222A",
+        "hri": "(01)09520123456788(22)2A",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-cpv-brand-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://brand.example.com/01/09520123456788/22/2A",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://brand.example.com/01/09520123456788/22/2A",
+        "elementString": "0109520123456788222A",
+        "bracketed": "(01)09520123456788(22)2A",
+        "hri": [
+          "(01) 09520123456788",
+          "(22) 2A"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788222A",
+        "hri": "(01)09520123456788(22)2A",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-lot",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/ABC123",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/10/ABC123",
+        "elementString": "010952012345678810ABC123",
+        "bracketed": "(01)09520123456788(10)ABC123",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC123",
+        "hri": "(01)09520123456788(10)ABC123",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC123",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-lot-brand-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://brand.example.com/01/09520123456788/10/ABC123",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://brand.example.com/01/09520123456788/10/ABC123",
+        "elementString": "010952012345678810ABC123",
+        "bracketed": "(01)09520123456788(10)ABC123",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC123",
+        "hri": "(01)09520123456788(10)ABC123",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC123",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-serial",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/21/12345",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/21/12345",
+        "elementString": "01095201234567882112345",
+        "bracketed": "(01)09520123456788(21)12345",
+        "hri": [
+          "(01) 09520123456788",
+          "(21) 12345"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/12345"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567882112345",
+        "hri": "(01)09520123456788(21)12345",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/12345",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-serial-brand-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://brand.example.com/01/09520123456788/21/12345",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://brand.example.com/01/09520123456788/21/12345",
+        "elementString": "01095201234567882112345",
+        "bracketed": "(01)09520123456788(21)12345",
+        "hri": [
+          "(01) 09520123456788",
+          "(21) 12345"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/12345"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567882112345",
+        "hri": "(01)09520123456788(21)12345",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/12345",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-lot-serial-expiry",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426",
+        "elementString": "010952012345678810ABC1\u001D2112345\u001D17180426",
+        "bracketed": "(01)09520123456788(10)ABC1(21)12345(17)180426",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC1",
+          "(21) 12345",
+          "(17) 180426"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC1\u001D2112345\u001D17180426",
+        "hri": "(01)09520123456788(10)ABC1(21)12345(17)180426",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-lot-serial-expiry-example-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788/10/ABC1/21/12345?17=180426",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/01/09520123456788/10/ABC1/21/12345?17=180426",
+        "elementString": "010952012345678810ABC1\u001D2112345\u001D17180426",
+        "bracketed": "(01)09520123456788(10)ABC1(21)12345(17)180426",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC1",
+          "(21) 12345",
+          "(17) 180426"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC1\u001D2112345\u001D17180426",
+        "hri": "(01)09520123456788(10)ABC1(21)12345(17)180426",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-net-weight",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?3103=000195",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788?3103=000195",
+        "elementString": "01095201234567883103000195",
+        "bracketed": "(01)09520123456788(3103)000195",
+        "hri": [
+          "(01) 09520123456788",
+          "(3103) 000195"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567883103000195",
+        "hri": "(01)09520123456788(3103)000195",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-net-weight-example-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788?3103=000195",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/01/09520123456788?3103=000195",
+        "elementString": "01095201234567883103000195",
+        "bracketed": "(01)09520123456788(3103)000195",
+        "hri": [
+          "(01) 09520123456788",
+          "(3103) 000195"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567883103000195",
+        "hri": "(01)09520123456788(3103)000195",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-three-attributes-unsorted",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788?3103=000195&3922=0299&17=201225",
+      "note": "query keys not in canonical order",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/01/09520123456788?3103=000195&3922=0299&17=201225",
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "bracketed": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "hri": [
+          "(01) 09520123456788",
+          "(3103) 000195",
+          "(3922) 0299",
+          "(17) 201225"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195&17=201225&3922=0299"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "hri": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-three-attributes-unsorted-canonical-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?3103=000195&3922=0299&17=201225",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788?3103=000195&3922=0299&17=201225",
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "bracketed": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "hri": [
+          "(01) 09520123456788",
+          "(3103) 000195",
+          "(3922) 0299",
+          "(17) 201225"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195&17=201225&3922=0299"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "hri": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-three-attributes-canonical",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+      "note": "the canonical form (4.12)",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+        "elementString": "010952012345678817201225310300019539220299",
+        "bracketed": "(01)09520123456788(17)201225(3103)000195(3922)0299",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 201225",
+          "(3103) 000195",
+          "(3922) 0299"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678817201225310300019539220299",
+        "hri": "(01)09520123456788(17)201225(3103)000195(3922)0299",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-sscc",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/00/195201234567891232",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/00/195201234567891232",
+        "elementString": "00195201234567891232",
+        "bracketed": "(00)195201234567891232",
+        "hri": [
+          "(00) 195201234567891232"
+        ],
+        "digitalLink": "https://id.gs1.org/00/195201234567891232"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00195201234567891232",
+        "hri": "(00)195201234567891232",
+        "digitalLink": "https://id.gs1.org/00/195201234567891232",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-sscc-example-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/00/195201234567891232",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/00/195201234567891232",
+        "elementString": "00195201234567891232",
+        "bracketed": "(00)195201234567891232",
+        "hri": [
+          "(00) 195201234567891232"
+        ],
+        "digitalLink": "https://id.gs1.org/00/195201234567891232"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00195201234567891232",
+        "hri": "(00)195201234567891232",
+        "digitalLink": "https://id.gs1.org/00/195201234567891232",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-sscc-content-count-lot",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/00/195201234567891232?02=09520123456788&37=25&10=ABC123",
+      "note": "batch/lot as a query attribute beside SSCC and CONTENT",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/00/195201234567891232?02=09520123456788&37=25&10=ABC123",
+        "elementString": "0019520123456789123202095201234567883725\u001D10ABC123",
+        "bracketed": "(00)195201234567891232(02)09520123456788(37)25(10)ABC123",
+        "hri": [
+          "(00) 195201234567891232",
+          "(02) 09520123456788",
+          "(37) 25",
+          "(10) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/00/195201234567891232?02=09520123456788&37=25&10=ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0019520123456789123202095201234567883725\u001D10ABC123",
+        "hri": "(00)195201234567891232(02)09520123456788(37)25(10)ABC123",
+        "digitalLink": "https://id.gs1.org/00/195201234567891232?02=09520123456788&10=ABC123&37=25",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-sscc-content-count-lot-example-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/00/195201234567891232?02=09520123456788&37=25&10=ABC123",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/00/195201234567891232?02=09520123456788&37=25&10=ABC123",
+        "elementString": "0019520123456789123202095201234567883725\u001D10ABC123",
+        "bracketed": "(00)195201234567891232(02)09520123456788(37)25(10)ABC123",
+        "hri": [
+          "(00) 195201234567891232",
+          "(02) 09520123456788",
+          "(37) 25",
+          "(10) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/00/195201234567891232?02=09520123456788&37=25&10=ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0019520123456789123202095201234567883725\u001D10ABC123",
+        "hri": "(00)195201234567891232(02)09520123456788(37)25(10)ABC123",
+        "digitalLink": "https://id.gs1.org/00/195201234567891232?02=09520123456788&10=ABC123&37=25",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gln",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/414/9520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/414/9520123456788",
+        "elementString": "4149520123456788",
+        "bracketed": "(414)9520123456788",
+        "hri": [
+          "(414) 9520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/414/9520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "4149520123456788",
+        "hri": "(414)9520123456788",
+        "digitalLink": "https://id.gs1.org/414/9520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gln-extension-percent-encoded",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/414/9520123456788/254/32a%2Fb",
+      "note": "a percent-encoded reserved character in a qualifier",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/414/9520123456788/254/32a%2Fb",
+        "elementString": "414952012345678825432a/b",
+        "bracketed": "(414)9520123456788(254)32a/b",
+        "hri": [
+          "(414) 9520123456788",
+          "(254) 32a/b"
+        ],
+        "digitalLink": "https://id.gs1.org/414/9520123456788/254/32a%2Fb"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "414952012345678825432a/b",
+        "hri": "(414)9520123456788(254)32a/b",
+        "digitalLink": "https://id.gs1.org/414/9520123456788/254/32a%2Fb",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gln-example-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/414/9520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/414/9520123456788",
+        "elementString": "4149520123456788",
+        "bracketed": "(414)9520123456788",
+        "hri": [
+          "(414) 9520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/414/9520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "4149520123456788",
+        "hri": "(414)9520123456788",
+        "digitalLink": "https://id.gs1.org/414/9520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gln-extension-percent-encoded-example-stem",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/414/9520123456788/254/32a%2Fb",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/414/9520123456788/254/32a%2Fb",
+        "elementString": "414952012345678825432a/b",
+        "bracketed": "(414)9520123456788(254)32a/b",
+        "hri": [
+          "(414) 9520123456788",
+          "(254) 32a/b"
+        ],
+        "digitalLink": "https://id.gs1.org/414/9520123456788/254/32a%2Fb"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "414952012345678825432a/b",
+        "hri": "(414)9520123456788(254)32a/b",
+        "digitalLink": "https://id.gs1.org/414/9520123456788/254/32a%2Fb",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-giai-with-gtin-attribute",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/8004/9520614141234567?01=09520123456788",
+      "note": "a primary key as a data attribute of another",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/8004/9520614141234567?01=09520123456788",
+        "elementString": "80049520614141234567\u001D0109520123456788",
+        "bracketed": "(8004)9520614141234567(01)09520123456788",
+        "hri": [
+          "(8004) 9520614141234567",
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/8004/9520614141234567?01=09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "80049520614141234567\u001D0109520123456788",
+        "hri": "(8004)9520614141234567(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/8004/9520614141234567?01=09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-with-giai-attribute",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788?8004=9520614141234567",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/01/09520123456788?8004=9520614141234567",
+        "elementString": "010952012345678880049520614141234567",
+        "bracketed": "(01)09520123456788(8004)9520614141234567",
+        "hri": [
+          "(01) 09520123456788",
+          "(8004) 9520614141234567"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?8004=9520614141234567"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678880049520614141234567",
+        "hri": "(01)09520123456788(8004)9520614141234567",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?8004=9520614141234567",
+        "issues": []
+      }
+    },
+    {
+      "id": "dl-gtin-cpv-linktype",
+      "group": "corpus/digital-link-standard",
+      "source": "GS1 Digital Link URI Syntax 1.7.0 examples",
+      "inputKind": "DigitalLink",
+      "input": "http://example.com/01/09520123456788/22/2A?linkType=gs1:traceability",
+      "note": "http and the reserved linkType key (4.10.1)",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "http://example.com/01/09520123456788/22/2A?linkType=gs1:traceability",
+        "elementString": "0109520123456788222A",
+        "bracketed": "(01)09520123456788(22)2A",
+        "hri": [
+          "(01) 09520123456788",
+          "(22) 2A"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788222A",
+        "hri": "(01)09520123456788(22)2A",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A",
+        "issues": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "linter": "pcenc",
+  "source": "gs1-syntax-dictionary 2026-01-27 src/lint_pcenc.c unit tests",
+  "cases": [
+    {"value":"","pass":true},
+    {"value":"A","pass":true},
+    {"value":"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHI","pass":true},
+    {"value":"%00","pass":true},
+    {"value":"%FF","pass":true},
+    {"value":"%Ff","pass":true},
+    {"value":"%fF","pass":true},
+    {"value":"%ff","pass":true},
+    {"value":"%fg","pass":false,"error":"GS1_LINTER_INVALID_PERCENT_SEQUENCE","markup":"*%fg*"},
+    {"value":"%gf","pass":false,"error":"GS1_LINTER_INVALID_PERCENT_SEQUENCE","markup":"*%gf*"},
+    {"value":"%g","pass":false,"error":"GS1_LINTER_INVALID_PERCENT_SEQUENCE","markup":"*%g*"},
+    {"value":"%20","pass":true},
+    {"value":"ABC%20","pass":true},
+    {"value":"ABC%00","pass":true},
+    {"value":"ABC%FF","pass":true},
+    {"value":"ABC%ff","pass":true},
+    {"value":"ABC%fg","pass":false,"error":"GS1_LINTER_INVALID_PERCENT_SEQUENCE","markup":"ABC*%fg*"},
+    {"value":"ABC%gf","pass":false,"error":"GS1_LINTER_INVALID_PERCENT_SEQUENCE","markup":"ABC*%gf*"},
+    {"value":"ABC%g","pass":false,"error":"GS1_LINTER_INVALID_PERCENT_SEQUENCE","markup":"ABC*%g*"},
+    {"value":"ABC%20XYZ","pass":true},
+    {"value":"ABC%00XYZ","pass":true},
+    {"value":"ABC%FFXYZ","pass":true},
+    {"value":"ABC%ffXYZ","pass":true},
+    {"value":"ABC%fgXYZ","pass":false,"error":"GS1_LINTER_INVALID_PERCENT_SEQUENCE","markup":"ABC*%fg*XYZ"},
+    {"value":"ABC%gfXYZ","pass":false,"error":"GS1_LINTER_INVALID_PERCENT_SEQUENCE","markup":"ABC*%gf*XYZ"},
+    {"value":"ABC%gXYZ","pass":false,"error":"GS1_LINTER_INVALID_PERCENT_SEQUENCE","markup":"ABC*%gX*YZ"},
+    {"value":"ABCDEFGHIJKLMNOPQRSTUVWXYZ%00+12345","pass":true}
+  ]
+}

@@ -1,0 +1,982 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "one failing value per linter named by Syntax Dictionary 2026-01-27",
+  "cases": [
+    {
+      "id": "linter-csum-00",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter csum on AI 00",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345670",
+      "note": "component 0 replaced by \"123456789012345670\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (00): The numeric check digit is incorrect.",
+        "errorMarkup": "(00)12345678901234567|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(00)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "00123456789012345670",
+        "hri": "(00)123456789012345670"
+      }
+    },
+    {
+      "id": "linter-gcppos2-00",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter gcppos2 on AI 00",
+      "inputKind": "Bracketed",
+      "input": "(00)12A456789012345675",
+      "note": "component 0 replaced by \"12A456789012345675\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (00): A non-digit character was found where a digit is expected.",
+        "errorMarkup": "(00)12|A|456789012345675"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(00)",
+          "InvalidData(00)",
+          "InvalidData(00)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0012A456789012345675",
+        "hri": "(00)12A456789012345675"
+      }
+    },
+    {
+      "id": "linter-yymmd0-11",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter yymmd0 on AI 11",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(11)200010",
+      "note": "component 0 replaced by \"200010\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (11): The date contains an illegal month of the year.",
+        "errorMarkup": "(11)20|00|10"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(11)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011234567890123111200010",
+        "hri": "(01)12345678901231(11)200010"
+      }
+    },
+    {
+      "id": "linter-gcppos1-253",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter gcppos1 on AI 253",
+      "inputKind": "Bracketed",
+      "input": "(253)1A34567890128952112",
+      "note": "component 0 replaced by \"1A34567890128\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (253): A non-digit character was found where a digit is expected.",
+        "errorMarkup": "(253)1|A|34567890128"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(253)",
+          "InvalidData(253)",
+          "InvalidData(253)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2531A34567890128952112",
+        "hri": "(253)1A34567890128952112"
+      }
+    },
+    {
+      "id": "linter-iso4217-3910",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter iso4217 on AI 3910",
+      "inputKind": "Bracketed",
+      "input": "(415)1234567890128(8020)952112(3910)000123456",
+      "note": "component 0 replaced by \"000\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (3910): A valid ISO 4217 three-digit currency code is required.",
+        "errorMarkup": "(3910)|000|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(3910)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "41512345678901288020952112\u001D3910000123456",
+        "hri": "(415)1234567890128(8020)952112(3910)000123456"
+      }
+    },
+    {
+      "id": "linter-iso3166-421",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter iso3166 on AI 421",
+      "inputKind": "Bracketed",
+      "input": "(421)000952112",
+      "note": "component 0 replaced by \"000\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (421): A valid ISO 3166 three-digit country code is required.",
+        "errorMarkup": "(421)|000|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(421)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "421000952112",
+        "hri": "(421)000952112"
+      }
+    },
+    {
+      "id": "linter-pcenc-4300",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter pcenc on AI 4300",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675(4300)%fg",
+      "note": "component 0 replaced by \"%fg\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4300): The input contains an invalid percent hex-encoding \"%hh\" sequence.",
+        "errorMarkup": "(4300)|%fg|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4300)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "001234567890123456754300%fg",
+        "hri": "(00)123456789012345675(4300)%fg"
+      }
+    },
+    {
+      "id": "linter-iso3166alpha2-4307",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter iso3166alpha2 on AI 4307",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675(4307)AA",
+      "note": "component 0 replaced by \"AA\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4307): A valid ISO 3166 two-character country code is required.",
+        "errorMarkup": "(4307)|AA|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4307)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "001234567890123456754307AA",
+        "hri": "(00)123456789012345675(4307)AA"
+      }
+    },
+    {
+      "id": "linter-latitude-4309",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter latitude on AI 4309",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675(4309)18000000011800000000",
+      "note": "component 0 replaced by \"1800000001\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4309): The latitude is outside of the range \"0000000000\" to \"1800000000\".",
+        "errorMarkup": "(4309)|1800000001|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4309)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "00123456789012345675430918000000011800000000",
+        "hri": "(00)123456789012345675(4309)18000000011800000000"
+      }
+    },
+    {
+      "id": "linter-longitude-4309",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter longitude on AI 4309",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675(4309)09000000003600000001",
+      "note": "component 1 replaced by \"3600000001\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4309): The longitude is outside of the range \"0000000000\" to \"3600000000\".",
+        "errorMarkup": "(4309)0900000000|3600000001|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4309)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "00123456789012345675430909000000003600000001",
+        "hri": "(00)123456789012345675(4309)09000000003600000001"
+      }
+    },
+    {
+      "id": "linter-yesno-4321",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter yesno on AI 4321",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675(4321)2",
+      "note": "component 0 replaced by \"2\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4321): A \"0\" or \"1\" is required.",
+        "errorMarkup": "(4321)|2|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4321)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0012345678901234567543212",
+        "hri": "(00)123456789012345675(4321)2"
+      }
+    },
+    {
+      "id": "linter-hhmi-4324",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter hhmi on AI 4324",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675(4324)2512312400",
+      "note": "component 1 replaced by \"2400\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4324): The time contains an illegal hour.",
+        "errorMarkup": "(4324)251231|24|00"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4324)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0012345678901234567543242512312400",
+        "hri": "(00)123456789012345675(4324)2512312400"
+      }
+    },
+    {
+      "id": "linter-yymmdd-4326",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter yymmdd on AI 4326",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675(4326)200010",
+      "note": "component 0 replaced by \"200010\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4326): The date contains an illegal month of the year.",
+        "errorMarkup": "(4326)20|00|10"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4326)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "001234567890123456754326200010",
+        "hri": "(00)123456789012345675(4326)200010"
+      }
+    },
+    {
+      "id": "linter-hyphen-4330",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter hyphen on AI 4330",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675(4330)123456X",
+      "note": "component 1 replaced by \"X\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4330): Only hyphens are permitted.",
+        "errorMarkup": "(4330)123456|X|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4330)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "001234567890123456754330123456X",
+        "hri": "(00)123456789012345675(4330)123456X"
+      }
+    },
+    {
+      "id": "linter-iso3166999-7030",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter iso3166999 on AI 7030",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(7030)000952112",
+      "note": "component 0 replaced by \"000\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7030): A valid ISO 3166 three-digit country code or \"999\" is required.",
+        "errorMarkup": "(7030)|000|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7030)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012317030000952112",
+        "hri": "(01)12345678901231(7030)000952112"
+      }
+    },
+    {
+      "id": "linter-importeridx-7040",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter importeridx on AI 7040",
+      "inputKind": "Bracketed",
+      "input": "(7040)199!",
+      "note": "component 3 replaced by \"!\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7040): The Importer Index is an invalid character.",
+        "errorMarkup": "(7040)199|!|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7040)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "7040199!",
+        "hri": "(7040)199!"
+      }
+    },
+    {
+      "id": "linter-packagetype-7041",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter packagetype on AI 7041",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675(7041)0",
+      "note": "component 0 replaced by \"0\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7041): A valid PackageTypeCode is required.",
+        "errorMarkup": "(7041)|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7041)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0012345678901234567570410",
+        "hri": "(00)123456789012345675(7041)0"
+      }
+    },
+    {
+      "id": "linter-mediatype-7241",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter mediatype on AI 7241",
+      "inputKind": "Bracketed",
+      "input": "(8017)123456789012345675(7241)00",
+      "note": "component 0 replaced by \"00\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7241): A valid AIDC media type is required.",
+        "errorMarkup": "(7241)|00|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7241)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8017123456789012345675\u001D724100",
+        "hri": "(8017)123456789012345675(7241)00"
+      }
+    },
+    {
+      "id": "linter-yyyymmdd-7250",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter yyyymmdd on AI 7250",
+      "inputKind": "Bracketed",
+      "input": "(8018)123456789012345675(7250)20200010",
+      "note": "component 0 replaced by \"20200010\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7250): The date contains an illegal month of the year.",
+        "errorMarkup": "(7250)2020|00|10"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7250)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8018123456789012345675\u001D725020200010",
+        "hri": "(8018)123456789012345675(7250)20200010"
+      }
+    },
+    {
+      "id": "linter-iso5218-7252",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter iso5218 on AI 7252",
+      "inputKind": "Bracketed",
+      "input": "(8018)123456789012345675(7252)3",
+      "note": "component 0 replaced by \"3\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7252): A valid ISO/IEC 5218 biological sex code required.",
+        "errorMarkup": "(7252)|3|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7252)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8018123456789012345675\u001D72523",
+        "hri": "(8018)123456789012345675(7252)3"
+      }
+    },
+    {
+      "id": "linter-posinseqslash-7258",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter posinseqslash on AI 7258",
+      "inputKind": "Bracketed",
+      "input": "(7259)ABC(8018)123456789012345675(7258)1//",
+      "note": "component 0 replaced by \"1//\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7258): The data must have the format \"<pos>/<end>\".",
+        "errorMarkup": "(7258)|1//|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7258)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "7259ABC\u001D8018123456789012345675\u001D72581//",
+        "hri": "(7259)ABC(8018)123456789012345675(7258)1//"
+      }
+    },
+    {
+      "id": "linter-nonzero-8001",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter nonzero on AI 8001",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(8001)00001234512301",
+      "note": "component 0 replaced by \"0000\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8001): A non-zero value is required.",
+        "errorMarkup": "(8001)|0000|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8001)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231800100001234512301",
+        "hri": "(01)12345678901231(8001)00001234512301"
+      }
+    },
+    {
+      "id": "linter-winding-8001",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter winding on AI 8001",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(8001)12341234512321",
+      "note": "component 3 replaced by \"2\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8001): The winding direction must be either \"0\", \"1\" or \"9\".",
+        "errorMarkup": "(8001)123412345123|2|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8001)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231800112341234512321",
+        "hri": "(01)12345678901231(8001)12341234512321"
+      }
+    },
+    {
+      "id": "linter-zero-8003",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter zero on AI 8003",
+      "inputKind": "Bracketed",
+      "input": "(8003)11234567890128952112",
+      "note": "component 0 replaced by \"1\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8003): A zero is required.",
+        "errorMarkup": "(8003)|1|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8003)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800311234567890128952112",
+        "hri": "(8003)11234567890128952112"
+      }
+    },
+    {
+      "id": "linter-pieceoftotal-8006",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter pieceoftotal on AI 8006",
+      "inputKind": "Bracketed",
+      "input": "(8006)123456789012310001",
+      "note": "component 1 replaced by \"0001\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8006): The piece number must not have a value of zero.",
+        "errorMarkup": "(8006)12345678901231|00|01"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8006)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8006123456789012310001",
+        "hri": "(8006)123456789012310001"
+      }
+    },
+    {
+      "id": "linter-iban-8007",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter iban on AI 8007",
+      "inputKind": "Bracketed",
+      "input": "(415)1234567890128(8020)952112(8007)BE71096123456760",
+      "note": "component 0 replaced by \"BE71096123456760\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8007): The IBAN is invalid since the check characters are incorrect.",
+        "errorMarkup": "(8007)BE|71|096123456760"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8007)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "41512345678901288020952112\u001D8007BE71096123456760",
+        "hri": "(415)1234567890128(8020)952112(8007)BE71096123456760"
+      }
+    },
+    {
+      "id": "linter-hh-8008",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter hh on AI 8008",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(8008)251231245959",
+      "note": "component 1 replaced by \"24\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8008): The time contains an illegal hour.",
+        "errorMarkup": "(8008)251231|24|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8008)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012318008251231245959",
+        "hri": "(01)12345678901231(8008)251231245959"
+      }
+    },
+    {
+      "id": "linter-mi-8008",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter mi on AI 8008",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(8008)251231236059",
+      "note": "component 2 replaced by \"60\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8008): The time contains an illegal minute.",
+        "errorMarkup": "(8008)25123123|60|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8008)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012318008251231236059",
+        "hri": "(01)12345678901231(8008)251231236059"
+      }
+    },
+    {
+      "id": "linter-ss-8008",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter ss on AI 8008",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(8008)251231235960",
+      "note": "component 3 replaced by \"60\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8008): The time contains an illegal seconds.",
+        "errorMarkup": "(8008)2512312359|60|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8008)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012318008251231235960",
+        "hri": "(01)12345678901231(8008)251231235960"
+      }
+    },
+    {
+      "id": "linter-nozeroprefix-8011",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter nozeroprefix on AI 8011",
+      "inputKind": "Bracketed",
+      "input": "(8010)952112(8011)0",
+      "note": "component 0 replaced by \"0\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8011): A zero prefix is not permitted.",
+        "errorMarkup": "(8011)|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8011)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8010952112\u001D80110",
+        "hri": "(8010)952112(8011)0"
+      }
+    },
+    {
+      "id": "linter-csumalpha-8013",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter csumalpha on AI 8013",
+      "inputKind": "Bracketed",
+      "input": "(8013)2",
+      "note": "component 0 replaced by \"2\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8013): The component is too short to perform an alphanumeric check character pair calculation.",
+        "errorMarkup": "(8013)|2|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8013)",
+          "InvalidData(8013)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "80132",
+        "hri": "(8013)2"
+      }
+    },
+    {
+      "id": "linter-hasnondigit-8014",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter hasnondigit on AI 8014",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(8014)0",
+      "note": "component 0 replaced by \"0\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8014): The component is too short to perform an alphanumeric check character pair calculation.",
+        "errorMarkup": "(8014)|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8014)",
+          "InvalidData(8014)",
+          "InvalidData(8014)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011234567890123180140",
+        "hri": "(01)12345678901231(8014)0"
+      }
+    },
+    {
+      "id": "linter-couponcode-8110",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter couponcode on AI 8110",
+      "inputKind": "Bracketed",
+      "input": "(8110)a12345612345611110123",
+      "note": "component 0 replaced by \"a12345612345611110123\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): A non-digit character was found where a digit is expected.",
+        "errorMarkup": "(8110)|a|12345612345611110123"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110a12345612345611110123",
+        "hri": "(8110)a12345612345611110123"
+      }
+    },
+    {
+      "id": "linter-couponposoffer-8112",
+      "group": "corpus/linter-mutations",
+      "source": "Syntax Dictionary 2026-01-27 linter couponposoffer on AI 8112",
+      "inputKind": "Bracketed",
+      "input": "(8112)a01234561234560123456",
+      "note": "component 0 replaced by \"a01234561234560123456\"",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8112): A non-digit character was found where a digit is expected.",
+        "errorMarkup": "(8112)|a|01234561234560123456"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8112)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8112a01234561234560123456",
+        "hri": "(8112)a01234561234560123456"
+      }
+    }
+  ]
+}

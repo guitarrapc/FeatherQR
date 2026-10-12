@@ -1,5 +1,5 @@
 // FeatherQR
-// 36 exported types
+// 37 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR
@@ -23,6 +23,13 @@ namespace FeatherQR
         Default = 0,
         Iso8859_1 = 3,
         Utf8 = 26,
+    }
+
+    public readonly struct Fnc1Mode : IEquatable<Fnc1Mode>
+    {
+        public bool IsFirstPosition { get; }
+        public bool IsSecondPosition { get; }
+        public int? ApplicationIndicator { get; }
     }
 
     public readonly struct ImagePoint : IEquatable<ImagePoint>
@@ -171,6 +178,7 @@ namespace FeatherQR
     public readonly struct QRCodeDecodeInfo : IEquatable<QRCodeDecodeInfo>
     {
         public DecodeStatus Status { get; }
+        public Fnc1Mode Fnc1 { get; }
         public QREccLevel EccLevel { get; }
         public QRStructuredAppend StructuredAppend { get; }
         public SymbolCorners Corners { get; }
@@ -281,6 +289,7 @@ namespace FeatherQR
     public readonly struct RmQRCodeDecodeInfo : IEquatable<RmQRCodeDecodeInfo>
     {
         public DecodeStatus Status { get; }
+        public Fnc1Mode Fnc1 { get; }
         public RmQREccLevel EccLevel { get; }
         public RmQRVersion Version { get; }
         public SymbolCorners Corners { get; }

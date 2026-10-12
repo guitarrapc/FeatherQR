@@ -203,7 +203,8 @@ static string Render(string assemblyPath)
     {
         var sb = new StringBuilder();
         sb.Append('\n');
-        if (HasAttribute(type.GetCustomAttributes(), "ObsoleteAttribute")) sb.Append("    [Obsolete]\n");
+        // A ref struct carries a compiler-emitted [Obsolete] for compilers that predate it; that is not the author's attribute.
+        if (HasAttribute(type.GetCustomAttributes(), "ObsoleteAttribute") && !HasAttribute(type.GetCustomAttributes(), "IsByRefLikeAttribute")) sb.Append("    [Obsolete]\n");
         sb.Append("    ").Append(TypeHeader(type)).Append('\n').Append("    {\n");
         foreach (var member in Members(type)) sb.Append("        ").Append(member).Append('\n');
         sb.Append("    }\n");
@@ -260,6 +261,7 @@ static string Render(string assemblyPath)
         else if (isAbstract && !isInterface) modifiers.Add("abstract");
         else if (isSealed && !isEnum && !isValueType) modifiers.Add("sealed");
         if (isValueType && !isEnum && HasAttribute(type.GetCustomAttributes(), "IsReadOnlyAttribute")) modifiers.Add("readonly");
+        if (isValueType && !isEnum && HasAttribute(type.GetCustomAttributes(), "IsByRefLikeAttribute")) modifiers.Add("ref");
         modifiers.Add(kind);
 
         var header = $"{string.Join(" ", modifiers)} {BareName(type)}{GenericSuffix(type.GetGenericParameters())}";

@@ -1,0 +1,23 @@
+{
+  "id": "r13x139-m-gs1-mixed-case-serial",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "rMQR",
+  "version": 22,
+  "versionName": "R13x139",
+  "width": 139,
+  "height": 13,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 4,
+  "payloadText": "01095240000591092112345678p901\u001D101234567p\u001D17231120",
+  "payloadUtf8Hex": "3031303935323430303030353931303932313132333435363738703930311D313031323334353637701D3137323331313230",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3",
+    "writerInput": "(01)09524000059109(21)12345678p901(10)1234567p(17)231120"
+  }
+}

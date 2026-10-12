@@ -1,6 +1,7 @@
 #:sdk Microsoft.NET.Sdk
 #:property TargetFramework=net10.0
 #:project ../src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj
+#:project ../src/FeatherQR.Gs1/FeatherQR.Gs1.csproj
 #:property EnableAotAnalyzer=false
 #:property EnableTrimAnalyzer=false
 #:property EnableSingleFileAnalyzer=false
@@ -12,7 +13,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
-// Prints the exported surface of FeatherQR and FeatherQR.SkiaSharp as one sorted, diffable listing.
+// Prints the exported surface of FeatherQR, FeatherQR.SkiaSharp and FeatherQR.Gs1 as one sorted, diffable listing.
 //
 //   dotnet run tools/public_api.cs                    plain text, to stdout
 //   dotnet run tools/public_api.cs -- -o api.txt      plain text, to a file
@@ -35,14 +36,14 @@ using System.Text.Json;
 
 var outputPath = GetOutputPath(args);
 var wantsHtml = args.Contains("--html");
-// Both shipped assemblies, in the order the packages depend on each other. The project
-// reference to the rendering package brings the core along, so one reference covers both.
-var assemblies = new[] { typeof(FeatherQR.QRCodeData).Assembly, typeof(FeatherQR.SkiaSharp.SymbolRenderer).Assembly };
+// The shipped assemblies, in the order the packages depend on each other. The project
+// references to the rendering and GS1 packages bring the core along.
+var assemblies = new[] { typeof(FeatherQR.QRCodeData).Assembly, typeof(FeatherQR.SkiaSharp.SymbolRenderer).Assembly, typeof(FeatherQR.Gs1.Gs1ElementString).Assembly };
 var version = assemblies[0].GetName().Version;
 var nullability = new NullabilityInfoContext();
 
 // Doc text, keyed by the documentation ID the compiler emits. Exported types never collide
-// across the two assemblies; the compiler-generated internals both carry (PolySharp's
+// across the assemblies; the compiler-generated internals they all carry (PolySharp's
 // polyfills, Microsoft.CodeAnalysis.EmbeddedAttribute) do, and either copy will do.
 var docs = new Dictionary<string, (string Summary, string Remarks)>(StringComparer.Ordinal);
 foreach (var entry in assemblies.SelectMany(LoadDocs)) docs.TryAdd(entry.Key, entry.Value);
@@ -76,7 +77,7 @@ var types = assemblies.SelectMany(a => a.GetExportedTypes())
 // about what the surface is.
 var model = types
     .Select(t => MemberEntries(t) is var members
-        ? (Type: t, Name: FullName(t), Header: TypeHeader(t), Obsolete: IsObsolete(t), DocId: DocIdOfType(t),
+        ? (Type: t, Name: FullName(t), Header: TypeHeader(t), Obsolete: IsObsolete(t) && !t.IsByRefLike, DocId: DocIdOfType(t),
            // A type has no sequence points of its own, so it borrows the file its first member
            // is in and drops the line: the right file, without claiming to know the exact line
            // the declaration starts on.
@@ -524,6 +525,7 @@ string TypeHeader(Type type)
     else if (type.IsAbstract && !type.IsInterface) modifiers.Add("abstract");
     else if (type.IsSealed && !type.IsEnum && !type.IsValueType) modifiers.Add("sealed");
     if (type.IsValueType && !type.IsEnum && TypeHasAttribute(type, "IsReadOnlyAttribute")) modifiers.Add("readonly");
+    if (type.IsValueType && !type.IsEnum && type.IsByRefLike) modifiers.Add("ref");
     modifiers.Add(kind);
 
     var header = $"{string.Join(" ", modifiers)} {BareName(type)}{GenericSuffix(type.GetGenericArguments())}";
