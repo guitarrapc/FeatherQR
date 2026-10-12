@@ -1230,21 +1230,17 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// An upper bound on the number of alignment patterns of a version, which sizes the buffer of blocked rectangles.
+    /// The number of alignment patterns a version places, which sizes the buffer of blocked rectangles.
     /// </summary>
     /// <param name="version">The QR code version (1-40)</param>
-    /// <returns>At least the number of alignment patterns the version places.</returns>
+    /// <returns>The number of alignment patterns the version places.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateAlignmentPatternCount(int version)
     {
-        // The list holds every grid point already, so the product overshoots the count. Version 1 has no
-        // alignment pattern, and the three positions under the finder patterns are never placed.
+        // Version 1 has no alignment pattern. From version 2 the list holds every grid point, and the
+        // three under the finder patterns are never placed.
         if (version == 1) return 0;
-        var positions = GetAlignmentPatternPositions(version);
-        var posCount = positions.Count;
-        var totalCombinations = posCount * posCount;
-        var overlaps = posCount >= 2 ? 3 : 0;
-        return totalCombinations - overlaps;
+        return GetAlignmentPatternPositions(version).Count - 3;
     }
 
     /// <summary>
