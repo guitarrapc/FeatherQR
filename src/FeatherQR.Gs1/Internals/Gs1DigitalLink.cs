@@ -19,8 +19,8 @@ namespace FeatherQR.Gs1.Internals;
 /// 3986), a host, then the path walked backwards in <c>/AI/value</c> pairs until one whose AI is a primary key, so
 /// any stem may come before it. The pairs after the key must be an ordered subsequence of one of the key's
 /// qualifier sequences. Query parameters are percent-decoded (<c>+</c> is a blank there), a numeric key must be an
-/// AI the table knows and a data attribute, a key that is not numeric is ignored, a repeated numeric key resolves to
-/// its last value, and a key the path already holds, or that belongs in the path, is refused. Values are read as
+/// AI the table knows and a data attribute, a key that is not numeric is ignored, and a key the path or the query
+/// already holds, equal values included, or that belongs in the path, is refused. Values are read as
 /// they are, except what the element string needs to split back into the same elements: a predefined-length AI's
 /// value has its length, and an escape never decodes to a control character.
 /// </para>
@@ -558,9 +558,7 @@ internal static class Gs1DigitalLink
                 return false;
             position = valueEnd;
         }
-        var pathWritten = written;
-
-        // The query: numeric keys are AIs, in URI order, the last of a repeated key winning.
+        // The query: numeric keys are AIs, in URI order, none repeating an AI the path or the query already holds.
         position = queryStart;
         while (position < end)
         {
@@ -582,10 +580,7 @@ internal static class Gs1DigitalLink
                 error = new Gs1Error(Gs1ErrorKind.UnknownAi, parameterStart, ai.Length);
                 return false;
             }
-            if (HasLaterParameter(uri, position, end, ai))
-                continue;
-
-            if (IsPathAi(buffer.Slice(0, pathWritten), ai))
+            if (HoldsAi(buffer.Slice(0, written), ai))
             {
                 error = new Gs1Error(Gs1ErrorKind.RepeatedAi, parameterStart, ai.Length);
                 return false;
@@ -768,30 +763,13 @@ internal static class Gs1DigitalLink
         return -1;
     }
 
-    /// <summary>Whether the path's elements, already in the buffer, hold this AI.</summary>
-    private static bool IsPathAi(ReadOnlySpan<char> path, ReadOnlySpan<char> ai)
+    /// <summary>Whether the elements already in the buffer, from the path and the query so far, hold this AI.</summary>
+    private static bool HoldsAi(ReadOnlySpan<char> elements, ReadOnlySpan<char> ai)
     {
         var position = 0;
-        while (position < path.Length && Gs1Splitter.TryNext(path, ref position, out var element, out _))
+        while (position < elements.Length && Gs1Splitter.TryNext(elements, ref position, out var element, out _))
         {
-            if (path.Slice(element.AiStart, element.AiLength).SequenceEqual(ai))
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>Whether a later query parameter has the same key, in which case this one is superseded.</summary>
-    private static bool HasLaterParameter(ReadOnlySpan<char> uri, int from, int end, ReadOnlySpan<char> ai)
-    {
-        var position = from;
-        while (position < end)
-        {
-            var amp = uri.Slice(position, end - position).IndexOf('&');
-            var parameterEnd = amp < 0 ? end : position + amp;
-            var parameter = uri.Slice(position, parameterEnd - position);
-            position = parameterEnd + 1;
-            var equals = parameter.IndexOf('=');
-            if (equals == ai.Length && parameter.Slice(0, equals).SequenceEqual(ai))
+            if (elements.Slice(element.AiStart, element.AiLength).SequenceEqual(ai))
                 return true;
         }
         return false;

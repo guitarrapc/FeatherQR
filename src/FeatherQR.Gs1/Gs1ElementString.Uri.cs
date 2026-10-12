@@ -63,9 +63,9 @@ public static partial class Gs1ElementString
     /// <see cref="TryValidate"/>'s.
     /// </summary>
     /// <remarks>
-    /// A query key that is not numeric (<c>linkType</c>, an extension) is ignored, a repeated numeric key resolves
-    /// to its last value, and a fragment is ignored. A compressed URI is refused with its own kind. The element
-    /// string is never longer than the URI.
+    /// A query key that is not numeric (<c>linkType</c>, an extension) is ignored, an AI that appears twice in the
+    /// URI is refused even with equal values, as the GS1 Syntax Engine refuses it, and a fragment is ignored. A
+    /// compressed URI is refused with its own kind. The element string is never longer than the URI.
     /// </remarks>
     /// <param name="uri">The URI.</param>
     /// <param name="elementString">The element string, separators as U+001D and no leading FNC1. Empty when it failed.</param>

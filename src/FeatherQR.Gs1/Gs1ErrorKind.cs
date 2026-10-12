@@ -63,6 +63,6 @@ public enum Gs1ErrorKind
     /// <summary>Two AIs the table says cannot appear together.</summary>
     ExcludedAiPair = 19,
 
-    /// <summary>The same AI twice with different values, or a key repeated between a URI's path and query.</summary>
+    /// <summary>The same AI twice with different values in an element string, or twice at all in a Digital Link URI.</summary>
     RepeatedAi = 20,
 }

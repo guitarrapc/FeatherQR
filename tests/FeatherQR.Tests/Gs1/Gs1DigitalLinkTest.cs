@@ -27,8 +27,6 @@ public class Gs1DigitalLinkTest
     /// <summary>URIs the engine refused that this library reads into data every check passes, by cause.</summary>
     private static readonly HashSet<string> AcceptDifferences =
     [
-        "eq-dl-repeated-key",   // a repeated query key: the last value wins (G9), the engine refuses any repeat
-        "parse-dl-uri-103",     // the same, with equal values
         "parse-dl-uri-012",     // a mixed-case scheme: RFC 3986 makes the scheme case-insensitive, the engine takes it for plain data
     ];
 
@@ -109,7 +107,6 @@ public class Gs1DigitalLinkTest
     [Arguments("http://a/01/09520123456788", Gtin)]
     [Arguments("https://brand.example.com/some/path/01/09520123456788/22/2A/10/ABC/21/123?17=251231&3103=000195&linkType=gs1:pip&x", Gtin + "222A\u001D" + "10ABC\u001D" + "21123\u001D" + "17251231" + "3103000195")]
     [Arguments("https://id.gs1.org/01/09520123456788/235/XYZ?10=ABC", Gtin + "235XYZ\u001D" + "10ABC")]
-    [Arguments("https://id.gs1.org/01/09520123456788?17=251231&17=261231", Gtin + "17261231")]
     [Arguments("https://id.gs1.org/01/09520123456788?99=A%2FB+C&98=%41", Gtin + "99A/B C\u001D" + "98A")]
     [Arguments("https://id.gs1.org/01/09520123456788/10/A+B%2fC#frag", Gtin + "10A+B/C")]
     [Arguments("https://id.gs1.org/00/faux/00/195201234567891232", "00195201234567891232")]
@@ -155,6 +152,8 @@ public class Gs1DigitalLinkTest
     [Arguments("https://id.gs1.org/01/09520123456788/10/", Gs1ErrorKind.EmptyValue, 40, 0)]
     [Arguments("https://id.gs1.org/01/09520123456788/10/ABC?10=ABC", Gs1ErrorKind.RepeatedAi, 44, 2)]
     [Arguments("https://id.gs1.org/01/09520123456788?01=09520123456788", Gs1ErrorKind.RepeatedAi, 37, 2)]
+    [Arguments("https://id.gs1.org/01/09520123456788?17=251231&17=261231", Gs1ErrorKind.RepeatedAi, 47, 2)]
+    [Arguments("https://id.gs1.org/01/09520123456788?99=X&99=X", Gs1ErrorKind.RepeatedAi, 42, 2)]
     [Arguments("https://id.gs1.org/01/0952012345678", Gs1ErrorKind.ValueTooShort, 22, 13)]
     [Arguments("https://id.gs1.org/01/095201234567881", Gs1ErrorKind.ValueTooLong, 22, 15)]
     [Arguments("https://id.gs1.org/01/09520123456788?17=25123", Gs1ErrorKind.ValueTooShort, 40, 5)]

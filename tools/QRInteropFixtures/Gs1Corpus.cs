@@ -267,7 +267,7 @@ public static class Gs1Corpus
         D("dl-unknown-numeric-key", "https://id.gs1.org/01/" + Gtin + "?4000=ABC");
         D("dl-extension-key", "https://id.gs1.org/01/" + Gtin + "?foo=bar");
         D("dl-extension-linktype", "https://id.gs1.org/01/" + Gtin + "?linkType=gs1:pip");
-        D("dl-repeated-key", "https://id.gs1.org/01/" + Gtin + "?17=251231&17=261231", "a repeated key: the last value wins (URI Syntax 1.7.0 section 3)");
+        D("dl-repeated-key", "https://id.gs1.org/01/" + Gtin + "?17=251231&17=261231", "a repeated key, which the engine refuses even with equal values");
         D("dl-compressed", "https://id.gs1.org/DBHKVAdpQgqrAg", "a compressed URI (legacy compression, frozen at 1.1.4)");
         D("dl-no-primary-key", "https://id.gs1.org/10/ABC");
         D("dl-qualifier-without-key", "https://id.gs1.org/21/ABC");

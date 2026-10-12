@@ -3548,7 +3548,7 @@
       "source": "gs1-support-plan.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?17=251231&17=261231",
-      "note": "a repeated key: the last value wins (URI Syntax 1.7.0 section 3)",
+      "note": "a repeated key, which the engine refuses even with equal values",
       "syntaxEngine": {
         "valid": false,
         "error": "AI (17) is duplicated"
