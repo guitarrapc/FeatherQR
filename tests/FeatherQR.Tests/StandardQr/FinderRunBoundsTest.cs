@@ -5,15 +5,15 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The bounds the axis cross-checks stop their walk at (<see cref="FinderPatternFinder.AxisRunBounds"/>) are exact only if no cross section the verdict could accept lies outside them.
 /// That is a property of the verdict alone, so it is held here against the verdict's own checks, not against images: every run vector that passes the total check and a ratio check, or like edges, has to be inside every bound.
-/// Each test runs for both total windows: the row again within 40 % of the row, and the column within 5/12 to 12/5 of it.
+/// Each test runs for both total windows: the row again within 40 % of the row, and the column within 2/7 to 7/2 of it.
 /// The grey second look is left out on purpose: it is asked only of runs that already pass the near-miss check, so it can refuse more and never accept more.
 /// </summary>
 public class FinderRunBoundsTest
 {
     [Test]
     [Arguments(false, 40)]
-    // The column's window reaches 12/5 of the expected total, so the enumeration grows as its fifth power; 24 keeps it to the row's size
-    [Arguments(true, 24)]
+    // The column's window reaches 7/2 of the expected total, so the enumeration grows as its fifth power; 16 keeps it to the row's size
+    [Arguments(true, 16)]
     public async Task EveryAcceptableCrossSection_IsInsideTheBounds_SmallTotalsExhaustive(bool acrossAxes, int largestExpected)
     {
         // Every vector of five runs, zero included, whose sum can still pass the total check, for every expected total up to the largest
@@ -157,7 +157,7 @@ public class FinderRunBoundsTest
         // A bound that never refuses holds trivially. For a 3 px a module window (21 px), a centre of one module leaves no room for a side run of one module, and a side run of three modules is past every centre.
         var bounds = FinderPatternFinder.AxisRunBounds.From(21, acrossAxes);
         await Assert.That(bounds.CentreLow).IsGreaterThan(1);
-        await Assert.That(bounds.CentreHigh).IsLessThan(acrossAxes ? 36 : 21);
+        await Assert.That(bounds.CentreHigh).IsLessThan(acrossAxes ? 52 : 21);
         await Assert.That(bounds.SideCap(3)).IsLessThan(3);
         await Assert.That(bounds.SideCap(9)).IsLessThan(9);
         await Assert.That(bounds.TotalCap(9)).IsLessThanOrEqualTo(acrossAxes ? 41 : 29);
@@ -169,18 +169,18 @@ public class FinderRunBoundsTest
     [Test]
     public async Task ColumnWindow_IsWiderThanTheRowsOnBothSides()
     {
-        // The column is held to 5/12 to 12/5 of the row: a finder drawn up to twice as tall as wide, and a fifth on top for whole pixels
+        // The column is held to 2/7 to 7/2 of the row: a finder on a card tilted up to 73° from the camera
         await Assert.That(FinderPatternFinder.IsTotalInWindow(49, 33, acrossAxes: true)).IsTrue();
         await Assert.That(FinderPatternFinder.IsTotalInWindow(49, 33, acrossAxes: false)).IsFalse();
-        await Assert.That(FinderPatternFinder.IsTotalInWindow(79, 33, acrossAxes: true)).IsTrue();
-        await Assert.That(FinderPatternFinder.IsTotalInWindow(80, 33, acrossAxes: true)).IsFalse();
-        await Assert.That(FinderPatternFinder.IsTotalInWindow(14, 33, acrossAxes: true)).IsTrue();
-        await Assert.That(FinderPatternFinder.IsTotalInWindow(13, 33, acrossAxes: true)).IsFalse();
-        // 60 = 12 × 5 and 25 = 5 × 5: both edges are open
-        await Assert.That(FinderPatternFinder.IsTotalInWindow(60, 25, acrossAxes: true)).IsFalse();
-        await Assert.That(FinderPatternFinder.IsTotalInWindow(59, 25, acrossAxes: true)).IsTrue();
-        await Assert.That(FinderPatternFinder.IsTotalInWindow(25, 60, acrossAxes: true)).IsFalse();
-        await Assert.That(FinderPatternFinder.IsTotalInWindow(26, 60, acrossAxes: true)).IsTrue();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(115, 33, acrossAxes: true)).IsTrue();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(116, 33, acrossAxes: true)).IsFalse();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(10, 33, acrossAxes: true)).IsTrue();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(9, 33, acrossAxes: true)).IsFalse();
+        // 70 = 7 × 10 and 20 = 2 × 10: both edges are open
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(70, 20, acrossAxes: true)).IsFalse();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(69, 20, acrossAxes: true)).IsTrue();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(20, 70, acrossAxes: true)).IsFalse();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(21, 70, acrossAxes: true)).IsTrue();
     }
 
     [Test]
@@ -257,7 +257,7 @@ public class FinderRunBoundsTest
 
     private static int SmallestTotal(int expected, bool acrossAxes) => acrossAxes ? 5 * expected / 12 + 1 : 3 * expected / 5 + 1;
 
-    private static int LargestTotal(int expected, bool acrossAxes) => acrossAxes ? (12 * expected - 1) / 5 : (7 * expected - 1) / 5;
+    private static int LargestTotal(int expected, bool acrossAxes) => acrossAxes ? (7 * expected - 1) / 2 : (7 * expected - 1) / 5;
 
     private static string? Violation(FinderPatternFinder.AxisRunBounds bounds, ReadOnlySpan<int> runs)
     {

@@ -43,8 +43,7 @@ public static class RmQRSanityGate
             }
         }
 
-        var imageView = new ImageView(luminance, widthPixels, heightPixels, ImageFormat.Lum);
-        var results = new BarcodeReader { Formats = BarcodeFormat.RMQRCode, TryHarder = true }.From(imageView);
+        var results = ZXingCppCalls.Read(new BarcodeReader { Formats = BarcodeFormat.RMQRCode, TryHarder = true }, luminance, widthPixels, heightPixels);
         if (results.Length != 1)
             throw new InvalidOperationException($"sanity gate: zxing-cpp found {results.Length} symbols in fixture {manifest.Generator}/{manifest.Id}.");
 

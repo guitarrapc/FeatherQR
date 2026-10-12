@@ -33,6 +33,15 @@ internal static class SymbolGeometry
             transposed);
 
     /// <summary>
+    /// <paramref name="corners"/>, found on the image reduced to one pixel for every <paramref name="scale"/> by <paramref name="scale"/>, in the pixels of the full image.
+    /// A reduced pixel is the block that starts at <paramref name="scale"/> times its own corner, so the coordinates multiply and nothing is added; empty corners stay empty.
+    /// </summary>
+    public static SymbolCorners Scaled(in SymbolCorners corners, int scale)
+        => new(Scaled(corners.TopLeft, scale), Scaled(corners.TopRight, scale), Scaled(corners.BottomRight, scale), Scaled(corners.BottomLeft, scale));
+
+    private static ImagePoint Scaled(ImagePoint point, int scale) => new(point.X * scale, point.Y * scale);
+
+    /// <summary>
     /// Corners already mapped to image coordinates, given in grid order — grid (0, 0), (columns, 0), (columns, rows), (0, rows) — reordered into the symbol's frame.
     /// </summary>
     public static SymbolCorners FromMapped(float tlX, float tlY, float gridTrX, float gridTrY, float brX, float brY, float gridBlX, float gridBlY, bool transposed)

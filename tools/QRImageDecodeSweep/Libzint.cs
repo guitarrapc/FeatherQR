@@ -6,8 +6,8 @@ namespace QRImageDecodeSweep;
 
 /// <summary>
 /// libzint through the pinned ZXingCpp package's creator.
-/// The creator dies with an access violation on some payloads, some of the time (Standard QR case 301, a 523-character byte payload at level Q, about one run in three), and a managed process cannot catch that.
-/// So it runs in a worker process that appends each finished case to a file; when the worker dies the case it died on is tried again, and only after eight deaths in a row is it given up.
+/// A managed process cannot catch a fault in native code, so the creator runs in a worker process that appends each finished case to a file; when the worker dies the case it died on is tried again, and only after eight deaths in a row is it given up.
+/// The access violations it was built for stopped once the creator was held through its call (qrcode-test-fixtures.md, Lessons learned), so it is a guard now.
 /// Eight makes a dropped case rare, not impossible, so a drop is never silent: the case gets a row of its own saying so, and the run ends with a failing exit code, because its row set is no longer the one other runs have.
 /// </summary>
 internal static class Libzint
@@ -155,13 +155,18 @@ internal static class Libzint
             Symbologies.MicroQr => (ZXingCpp.BarcodeFormat.MicroQRCode, d.Version == 1 ? "version=1" : $"version={d.Version},ecLevel={d.Ecc}"),
             _ => (ZXingCpp.BarcodeFormat.RMQRCode, $"version={d.Version},ecLevel={d.Ecc}"),
         };
-        return new ZXingCpp.BarcodeCreator(format) { Options = options }.From(d.Text);
+        // The wrapper frees a creator's options when finalized, and unheld it died in native code in most runs
+        var creator = new ZXingCpp.BarcodeCreator(format) { Options = options };
+        var barcode = creator.From(d.Text);
+        GC.KeepAlive(creator);
+        return barcode;
     }
 
     private static Symbol CreateSymbol(CaseDefinition d)
     {
         using var barcode = Create(d);
-        using var image = barcode.ToImage(new ZXingCpp.WriterOptions { Scale = 1, AddQuietZones = false });
+        using var writer = new ZXingCpp.WriterOptions { Scale = 1, AddQuietZones = false };
+        using var image = barcode.ToImage(writer);
         var pixels = image.ToArray();
         var modules = new bool[image.Width * image.Height];
         for (var i = 0; i < modules.Length; i++)
@@ -173,7 +178,8 @@ internal static class Libzint
     {
         using var barcode = Create(d);
         var ppm = 1 + random.Next(6);
-        using var image = barcode.ToImage(new ZXingCpp.WriterOptions { Scale = ppm, AddQuietZones = true });
+        using var writer = new ZXingCpp.WriterOptions { Scale = ppm, AddQuietZones = true };
+        using var image = barcode.ToImage(writer);
         return new Rendered(image.ToArray(), image.Width, image.Height, ppm);
     }
 }

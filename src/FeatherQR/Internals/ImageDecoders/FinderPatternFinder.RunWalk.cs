@@ -117,11 +117,11 @@ internal static partial class FinderPatternFinder
     /// The row again (<paramref name="acrossAxes"/> false) is the row scan's own line through a refined centre: the same cross section, within 40 %.
     /// The column is the other axis, and a symbol in perspective draws a finder longer along one axis than the other: at keystone k the finder at the wide edge is stretched 1/(1 − k), 2 at 50 %.
     /// Stretched along its own axes, a finder's column is at most that factor from its row whatever the turn; stretched off them, as a tilt about both axes draws every finder and a one-axis keystone the corner ones, it can be further, up to 2.31 at a stretch of 2.
-    /// The window is 5/12 to 12/5: whole-pixel runs on the worst finder a 50 % keystone draws, at 3 px/module, measure 2.33.
+    /// A card tilted steeply away is drawn further still, one axis at the cosine of the tilt. The window is 2/7 to 7/2, a tilt of 73°: photographed finders measure up to 3.1.
     /// </remarks>
     internal static bool IsTotalInWindow(int total, int expectedTotal, bool acrossAxes)
         => acrossAxes
-            ? 12 * total > 5 * expectedTotal && 5 * total < 12 * expectedTotal
+            ? 7 * total > 2 * expectedTotal && 2 * total < 7 * expectedTotal
             : 5 * Math.Abs(total - expectedTotal) < 2 * expectedTotal;
 
     /// <summary>
@@ -162,9 +162,9 @@ internal static partial class FinderPatternFinder
 
         public static AxisRunBounds From(int expectedTotal, bool acrossAxes)
         {
-            // The smallest and the largest total inside the window: 5·|total − expected| < 2·expected along the row, 5·expected < 12·total and 5·total < 12·expected across the axes
-            var totalLow = Math.Max((acrossAxes ? 5 * expectedTotal / 12 : 3 * expectedTotal / 5) + 1, MinTotal);
-            var totalHigh = acrossAxes ? (12 * expectedTotal - 1) / 5 : (7 * expectedTotal - 1) / 5;
+            // The smallest and the largest total inside the window: 5·|total − expected| < 2·expected along the row, 2·expected < 7·total and 2·total < 7·expected across the axes
+            var totalLow = Math.Max((acrossAxes ? 2 * expectedTotal / 7 : 3 * expectedTotal / 5) + 1, MinTotal);
+            var totalHigh = acrossAxes ? (7 * expectedTotal - 1) / 2 : (7 * expectedTotal - 1) / 5;
             if (totalHigh < totalLow)
                 return new AxisRunBounds(totalHigh, 0, 1, 0);
 

@@ -10,10 +10,10 @@ namespace FeatherQR.Internals.StandardQR;
 internal static partial class QRImageDecoder
 {
     /// <summary>
-    /// Eight modules a step. A cell's start and span are taken once a row and broadcast; a step that straddles two cells selects per lane with a mask that depends on the version only.
+    /// Eight modules a step. The start, the slope and the curvature of a run of columns that shares its three nodes are taken once a row and broadcast; a step that straddles two runs selects per lane with a mask that depends on the version only.
     /// </summary>
     /// <remarks>
-    /// The multiply and the add stay separate instructions: fused, a coordinate can differ from the reference's by an ulp and truncate into the next pixel.
+    /// Each multiply and add stays a separate instruction: fused, a coordinate can differ from the reference's by an ulp and truncate into the next pixel.
     /// The reference takes each pixel through <see cref="ImageDecoders.PixelIndex.Clamp(float, int)"/>, the same on every runtime. Here the upper clamp is taken in float with the limit as the first operand of the minimum, so a NaN lane passes through, truncates to INT_MIN and is raised to 0 by the integer maximum, which is where the reference puts it; with the operands the other way round NaN becomes the limit and a different pixel.
     /// A gather was measured slower than eight scalar loads and would read past the last pixel.
     /// </remarks>
@@ -26,22 +26,28 @@ internal static partial class QRImageDecoder
             return;
         }
 
-        var cells = meshSize - 1;
         Span<float> rowXs = stackalloc float[MaxMeshNodes];
         Span<float> rowYs = stackalloc float[MaxMeshNodes];
-        Span<float> cellStartX = stackalloc float[MaxMeshNodes];
-        Span<float> cellSpanX = stackalloc float[MaxMeshNodes];
-        Span<float> cellStartY = stackalloc float[MaxMeshNodes];
-        Span<float> cellSpanY = stackalloc float[MaxMeshNodes];
-        Span<int> cellOf = stackalloc int[MaxPiecewiseDimension];
-        Span<float> fractionOf = stackalloc float[MaxPiecewiseDimension];
+        Span<float> startX = stackalloc float[MaxMeshNodes];
+        Span<float> slopeX = stackalloc float[MaxMeshNodes];
+        Span<float> curveX = stackalloc float[MaxMeshNodes];
+        Span<float> startY = stackalloc float[MaxMeshNodes];
+        Span<float> slopeY = stackalloc float[MaxMeshNodes];
+        Span<float> curveY = stackalloc float[MaxMeshNodes];
+        Span<int> firstOf = stackalloc int[MaxPiecewiseDimension];
+        Span<float> alongOf = stackalloc float[MaxPiecewiseDimension];
+        Span<float> pastOf = stackalloc float[MaxPiecewiseDimension];
         Span<int> stepFirst = stackalloc int[MaxPiecewiseDimension / 8];
         Span<int> stepLast = stackalloc int[MaxPiecewiseDimension / 8];
         Span<int> laneMasks = stackalloc int[MaxPiecewiseDimension];
-        BuildColumnTable(gridCoords, cells, dimension, cellOf, fractionOf);
-        if (!TryBuildStepTable(cellOf, dimension, 8, stepFirst, stepLast, laneMasks))
+        Span<float> toSecond = stackalloc float[MaxMeshNodes];
+        Span<float> toThird = stackalloc float[MaxMeshNodes];
+        Span<float> across = stackalloc float[MaxMeshNodes];
+        BuildColumnTable(gridCoords, meshSize, dimension, firstOf, alongOf, pastOf);
+        BuildRunTable(gridCoords, meshSize, toSecond, toThird, across);
+        if (!TryBuildStepTable(firstOf, dimension, 8, stepFirst, stepLast, laneMasks))
         {
-            // cells narrower than a step: not an Annex E lattice, and the two-cell select does not cover it
+            // runs of columns narrower than a step: not an Annex E lattice, and the two-run select does not cover it
             SampleGridPiecewiseColumnTable(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
             return;
         }
@@ -52,22 +58,17 @@ internal static partial class QRImageDecoder
         var widthVector = Vector256.Create(width);
         var limitVector = Vector128.Create(threshold);
         var one = Vector128.Create((byte)1);
-        ref var fraction0 = ref MemoryMarshal.GetReference(fractionOf);
+        ref var along0 = ref MemoryMarshal.GetReference(alongOf);
+        ref var past0 = ref MemoryMarshal.GetReference(pastOf);
         ref var mask0 = ref MemoryMarshal.GetReference(laneMasks);
         ref var lum = ref MemoryMarshal.GetReference(luminance);
         ref var dst = ref MemoryMarshal.GetReference(modules);
 
-        var cellJ = 0;
         for (var v = 0; v < dimension; v++)
         {
-            InterpolateMeshRow(v, ref cellJ, cells, meshSize, gridCoords, nodeXs, nodeYs, rowXs, rowYs);
-            for (var c = 0; c < cells; c++)
-            {
-                cellStartX[c] = rowXs[c];
-                cellSpanX[c] = rowXs[c + 1] - rowXs[c];
-                cellStartY[c] = rowYs[c];
-                cellSpanY[c] = rowYs[c + 1] - rowYs[c];
-            }
+            InterpolateMeshRow(firstOf[v], alongOf[v], pastOf[v], meshSize, toSecond, toThird, across, nodeXs, nodeYs, rowXs, rowYs);
+            RowCoefficients(meshSize, toSecond, toThird, across, rowXs, startX, slopeX, curveX);
+            RowCoefficients(meshSize, toSecond, toThird, across, rowYs, startY, slopeY, curveY);
 
             var rowBase = v * dimension;
             var u = 0;
@@ -75,22 +76,27 @@ internal static partial class QRImageDecoder
             {
                 var a = stepFirst[j];
                 var b = stepLast[j];
-                var startX = Vector256.Create(cellStartX[a]);
-                var spanX = Vector256.Create(cellSpanX[a]);
-                var startY = Vector256.Create(cellStartY[a]);
-                var spanY = Vector256.Create(cellSpanY[a]);
+                var originX = Vector256.Create(startX[a]);
+                var riseX = Vector256.Create(slopeX[a]);
+                var bendX = Vector256.Create(curveX[a]);
+                var originY = Vector256.Create(startY[a]);
+                var riseY = Vector256.Create(slopeY[a]);
+                var bendY = Vector256.Create(curveY[a]);
                 if (a != b)
                 {
                     var inLast = Vector256.LoadUnsafe(ref mask0, (nuint)u).AsSingle();
-                    startX = Vector256.ConditionalSelect(inLast, Vector256.Create(cellStartX[b]), startX);
-                    spanX = Vector256.ConditionalSelect(inLast, Vector256.Create(cellSpanX[b]), spanX);
-                    startY = Vector256.ConditionalSelect(inLast, Vector256.Create(cellStartY[b]), startY);
-                    spanY = Vector256.ConditionalSelect(inLast, Vector256.Create(cellSpanY[b]), spanY);
+                    originX = Vector256.ConditionalSelect(inLast, Vector256.Create(startX[b]), originX);
+                    riseX = Vector256.ConditionalSelect(inLast, Vector256.Create(slopeX[b]), riseX);
+                    bendX = Vector256.ConditionalSelect(inLast, Vector256.Create(curveX[b]), bendX);
+                    originY = Vector256.ConditionalSelect(inLast, Vector256.Create(startY[b]), originY);
+                    riseY = Vector256.ConditionalSelect(inLast, Vector256.Create(slopeY[b]), riseY);
+                    bendY = Vector256.ConditionalSelect(inLast, Vector256.Create(curveY[b]), bendY);
                 }
 
-                var s = Vector256.LoadUnsafe(ref fraction0, (nuint)u);
-                var x = startX + spanX * s;
-                var y = startY + spanY * s;
+                var along = Vector256.LoadUnsafe(ref along0, (nuint)u);
+                var past = Vector256.LoadUnsafe(ref past0, (nuint)u);
+                var x = originX + along * (riseX + past * bendX);
+                var y = originY + along * (riseY + past * bendY);
 
                 // limit first: see remarks
                 var px = Vector256.Max(Avx.ConvertToVector256Int32WithTruncation(Avx.Min(maxPx, x)), zero);
@@ -111,13 +117,12 @@ internal static partial class QRImageDecoder
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, rowBase + u), dark.AsUInt64().ToScalar());
             }
 
-            // row tail (1 or 5 modules), the reference's scalar body on the same per-cell floats
+            // row tail (1 or 5 modules), the reference's scalar body on the same per-run floats
             for (; u < dimension; u++)
             {
-                var c = cellOf[u];
-                var s = fractionOf[u];
-                var px = PixelIndex.Clamp(cellStartX[c] + cellSpanX[c] * s, width);
-                var py = PixelIndex.Clamp(cellStartY[c] + cellSpanY[c] * s, height);
+                var c = firstOf[u];
+                var px = PixelIndex.Clamp(startX[c] + alongOf[u] * (slopeX[c] + pastOf[u] * curveX[c]), width);
+                var py = PixelIndex.Clamp(startY[c] + alongOf[u] * (slopeY[c] + pastOf[u] * curveY[c]), height);
 
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }

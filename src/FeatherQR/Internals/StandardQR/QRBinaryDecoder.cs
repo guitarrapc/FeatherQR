@@ -9,14 +9,14 @@ namespace FeatherQR.Internals.StandardQR;
 /// </summary>
 /// <remarks>
 /// Inverse of <see cref="QRBinaryEncoder"/>.
-/// Supports the segments the encoder can produce, Numeric, Alphanumeric, Byte (ISO-8859-1 / UTF-8), Kanji and ECI headers, plus multi-segment streams from other encoders.
+/// Supports the segments the encoder can produce, Numeric, Alphanumeric, Byte (ISO-8859-1 / UTF-8), Kanji and ECI headers, plus multi-segment streams and Shift_JIS Byte segments from other encoders.
 /// Kanji mode is decoded as JIS X 0208, the mapping the encoder writes it with (with <c>AllowKanji</c>).
 /// A Structured Append header and either FNC1 indicator (ISO/IEC 18004 6.4.8) are read and returned to the caller.
 /// FNC1 is accepted once and before the first data segment, with the ECI and Structured Append headers on either side of it. An indicator after a data segment, a second one, or an application indicator outside 00-99 and the letters is <see cref="DecodeStatus.InvalidBitstream"/>.
 /// While FNC1 is active a lone <c>%</c> in an Alphanumeric segment is the separator (U+001D) and <c>%%</c> is one <c>%</c>, read left to right within the segment, as every reader probed reads them. Byte, Numeric and Kanji segments are unchanged.
 /// <para>
 /// Byte segments without an ECI header have no declared charset (ISO/IEC 18004 defaults to ISO-8859-1, but UTF-8 payloads are common in the wild).
-/// The decoder uses UTF-8 when the payload validates as UTF-8 (or carries a BOM) and falls back to ISO-8859-1 otherwise, ASCII decodes identically either way.
+/// The decoder uses UTF-8 when the payload validates as UTF-8 (or carries a BOM), Shift_JIS when the bytes give it away, and falls back to ISO-8859-1 otherwise, ASCII decodes identically either way.
 /// </para>
 /// <para>
 /// Segment payload decoding (digit/character groups, byte charset resolution) is shared with the other symbology decoders via <see cref="SegmentDecoders"/>; this class owns the Standard QR framing: 4-bit mode indicators, version-dependent count indicator widths, and ECI headers.
@@ -39,6 +39,7 @@ internal static class QRBinaryDecoder
     // ECI assignment numbers this decoder can map to a charset.
     private const int EciIso8859_1a = 1;  // ISO-8859-1 (historical assignment)
     private const int EciIso8859_1b = 3;  // ISO-8859-1
+    private const int EciShiftJis = 20;   // Shift_JIS
     private const int EciUtf8 = 26;       // UTF-8
     private const int EciAscii = 27;      // US-ASCII (subset of ISO-8859-1)
 
@@ -134,6 +135,9 @@ internal static class QRBinaryDecoder
                                     break;
                                 case EciUtf8:
                                     charset = ByteSegmentCharset.Utf8;
+                                    break;
+                                case EciShiftJis:
+                                    charset = ByteSegmentCharset.ShiftJis;
                                     break;
                                 default:
                                     return DecodeStatus.UnsupportedContent;

@@ -12,22 +12,20 @@ public class LargeVersionGridOrderTest
         => QRCodeGenerator.Create($"FQR MESH ORDER v{version} 0123456789", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 0 });
 
     /// <summary>
-    /// An intact symbol in perspective reads through the anchored transform with no corrections.
-    /// The mesh reads the same render with corrections, from interpolating between measured nodes, so a read without any is the transform's.
+    /// An intact symbol in perspective reads with no corrections, through the anchored transform, and through the mesh alike: either grid puts every module on its pixel.
     /// </summary>
     [Test]
-    [Arguments(14, 4f, 20f, 0.16f)]
-    [Arguments(17, 5f, 20f, 0.16f)]
+    [Arguments(14, 3f, 20f, 0.2f)]
     [Arguments(20, 3.5f, 20f, 0.12f)]
-    [Arguments(25, 4f, 200f, 0.16f)]
-    public async Task AnchoredIntactSymbol_ReadsThroughTheFourPointTransform(int version, float pixelsPerModule, float degrees, float keystone)
+    [Arguments(25, 3f, 200f, 0.2f)]
+    [Arguments(30, 3f, 20f, 0.2f)]
+    public async Task AnchoredIntactSymbol_ReadsWithNoCorrections(int version, float pixelsPerModule, float degrees, float keystone)
     {
         var qr = Symbol(version);
         var (luminance, width, height) = SupersampledRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, degrees, keystone);
 
-        // Premise: the grid choice shows in the corrections
         var truth = SupersampledGeometry.GridToPixel(qr.Size, qr.Size, pixelsPerModule, degrees, keystone);
-        await Assert.That(MeshCorrections(luminance, width, height, qr.Size, truth)).IsGreaterThan(0);
+        await Assert.That(MeshCorrections(luminance, width, height, qr.Size, truth)).IsEqualTo(0);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -140,11 +138,15 @@ public class LargeVersionGridOrderTest
     private static int MeshCorrections(byte[] luminance, int width, int height, int dimension, in PerspectiveTransform truth)
     {
         var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
-        var moduleSize = (SizeAlong(truth, 3.5f, 3.5f, 1f, 0f) + SizeAlong(truth, 3.5f, 3.5f, 0f, 1f) + SizeAlong(truth, dimension - 3.5f, 3.5f, 1f, 0f) + SizeAlong(truth, 3.5f, dimension - 3.5f, 0f, 1f)) / 4f;
+        var moduleSize = SizeAlong(truth, 3.5f, 3.5f, 1f, 0f);
+        var topLeft = At(truth, 3.5f, 3.5f, moduleSize);
+        var topRight = At(truth, dimension - 3.5f, 3.5f, moduleSize);
+        var bottomLeft = At(truth, 3.5f, dimension - 3.5f, moduleSize);
+        var frame = QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, QRImageDecoder.MeasureModuleSizes(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft));
         var gridCoords = new float[7];
         var nodeXs = new float[49];
         var nodeYs = new float[49];
-        if (!QRImageDecoder.TryBuildSampleMesh(luminance, width, height, threshold, grey, At(truth, 3.5f, 3.5f, moduleSize), At(truth, dimension - 3.5f, 3.5f, moduleSize), At(truth, 3.5f, dimension - 3.5f, moduleSize), dimension, moduleSize, gridCoords, nodeXs, nodeYs, out var meshSize, out _, out _))
+        if (!QRImageDecoder.TryBuildLatticeMesh(luminance, width, height, threshold, grey, frame, dimension, gridCoords, nodeXs, nodeYs, out var meshSize, out _, out _))
             return -1;
 
         var modules = new byte[dimension * dimension];

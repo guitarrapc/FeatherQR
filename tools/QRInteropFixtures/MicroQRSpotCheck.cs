@@ -55,9 +55,8 @@ public static class MicroQRSpotCheck
 
             var luminance = RenderLuminance(modules, calculated.Size, PixelsPerModule);
             var widthPixels = calculated.Size * PixelsPerModule;
-            var image = new ImageView(luminance, widthPixels, widthPixels, ImageFormat.Lum);
 
-            var results = reader.From(image);
+            var results = ZXingCppCalls.Read(reader, luminance, widthPixels, widthPixels);
             if (results.Length == 1 && results[0].Text == text)
             {
                 Console.WriteLine($"PASS: {calculated.Version}/{ecc} \"{text}\" decoded as {results[0].Format}");

@@ -7,7 +7,7 @@ using static FeatherQR.Internals.ImageDecoders.AttemptStatus;
 namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
-/// Decodes a Micro QR code from a grayscale image: clean, screen-rendered or scanned inputs, including a lighting gradient across the symbol.
+/// Decodes a Micro QR code from a grayscale image: a rendered symbol, a scan or a photograph in mild perspective, including a lighting gradient across the symbol.
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
@@ -54,6 +54,10 @@ internal static partial class MicroQRImageDecoder
     {
         public bool HasMidpointPass => true;
 
+        public bool HasReducedScaleSearch => false;
+
+        public MicroQRCodeDecodeInfo AtFullScale(in MicroQRCodeDecodeInfo info, int scale) => info.WithCorners(SymbolGeometry.Scaled(info.Corners, scale));
+
         public MicroQRCodeDecodeInfo NotDetected => new CandidateDecoder().NotDetected;
 
         public DecodeStatus DecodeGlobal(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)
@@ -62,7 +66,7 @@ internal static partial class MicroQRImageDecoder
             return CandidateScan.Decode<CandidateDecoder, MicroQRCodeDecodeInfo>(ref decoder, luminance, histogram, width, height, destination, out charsWritten, out info, out noFinder, out threshold, out grey);
         }
 
-        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
             => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
 
         public DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)

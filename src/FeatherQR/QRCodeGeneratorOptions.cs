@@ -117,7 +117,7 @@ public record struct QRCodeGeneratorOptions
     /// </para>
     /// <para>
     /// Off by default because not every reader reads Kanji mode. An Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it, where they read UTF-8 behind ECI 26.
-    /// The iPhone camera, Google Lens on iPhone, ZXing and its ports, zxing-cpp and Denso Wave's reader read it.
+    /// The iPhone camera, Google Lens on iPhone and the dedicated readers tried read it.
     /// Turn it on where the readers are known to read it, an industrial scanner for example, or where the symbol has to be smaller.
     /// </para>
     /// </remarks>

@@ -12,11 +12,12 @@ namespace FeatherQR.Tests;
 /// A sampler is right only when it picks the same pixel, so "close" is a failure: one ulp of
 /// difference in a coordinate can truncate into the neighbouring pixel, and on a module boundary that
 /// is a different bit. The tiers reach identity by doing the reference's float operations in the
-/// reference's order (no reciprocal, no fused multiply-add) and moving only where they happen: the
-/// fraction across a cell once a column, a cell's start and span once a row.
+/// reference's order (no fused multiply-add) and moving only where they happen: a column's three nodes,
+/// its distances past the first two and the reciprocals of the lattice's spacings once a call, a row's
+/// starts, slopes and curvatures once a row.
 /// The scenes are chosen by what can go wrong rather than by what decodes: every version that has a
-/// mesh (the row tail is 1 or 5 modules, and which 8-module steps straddle two cells differs per
-/// version), a mesh bent by rotation and keystone, nodes moved off their predictions, symbols pushed
+/// mesh (the row tail is 1 or 5 modules, and which 8-module steps straddle two runs of columns differs
+/// per version), a mesh bent by rotation and keystone, nodes moved off their predictions, symbols pushed
 /// past each image edge so all four clamps fire inside a vector step, and nodes no detector would
 /// produce (NaN, infinities, magnitudes past int range), which is where a vector float-to-int
 /// conversion and the scalar cast part ways unless the tier is written for it.
@@ -207,9 +208,10 @@ public class SampleGridPiecewiseParityTest
     }
 
     /// <summary>
-    /// The vector tier builds a step from at most two cells, which holds for every Annex E lattice
-    /// (cells are at least 20 modules wide). Handed a lattice with cells three modules wide, where an
-    /// 8-module step crosses three, it has to notice and leave the grid to a tier that does not assume it.
+    /// The vector tier builds a step from at most two runs of columns that share their three nodes, which
+    /// holds for every Annex E lattice (a run is at least 22 modules wide). Handed a lattice with cells three
+    /// modules wide, where an 8-module step crosses three runs, it has to notice and leave the grid to a tier
+    /// that does not assume it.
     /// </summary>
     [Test]
     public async Task EveryTier_PicksTheReferencePixel_WhenCellsAreNarrowerThanAVectorStep()
@@ -252,5 +254,65 @@ public class SampleGridPiecewiseParityTest
             await Assert.That(() => fn(scene.Luminance, scene.Width, scene.Height, Threshold, scene.GridCoords, scene.NodeXs, scene.NodeYs, scene.MeshSize, scene.Dimension, modules.AsSpan(0, modules.Length - 1)))
                 .Throws<ArgumentException>().Because($"{name}: modules one byte short");
         }
+    }
+
+    /// <summary>
+    /// What the tiers are held to is itself held to a map: nodes on one that curves along each lattice line, which three nodes a side reproduce exactly, and an image with a dark block of 3 × 3 pixels where that map puts each dark module, the modules five pixels or more apart.
+    /// Every module reads as drawn. Two nodes a side would put the middle of a cell more than a pixel and a half off its block.
+    /// </summary>
+    [Test]
+    [Arguments(13)]
+    [Arguments(25)]
+    [Arguments(40)]
+    public async Task Reference_OnAMapThatCurvesAlongEachLine_PutsEveryModuleOnItsPixel(int version)
+    {
+        const int Side = 1400;
+        static (double X, double Y) Map(double u, double v) => (30 + 5 * u + 0.01 * u * u + 0.3 * v + 0.002 * u * v, 30 + 5 * v + 0.01 * v * v + 0.2 * u + 0.002 * u * v);
+
+        var dimension = 17 + 4 * version;
+        var gridCoords = new List<float>();
+        foreach (var value in QRCodeConstants.AlignmentPatternBaseValues.Slice((version - 1) * 7, 7))
+        {
+            if (value != 0)
+                gridCoords.Add(value + 0.5f);
+        }
+        var meshSize = gridCoords.Count;
+        var nodeXs = new float[meshSize * meshSize];
+        var nodeYs = new float[meshSize * meshSize];
+        for (var j = 0; j < meshSize; j++)
+        {
+            for (var i = 0; i < meshSize; i++)
+            {
+                var (x, y) = Map(gridCoords[i], gridCoords[j]);
+                nodeXs[j * meshSize + i] = (float)x;
+                nodeYs[j * meshSize + i] = (float)y;
+            }
+        }
+
+        var luminance = new byte[Side * Side];
+        luminance.AsSpan().Fill(255);
+        var expected = new byte[dimension * dimension];
+        var rng = new Random(version);
+        for (var v = 0; v < dimension; v++)
+        {
+            for (var u = 0; u < dimension; u++)
+            {
+                if (rng.Next(2) == 0)
+                    continue;
+                expected[v * dimension + u] = 1;
+                var (x, y) = Map(u + 0.5, v + 0.5);
+                for (var dy = -1; dy <= 1; dy++)
+                {
+                    for (var dx = -1; dx <= 1; dx++)
+                        luminance[((int)y + dy) * Side + (int)x + dx] = 0;
+                }
+            }
+        }
+
+        var actual = new byte[dimension * dimension];
+        QRImageDecoder.SampleGridPiecewiseScalar(luminance, Side, Side, Threshold, gridCoords.ToArray(), nodeXs, nodeYs, meshSize, dimension, actual);
+
+        var at = actual.AsSpan().CommonPrefixLength(expected);
+        await Assert.That(at).IsEqualTo(expected.Length).Because($"module at row {at / dimension}, column {at % dimension}");
     }
 }

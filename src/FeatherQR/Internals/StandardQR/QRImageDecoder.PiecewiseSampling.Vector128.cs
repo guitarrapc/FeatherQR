@@ -22,22 +22,28 @@ internal static partial class QRImageDecoder
             return;
         }
 
-        var cells = meshSize - 1;
         Span<float> rowXs = stackalloc float[MaxMeshNodes];
         Span<float> rowYs = stackalloc float[MaxMeshNodes];
-        Span<float> cellStartX = stackalloc float[MaxMeshNodes];
-        Span<float> cellSpanX = stackalloc float[MaxMeshNodes];
-        Span<float> cellStartY = stackalloc float[MaxMeshNodes];
-        Span<float> cellSpanY = stackalloc float[MaxMeshNodes];
-        Span<int> cellOf = stackalloc int[MaxPiecewiseDimension];
-        Span<float> fractionOf = stackalloc float[MaxPiecewiseDimension];
+        Span<float> startX = stackalloc float[MaxMeshNodes];
+        Span<float> slopeX = stackalloc float[MaxMeshNodes];
+        Span<float> curveX = stackalloc float[MaxMeshNodes];
+        Span<float> startY = stackalloc float[MaxMeshNodes];
+        Span<float> slopeY = stackalloc float[MaxMeshNodes];
+        Span<float> curveY = stackalloc float[MaxMeshNodes];
+        Span<int> firstOf = stackalloc int[MaxPiecewiseDimension];
+        Span<float> alongOf = stackalloc float[MaxPiecewiseDimension];
+        Span<float> pastOf = stackalloc float[MaxPiecewiseDimension];
         Span<int> stepFirst = stackalloc int[MaxPiecewiseDimension / 4];
         Span<int> stepLast = stackalloc int[MaxPiecewiseDimension / 4];
         Span<int> laneMasks = stackalloc int[MaxPiecewiseDimension];
-        BuildColumnTable(gridCoords, cells, dimension, cellOf, fractionOf);
-        if (!TryBuildStepTable(cellOf, dimension, 4, stepFirst, stepLast, laneMasks))
+        Span<float> toSecond = stackalloc float[MaxMeshNodes];
+        Span<float> toThird = stackalloc float[MaxMeshNodes];
+        Span<float> across = stackalloc float[MaxMeshNodes];
+        BuildColumnTable(gridCoords, meshSize, dimension, firstOf, alongOf, pastOf);
+        BuildRunTable(gridCoords, meshSize, toSecond, toThird, across);
+        if (!TryBuildStepTable(firstOf, dimension, 4, stepFirst, stepLast, laneMasks))
         {
-            // cells narrower than a step: not an Annex E lattice, and the two-cell select does not cover it
+            // runs of columns narrower than a step: not an Annex E lattice, and the two-run select does not cover it
             SampleGridPiecewiseColumnTable(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
             return;
         }
@@ -47,35 +53,32 @@ internal static partial class QRImageDecoder
         var widthVector = Vector128.Create(width);
         var limitVector = Vector128.Create(threshold);
         var one = Vector128.Create((byte)1);
-        ref var fraction0 = ref MemoryMarshal.GetReference(fractionOf);
+        ref var along0 = ref MemoryMarshal.GetReference(alongOf);
+        ref var past0 = ref MemoryMarshal.GetReference(pastOf);
         ref var mask0 = ref MemoryMarshal.GetReference(laneMasks);
         ref var first0 = ref MemoryMarshal.GetReference(stepFirst);
         ref var last0 = ref MemoryMarshal.GetReference(stepLast);
-        ref var startX0 = ref MemoryMarshal.GetReference(cellStartX);
-        ref var spanX0 = ref MemoryMarshal.GetReference(cellSpanX);
-        ref var startY0 = ref MemoryMarshal.GetReference(cellStartY);
-        ref var spanY0 = ref MemoryMarshal.GetReference(cellSpanY);
+        ref var startX0 = ref MemoryMarshal.GetReference(startX);
+        ref var slopeX0 = ref MemoryMarshal.GetReference(slopeX);
+        ref var curveX0 = ref MemoryMarshal.GetReference(curveX);
+        ref var startY0 = ref MemoryMarshal.GetReference(startY);
+        ref var slopeY0 = ref MemoryMarshal.GetReference(slopeY);
+        ref var curveY0 = ref MemoryMarshal.GetReference(curveY);
         ref var lum = ref MemoryMarshal.GetReference(luminance);
         ref var dst = ref MemoryMarshal.GetReference(modules);
 
-        var cellJ = 0;
         for (var v = 0; v < dimension; v++)
         {
-            InterpolateMeshRow(v, ref cellJ, cells, meshSize, gridCoords, nodeXs, nodeYs, rowXs, rowYs);
-            for (var c = 0; c < cells; c++)
-            {
-                cellStartX[c] = rowXs[c];
-                cellSpanX[c] = rowXs[c + 1] - rowXs[c];
-                cellStartY[c] = rowYs[c];
-                cellSpanY[c] = rowYs[c + 1] - rowYs[c];
-            }
+            InterpolateMeshRow(firstOf[v], alongOf[v], pastOf[v], meshSize, toSecond, toThird, across, nodeXs, nodeYs, rowXs, rowYs);
+            RowCoefficients(meshSize, toSecond, toThird, across, rowXs, startX, slopeX, curveX);
+            RowCoefficients(meshSize, toSecond, toThird, across, rowYs, startY, slopeY, curveY);
             var rowBase = v * dimension;
             var u = 0;
             var j = 0;
             for (; u + 8 <= dimension; u += 8, j += 2)
             {
-                var low = StepIndexVector128(ref startX0, ref spanX0, ref startY0, ref spanY0, Unsafe.Add(ref first0, j), Unsafe.Add(ref last0, j), ref mask0, ref fraction0, u, lastX, lastY, widthVector);
-                var high = StepIndexVector128(ref startX0, ref spanX0, ref startY0, ref spanY0, Unsafe.Add(ref first0, j + 1), Unsafe.Add(ref last0, j + 1), ref mask0, ref fraction0, u + 4, lastX, lastY, widthVector);
+                var low = StepIndexVector128(ref startX0, ref slopeX0, ref curveX0, ref startY0, ref slopeY0, ref curveY0, Unsafe.Add(ref first0, j), Unsafe.Add(ref last0, j), ref mask0, ref along0, ref past0, u, lastX, lastY, widthVector);
+                var high = StepIndexVector128(ref startX0, ref slopeX0, ref curveX0, ref startY0, ref slopeY0, ref curveY0, Unsafe.Add(ref first0, j + 1), Unsafe.Add(ref last0, j + 1), ref mask0, ref along0, ref past0, u + 4, lastX, lastY, widthVector);
                 var pixels = (ulong)Unsafe.Add(ref lum, (nuint)low.GetElement(0))
                     | (ulong)Unsafe.Add(ref lum, (nuint)low.GetElement(1)) << 8
                     | (ulong)Unsafe.Add(ref lum, (nuint)low.GetElement(2)) << 16
@@ -87,13 +90,12 @@ internal static partial class QRImageDecoder
                 var dark = Vector128.LessThan(Vector128.CreateScalar(pixels).AsByte(), limitVector) & one;
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, rowBase + u), dark.AsUInt64().ToScalar());
             }
-            // row tail: 1 module for even versions and 5 for odd ones; the reference's scalar body on the same per-cell floats
+            // row tail: 1 module for even versions and 5 for odd ones; the reference's scalar body on the same per-run floats
             for (; u < dimension; u++)
             {
-                var c = cellOf[u];
-                var s = fractionOf[u];
-                var px = PixelIndex.Clamp(cellStartX[c] + cellSpanX[c] * s, width);
-                var py = PixelIndex.Clamp(cellStartY[c] + cellSpanY[c] * s, height);
+                var c = firstOf[u];
+                var px = PixelIndex.Clamp(startX[c] + alongOf[u] * (slopeX[c] + pastOf[u] * curveX[c]), width);
+                var py = PixelIndex.Clamp(startY[c] + alongOf[u] * (slopeY[c] + pastOf[u] * curveY[c]), height);
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }
         }
@@ -101,24 +103,29 @@ internal static partial class QRImageDecoder
 
     /// <summary>The pixel index of the four modules at column <paramref name="u"/>: the ARM64 step on portable vectors.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<uint> StepIndexVector128(ref float startX0, ref float spanX0, ref float startY0, ref float spanY0, int a, int b, ref int mask0, ref float fraction0, int u, Vector128<float> lastX, Vector128<float> lastY, Vector128<int> widthVector)
+    private static Vector128<uint> StepIndexVector128(ref float startX0, ref float slopeX0, ref float curveX0, ref float startY0, ref float slopeY0, ref float curveY0, int a, int b, ref int mask0, ref float along0, ref float past0, int u, Vector128<float> lastX, Vector128<float> lastY, Vector128<int> widthVector)
     {
         var startX = Vector128.Create(Unsafe.Add(ref startX0, a));
-        var spanX = Vector128.Create(Unsafe.Add(ref spanX0, a));
+        var slopeX = Vector128.Create(Unsafe.Add(ref slopeX0, a));
+        var curveX = Vector128.Create(Unsafe.Add(ref curveX0, a));
         var startY = Vector128.Create(Unsafe.Add(ref startY0, a));
-        var spanY = Vector128.Create(Unsafe.Add(ref spanY0, a));
+        var slopeY = Vector128.Create(Unsafe.Add(ref slopeY0, a));
+        var curveY = Vector128.Create(Unsafe.Add(ref curveY0, a));
         if (a != b)
         {
             var inLast = Vector128.LoadUnsafe(ref mask0, (nuint)u).AsSingle();
             startX = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref startX0, b)), startX);
-            spanX = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref spanX0, b)), spanX);
+            slopeX = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref slopeX0, b)), slopeX);
+            curveX = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref curveX0, b)), curveX);
             startY = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref startY0, b)), startY);
-            spanY = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref spanY0, b)), spanY);
+            slopeY = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref slopeY0, b)), slopeY);
+            curveY = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref curveY0, b)), curveY);
         }
-        var s = Vector128.LoadUnsafe(ref fraction0, (nuint)u);
-        // multiply and add kept separate: fused, a coordinate can differ from the reference's by an ulp and truncate into the next pixel
-        var x = startX + spanX * s;
-        var y = startY + spanY * s;
+        var along = Vector128.LoadUnsafe(ref along0, (nuint)u);
+        var past = Vector128.LoadUnsafe(ref past0, (nuint)u);
+        // each multiply and add kept separate: fused, a coordinate can differ from the reference's by an ulp and truncate into the next pixel
+        var x = startX + along * (slopeX + past * curveX);
+        var y = startY + along * (slopeY + past * curveY);
         return (VectorCast.ToPixel(y, lastY) * widthVector + VectorCast.ToPixel(x, lastX)).AsUInt32();
     }
 }

@@ -57,6 +57,23 @@ internal sealed class PageEndMemory : IDisposable
         return span;
     }
 
+    /// <summary>A span of <paramref name="bytes"/> whose last byte is the last readable one.</summary>
+    public Span<byte> AtPageEnd(ReadOnlySpan<byte> bytes)
+    {
+        var span = AtPageEnd(bytes.Length);
+        bytes.CopyTo(span);
+        return span;
+    }
+
+    /// <summary>A span of <paramref name="length"/> bytes whose last byte is the last writable one.</summary>
+    public Span<byte> AtPageEnd(int length)
+    {
+        if (length > _pageSize)
+            throw new ArgumentOutOfRangeException(nameof(length), "longer than a page");
+        var start = _address + _pageSize - length;
+        return MemoryMarshal.CreateSpan(ref Unsafe.AddByteOffset(ref Unsafe.NullRef<byte>(), start), length);
+    }
+
     public void Dispose()
     {
         if (OperatingSystem.IsWindows())

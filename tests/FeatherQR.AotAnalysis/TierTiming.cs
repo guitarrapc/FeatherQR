@@ -301,6 +301,11 @@ internal static partial class TierTiming
         // The kernels that already take a 128-bit tier on WebAssembly: each through its dispatch, and its scalar form
         new("kernel/LuminanceInverter", () => Inverter(scalar: false)),
         new("kernel/LuminanceInverter-scalar", () => Inverter(scalar: true)),
+        // The reduced-scale search's halving: the no-symbol shapes' 740 px, and a photograph's 12 megapixels
+        new("kernel/LuminanceHalver-740", () => Halver(740, 740, scalar: false)),
+        new("kernel/LuminanceHalver-740-scalar", () => Halver(740, 740, scalar: true)),
+        new("kernel/LuminanceHalver-12mp", () => Halver(3024, 4032, scalar: false)),
+        new("kernel/LuminanceHalver-12mp-scalar", () => Halver(3024, 4032, scalar: true)),
         new("kernel/LocalBinarizer", () => LocalBinarize(scalar: false)),
         new("kernel/LocalBinarizer-scalar", () => LocalBinarize(scalar: true)),
         new("kernel/FinderRowMask-v40", () => FinderRows(Crisp(Large(), 3f), FinderRowKernel.MaskWalk)),
@@ -862,6 +867,24 @@ internal static partial class TierTiming
         };
     }
 
+    /// <summary>The halving of a noise image through its dispatch or its scalar tier, out of place as the first level is halved.</summary>
+    private static Func<int> Halver(int width, int height, bool scalar)
+    {
+        var source = Noise(width, height).Luminance;
+        var destination = new byte[(width / 2) * (height / 2)];
+        return scalar
+            ? () =>
+            {
+                LuminanceHalver.HalveScalar(source, width, height, destination);
+                return destination[1];
+            }
+            : () =>
+            {
+                LuminanceHalver.Halve(source, width, height, destination);
+                return destination[1];
+            };
+    }
+
     private static Func<int> LocalBinarize(bool scalar)
     {
         var image = Soften(Crisp(Large(), 4f));
@@ -873,9 +896,11 @@ internal static partial class TierTiming
             : () => LocalBinarizer.TryBinarize(image.Luminance, image.Width, image.Height, false, threshold, binarized, scratch, out var dark) ? dark : -1;
     }
 
-    private static Image Noise(int side)
+    private static Image Noise(int side) => Noise(side, side);
+
+    private static Image Noise(int width, int height)
     {
-        var luminance = new byte[side * side];
+        var luminance = new byte[width * height];
         var state = 0x2545F491u;
         for (var i = 0; i < luminance.Length; i++)
         {
@@ -884,7 +909,7 @@ internal static partial class TierTiming
             state ^= state << 5;
             luminance[i] = (byte)state;
         }
-        return new(luminance, side, side);
+        return new(luminance, width, height);
     }
 
     /// <summary>The finder search's row pass over every row (stride 1), the full sweep a failed stride-4 pass falls back to.</summary>

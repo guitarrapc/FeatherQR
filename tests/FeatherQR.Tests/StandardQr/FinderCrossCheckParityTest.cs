@@ -190,8 +190,8 @@ public class FinderCrossCheckParityTest
     private static int[] ExpectedTotals(int module)
     {
         var nominal = 7 * module;
-        // Around the row's 40 % window and the column's 5/12 to 12/5: a column is checked against the row, and a finder in perspective is up to twice as tall as wide
-        return [.. new[] { 1, 5, 6, 7, nominal * 5 / 12, nominal / 2, nominal * 5 / 7, nominal - 1, nominal, nominal + 1, nominal * 10 / 7, nominal * 2, nominal * 12 / 5 }.Where(e => e >= 1).Distinct()];
+        // Around the row's 40 % window and the column's 2/7 to 7/2: a column is checked against the row, and a finder on a card tilted away is up to three and a half times as wide as tall
+        return [.. new[] { 1, 5, 6, 7, nominal * 2 / 7, nominal / 2, nominal * 5 / 7, nominal - 1, nominal, nominal + 1, nominal * 10 / 7, nominal * 2, nominal * 7 / 2 }.Where(e => e >= 1).Distinct()];
     }
 
     /// <summary>
