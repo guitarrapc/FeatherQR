@@ -20,12 +20,10 @@ public class StructuredAppendPlannerTest
     [Arguments("japanese", 67, QREccLevel.M, 1, 5, QRSegmentation.Single)]
     [Arguments("mixed", 600, QREccLevel.M, 1, 6, QRSegmentation.Optimal)]
     [Arguments("ascii", 600, QREccLevel.Q, 3, 9, QRSegmentation.Single)]
-    // Under Optimal the count, the version and the bracket come from one walk near the plan's
-    // floor. Content whose density varies along the text, ranges that cross a count indicator
-    // band (9/10, 26/27), and content whose characters are too wide for the walk's first margin
-    // (a pair is 32 bits that cannot be cut, so the balanced budget sits 32 to 47 bits above the
-    // floor and the widening steps run) are where a shortcut that was only right on periodic
-    // content would show.
+    // Under Optimal the count, the version and the bracket come from one walk near the plan's floor.
+    // A shortcut that is only right on periodic content shows on these rows: density that varies along
+    // the text, ranges that cross a count indicator band (9/10, 26/27), and pairs. A pair is 32 bits that
+    // cannot be cut, so the balanced budget sits 32 to 47 bits above the floor and the widening steps run.
     [Arguments("digitsThenMixed", 20000, QREccLevel.L, 1, 40, QRSegmentation.Optimal)]
     [Arguments("digitsThenMixed", 3000, QREccLevel.L, 1, 10, QRSegmentation.Optimal)]
     [Arguments("proseThenDigits", 2500, QREccLevel.L, 5, 9, QRSegmentation.Optimal)]
@@ -323,7 +321,6 @@ public class StructuredAppendPlannerTest
 
         foreach (var version in new[] { 1, 10, 27 })
         {
-            // From the head and from the middle: a start a few characters in caught no planted fault these two miss
             foreach (var start in new[] { 0, text.Length / 2 })
             {
                 var budgets = new HashSet<int> { 0, StructuredAppendPlanner.HeaderBits };

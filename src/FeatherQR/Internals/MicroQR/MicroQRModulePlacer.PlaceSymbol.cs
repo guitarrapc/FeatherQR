@@ -13,7 +13,7 @@ namespace FeatherQR.Internals.MicroQR;
 ///
 /// Produces matrices byte-identical to the per-module reference methods in MicroQRModulePlacer.cs (guarded by MicroQRModulePlacerParityTest).
 /// Four runtime tiers: BMI2+AVX2 (placement as a static per-row PEXT/PDEP permutation and a 32-module unpack, gated on fast-PEXT hardware, Intel or AMD Zen 3+), SSSE3 and ARM64 NEON (serial packed placement, 16-module unpack sharing one pipeline, only the bit-expand idiom differs), and portable scalar (SWAR spreads).
-/// Measured 3.6-8.4x over the reference across M1-M4 on x64, zero allocations (see the micro-optimization findings log):
+/// It allocates nothing. Its design:
 /// <list type="bullet">
 /// <item>The transmission stream is at most 192 bits (M4), so it is packed once
 /// into three ulongs and consumed MSB-first from a register accumulator instead of per-bit indexed loads with a data/ecc branch.</item>
@@ -25,7 +25,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// <item>The mask apply (a 12-row-periodic template AND the data-region mask)
 /// is fused into the unpack pass instead of a separate XOR pass over the rows. Format bits are poked into the packed rows beforehand and live entirely outside the data-region mask, so the fused XOR cannot touch them.</item>
 /// <item>The unpack expands 16 modules per step with the SSSE3
-/// broadcast/shuffle/compare idiom when available, falling back to scalar SWAR spreads (8 modules per step) otherwise. A single code path serves all four sizes (the scalar phase's size-11 byte-domain dispatch lost its advantage once the unpack was vectorized and the placement unrolled, measured).</item>
+/// broadcast/shuffle/compare idiom when available, falling back to scalar SWAR spreads (8 modules per step) otherwise. A single code path serves all four sizes.</item>
 /// <item>All tables are small static arrays built by ordinary code from the
 /// reference implementations (NativeAOT/trimming-safe).</item>
 /// </list>
@@ -63,8 +63,8 @@ internal static partial class MicroQRModulePlacer
     /// <param name="version">Micro QR version (drives the format information).</param>
     /// <param name="eccLevel">ECC level (drives the format information).</param>
     /// <param name="forcedMask">Pinned mask pattern (0-3), or -1 for edge-score selection.</param>
-    // Once the entry took the stride, the JIT stopped inlining it into the generator's core writers, where it had inlined the
-    // contiguous one: on x64 without AVX2 the quiet-zone-free M2 and M3 encodes took 1.08 and 1.04 times as long as with it inlined.
+    // Without the attribute the JIT leaves this entry a call in the generator's core writers, which slows the small
+    // quiet-zone-free encodes.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int PlaceSymbol(Span<byte> destination, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
@@ -141,8 +141,8 @@ internal static partial class MicroQRModulePlacer
     }
 #endif
 
-    // Not inlined: through the AggressiveInlining entry its interpolated messages went into the generator's span CreateCore on .NET 10
-    // with AVX2, 5.4 KB of code against 3.4 KB with this a call, its prolog zeroing 584 bytes a call against 344.
+    // Not inlined: through the AggressiveInlining entry its interpolated messages would go into the generator's span CreateCore,
+    // growing its code and the stack its prolog zeroes on every call.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ValidateArguments(Span<byte> matrix, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, int forcedMask)
     {
@@ -266,9 +266,8 @@ internal static partial class MicroQRModulePlacer
         // Format information: row 8 cols 1..8 carry bits 14..7, col 8 rows 7..1
         // carry bits 6..0 (same coordinates as PlaceFormat). These modules lie
         // outside the data-region mask, so the fused apply cannot flip them.
-        // Row 8's cols 1..8 hold format bits 14..7 in descending order, the
-        // bit-reversed high byte of (formatBits >> 7) shifted to bit 1, one
-        // masked insert instead of eight.
+        // Row 8 holds its bits in descending order, so the bit-reversed byte of
+        // (formatBits >> 7), shifted to bit 1, goes in as one masked insert.
         var formatBits = _formatBitsTable[(MicroQRConstants.GetSymbolNumber(version, eccLevel) << 2) | mask];
         rows[8] = (rows[8] & ~0x1FEul) | ((ulong)_reverseByte[(formatBits >> 7) & 0xFF] << 1);
         for (var row = 7; row >= 1; row--)
@@ -300,11 +299,10 @@ internal static partial class MicroQRModulePlacer
         rows = rows.Slice(0, size);
         var mask = BuildPackedRows(rows, size, stream, version, eccLevel, forcedMask);
 
-        // Unpack with the mask applied on the fly: full 8-byte write steps. A
-        // tail of >= 4 bytes becomes one overlapped spread ending at the row
-        // edge (write-mode overlap is idempotent, unlike XOR), a tail of <= 3
-        // bytes is cheaper as scalar stores. Every write stays inside its row,
-        // and ValidateArguments guaranteed the rows inside the matrix.
+        // A tail of 4 bytes or more becomes one overlapped spread ending at the
+        // row edge, which is safe because the overlap rewrites the same values.
+        // A shorter tail is cheaper as scalar stores. Every write stays inside
+        // its row, and ValidateArguments guaranteed the rows inside the matrix.
         ref var buf = ref MemoryMarshal.GetReference(matrix);
         var rowOffset = 0;
         for (var y = 0; y < size; y++, rowOffset += stride)

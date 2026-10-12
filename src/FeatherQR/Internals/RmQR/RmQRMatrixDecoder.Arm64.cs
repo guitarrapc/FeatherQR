@@ -202,7 +202,7 @@ internal static partial class RmQRMatrixDecoder
 
     /// <summary>
     /// Compresses one block's pairs into the stream: each run contributes one AND, one shift and one OR into the bit accumulator, which is drained a whole 32-bit word at a time.
-    /// The drain is a branch on purpose. The run lengths are per-version constants, so its pattern is periodic and the predictor learns it. Making it branchless measured 13-22 % slower.
+    /// The drain is a branch on purpose. The run lengths are per-version constants, so its pattern is periodic and the predictor learns it. A branchless drain is slower.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Emit(ref byte dst, ref uint lanes, ref uint runs, nuint end, ref ulong accumulator, ref int accumulated, ref nint written, ref nuint at)

@@ -7,9 +7,9 @@ namespace FeatherQR.Tests;
 /// position, <c>110</c> for second), pinned on hand-assembled streams at R7x43 (count widths 4 / 3 / 3 / 2)
 /// with the exact bit count the matrix decoder would pass. The rules are the Standard QR ones: once,
 /// before the first data segment, with ECI headers on either side, the application indicator held to its
-/// ranges, and the <c>%</c> rule in Alphanumeric segments. The two indicators used to be refused as
-/// reserved, which the record of this symbology stated without a source: zxing-cpp's and qrcode2's mode
-/// tables, libzint's and CodeGlyphX's writers, and zxing-cpp reading their symbols as GS1 say otherwise.
+/// ranges, and the <c>%</c> rule in Alphanumeric segments. The two indicators are not reserved:
+/// zxing-cpp's and qrcode2's mode tables, libzint's and CodeGlyphX's writers, and zxing-cpp reading
+/// their symbols as GS1 agree on their meaning.
 /// </summary>
 public class Fnc1RmQRDecodeTest
 {

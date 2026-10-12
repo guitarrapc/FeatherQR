@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// every version over the three capture geometries the decoder actually builds.
 /// </summary>
 /// <remarks>
-/// The N5 contract is stricter than "decodes the same symbol": the vector kernel must
+/// The contract is stricter than "decodes the same symbol": the vector kernel must
 /// sample the exact same pixels as the scalar loop, so this compares module output
 /// byte for byte rather than comparing decode results.
 ///
@@ -172,11 +172,9 @@ public class RmQRSampleGridParityTest
             // Denominator crosses zero between columns. Module centers are half-integers,
             // so this frame yields only large finite coordinates, not infinities.
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 8f, 0f, 0f, 8f, -1f / 20f, 0f),
-            // Denominator exactly zero ON a sampled centre: d = perspectiveX·(col+0.5) + 1
-            // vanishes at col 0 for perspectiveX = -2, and -2 is exact in binary, so this
-            // is the only shape that actually produces infinities (and NaN where the
-            // numerator vanishes too). This is what the float→int conversion argument
-            // rests on, and until now nothing exercised it.
+            // Denominator exactly zero on a sampled centre: d = perspectiveX·(col+0.5) + 1
+            // vanishes at col 0 for perspectiveX = -2, and -2 is exact in binary. Only this
+            // shape produces infinities, and NaN where the numerator vanishes too.
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 8f, 0f, 0f, 8f, -2f, 0f),
             // Same, on the row axis.
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 8f, 0f, 0f, 8f, 0f, -2f),

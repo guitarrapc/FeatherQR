@@ -4,7 +4,7 @@ using FeatherQR.Internals;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The register-held segmentation program against the all-states relaxation it replaced, on the
+/// The register-held segmentation program against an all-states relaxation, on the
 /// parts the cost alone does not pin: the predecessor chosen on a tie (which decides the plan the
 /// writer emits), the prefix walk's stopping point at every budget it can turn on, and the
 /// character class table behind every loop.
@@ -88,8 +88,7 @@ public class ModeSegmenterPlanParityTest
     }
 
     /// <summary>
-    /// The corpus without its long periodic row, which the prefix search prices at every budget a prefix turns on: a third of the test's time,
-    /// and of the budget and class faults planted by hand it caught none the shorter rows miss.
+    /// The corpus without its long periodic row, which the prefix search would price at every budget a prefix turns on.
     /// </summary>
     public static IEnumerable<(string Name, string Text)> PrefixCorpus() => Corpus().Where(static row => row.Name != "mixed-long");
 

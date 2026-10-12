@@ -452,7 +452,7 @@ public static partial class QrInterop
     /// The page script chains batches so the UI stays responsive and can show progress / cancel.
     /// <para>
     /// Content is made unique per iteration by appending <c>" #&lt;index+1&gt;"</c>.
-    /// Mode <c>encode</c> exercises the allocation-free <see cref="QRCodeGenerator.Create(ReadOnlySpan{char}, QREccLevel, Span{byte}, bool, EciMode, int, int)"/> overload only. Mode <c>render</c> runs the full pipeline (encode + Skia render + PNG encode) with the current visual options.
+    /// Mode <c>encode</c> exercises the allocation-free <see cref="QRCodeGenerator.Create(ReadOnlySpan{char}, QREccLevel, Span{byte}, in QRCodeGeneratorOptions)"/> overload only. Mode <c>render</c> runs the full pipeline (encode + Skia render + PNG encode) with the current visual options.
     /// </para>
     /// </summary>
     /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>

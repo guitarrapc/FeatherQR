@@ -7,7 +7,7 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
-/// GFNI syndrome kernel: all ≤30 syndrome accumulators live in one 256-bit register, so every data byte updates every syndrome with one gf2p8mulb, replacing up to 30 scalar GF multiplies per byte (measured ~114x on a version 40 block).
+/// GFNI syndrome kernel: all ≤30 syndrome accumulators live in one 256-bit register, so every data byte updates every syndrome with one gf2p8mulb, replacing up to 30 scalar GF multiplies per byte.
 /// </summary>
 /// <remarks>
 /// GF2P8MULB is hardwired to the AES polynomial 0x11B while QR uses 0x11D, so the kernel runs in an isomorphic image of the field: φ maps GF(0x11D) → GF(0x11B) (constructed from β = the first root of x⁸+x⁴+x³+x²+1 in GF(0x11B)). It happens to be an involution, φ = φ⁻¹.
@@ -15,7 +15,7 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// XOR is field addition and φ is GF(2)-linear, so accumulation commutes with the mapping.
 /// <para>
 /// The Horner recurrence is unrolled ×4 (acc·A⁴ ^ φ(c0)·A³ ^ φ(c1)·A² ^ φ(c2)·A ^ φ(c3), xor-tree reassociated) because the loop is latency-bound on the acc → mulb → xor carried chain. The c·Aⁿ multiplies are off-chain.
-/// Measured 29% over unroll ×2 and 47% over the plain recurrence. Unroll ×8 stalled (throughput-bound), so ×4 is the converged shape.
+/// Unroll ×8 is throughput-bound and gains nothing more.
 /// The constants are baked and locked to the runtime construction by GfniIsomorphismConstants_MatchFirstPrinciplesConstruction.
 /// </para>
 /// </remarks>
@@ -64,7 +64,7 @@ internal static partial class EccBinaryDecoder
 
     /// <summary>
     /// Computes the syndromes for one block.
-    /// <paramref name="syndromes"/> must have room for <see cref="SyndromeLanes"/> bytes. Lanes past<paramref name="eccCount"/> receive syndromes of roots the code does not use and must not be read.
+    /// <paramref name="syndromes"/> must have room for <see cref="SyndromeLanes"/> bytes. Lanes past <paramref name="eccCount"/> receive syndromes of roots the code does not use and must not be read.
     /// </summary>
     internal static bool ComputeSyndromesGfni(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)
     {

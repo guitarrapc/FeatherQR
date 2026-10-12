@@ -160,9 +160,7 @@ public static class RmQRSpotCheck
     }
 
     // Asks the sizing API directly: false is its "does not fit". Sizing.Required throws
-    // on that answer, and this used to catch the ArgumentException the throwing API of the
-    // time raised, so once sizing stopped throwing it the first symbol that could not
-    // hold "é" behind an ECI header took the whole check down.
+    // on that answer, and the smallest symbols cannot hold "é" behind an ECI header.
     private static bool FitsWithEci(string text, RmQRVersion version, RmQREccLevel ecc, EciMode eciMode)
         => RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version });
 

@@ -21,7 +21,7 @@ public enum EciMode
     // EciMode.Iso8859_1
     // ┌──────────┬────────────┬──────────┬────────────────┬──────────┐
     // │ ECI(4b)  │ Value(8b)  │ Mode(4b) │ Count(8b)      │ Data     │
-    // │ 0111     │ 00000100   │ 0100     │ 00000010       │ ...      │
+    // │ 0111     │ 00000011   │ 0100     │ 00000010       │ ...      │
     // └──────────┴────────────┴──────────┴────────────────┴──────────┘
     // 4 + 8 + 4 + 8 + (2 * 8) = 40 bits
     //
@@ -29,7 +29,7 @@ public enum EciMode
     // 1. Padding
     // public void WritePadding(int targetBitCount)
     // {
-    //     var remaining = targetBitCount - _builder.Length; // <- - different due to ECI header
+    //     var remaining = targetBitCount - _writer.BitPosition; // <- - different due to ECI header
     //     ....
     // }
     //
@@ -98,7 +98,7 @@ internal static class EciModeExtensions
     {
         if (eciMode == EciMode.Default)
         {
-            return 0; // No ECI header
+            return 0;
         }
 
         // ECI mode indicator (4 bits) + ECI assignment number (8 bits for 0-127)

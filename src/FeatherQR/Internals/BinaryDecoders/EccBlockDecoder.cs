@@ -10,7 +10,6 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// <remarks>
 /// Shared by Standard QR and rMQR, which interleave identically: the layout depends only on the <see cref="ECCInfo"/> block structure.
 /// Micro QR has one block and a half codeword at the end of the data on M1 and M3, and corrects its block itself.
-/// Until 2026-09-29 Standard QR deinterleaved the whole stream and rMQR gathered each block from it by index, correcting it before gathering the next.
 /// </remarks>
 internal static class EccBlockDecoder
 {

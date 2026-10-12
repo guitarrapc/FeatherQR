@@ -12,10 +12,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// <summary>
 /// 128-bit mask pattern selection for the targets with neither the AVX2 nor the ARM64 tier: x64 without AVX2, and WebAssembly.
 /// Versions 1-11 run the AVX2 tier's lane-per-pattern scorer with two candidates a vector, four groups a call, and versions 12-40 the
-/// transposed scorer (ModulePlacer.Masking.Transposed.Vector128.cs), which took 0.39 to 0.59 of the scalar bit-packed paths' time at
-/// versions 12 to 27 and 0.56 to 0.71 at 28 to 40 on the JIT without AVX2, default NativeAOT, WebAssembly AOT and interpreted
-/// (2026-10-05), and 0.67 to 0.73 of the scalar path rewritten on 2026-10-07 at versions 12, 20, 27, 28 and 40 on the JIT with AVX off
-/// (2026-10-08).
+/// transposed scorer (ModulePlacer.Masking.Transposed.Vector128.cs).
 /// </summary>
 /// <remarks>
 /// Popcounts accumulate in 16-bit lanes and reduce to totals only at the checkpoint and the end of a scoring call (a group of two
@@ -68,7 +65,7 @@ internal static partial class ModulePlacer
     /// <summary>Each 64-bit lane's total of an <see cref="AddPopCount"/> accumulator.</summary>
     /// <remarks>
     /// The high pair takes the low pair in and the shift brings the sum down, with no mask of the low pair: .NET 8's unoptimized ARM64 JIT
-    /// loads <c>Vector128.Create(0xFFFFFFFFul)</c> as all ones, which left the high pair in every total and aborted lanes at the checkpoint.
+    /// loads <c>Vector128.Create(0xFFFFFFFFul)</c> as all ones, which leaves the high pair in every total and aborts lanes at the checkpoint.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static Vector128<ulong> LaneTotals(Vector128<ushort> acc)
@@ -164,8 +161,7 @@ internal static partial class ModulePlacer
         }
 
         // rows2[y] = row y of the group's two candidates (masked, format bits in). Scratch for the vertical-equality rows. The
-        // complements are computed where they are read: without a third buffer to zero, default NativeAOT and WebAssembly ran
-        // versions 1-10 faster by 2 to 6 %, and the JIT without AVX2 read level end to end.
+        // complements are computed where they are read, which saves a third buffer to zero on every call.
         Span<Vector128<ulong>> rows2 = stackalloc Vector128<ulong>[64];
         Span<Vector128<ulong>> eq2 = stackalloc Vector128<ulong>[64];
 

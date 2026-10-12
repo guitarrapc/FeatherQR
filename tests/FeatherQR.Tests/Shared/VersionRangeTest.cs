@@ -4,19 +4,16 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="QRVersionRange"/> and <see cref="MicroQRVersionRange"/>, the version
-/// constraint that replaced the single requested version in the options structs
-/// (specs/qrcode-symbologies.md, Public API direction).
+/// constraint of the options structs (specs/qrcode-symbologies.md, Public API direction).
 /// </summary>
 /// <remarks>
 /// <para>
-/// The range is one concept with the fixed version as its degenerate case, so the two
-/// behaviours that were previously separate parameters have to keep working exactly:
-/// <c>Any</c> must reproduce automatic selection and <c>Exactly(n)</c> must reproduce a
-/// pinned version, byte for byte, against the released parameter list overloads. Those two
-/// sweeps are the point of this file.
+/// The range is one concept with the fixed version as its degenerate case, so
+/// <c>Any</c> must write what automatic selection writes and <c>Exactly(n)</c> what a
+/// plain version number writes, byte for byte. Those two sweeps are the point of this file.
 /// </para>
 /// <para>
-/// The rest is the constraint semantics that did not exist before: a range that excludes
+/// The rest is the constraint semantics: a range that excludes
 /// everything that fits, a range whose only fitting member is at either end, and the split
 /// between "does not fit" (<c>false</c>) and a contradictory argument (throws).
 /// </para>
@@ -144,7 +141,7 @@ public class VersionRangeTest
     [Test]
     public async Task StandardRange_ImplicitFromInt_RejectsTheLegacyAutomaticSentinel()
     {
-        // -1 is automatic only in the released WithVersion(int) builder method. Accepting it
+        // -1 is automatic only in the WithVersion(int) builder method. Accepting it
         // here would let a -1 arriving through a variable silently mean "any version".
         await Assert.That(() => { QRVersionRange _ = -1; }).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => { QRVersionRange _ = 0; }).Throws<ArgumentOutOfRangeException>();
@@ -169,9 +166,8 @@ public class VersionRangeTest
     [Test]
     public async Task StandardRange_ImplicitFromNullableInt_TreatsAbsenceAsAutomatic()
     {
-        // The job the old `requestedVersion: -1` convention was really doing: a caller whose
-        // version is optional passes it straight through. `null` says that with a type
-        // instead of a magic number, so -1 stays an error.
+        // A caller whose version is optional passes it straight through. `null` says that
+        // with a type instead of a magic number, so -1 stays an error.
         int? absent = null;
         int? configured = 12;
         int? mistyped = -1;
@@ -215,12 +211,9 @@ public class VersionRangeTest
     [MethodDataSource(nameof(FitPredicateInputs))]
     public async Task StandardQr_FitsIsMonotoneInVersion(QREccLevel ecc, EciMode eci, bool utf8BOM)
     {
-        // The range resolves by scanning for the first version in [Min, Max] that fits,
-        // which is correct whether or not the predicate is monotone. But the reported
-        // version being the *smallest* usable one, and callers reasoning about AtLeast,
-        // both assume no version stops fitting as versions grow. The count indicator does
-        // widen at versions 10 and 27, so this is a real question, and it is cheap to
-        // settle exhaustively rather than assume.
+        // The reported version being the smallest usable one, and callers reasoning about
+        // AtLeast, both assume no version stops fitting as versions grow. The count
+        // indicator widens at versions 10 and 27, so the assumption is checked exhaustively.
         //
         // The mode loop is in the body because EncodingMode is internal and cannot appear
         // in a public test signature.
@@ -253,7 +246,7 @@ public class VersionRangeTest
         yield return (QREccLevel.H, EciMode.Utf8, utf8BOM: true);
     }
 
-    // ---- Any and Exactly reproduce the released behaviour, byte for byte -------------
+    // ---- Any is automatic selection and Exactly(n) is n, byte for byte ---------------
 
     public static IEnumerable<(string text, QREccLevel ecc)> SweepPayloads()
     {

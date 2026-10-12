@@ -83,7 +83,7 @@ internal static partial class LuminanceConverter
     /// </summary>
     /// <remarks>
     /// The extents are checked once here, not per row.
-    /// Every tier walks by <c>ref</c> from a single <c>GetReference</c> and so carries no bounds check of its own, including the scalar tier, whose per-row re-slicing was removed for speed.
+    /// Every tier walks by <c>ref</c> from a single <c>GetReference</c> and so carries no bounds check of its own, the scalar tier included.
     /// A caller that hands over a short destination would otherwise corrupt whatever follows it (in practice a pooled rental) instead of throwing.
     /// </remarks>
     internal static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, bool forceScalar = false)
@@ -129,7 +129,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// UDOT carries the whole luminance sum (<see cref="System.Runtime.Intrinsics.Arm.Dp"/>, an ARMv8.2 extension that Cortex-A53/A72-class cores lack) and the composite path separates planes with UZP1/UZP2, which live under <c>AdvSimd.Arm64</c>, so both gates are required rather than plain AdvSimd.
-    /// LD4 would also serve for the planes but has no ref-taking overload, so it was rejected (see LuminanceConverter.Arm64.cs).
+    /// LD4 would also serve for the planes but has no ref-taking overload (see LuminanceConverter.Arm64.cs).
     /// </summary>
     private static bool IsAdvSimdTierAvailable
         => System.Runtime.Intrinsics.Arm.Dp.IsSupported && System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported;
@@ -227,20 +227,17 @@ internal static partial class LuminanceConverter
     /// The portable tier: every target without a vector kernel (netstandard, or a runtime without SIMD acceleration) and every row too narrow for one, so it is shipped code rather than only a reference.
     /// </summary>
     /// <remarks>
-    /// Three things earn their keep here, each measured separately on Apple M2 against the straightforward per-pixel loop this replaces (1.3-1.8x overall):
     /// <list type="bullet">
-    /// <item>The channel offsets become constants of a per-layout loop instead of
+    /// <item>The channel offsets are constants of a per-layout loop instead of
     /// parameters, so the address arithmetic folds and RGB888x drops its alpha branch outright.</item>
     /// <item>Walking by <c>ref</c> rather than re-slicing spans removes the per-pixel
-    /// bounds checks: worth 16-30 % on its own.</item>
-    /// <item>Four pixels per iteration, worth a further 8-11 % because the loop is
-    /// latency-bound on load → multiply → store rather than throughput-bound.</item>
+    /// bounds checks.</item>
+    /// <item>Four pixels per iteration, because the loop is latency-bound on
+    /// load → multiply → store rather than throughput-bound. Eight is slower on one layout.</item>
     /// </list>
     /// <para>
-    /// Two plausible-looking alternatives were measured and rejected.
-    /// Reading the pixel as one <c>uint</c> and splitting it with shifts costs 37-53 % on ARM64, where a byte load at a constant offset is cheap and the extra ALU work is not. That is the opposite of the x64 result.
-    /// Replacing the three multiplies with 256-entry weight tables loses 3-5 % (MUL is 1-2 cycles at one per cycle, while three more L1 loads contend with the pixel loads) and would additionally read out of bounds on a premultiplied buffer that violates c ≤ a, which nothing forbids at this boundary.
-    /// Eight pixels per iteration regressed one layout by 2x.
+    /// Reading the pixel as one <c>uint</c> and splitting it with shifts is slower on ARM64, where a byte load at a constant offset is cheap and the extra ALU work is not.
+    /// 256-entry weight tables in place of the three multiplies are slower too, because three more L1 loads contend with the pixel loads. They would also read out of bounds on a premultiplied buffer that violates c ≤ a, which nothing forbids at this boundary.
     /// </para>
     /// </remarks>
     private static void ConvertRgbaScalar(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)

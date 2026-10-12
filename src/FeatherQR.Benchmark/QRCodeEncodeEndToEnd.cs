@@ -11,9 +11,9 @@ using System.Text;
 ///   Alphanumeric_V10_M : version 10-M, alphanumeric mode (300 characters)
 ///   Alphanumeric_V40_L : version 40-L, alphanumeric mode (4,296 characters, capacity boundary)
 ///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
-///   Byte_V20_M : version 19-M, byte mode (mid-size, exercises the transposed mask tier on two-word rows). Named V20 before 620 bytes was found to fit version 19
+///   Byte_V20_M : version 19-M, byte mode (mid-size, exercises the transposed mask tier on two-word rows). The name says V20, and 620 bytes fit version 19
 ///   Byte_V40_L : version 40-L, byte mode (largest data blocks)
-///   Byte_V40_H : version 39-H, byte mode (77 blocks x 30 ecc). Named V40 before 1,200 bytes was found to fit version 39
+///   Byte_V40_H : version 39-H, byte mode (77 blocks x 30 ecc). The name says V40, and 1,200 bytes fit version 39
 ///   Kanji_V6_M : version 6-M, Kanji mode (capacity boundary, 65 characters)
 ///   Kanji_Long_V15_L : version 15-L, Kanji mode (capacity boundary, 320 characters)
 ///
@@ -229,13 +229,6 @@ public class QRCodeEncodeEndToEnd
     {
         return QRCodeGenerator.Create(_kanjiLong.AsSpan(), QREccLevel.L, KanjiVersion15);
     }
-
-    // Three "(options)" benchmarks stood here until 2.0.0, pairing each options overload
-    // against the parameter list overload it forwarded to so that "the forwarder costs
-    // nothing" stayed a measured fact. The parameter list overloads were removed, and
-    // `QRCodeGeneratorOptions.Default` is `default`, so each pair collapsed into two
-    // spellings of one call and the pairs were dropped rather than left measuring
-    // themselves. The options path is now the only path, and the benchmarks above are on it.
 
     internal static string BuildDeterministicText(int length)
     {

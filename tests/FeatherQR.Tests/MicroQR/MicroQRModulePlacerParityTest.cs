@@ -13,9 +13,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// The reference is an independent transcription of ISO/IEC 18004 Micro QR
-/// placement (the pre-optimization implementation), kept naive on purpose:
-/// per-module function predicate, per-bit indexed stream reads, per-module mask
-/// switch. It shares no code with the production fast path.
+/// placement, kept naive on purpose: per-module function predicate, per-bit
+/// indexed stream reads, per-module mask switch. It shares no code with the
+/// production fast path.
 /// </remarks>
 public class MicroQRModulePlacerParityTest
 {
@@ -82,7 +82,7 @@ public class MicroQRModulePlacerParityTest
 
     /// <summary>
     /// The scalar-unpack fallback (taken at runtime when SSSE3 is unavailable)
-    /// must match the reference too, on SIMD-capable test machines it is
+    /// must match the reference too. On SIMD-capable test machines it is
     /// exercised through this named internal entry point.
     /// </summary>
     [Test]
@@ -125,13 +125,11 @@ public class MicroQRModulePlacerParityTest
     /// unpack) must match the reference on machines that support it.
     /// </summary>
     /// <remarks>
-    /// Deliberately gated on instruction SUPPORT only, not on the production
-    /// dispatch's fast-PEXT vendor/family check: named-entry parity tests exist
-    /// precisely to cover tiers the local dispatch would not take (the SSSE3
-    /// and scalar tests run on BMI2 machines for the same reason), and PEXT/PDEP
-    /// results are identical where they are merely microcoded (pre-Zen 3 AMD) —
-    /// only slower, by well under a millisecond across this whole data source
-    /// (~96 BMI ops per placement call).
+    /// Gated on instruction support only, not on the production dispatch's
+    /// fast-PEXT vendor/family check. Named-entry parity tests cover tiers the
+    /// local dispatch would not take (the SSSE3 and scalar tests run on BMI2
+    /// machines for the same reason), and PEXT/PDEP give the same results where
+    /// they are microcoded (pre-Zen 3 AMD).
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(AllCombinationsAndSeeds))]

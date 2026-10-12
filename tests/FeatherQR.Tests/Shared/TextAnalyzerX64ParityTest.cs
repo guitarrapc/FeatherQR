@@ -12,11 +12,11 @@ namespace FeatherQR.Tests;
 /// is unreachable on any CPU that also has AVX2.
 /// </summary>
 /// <remarks>
-/// The regression these pin: both tiers compared UTF-16 code units as Int16, so every
-/// char at or above U+8000 (surrogate halves, U+FFFD, CJK compatibility) read as
-/// negative and passed the "&gt; 127" and "&gt; 255" range tests. Auto-detection then
-/// declared Latin-1 for text ISO-8859-1 cannot represent, and the Byte-mode Latin-1
-/// writer truncated (or, on its SSE2 tier, saturated) the char.
+/// The fault these pin: a tier that compares UTF-16 code units as Int16 reads every
+/// char at or above U+8000 (surrogate halves, U+FFFD, CJK compatibility) as negative,
+/// and the char passes the "&gt; 127" and "&gt; 255" range tests. Auto-detection then
+/// declares Latin-1 for text ISO-8859-1 cannot represent, and the Byte-mode Latin-1
+/// writer truncates the char, or saturates it on its SSE2 tier.
 /// <para>
 /// The offending code units are written as \u escapes on purpose: what is under test is
 /// the code unit value at a position, not the glyph.
@@ -39,8 +39,8 @@ public class TextAnalyzerX64ParityTest
         "\uFFFD0123456789012345",                                       // above U+7FFF, first block only
     ];
 
-    // Boundary chars adjacent to every SIMD range check, plus the code units the signed
-    // comparison used to swallow: U+8000 is the first negative Int16, U+D83D a surrogate
+    // Boundary chars adjacent to every SIMD range check, plus the code units a signed
+    // comparison swallows: U+8000 is the first negative Int16, U+D83D a surrogate
     // half, U+FFFD the top of the code unit range.
     public static IEnumerable<char> BoundaryChars =>
     [
@@ -127,7 +127,7 @@ public class TextAnalyzerX64ParityTest
     /// <summary>
     /// The Latin-1 precondition from TextAnalyzerAdvSimdParityTest, aimed at the two x64
     /// tiers directly: on an AVX2 machine the dispatcher never reaches the SSE2 tier, so
-    /// its half of the bug would survive a green run of the dispatch-level test.
+    /// a fault in that tier would survive a green run of the dispatch-level test.
     /// </summary>
     [Test]
     public async Task AnalyzeX64_NeverDeclaresLatin1_ForCharsAboveFF()

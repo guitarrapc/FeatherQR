@@ -252,8 +252,8 @@ internal static partial class QRImageDecoder
     /// How many other triples a failed decode verifies, best confirmed first.
     /// </summary>
     /// <remarks>
-    /// When the stride pass selected the triple and returned, the list it hands back counts each finder on a third of its rows, once or twice, and the order is coarse: three renders in 1,600 past 20 % keystone needed the second triple, and eight or 64 read none more.
-    /// Sweeping the rest of the rows first made the first triple enough, and cost a failing image a sweep each attempt: 740 × 740 noise doubled, 3.1 to 6.2 ms.
+    /// When the stride pass selected the triple and returned, the list it hands back counts each finder on a third of its rows, once or twice, and the order is coarse. Past 20 % keystone the second triple can be the symbol's, and verifying more than two reads no more symbols.
+    /// Sweeping the rest of the rows first would make the first triple enough, and would cost a failing image a sweep each attempt.
     /// </remarks>
     private const int MaxAlternativeTriples = 2;
 
@@ -284,7 +284,7 @@ internal static partial class QRImageDecoder
     /// Whether a triple's two timing patterns read through the frame of its own centres and sizes: the check a triple from <see cref="FinderPatternFinder.AlternativeTriples"/>, or another corner of a triple that failed, passes before it costs a decode.
     /// </summary>
     /// <remarks>
-    /// A timing pattern runs between two real finders and nowhere else, and the frame follows perspective, so this holds past 40 % keystone where the triple's shape says little: through their own frames the drawn triples of those renders read no timing module wrong, and triples holding a false candidate read 20 to 49 % wrong, near the half that texture reads.
+    /// A timing pattern runs between two real finders and nowhere else, and the frame follows perspective, so this holds past 40 % keystone where the triple's shape says little. There a real triple still reads its timing modules through its own frame, and a triple holding a false candidate reads them near half wrong, as texture does.
     /// The centres are not refined for it. A grid through them misses the timing modules by under a module.
     /// </remarks>
     internal static bool TimingPatternsRead(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
@@ -1005,7 +1005,7 @@ internal static partial class QRImageDecoder
     /// Where the frame is the parallelogram, the symbol has one module size and both lines divide by the mean of all four.
     /// Otherwise each line divides by the geometric mean of its own two ends, which is the count the frame itself implies:
     /// with the far end at weight w the near end measures w·L/(n − 7) and the far end L/(w·(n − 7)), so their product is (L/(n − 7))². Their plain mean is larger by (w + 1/w)/2 and puts the count short, 6 % at a size ratio of 2 and 13 % at 3, which at version 40 is five versions.
-    /// A line the frame takes as flat beside one it foreshortens divides by its own sizes too, not by the mean of four: that mean holds the other line's far end, 40 % large on a symbol at 20 % keystone, and put a version 40 two versions short.
+    /// A line the frame takes as flat beside one it foreshortens divides by its own sizes too, not by the mean of four: that mean holds the other line's far end, 40 % large on a symbol at 20 % keystone, which puts a version 40 two versions short.
     /// </remarks>
     internal static float EstimateModules(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, in FinderFrame frame)
     {

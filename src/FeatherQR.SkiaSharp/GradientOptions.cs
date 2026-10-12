@@ -69,13 +69,10 @@ public sealed record class GradientOptions
     /// The gradient flows from the first color to the last in the direction given by <see cref="Direction"/>.
     /// </remarks>
     // "Immutable through its API", not "immutable": MemoryMarshal and reflection both
-    // reach the array. Not worth warning callers about, but do not treat it as
-    // unreachable here.
-    //
-    // System.Text.Json also cannot serialize a span getter. Accepted: SKColor serializes
-    // as {Alpha,Red,Green,Blue}, so anyone persisting a gradient wants their own DTO with
-    // #RRGGBB strings (the Playground has one), and a converter would add a
-    // System.Text.Json dependency to the netstandard builds.
+    // reach the array.
+    // System.Text.Json cannot serialize a span getter. A converter would add a
+    // System.Text.Json dependency to the netstandard builds, and SKColor serializes as
+    // {Alpha,Red,Green,Blue}, so a caller persisting a gradient wants its own DTO anyway.
     public ReadOnlySpan<SKColor> Colors => _colors;
 
     /// <summary>

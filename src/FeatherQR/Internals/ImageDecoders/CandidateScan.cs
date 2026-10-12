@@ -68,13 +68,10 @@ internal static class CandidateScan
         Span<FinderPattern> tried = stackalloc FinderPattern[MaxCandidatesToTry];
         var status = Scan<TDecoder, TInfo>(ref decoder, image, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount, out var stridedFound);
         noFinder = false;
-        // Terminal, not just successful: DestinationTooSmall is only reached after the symbol has been located, sampled,
-        // RS-corrected and its segment found to fit the bitstream. (That ordering is a precondition, not a given: the segment
-        // decoders check bitstream sufficiency before destination sufficiency precisely so a malformed count cannot masquerade as
-        // a short buffer here. They check the content after it.) A sized call stops at that symbol as a read, so no sweep runs
-        // here either, which keeps a probe for the buffer's size as cheap as a sized call. The price is a second symbol that
-        // fits and that only the sweep finds. A verdict on the content does not end it: the sweep can find another symbol that
-        // reads.
+        // Terminal, not just successful: DestinationTooSmall means the symbol was read, so no sweep runs and a probe for the
+        // buffer's size costs what a sized call does. That relies on the segment decoders checking the bitstream before the
+        // destination, so a malformed count never reports a short buffer. A verdict on the content does not end the scan:
+        // the sweep can find another symbol that reads.
         if (AttemptStatus.IsTerminal(status))
             return status;
 
@@ -92,7 +89,7 @@ internal static class CandidateScan
             return sweptStatus;
         }
 
-        // Both failed: the strided scan's diagnostic, the one whose candidates the caller would have seen before the sweep existed
+        // Both failed: the strided scan's diagnostic
         return status;
     }
 

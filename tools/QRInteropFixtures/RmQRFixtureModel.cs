@@ -9,9 +9,8 @@ namespace QRInteropFixtures;
 /// <param name="ErrorCorrectionLevel">"M" or "H", the RmQREccLevel name.</param>
 /// <param name="Height">Symbol height in modules (7, 9, 11, 13, 15, 17).</param>
 /// <param name="Width">Symbol width in modules (27, 43, 59, 77, 99, 139).</param>
-/// <param name="Mode">"Numeric", "Alphanumeric", "Byte" or "Kanji". Kanji is decode-only
-/// for this library, so those cases exist purely to exercise the decoder. Only qrtool
-/// can produce them (libzint emits Byte mode with ECI 20 for the same input).</param>
+/// <param name="Mode">"Numeric", "Alphanumeric", "Byte" or "Kanji". Only qrtool can produce
+/// the Kanji cases (libzint emits Byte mode with ECI 20 for the same input).</param>
 /// <param name="Utf8">Whether the payload needs a UTF-8-capable generator. Cases for libzint must leave this false.</param>
 /// <param name="ShiftJisHex">
 /// Kanji cases only: the exact Shift_JIS bytes to hand the generator, hex-encoded.

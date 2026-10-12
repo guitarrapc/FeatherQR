@@ -177,11 +177,8 @@ internal static partial class MicroQRImageDecoder
             }
         }
 
-        // The fast path above covers the overwhelmingly common axis-aligned
-        // case. On failure, recover the finder square's local axes by sweeping
-        // directions through 90 degrees, then sample along those rotated axes.
-        // A square finder repeats every 90 degrees. The four sign/axis
-        // assignments below recover the symbol orientation.
+        // The frames above cover the axis-aligned case. A symbol they do not read
+        // may be turned, so the finder's own axes are searched.
         return TryDecodeArbitraryOrientation(image, candidate, modules, destination, out charsWritten, out info, ref best);
     }
 
@@ -238,11 +235,10 @@ internal static partial class MicroQRImageDecoder
                     if (IsTerminal(status))
                         return status;
 
-                    // Scale and perspective searches multiply this affine attempt
-                    // by hundreds. Enter them only after either polarity decoded
-                    // valid format information, which a random grid does 14 to 38 %
-                    // of the time by version: the gate thins the grids searched
-                    // rather than ruling texture out.
+                    // The scale and perspective searches multiply this affine attempt
+                    // by hundreds, so they run only for a grid that got past its format
+                    // information either way round. A random grid often does too: the
+                    // gate thins the grids searched rather than ruling texture out.
                     if (!pastFormat)
                         continue;
 
@@ -411,8 +407,8 @@ internal static partial class MicroQRImageDecoder
     /// </summary>
     /// <remarks>
     /// It is read again by coverage only when an orientation that got past its format information read that word exactly. A real
-    /// symbol's format modules sit next to the finder, where the frame is best. Texture reads a word within 3 bits about half the
-    /// time and an exact one about 1 in 1,000.
+    /// symbol's format modules sit next to the finder, where the frame is best, while texture often reads a word within the
+    /// correctable distance and seldom an exact one.
     /// </remarks>
     internal struct BothWays<TGrid>(TGrid grid, int size) : IGridRead<MicroQRCodeDecodeInfo>
         where TGrid : struct, ICoverageGrid

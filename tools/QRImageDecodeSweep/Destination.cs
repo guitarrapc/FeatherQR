@@ -67,8 +67,8 @@ internal static class Destination
         var (shortStatus, shortVersion, _) = Decode(symbology, luminance, width, height, shortDestination);
         var tiny = new char[2];
         var (tinyStatus, tinyVersion, _) = Decode(symbology, luminance, width, height, tiny);
-        // The three calls in turn each round, each keeping its fastest: a stall of the machine lands in one call of one round,
-        // where timed a call's rounds at a time it fell on one of the three and moved the 95th percentile by up to half
+        // The three calls take turns each round and each keeps its fastest, so a stall of the machine lands in one call of one round.
+        // With a call's rounds timed in a row, a stall falls on one of the three calls and moves its ratio to the others.
         var (sizedUs, shortUs, tinyUs) = (double.MaxValue, double.MaxValue, double.MaxValue);
         for (var round = 0; round < Rounds; round++)
         {
@@ -264,7 +264,7 @@ internal static class Destination
             writer.WriteLine(string.Join(',', r.Render, r.Kind, r.Ppm, r.Angle, r.Noise, r.Image, r.Sized, r.SizedVersion, Quote(r.Text), r.Short, r.ShortVersion, r.Tiny, r.TinyVersion, F(r.SizedUs), F(r.ShortUs), F(r.TinyUs)));
     }
 
-    /// <summary>A result file. One written before the pixel digest was a column (2026-10-01) is read with an empty digest.</summary>
+    /// <summary>A result file. One without the pixel digest column is read with an empty digest.</summary>
     public static List<Row> Read(string path)
     {
         var lines = File.ReadAllLines(path);
@@ -314,7 +314,7 @@ internal static class Destination
     /// <summary>
     /// Two result files of the same set from two trees, render for render: every status, version or text that moved, and the cost
     /// before and after over the pairs of one image. The render names pair the rows whatever the decoder does, and the pixel digest
-    /// says whether a pair is one image. A file from before the digest falls back on how the render was made (kind, ppm, angle and
+    /// says whether a pair is one image. A file without the digest falls back on how the render was made (kind, ppm, angle and
     /// noise), which tells a redrawn set but not a renderer that changed. A pair that is not one image (an encoder, a renderer or
     /// the draws changed) is listed apart, since what moved there says nothing about the decoder, and so is a render in only one of
     /// the files.

@@ -160,8 +160,8 @@ public class RmQRFormatScaleTest
 
     /// <summary>
     /// A clean render whose sub-finder is painted out, so every frame is the unrefined one and the
-    /// symbol reads only at a corrected scale. At 5.1 px/module it pins the cutoff from below: with
-    /// the earlier 3 px cutoff this render does not decode.
+    /// symbol reads only at a corrected scale. At 5.1 px/module it pins the cutoff from below: under
+    /// a 3 px cutoff this render does not decode.
     /// </summary>
     [Test]
     [Arguments(RmQRVersion.R7x59, 5.1f)]

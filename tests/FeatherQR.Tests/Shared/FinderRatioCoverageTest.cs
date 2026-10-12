@@ -3,7 +3,7 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The grey-level measurement is a second look at runs that fail the whole-pixel 1:1:3:1:1 check by about a pixel. It holds them to the same ratio, so what it may change is bounded: a pattern that is not a finder stays refused, and an image with no grey in it is scanned exactly as before.
+/// The grey-level measurement is a second look at runs that fail the whole-pixel 1:1:3:1:1 check by about a pixel. It holds them to the same ratio, so what it may change is bounded: a pattern that is not a finder stays refused, and an image with no grey in it is scanned by its whole-pixel runs alone.
 /// </summary>
 public class FinderRatioCoverageTest
 {
@@ -33,7 +33,7 @@ public class FinderRatioCoverageTest
     /// <summary>
     /// A cross whose middle row and column read 1:1:3:1:1 but whose diagonal reads 1:1:1:1:1: the shape the diagonal cross-check exists to refuse, and the one the second look must not rescue.
     /// The near-miss tolerance is an absolute number of pixels, so holding the centre run to the same budget as the outer ones is what keeps a run of five equal modules from being a near miss.
-    /// The cases here are renders the whole-pixel scan refuses and the old centre budget did not. The falling diagonal's centre share (<see cref="FinderDiagonalCentreTest"/>) now refuses them as well, so this no longer isolates the budget. The run-bounds and row-edge tests are what hold the budget itself.
+    /// The cases here are renders the whole-pixel scan refuses and a looser centre budget does not. The falling diagonal's centre share (<see cref="FinderDiagonalCentreTest"/>) refuses them as well, so this test does not isolate the budget. The run-bounds and row-edge tests hold the budget itself.
     /// </summary>
     [Test]
     [Arguments(2.5f, 0.75f, 0.75f)]

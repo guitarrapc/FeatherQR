@@ -124,11 +124,10 @@ public class RmQRCodewordEncoderUnitTest
         var oracle = RmQRNaiveReference.ExtractInterleavedStream(modules, height, width, out var bitCount);
         await Assert.That(oracle.Length).IsEqualTo(ours.Length);
 
-        // Known qrtool 0.13.2 (qrcode2 crate) defect, recorded in specs/qrcode-test-fixtures.md:
-        // it never writes the last h - 10 modules of the walk (column 1, rows 8..h-3), so on
-        // versions 11 modules high or taller the final ECC codeword loses its lowest
-        // (h - 10 - remainderBits) bits (zxing-cpp corrects it as one codeword error). Every
-        // other byte, including the remainder tail, must still match, and libzint symbols match exactly.
+        // qrtool 0.13.2 never writes the last h - 10 modules of the walk (column 1, rows 8..h-3,
+        // see specs/qrcode-test-fixtures.md). On versions 11 modules high or taller the final ECC
+        // codeword loses its lowest (h - 10 - remainderBits) bits. Every other byte, including the
+        // remainder tail, must still match, and libzint symbols match exactly.
         var totalCodewords = RmQRConstants.GetTotalCodewordCount(version);
         var allowedLowBits = manifest.Generator == "qrtool" ? Math.Max(0, height - 10 - RmQRConstants.GetRemainderBitCount(version)) : 0;
         for (var i = 0; i < ours.Length; i++)

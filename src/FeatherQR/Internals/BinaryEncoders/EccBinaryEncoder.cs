@@ -8,7 +8,7 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// </summary>
 /// <remarks>
 /// This encoder implements the Reed-Solomon error correction algorithm as specified in ISO/IEC 18004 Section 8.5.
-/// The public entry point dispatches to the fastest kernel the runtime supports: GFNI (net10.0+, ~64x over the naive form), SSSE3 (net8.0+, ~52x), NEON (net8.0+ ARM64, ~21-36x), the NEON kernel on WebAssembly's swizzle (net8.0+, 1.5-9x the scalar kernel), or a portable scalar kernel (~4.4x) used on netstandard and pre-SSSE3 x86.
+/// The public entry point dispatches to the fastest kernel the runtime supports: GFNI (net10.0+), SSSE3 (net8.0+), NEON (net8.0+ ARM64), the NEON kernel on WebAssembly's swizzle (net8.0+), or a portable scalar kernel used on netstandard and pre-SSSE3 x86.
 /// All kernels produce byte-identical output. See the kernel parity tests.
 /// </remarks>
 internal static partial class EccBinaryEncoder
@@ -77,8 +77,7 @@ internal static partial class EccBinaryEncoder
     /// The output is <see cref="CalculateECC"/> per block. A block's remainder is one serial chain, each step's division factors read from the register the step before left,
     /// and the blocks of a group have one length and one generator, so the x86 kernels advance two or four blocks' chains in one loop, where they overlap.
     /// A symbol with no group of two or more blocks goes block by block to <see cref="CalculateECC"/> from this inlined entry. With that test inside a
-    /// call of its own, the codeword assembly of a one-block rMQR symbol (R7x43) read 0.038 to 0.044 µs against 0.035 to 0.036 on the SSSE3 kernel,
-    /// and 0.035 to 0.037 inlined (2026-10-07). The argument checks belong to the other path. On this one a bad argument raises what
+    /// call of its own, a one-block symbol pays for the call. The argument checks belong to the other path. On this one a bad argument raises what
     /// slicing the spans or <see cref="CalculateECC"/> throws.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -100,8 +99,8 @@ internal static partial class EccBinaryEncoder
         CalculateEccGroups(data, ecc, eccCount, blocks1, length1, blocks2, length2);
     }
 
-    // The fields go on as integers. Given the ECCInfo by reference, the JIT stopped inlining this method into the stage harness's
-    // Reed-Solomon row, where it is inlined with integers. The encoders' Tier1 code calls it out of line with integers (.NET 10).
+    // The fields go on as integers. Given the ECCInfo by reference, the JIT does not inline this method into a caller
+    // that inlines it with integers (.NET 10).
     private static void CalculateEccGroups(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks1, int length1, int blocks2, int length2)
     {
         if (eccCount < 1 || eccCount > 255)
@@ -142,13 +141,13 @@ internal static partial class EccBinaryEncoder
     /// Runs on every target (netstandard2.0+, old x86, pre-NEON ARM).
     /// </summary>
     /// <remarks>
-    /// Two optimizations over the naive polynomial division, both measured (~4.4x combined):
+    /// Two optimizations over the naive polynomial division:
     /// - The generator polynomial depends only on <paramref name="eccCount"/> and QR uses a
     ///   small fixed set of counts, so it is cached in log domain per count. This removes the
     ///   O(eccCount²) per-call construction and lets the inner loop do a single Exp lookup
     ///   instead of a full GF multiply (2 Log lookups + zero checks) per element.
     /// - Table and buffer accesses go through refs so the JIT emits no bounds checks in the
-    ///   inner loop (measured ~17% on top of the caching).
+    ///   inner loop.
     /// </remarks>
     internal static void CalculateEccScalar(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
@@ -191,7 +190,7 @@ internal static partial class EccBinaryEncoder
     }
 
     /// <summary>
-    /// Naive polynomial division (the pre-optimization implementation).
+    /// Naive polynomial division.
     /// Used only when the generator polynomial has no log-domain representation (eccCount == 255).
     /// </summary>
     private static void CalculateEccNaive(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
@@ -217,11 +216,9 @@ internal static partial class EccBinaryEncoder
     }
 
     // Log-domain generator polynomial cache, indexed by eccCount (1..255).
-    // logGen[j] = Log[generator[j + 1]] (the leading 1 coefficient is implicit).
-    // A sentinel empty array marks counts whose generator cannot be represented in
-    // log domain. Benign race: concurrent builds produce identical arrays, published
-    // with Volatile.Write so readers on weakly-ordered runtimes never observe a
-    // partially initialized array.
+    // logGen[j] = Log[generator[j + 1]], and the leading 1 coefficient is implicit.
+    // An empty array marks a count whose generator has no log-domain form. Benign race: concurrent
+    // builds produce identical arrays, and Volatile.Write publishes only a filled one.
     private static readonly byte[]?[] _logGenCache = new byte[]?[256];
     private static readonly byte[] _logGenUnrepresentable = [];
 
@@ -265,7 +262,7 @@ internal static partial class EccBinaryEncoder
     /// <remarks>
     /// Formula: (x - α^0)(x - α^1)...(x - α^(n-1)) where n = numEccWords Example for eccWordCount = 3: G(x) = (x - α^0)(x - α^1)(x - α^2)
     ///      = (x - 1)(x - α)(x - α^2)
-    ///      = x^3 + α^0·x^2 + α^1·x + α^0
+    ///      = x^3 + α^198·x^2 + α^199·x + α^3
     ///
     /// The generator polynomial is built iteratively:
     /// 1. Start: G(x) = 1 (polynomial of degree 0)
@@ -281,15 +278,14 @@ internal static partial class EccBinaryEncoder
     {
         generator.Clear();
 
-        // init with (x - α^0), start with polynomial "1"
+        // G(x) = 1
         generator[0] = 1;
 
         Span<byte> temp = stackalloc byte[generator.Length];
 
-        // Multiply by (x - α^i) for i = 1 to eccWordCount - 1
+        // Multiply by (x - α^i) for i = 0 to eccCount - 1
         for (var i = 0; i < eccCount; i++)
         {
-            // Multiply current generator by (x - α^i)
             temp.Clear();
 
             for (var j = 0; j <= i; j++)

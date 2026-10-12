@@ -98,7 +98,7 @@ internal static partial class RmQRImageDecoder
         }
 
         // Affine frames have an exactly unit denominator, so both divisions drop out.
-        // This is not a heuristic about typical input: TryDecodeFrame builds the isotropic and anisotropic frames with perspectiveX = perspectiveY = 0, so every attempt before the perspective search lands here.
+        // This is not a heuristic about typical input: TryFrame and TryScaledFrame build the unrefined, isotropic and anisotropic frames with perspectiveX = perspectiveY = 0, so those attempts land here.
         if (transform.a13 == 0f && transform.a23 == 0f && transform.a33 == 1f)
         {
             SampleGridSimd128Affine(luminance, width, height, threshold, transform, columns, rows, modules);
@@ -147,7 +147,7 @@ internal static partial class RmQRImageDecoder
                 var indexHi = VectorCast.ToPixel(yHi, lastY) * widthVector
                     + VectorCast.ToPixel(xHi, lastX);
 
-                // Lane extraction beats spilling the index vector to the stack: the reload was measured on the critical path of every gather.
+                // Lane extraction, not a spill of the index vector to the stack: the reload sits on the critical path of every gather.
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + column);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(0)) < threshold ? (byte)1 : (byte)0;
                 Unsafe.Add(ref destination, 1) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(1)) < threshold ? (byte)1 : (byte)0;
@@ -185,7 +185,7 @@ internal static partial class RmQRImageDecoder
     /// Everything else (the hoisted products, the clamp, the overlapping tail) matches the projective kernel, and the sampled bytes match <see cref="SampleGridScalar"/>.
     /// </summary>
     /// <remarks>
-    /// A separate method rather than a branch inside the shared loop: this is the shape that was measured, and it keeps the projective kernel's constants out of the affine loop's register budget.
+    /// A separate method rather than a branch inside the shared loop: it keeps the projective kernel's constants out of the affine loop's register budget.
     /// </remarks>
     private static void SampleGridSimd128Affine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {

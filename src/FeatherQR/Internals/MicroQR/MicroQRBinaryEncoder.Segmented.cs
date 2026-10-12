@@ -59,10 +59,9 @@ internal static partial class MicroQRBinaryEncoder
             Debug.Assert(segment.UnitCount < (1 << countBits), "run length must fit the character count indicator");
 
             // The bit budget checked above comes from UnitCount, but the payload is
-            // written from the run's characters. A plan whose two disagree would
-            // clear the budget and then overrun the accumulator. Byte mode under
-            // UTF-8 is the exception: its unit count is only knowable after
-            // transcoding, verified below.
+            // written from the run's characters, so a plan whose two disagree would
+            // overrun the accumulator. Byte mode under UTF-8 is the exception: its
+            // unit count is known only after transcoding and is checked below.
             if ((mode != EncodingMode.Byte || charset != EciMode.Utf8) && segment.UnitCount != segment.Length)
                 throw new ArgumentException($"Segment plan gives a {segment.Length}-character run a unit count of {segment.UnitCount}; they must agree outside UTF-8 Byte mode.", nameof(segments));
 

@@ -22,9 +22,7 @@ internal static class QRCodeConstants
 
     // Maximum data capacity for each QR code version (1-40) and error correction level (L,M,Q,H)
     // Array structure: [version-1][eccLevel][encodingMode]
-    // - 1600 elements total (40 versions × 4 ECC levels × 4 encoding modes)
-    // - Each 16-element block represents one version's capacities
-    // - Within each block: [L-Numeric, L-Alpha, L-Byte, L-Kanji, M-Numeric, M-Alpha, M-Byte, M-Kanji, Q-..., H-...]
+    // - 640 elements total (40 versions × 4 ECC levels × 4 encoding modes)
     // - Index calculation: (version-1) × 16 + eccLevel × 4 + encodingMode
     // - Example: Version 1, ECC-M, Alphanumeric = 0×16 + 1×4 + 1 = capacityBaseValues[5] = 20 characters
     // Based on ISO/IEC 18004 Table 7-11
@@ -249,10 +247,7 @@ internal static class QRCodeConstants
     //   [5] codewordsInGroup2
     // Based on ISO/IEC 18004 Table 9
     private static readonly int[] capacityECCBaseValues = [
-        // ECC Level L: Numeric, Alphanumeric, Byte, Kanji
-        // ECC Level M: Numeric, Alphanumeric, Byte, Kanji
-        // ECC Level Q: Numeric, Alphanumeric, Byte, Kanji
-        // ECC Level H: Numeric, Alphanumeric, Byte, Kanji
+        // One row per ECC level, in the order L, M, Q, H.
         // Version 1
         19, 7, 1, 19, 0, 0,
         16, 10, 1, 16, 0, 0,
@@ -528,8 +523,6 @@ internal static class QRCodeConstants
         return remainderBits.AsSpan()[version - 1];
     }
 
-    // Binary and Decimal Conversion
-
     /// <summary>
     /// Retrieves ECC information for the specified version and error correction level.
     /// </summary>
@@ -540,10 +533,9 @@ internal static class QRCodeConstants
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static ECCInfo GetEccInfo(int version, QREccLevel eccLevel)
     {
-        // An index, not a scan: automatic version selection asks once per version it tries, and scanning the
-        // 160 entries cost 2.35 us of a version 40 encode. The generator's entry points validate the level
-        // before they reach this. The range check here keeps an internal caller from reading another level's
-        // entry, and reports what the entry points report.
+        // An index, not a scan of the 160 entries: automatic version selection asks once per version it tries.
+        // The generator's entry points validate the level before they reach this. The range check here keeps
+        // an internal caller from reading another level's entry, and reports what the entry points report.
         if ((uint)eccLevel > (uint)QREccLevel.H)
             throw UndefinedLevel(eccLevel);
         if ((uint)(version - 1) >= 40u)
@@ -560,7 +552,7 @@ internal static class QRCodeConstants
     private static ArgumentException NoEntry(int version, QREccLevel eccLevel)
         => new($"ECC info not found for version {version}, level {eccLevel}");
 
-    // Format and Version String Generation
+    // Format and Version Information Bits
 
     /// <summary>
     /// Generates 15-bit format information bits using BCH(15,5) error correction.
@@ -593,7 +585,6 @@ internal static class QRCodeConstants
         const int ECC_CORRECTION_BITS = 10;
         const int TOTAL_BITS = 15;
 
-        // ECC level bits (2bit)
         var formatBits = level switch
         {
             QREccLevel.L => 0b01,
@@ -603,7 +594,6 @@ internal static class QRCodeConstants
             _ => throw new ArgumentOutOfRangeException(nameof(level), level, "QREccLevel was out of range"),
         };
 
-        // Add mask pattern bits (3bits)
         formatBits = (ushort)(formatBits << MASK_PATTERN_BITS | maskVersion);
 
         // Calculate BCH(15,5) error correction
@@ -616,7 +606,6 @@ internal static class QRCodeConstants
             }
         }
 
-        // Combine data and ECC bits, then apply mask (XOR)
         return (ushort)(((formatBits << ECC_CORRECTION_BITS) | temp) ^ FORMAT_MASK_PATTERN);
     }
 
@@ -790,8 +779,6 @@ internal static class QRCodeConstants
 
         return table;
     }
-
-    // struct definitions
 
     /// <summary>
     /// Alignment pattern information for a specific QR code version.

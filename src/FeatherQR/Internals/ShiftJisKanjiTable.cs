@@ -16,7 +16,7 @@ namespace FeatherQR.Internals;
 /// <remarks>
 /// <para>
 /// The mapping is JIS X 0208, not Microsoft CP932. The two disagree, and the cells CP932 adds stay unmapped here, so a symbol carrying them is reported as DecodeStatus.UnmappedCharacter rather than silently rewritten.
-/// The canonical statement of the divergence set and the reasoning is the scope decision in .github/docs/specs/qrcode-symbologies.md. Keep the counts out of this file so a regeneration cannot reintroduce a stale copy (they were wrong in four places once already).
+/// The canonical statement of the divergence set and the reasoning is the scope decision in .github/docs/specs/qrcode-symbologies.md. Keep the counts out of this file so a regeneration cannot reintroduce a stale copy.
 /// </para>
 /// <para>
 /// Unmapped cells hold 0, which is never a legitimate JIS X 0208 mapping.

@@ -11,13 +11,11 @@ namespace FeatherQR.Internals.StandardQR;
 /// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>. It produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskAdvSimdParityTest).
 ///
 /// Two tiers, split at 64 modules as <see cref="MaskCodeAdvSimd"/> does:
-/// - Versions 1-11: the AVX2 tiers' earlier lane-per-row form on 128-bit vectors (Vector128&lt;ulong&gt; = 2 rows per iteration, one ulong per row).
-///   The AVX2 tier has since moved to four candidates per vector. That design has not been measured on ARM64.
+/// - Versions 1-11: a lane-per-row form on 128-bit vectors (Vector128&lt;ulong&gt; = 2 rows per iteration, one ulong per row), one candidate
+///   at a time, where the AVX2 tier scores four candidates per vector.
 /// - Versions 12-40: the transposed scorer (the design is in ModulePlacer.Masking.Transposed.cs). It masks and scores with the 128-bit tier's
 ///   code (ModulePlacer.Masking.Transposed.Vector128.cs), whose popcount is cnt and uadalp here, and packs rows and applies the winner
-///   with this file's 16-module steps. On Apple M2 it took 0.90-0.97 of the two- and three-word SoA tiers' mask selection time at versions
-///   12-27 and 0.42-0.47 at 28-40 on the JIT, 0.87-0.98 and 0.48-0.57 on NativeAOT, and replaced them (2026-10-05). The 128-bit tier as it
-///   stands, with a SWAR popcount, movemask packing and an eight-module unpack, read 1.24-1.39 at 12-27, and with the NEON popcount alone 0.89-1.01.
+///   with this file's 16-module steps: ARM64 has no movemask for the 128-bit tier's packing, and that tier's unpack takes eight modules a step.
 /// NEON-specific choices:
 /// - The single-word tier's popcount is native (cnt.16b). One uaddlp widens the
 ///   per-byte counts to ushort lanes, which accumulate directly in
@@ -33,10 +31,7 @@ namespace FeatherQR.Internals.StandardQR;
 ///
 /// This file only executes under AdvSimd.Arm64.IsSupported, so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
 ///
-/// The single-word tier against the scalar bit-packed paths on Apple M2: v1 2.4x, v10 3.0x, zero allocations, measured before the rule-3 change of
-/// 2026-10-03 (#448) rewrote both, and not against them since.
-/// The ushort accumulate beat the per-qword AVX2-shaped accumulate by ~8% and the SIMD edges beat the SWAR edges by ~5-11%. The single-word tier
-/// has no early exit. The transposed tier has the 128-bit tier's checkpoint.
+/// The single-word tier has no early exit. The transposed tier has the 128-bit tier's checkpoint.
 /// </summary>
 internal static partial class ModulePlacer
 {
@@ -313,7 +308,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Lane-per-row Vector128 penalty scorer for single-word rows (structure mirrors the AVX2 tier's row-lane scorer, 2 rows per iteration).
+    /// Lane-per-row Vector128 penalty scorer for single-word rows, 2 rows per iteration.
     /// Row-direction rules run with per-lane shifts and native popcount. Column-direction rules materialize eq (vertical run continuation) and v5 (4-deep AND window) arrays with vector passes, then score them with offset loads.
     /// Scalar tails reuse the scalar expressions.
     /// Popcounts accumulate in weight-grouped ushort accumulators (rule-1 ones / twos, rule-2 x3, rule-3 x40, balance) and reduce once per score.

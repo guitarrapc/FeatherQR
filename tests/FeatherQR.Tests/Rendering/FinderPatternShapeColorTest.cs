@@ -9,9 +9,8 @@ public class FinderPatternShapeColorTest
     /// The contract a custom shape is written against: it is handed the dark paint once per finder
     /// and draws the dark modules only. The light ring is whatever it leaves undrawn, so the
     /// background shows through it on its own, opaque or not, and the renderer neither paints the
-    /// ring nor erases it. A shape that painted the ring itself, with a light paint the renderer
-    /// used to hand it, could only be made right on a translucent background by erasing through a
-    /// layer, which SVG output cannot express. The layer is gone and so is that overload.
+    /// ring nor erases it. A ring the shape painted itself could only be made right on a
+    /// translucent background by erasing through a layer, which SVG output cannot express.
     /// </summary>
     [Test]
     [Arguments(255)]
@@ -86,8 +85,8 @@ public class FinderPatternShapeColorTest
     [MethodDataSource(nameof(GetFinderPatternShapes))]
     public async Task CustomFinderPatternShape_WithAntialiasedModuleShape_UsesBackgroundColorForInnerRing(FinderPatternShape finderPatternShape)
     {
-        // Regression: even when modules are rendered with antialiasing (e.g., circles),
-        // finder pattern light areas must still use the configured background color.
+        // Even when modules are rendered with antialiasing (e.g., circles),
+        // finder pattern light areas must use the configured background color.
         var backgroundColor = new SKColor(0xEA, 0xFB, 0x00, 0xFF);
         var codeColor = SKColors.Green;
         var qr = QRCodeGenerator.Create("finder-shape-antialias-test", QREccLevel.M);
@@ -256,10 +255,9 @@ public class FinderPatternShapeColorTest
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The cases above are Standard QR with an explicit shape, which is all that could reach a
-    /// <see cref="FinderPatternShape"/> when they were written. Styling now routes Micro QR and
-    /// rMQR through one too, and Standard QR reaches it without being asked, so the two defects
-    /// those cases pin apply to paths they do not touch: the ring coming out dark
+    /// The cases above are Standard QR with an explicit shape. Styling routes Micro QR and rMQR
+    /// through a <see cref="FinderPatternShape"/> too, and Standard QR reaches one without being
+    /// asked, so the two defects those cases pin apply to paths they do not touch: the ring coming out dark
     /// (issue 337) and a transparent background not showing through it (issue 354). The ring is a
     /// hole in the finder's drawing, so what shows through it is whatever the renderer put beneath,
     /// which these cases hold to the rendered background on every symbology.
@@ -349,15 +347,14 @@ public class FinderPatternShapeColorTest
     }
 
     /// <summary>
-    /// The same two defects, on the canvas shape that only became reachable when the square
-    /// symbologies started letterboxing instead of stretching.
+    /// The same two defects, on a canvas the symbol is letterboxed in.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Issue 337 is the light ring drawn dark and issue 354 is a transparent background not
-    /// showing through it. Both live in the finder's own painting, which the aspect change does
-    /// not touch, but that change moved everything around it: the symbol no longer starts at the
-    /// canvas origin, and the canvas outside it is now painted with a pad colour of its own. A
+    /// showing through it. Both live in the finder's own painting, but on a letterboxed canvas
+    /// everything around it differs: the symbol does not start at the canvas origin, and the
+    /// canvas outside it is painted with a pad colour of its own. A
     /// ring that read its colour from the wrong layer, or a pad painted over the symbol rather
     /// than around it, would show up here and nowhere else in this class, whose other cases all
     /// render onto a canvas the symbol fills.
@@ -454,7 +451,7 @@ public class FinderPatternShapeColorTest
     /// The shape of <c>samples/Dotfiles/FinderPatternAlwaysBlack.cs</c>, the repro for issue 337,
     /// on a canvas that letterboxes: a gradient over the modules, an explicit finder shape, an
     /// opaque background, and transparent surroundings asked for by name. The gradient is what
-    /// made the ring come out dark, since it is a shader on the paint the finder also draws with.
+    /// can turn the ring dark, since it is a shader on the paint the finder also draws with.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(GetFinderPatternShapes))]

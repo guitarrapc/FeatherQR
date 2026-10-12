@@ -30,8 +30,8 @@ using System.Text.Json;
 // surface changes: breaking changes are already caught by package validation against the
 // released baseline, which is the only surface check worth failing a build over.
 //
-// One target framework is enough. No exported type has a framework-conditional member -
-// the conditional compilation in the library all sits on internal types - so net10.0
+// One target framework is enough. The conditional compilation in the library all sits on
+// internal types, so no exported type has a framework-conditional member and net10.0
 // represents netstandard2.0, netstandard2.1 and net8.0 as well.
 
 var outputPath = GetOutputPath(args);
@@ -285,8 +285,8 @@ string FlattenDoc(System.Xml.Linq.XElement element)
                     var paren = reference.IndexOf('(');
                     if (paren >= 0) reference = reference[..paren];
                     // Take the member name before stripping the arity tick, not after: on a generic type
-                    // the first tick sits in the type name, so cutting there threw the member away and
-                    // every member of SymbolImageBuilderBase`1 rendered as the type itself.
+                    // the first tick sits in the type name, so cutting there throws the member away and
+                    // every member of SymbolImageBuilderBase`1 renders as the type itself.
                     var name = reference[(reference.LastIndexOf('.') + 1)..];
                     var tick = name.IndexOf('`');
                     if (tick >= 0) name = name[..tick];
@@ -368,8 +368,8 @@ string RenderHtml()
                     var searchable = $"{member.Kind} {text} {Summary(member.DocId)}".ToLowerInvariant();
                     body.AppendLine($"""            <div class="member" data-text="{Escape(searchable)}">""");
 
-                    // An enum value is its own heading - "value Deflate" above "Deflate = 1,"
-                    // would say the same thing twice - so it keeps the compact form.
+                    // An enum value is its own heading, so it keeps the compact form: "value Deflate"
+                    // above "Deflate = 1," would say the same thing twice.
                     if (member.Kind != "value")
                     {
                         body.AppendLine($"""              <h4><span class="kind">{member.Kind}</span> {Named(member.Name, member.Href, "source")}{Tag(obsolete)}</h4>""");

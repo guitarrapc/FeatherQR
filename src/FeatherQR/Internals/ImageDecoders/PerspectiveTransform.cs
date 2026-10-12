@@ -33,8 +33,7 @@ internal readonly struct PerspectiveTransform
         float x0p, float y0p, float x1p, float y1p, float x2p, float y2p, float x3p, float y3p)
     {
         // Composition order follows the element convention of Times (row-vector
-        // application): squareToQuad ∘ quadToSquare, verified by the corner
-        // correspondence unit tests.
+        // application): squareToQuad ∘ quadToSquare.
         var quadToSquare = SquareToQuadrilateral(x0, y0, x1, y1, x2, y2, x3, y3).BuildAdjoint();
         var squareToQuad = SquareToQuadrilateral(x0p, y0p, x1p, y1p, x2p, y2p, x3p, y3p);
         return squareToQuad.Times(quadToSquare);

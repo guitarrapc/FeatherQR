@@ -28,8 +28,8 @@ internal static partial class FinderPatternFinder
 
         try
         {
-            // Build the dark bitmask (bit i = pixel i of this row is dark);
-            // threshold == 0 means nothing is dark, so the compare loops can skip.
+            // Bit i is set where pixel i of this row is dark. At a threshold of 0 nothing is dark, and the min identity
+            // below would say the opposite, since t - 1 wraps to 255.
             var row = luminance.Slice(y * width, width);
             var i = 0;
             if (threshold > 0)
@@ -52,8 +52,8 @@ internal static partial class FinderPatternFinder
                     var thr = Vector128.Create(threshold);
                     if (AdvSimd.Arm64.IsSupported)
                     {
-                        // NEON has no movemask, so fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, 3 pairwise adds reduce them (the bulk-movemask shape).
-                        // Measured ~8-11% over per-16 ExtractMostSignificantBits and 3.3-4.1x over the scalar walk on Apple M2
+                        // NEON has no movemask, so fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, 3 pairwise adds reduce them.
+                        // That is faster than ExtractMostSignificantBits every 16 pixels.
                         for (; i + 64 <= width; i += 64)
                         {
                             var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)i), thr) & NeonBitWeights;

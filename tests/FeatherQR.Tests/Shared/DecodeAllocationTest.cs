@@ -16,11 +16,10 @@ namespace FeatherQR.Tests;
 /// </para>
 /// <para>
 /// Runs alone. The decoders rent from <see cref="System.Buffers.ArrayPool{T}"/>, whose thread slot holds one array a size. A second array of that size, which Standard QR's grids take while the first is out, comes from the per-core stacks every thread shares, and a test running beside this one can empty them.
-/// With this class's tests running beside each other, the Standard QR decoder allocated 4,120 B on noise in every round in one of six runs on .NET 8. Alone it allocated nothing in every run.
 /// </para>
 /// <para>
 /// Where another test pins an image to the path it reads through, the image here is that one, drawn the same way, and its scene names the test.
-/// The earlier zero-allocation tests (the matrix overloads in <see cref="QRCodeDecoderRoundTripTest"/> and <see cref="RmQRCodeDecoderRoundTripTest"/>, the rMQR images in <see cref="RmQRCodeDecoderImageTest"/> and <see cref="RmQRStrongKeystoneDecodeTest"/>) stay where they are.
+/// The matrix overloads in <see cref="QRCodeDecoderRoundTripTest"/> and <see cref="RmQRCodeDecoderRoundTripTest"/> and the rMQR images in <see cref="RmQRCodeDecoderImageTest"/> and <see cref="RmQRStrongKeystoneDecodeTest"/> have zero-allocation tests of their own.
 /// </para>
 /// </remarks>
 [NotInParallel]

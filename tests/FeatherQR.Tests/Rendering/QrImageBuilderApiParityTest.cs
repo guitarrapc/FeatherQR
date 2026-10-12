@@ -21,8 +21,7 @@ public class QrImageBuilderApiParityTest
     /// related reasons: Micro QR ties the legal ECC levels to the version (M1 has
     /// none, M4 alone offers Q), and rMQR's two levels leave a single M→H step that
     /// has not been asked for. Both can join later without changing the contract.
-    /// <c>WithFinderPatternShape</c> used to be here, back when it was a Standard QR
-    /// decoration. It is shared now because it is the only way to style a finder
+    /// <c>WithFinderPatternShape</c> is not here. It is the only way to style a finder
     /// pattern without destroying it, and every symbology has one to protect.
     /// </summary>
     private static readonly string[] standardOnlyMembers =
@@ -45,8 +44,8 @@ public class QrImageBuilderApiParityTest
     ];
 
     // WithSegmentation is shared by all three builders (each with its own
-    // segmentation enum, canonicalized to SEGMENTATION below), so no per-symbology
-    // exclusion list is needed for it any more.
+    // segmentation enum, canonicalized to SEGMENTATION below), so it needs no
+    // per-symbology exclusion list.
 
     /// <summary>
     /// Options the two symbologies with a totally ordered version set have and rMQR does

@@ -155,7 +155,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// Each lane's two 16-bit halves times the weights' halves, added: pmaddwd on x64 and i32x4.dot_i16x8_s on WebAssembly, one
-    /// instruction each, and a multiply and a fold elsewhere (4.8x slower than the dot product on WebAssembly AOT). The halves are
+    /// instruction each, and a multiply and a fold elsewhere, which is the slower form on WebAssembly. The halves are
     /// bytes and the weights small, so the signed instructions give the unsigned sum.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -277,7 +277,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// The composite from four loaded pixel vectors, kept out of the classified block as in the ARM64 tier: only partial alpha calls it.
-    /// On WebAssembly the 16 pixels take the per-pixel formula instead: the vector composite ran 1.5x slower than it there, AOT-compiled
+    /// On WebAssembly the 16 pixels take the per-pixel formula instead: the vector composite is slower than it there, AOT-compiled
     /// and interpreted.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]

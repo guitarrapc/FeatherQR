@@ -31,7 +31,6 @@ internal static partial class TextAnalyzer
         var char0Byte = Vector128.Create((byte)'0');
         var char0Wide = Vector128.Create((ushort)'0');
 
-        // NEON processing 16 chars at once
         for (; i <= length - 16; i += 16)
         {
             var lo = Vector128.LoadUnsafe(ref src, (nuint)i);
@@ -55,7 +54,6 @@ internal static partial class TextAnalyzer
                     hasNonNumeric = true;
             }
 
-            // Alphanumeric check
             if (!hasNonAlphanumeric && hasNonNumeric)
             {
                 if (!IsAllAlphanumericAdvSimd(bytes, char0Byte))
@@ -114,7 +112,6 @@ internal static partial class TextAnalyzer
 
         var encoding = DetermineEncoding(hasNonNumeric, hasNonAlphanumeric);
 
-        // If there are user constraints (e.g. requestedVersion), calculate actual data length.
         var actualEciMode = requestedEciMode == EciMode.Default
             ? DetermineEciMode(hasNonAscii, hasNonIso88591)
             : requestedEciMode;
@@ -151,8 +148,8 @@ internal static partial class TextAnalyzer
         }
     }
 
-    // The alphanumeric alphabet (ISO/IEC 18004 Section 7.4.3) as five unsigned
-    // ranges/equalities, '$%', '*+' and '-./' are contiguous code points:
+    // The alphanumeric alphabet (ISO/IEC 18004 Section 7.4.3) as five unsigned ranges
+    // and two equalities. '$%', '*+' and '-./' are contiguous code points:
     //   digits  '0'-'9'  : (c - 0x30) <= 9
     //   upper   'A'-'Z'  : (c - 0x41) <= 25
     //   '$','%'          : (c - 0x24) <= 1

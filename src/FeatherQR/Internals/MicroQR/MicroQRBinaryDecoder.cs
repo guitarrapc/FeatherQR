@@ -50,8 +50,7 @@ internal static class MicroQRBinaryDecoder
         {
             while (true)
             {
-                // Not enough bits left for a mode indicator: the terminator was
-                // shortened away at capacity (ISO/IEC 18004 7.4.9).
+                // Not enough bits left for a mode indicator: the terminator was shortened away at capacity (ISO/IEC 18004 7.4.9).
                 if (totalBits - reader.BitPosition < modeBits)
                     break;
 
@@ -60,10 +59,7 @@ internal static class MicroQRBinaryDecoder
                 if (modeValue > ModeKanji)
                     return DecodeStatus.InvalidBitstream; // M4 indicators 4-7 are undefined
 
-                // Kanji takes an early branch rather than an arm of the switch below, which
-                // leaves the other three modes on exactly the shape they had before Kanji
-                // decoding existed: a fourth arm there cost the M2 numeric and M4 byte decodes
-                // 12-15 %.
+                // Kanji takes an early branch rather than an arm of the switch below. A fourth arm there slows the Numeric and Byte decodes.
                 int countBits;
                 if (modeValue == ModeKanji)
                 {
@@ -81,8 +77,7 @@ internal static class MicroQRBinaryDecoder
                 }
                 if (totalBits - reader.BitPosition < countBits)
                 {
-                    // A Numeric indicator (all zero bits) running out of room is a
-                    // truncated terminator. Anything else is a truncated segment.
+                    // A Numeric indicator (all zero bits) running out of room is a truncated terminator. Anything else is a truncated segment.
                     if (modeValue == ModeNumeric)
                         break;
                     return DecodeStatus.InvalidBitstream;
@@ -91,27 +86,14 @@ internal static class MicroQRBinaryDecoder
                 var count = reader.Reads(countBits);
                 if (count == 0)
                 {
-                    // Numeric + zero count is the terminator. Zero-count segments
-                    // in other modes are empty (the encoder never emits them).
+                    // Numeric + zero count is the terminator. Zero-count segments in other modes are empty (the encoder never emits them).
                     if (modeValue == ModeNumeric)
                         break;
                     continue;
                 }
 
-                // Kanji sits here, not as a switch arm and not earlier.
-                //
-                // Not earlier: it must follow the truncated-count check above. Skipping
-                // that lets BitReader read past the capacity, and since the buffer ends
-                // there too it throws InvalidOperationException out of a bool-returning
-                // TryDecode. (The zero-count rule below it is behaviour-neutral for
-                // Kanji. Only the truncated-count one matters.)
-                //
-                // Not a switch arm: a fourth arm crosses Roslyn's jump-table threshold,
-                // and the M2 numeric / M4 byte decode benchmarks measured 12-15 % slower
-                // with it. A bisect pinned that to this file, but not to the jump table
-                // specifically. An isolated micro-benchmark of the dispatch shows only
-                // noise, so code layout is the likelier mechanism. Treat the shape as
-                // measured-better, not as an explained win.
+                // Kanji sits here, not earlier and not as a switch arm. It must follow the truncated-count check above: without it BitReader reads past the capacity, where the buffer ends too, and throws out of a bool-returning TryDecode.
+                // As a fourth switch arm it slows the Numeric and Byte decodes.
                 if (modeValue == ModeKanji)
                 {
                     var kanjiStatus = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);

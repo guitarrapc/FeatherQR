@@ -7,7 +7,7 @@ namespace QRImageDecodeSweep;
 /// <summary>
 /// libzint through the pinned ZXingCpp package's creator.
 /// A managed process cannot catch a fault in native code, so the creator runs in a worker process that appends each finished case to a file. When the worker dies the case it died on is tried again, and only after eight deaths in a row is it given up.
-/// The access violations it was built for stopped once the creator was held through its call (qrcode-test-fixtures.md, Lessons learned), so it is a guard now.
+/// The fault known here is the wrapper freeing a creator's options during its call (qrcode-test-fixtures.md, Lessons learned). The creator is held through the call, so the worker is a guard against any other.
 /// Eight makes a dropped case rare, not impossible, so a drop is never silent: the case gets a row of its own saying so, and the run ends with a failing exit code, because its row set is no longer the one other runs have.
 /// </summary>
 internal static class Libzint
@@ -155,7 +155,7 @@ internal static class Libzint
             Symbologies.MicroQr => (ZXingCpp.BarcodeFormat.MicroQRCode, d.Version == 1 ? "version=1" : $"version={d.Version},ecLevel={d.Ecc}"),
             _ => (ZXingCpp.BarcodeFormat.RMQRCode, $"version={d.Version},ecLevel={d.Ecc}"),
         };
-        // The wrapper frees a creator's options when finalized, and unheld it died in native code in most runs
+        // The wrapper frees a creator's options when finalized, so the creator is held through the call
         var creator = new ZXingCpp.BarcodeCreator(format) { Options = options };
         var barcode = creator.From(d.Text);
         GC.KeepAlive(creator);

@@ -20,8 +20,7 @@ public class TryGetRequiredBufferSizeTest
         var ok = RmQRCodeGenerator.TryGetRequiredBufferSize("012345678901", RmQREccLevel.M, out var size);
         await Assert.That(ok).IsTrue();
 
-        // rMQR has no throwing sizing overload to agree with, so the symbol an encode
-        // actually produces is the reference the reported size is checked against.
+        // The symbol an encode produces is the reference the reported size is checked against.
         var symbol = RmQRCodeGenerator.Create("012345678901", RmQREccLevel.M);
         await Assert.That(size.Version).IsEqualTo(symbol.Version);
         await Assert.That(size.Width).IsEqualTo(symbol.Width);
@@ -131,11 +130,8 @@ public class TryGetRequiredBufferSizeTest
     }
 
     /// <summary>
-    /// rMQR has no throwing sizing overload to agree with, since the sizing surface became
-    /// Try-only before 1.2.0 shipped, so the
-    /// agreement asserted here is the one that was always the point: the size and version
-    /// reported for a set of options are the size and version an encode with those same
-    /// options produces, and the result decodes back to the input.
+    /// The size and version reported for a set of options are the size and version an
+    /// encode with those same options produces, and the result decodes back to the input.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(EciAgreementCases))]
@@ -327,8 +323,7 @@ public class TryGetRequiredBufferSizeTest
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly((MicroQRVersion)0) })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly((MicroQRVersion)5) })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { QuietZoneSize = -1 })).Throws<ArgumentOutOfRangeException>();
-        // The quiet zone is bounded above as well as below. The upper half of that guard
-        // lost its only test with the throwing sizing overloads.
+        // The quiet zone is bounded above as well as below.
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { QuietZoneSize = 10_001 })).Throws<ArgumentOutOfRangeException>();
         // M1 accepts ErrorDetectionOnly only: a version/ECC contradiction, text-independent.
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly(MicroQRVersion.M1) })).Throws<ArgumentException>();
@@ -344,10 +339,9 @@ public class TryGetRequiredBufferSizeTest
     }
 
     /// <summary>
-    /// Sizing and encoding have to answer the same question. Until 2.0.0 this swept the
-    /// throwing overload against the <c>Try</c> one. With the throwing overload removed,
-    /// the encode itself is the reference, which is the comparison that actually matters
-    /// to a caller: a buffer sized here has to be the buffer the encode fills.
+    /// Sizing and encoding have to answer the same question. The encode itself is the
+    /// reference, which is the comparison that matters to a caller: a buffer sized here
+    /// has to be the buffer the encode fills.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(MicroAgreementCases))]

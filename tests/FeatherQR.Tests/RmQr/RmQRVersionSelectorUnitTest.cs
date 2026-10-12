@@ -4,7 +4,7 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// rMQR version fit (design record: exact version, or <see cref="RmQRFitStrategy"/>
+/// rMQR version fit (exact version, or <see cref="RmQRFitStrategy"/>
 /// within an optional <see cref="RmQRHeight"/> constraint), the capacity arithmetic
 /// behind it, and the actionable error messages. Expected versions are hand-derived
 /// from the capacity table (specs/rmqr-encoder.md). Areas: R7x43 = 301,

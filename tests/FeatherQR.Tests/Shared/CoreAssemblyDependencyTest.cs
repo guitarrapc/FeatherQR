@@ -6,7 +6,7 @@ using System.Xml.Linq;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The split's regression guard: the core assembly references no SkiaSharp, on every target
+/// The core assembly references no SkiaSharp, on every target
 /// framework it ships for. A single <c>using SkiaSharp;</c> that slips into the core would
 /// pass every functional test (the test host has SkiaSharp loaded) and reach consumers as a
 /// native dependency they installed FeatherQR to avoid.

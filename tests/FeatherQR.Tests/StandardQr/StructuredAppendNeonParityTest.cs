@@ -5,7 +5,7 @@ using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
-/// <summary>The ARM64 lanes end chunks where the scalar walk does at resets, saturation, runs of marks and the 16-bit budget boundary. Below the measured average chunk length they do not run and leave the search's bracket as it was.</summary>
+/// <summary>The ARM64 lanes end chunks where the scalar walk does at resets, saturation, runs of marks and the 16-bit budget boundary. Below the backend's threshold of average chunk length they do not run and leave the search's bracket as it was.</summary>
 public class StructuredAppendNeonParityTest
 {
     public static IEnumerable<(string Text, EciMode Charset)> Inputs()

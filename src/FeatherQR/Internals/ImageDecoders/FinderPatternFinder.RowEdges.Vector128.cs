@@ -13,15 +13,13 @@ internal static partial class FinderPatternFinder
     private static void ClassifyWindows8(ref short starts, ref short ends, nuint k, out Vector128<short> strict, out Vector128<short> near, out Vector128<short> crisp)
     {
         // The arithmetic is ClassifyWindows16's on eight lanes. How the checks became integers is at the top of that method.
-        // Two things are different here, both chosen on ARM64:
         //
-        // 1. The verdicts leave as lanes (0 or all bits), not as bits. Turning a vector of shorts into a bitmask is one
-        //    instruction on x64 and a short sequence on ARM64 (LaneBits), and a step would pay it three times while on a
-        //    symbol most steps flag nothing. The caller ORs the three verdicts, makes bits of that once, and only when some
-        //    lane is flagged makes bits of each verdict.
+        // The verdicts leave as lanes (0 or all bits), not as bits. Turning a vector of shorts into a bitmask is one
+        // instruction on x64 and a short sequence on ARM64 (LaneBits), and a step would pay it three times while on a
+        // symbol most steps flag nothing.
         //
-        // 2. Eight windows a step, not sixteen as two halves: the second half is wasted on every row's last step, and a row
-        //    of a small symbol has only a few dozen windows. Measured slower.
+        // Eight windows a step, not sixteen as two halves: the second half is wasted on every row's last step, and a row
+        // of a small symbol has only a few dozen windows.
         var s0 = Vector128.LoadUnsafe(ref starts, k);
         var s1 = Vector128.LoadUnsafe(ref starts, k + 1);
         var s2 = Vector128.LoadUnsafe(ref starts, k + 2);

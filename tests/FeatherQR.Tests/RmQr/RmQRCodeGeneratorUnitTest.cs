@@ -4,11 +4,10 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Public rMQR generator surface, with the signatures the design record fixed:
-/// class / span / span-destination / <c>TryGetRequiredBufferSize</c> agreement, the
-/// default fit strategy decision (MinimizeArea, matching both external encoders'
-/// automatic choice), argument validation, actionable capacity messages, and
-/// Release-only zero allocation on the span path.
+/// Public rMQR generator surface: class / span / span-destination /
+/// <c>TryGetRequiredBufferSize</c> agreement, the default fit strategy (MinimizeArea,
+/// matching both external encoders' automatic choice), argument validation, actionable
+/// capacity messages, and Release-only zero allocation on the span path.
 /// </summary>
 public class RmQRCodeGeneratorUnitTest
 {
@@ -231,7 +230,7 @@ public class RmQRCodeGeneratorUnitTest
     public async Task Create_SpanDestination_IsAllocationFree()
     {
         // Steady-state span-destination encoding (Latin-1 and UTF-8, largest version) must
-        // not allocate. Debug builds are excluded per repo notes.
+        // not allocate.
         var latin = "the quick brown fox jumps over the lazy dog?! the quick brown fox jumps over the lazy dog?! the quick brown fox";
         var utf8 = "rMQR 矩形コード ✓ naïve café";
         var size = Sizing.Required(latin.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });

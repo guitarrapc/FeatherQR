@@ -1,8 +1,8 @@
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// <see cref="RmQRCodeGeneratorOptions"/>, the options struct that replaced the rMQR
-/// generator's parameter lists (specs/qrcode-symbologies.md, Public API direction).
+/// <see cref="RmQRCodeGeneratorOptions"/>, the options struct of the rMQR generator
+/// (specs/qrcode-symbologies.md, Public API direction).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -121,8 +121,7 @@ public class RmQRCodeGeneratorOptionsTest
     [Test]
     public async Task Generator_UnadornedCall_UsesTheSpecQuietZone()
     {
-        // The end-to-end proof of the sentinel: if "unset" meant 0, this symbol would be
-        // 43x7 instead of 47x11, and every existing rMQR expectation would shift.
+        // If "unset" meant 0, this symbol would be 43x7 instead of 47x11.
         var size = Sizing.Required("1".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
 
         await Assert.That(size.Width).IsEqualTo(R7x43CoreWidth + SpecQuietZone * 2);

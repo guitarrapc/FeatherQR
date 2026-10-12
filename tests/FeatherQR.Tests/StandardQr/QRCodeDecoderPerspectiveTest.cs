@@ -21,7 +21,7 @@ public class QRCodeDecoderPerspectiveTest
     [Arguments(15, 0.04f)]
     [Arguments(15, 0.06f)]
     [Arguments(15, 0.08f)]
-    [Arguments(20, 0.04f)] // regression guard: snapped one version low / bent global anchor before the mesh
+    [Arguments(20, 0.04f)]
     [Arguments(25, 0.04f)]
     [Arguments(25, 0.08f)]
     // The bottom-right alignment pattern where the finders' frame predicts it

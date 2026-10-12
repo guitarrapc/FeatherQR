@@ -83,7 +83,6 @@ public static class QRCodeGenerator
         ValidateEciMode(eciMode);
         ValidateEccLevel(eccLevel);
 
-        // Prepare configuration
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji);
         return CreateCore(textSpan, in config, quietZoneSize, maskPattern);
     }
@@ -97,12 +96,10 @@ public static class QRCodeGenerator
         var coreSize = result.GetCoreSize();
         var dataLength = coreSize * coreSize;
 
-        // Allocate buffers
         byte[]? rentedWorkBuffer = null;
 
         try
         {
-            // Work buffer (without quiet zone)
             rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
             // No clear: the placement template covers every core module.
             var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
@@ -127,7 +124,6 @@ public static class QRCodeGenerator
         ValidateEciMode(eciMode);
         ValidateEccLevel(eccLevel);
 
-        // Prepare configuration
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji);
         return CreateCore(textSpan, in config, destination, quietZoneSize, maskPattern);
     }
@@ -179,11 +175,8 @@ public static class QRCodeGenerator
 #if !NETSTANDARD2_1_OR_GREATER && !NET5_0_OR_GREATER
     /// <summary>
     /// Copies the rows of the contiguous <paramref name="core"/> into the window the quiet zone leaves in <paramref name="target"/>,
-    /// which the caller cleared before building the core, as the path before the move in place did. netstandard2.0 keeps that path: on
-    /// .NET Framework 4.8 the move took 1.13 to 1.14 times as long at versions 1 to 20 with one store a gap (quiet zone 4), 1.15 to 1.26
-    /// with two (quiet zone 6) and 1.17 to 1.29 with a clear a gap, and 0.99 to 1.09 at version 40 (one process of a kernel, 2026-10-06).
-    /// netstandard2.1 moves the core in place: on .NET 6 and 7, which run it, the quiet zone cost no symbol timed, versions 1 to 40, more
-    /// with the move than with this path at quiet zones 4 and 6, read over each symbol's quiet-zone-free encode (2026-10-07).
+    /// which the caller cleared before building the core. netstandard2.0 takes this path and not the move in place: on .NET Framework,
+    /// the runtime that loads it, the move is the slower of the two. netstandard2.1 moves the core in place, which is no slower on .NET 6 and 7.
     /// </summary>
     private static void CopyIntoWindow(ReadOnlySpan<byte> core, Span<byte> target, int coreSize, int quietZoneSize)
     {
@@ -203,7 +196,6 @@ public static class QRCodeGenerator
     /// <param name="maskPattern">Pinned mask pattern (0-7), or <see cref="AutomaticMask"/> for penalty-scored selection.</param>
     private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in QRConfiguration config, Span<byte> coreBuffer, int coreSize, int maskPattern)
     {
-        // Calculate buffer sizes
         var dataCapacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
         var dataBufferSize = (dataCapacity + 7) / 8; // bits to bytes, rounded up
         var totalBlocks = config.EccInfo.BlocksInGroup1 + config.EccInfo.BlocksInGroup2;
@@ -214,37 +206,22 @@ public static class QRCodeGenerator
         Span<byte> eccBuffer = stackalloc byte[eccBufferSize];
         Span<byte> interleavedBuffer = stackalloc byte[interleavedSize];
 
-        // Encode data
         var encodedLength = EncodeData(textSpan, config, dataBuffer);
         var encodedData = dataBuffer.Slice(0, encodedLength);
 
-        // Calculate Error Correction
         CalculateErrorCorrection(encodedData, config.EccInfo, eccBuffer);
-
-        // Interleave data
         InterleaveCodewords(encodedData, eccBuffer, config.EccInfo, config.Version, interleavedBuffer);
-
-        // QR matrix in core buffer
         WriteQRMatrix(coreBuffer, coreSize, config.Version, interleavedBuffer, config.EccLevel, maskPattern);
     }
 
     // ---- the Create surface -----------------------------------------------------------
     //
-    // Two overloads, one shape. The 1.1.1 parameter lists (utf8BOM, eciMode,
-    // requestedVersion, quietZoneSize) were frozen through 1.2.0 and removed in 2.0.0,
-    // which is what lets `options` carry a default here: while both sets existed,
-    // Create(text, ecc) would have been ambiguous between them. The string convenience
-    // overloads went with them, on the strength of `string` converting implicitly to
-    // ReadOnlySpan<char> so that Create("text", ecc) still binds. That holds on three of the
-    // four assets, not all four: the conversion is compiler-synthesized, and when
-    // ReadOnlySpan<T> comes from the System.Memory package rather than the framework (the
-    // netstandard2.0 asset, which is what .NET Framework consumers bind), only C# 14
-    // synthesizes it. Below that, those consumers write Create(text.AsSpan(), ecc). The
-    // options structs need no such spelling: their accessors are `set`, so an object
-    // initializer compiles for the same audience.
+    // No string overloads: string converts to ReadOnlySpan<char>, so Create("text", ecc) binds. On the
+    // netstandard2.0 asset the span comes from the System.Memory package, and only C# 14 synthesizes
+    // that conversion there. Older compilers write Create(text.AsSpan(), ecc).
     //
-    // Sizing is deliberately not paired: only TryGetRequiredBufferSize is offered, because
-    // "does not fit" is a data-dependent answer rather than a defect.
+    // No throwing sizing method beside TryGetRequiredBufferSize: "does not fit" is an answer about the
+    // data, not a defect.
 
     /// <summary>
     /// Encodes text into a QR code.
@@ -548,12 +525,12 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// The set of a Kanji-eligible text: the Kanji set, and for a text with ASCII in it (under Optimal, since under Single it is not one segment a chunk) today's UTF-8 set beside it.
+    /// The set of a Kanji-eligible text: the Kanji set, and for a text with ASCII in it (under Optimal, since under Single it is not one segment a chunk) the UTF-8 set beside it.
     /// The Kanji set is taken unless the UTF-8 set needs fewer symbols, or as many at a version no larger.
     /// </summary>
     /// <remarks>
     /// Text whose every character has a cell is a Kanji set under both segmentations, as <c>Create</c> writes it in Kanji mode under both: character for character 13 bits against 16 or 24 as UTF-8, and no ECI header, so any split of its UTF-8 set is a split of its Kanji set too, and the Kanji set is never larger.
-    /// A text with ASCII in it pays a header a run where its characters change kind, so there the UTF-8 set can be the smaller. Comparing the two the way <c>Create</c> compares a plan with the single stream keeps <c>Optimal</c> from growing a set, and leaves today's set where the Kanji one is no smaller.
+    /// A text with ASCII in it pays a header a run where its characters change kind, so there the UTF-8 set can be the smaller. Comparing the two the way <c>Create</c> compares a plan with the single stream keeps <c>Optimal</c> from growing a set, and leaves the UTF-8 set where the Kanji one is no smaller.
     /// Each set has a floor, the fewest symbols of the largest version its characters at their cheapest rate could fill, and for the Kanji set a run for every stretch of cells and of ASCII (<see cref="StructuredAppendPlanner.CanHoldKanji"/>).
     /// The set with the lower floor is planned first, and the other only where its floor says it could still win: a Kanji set planned only to lose costs a walk of the eight-state program, which is more than the UTF-8 set it loses to.
     /// </remarks>
@@ -979,8 +956,6 @@ public static class QRCodeGenerator
         return (totalSize, totalSize * totalSize);
     }
 
-    // Pipelines
-
     /// <summary>
     /// Prepares QR configuration by determining encoding, ECI mode, and version.
     /// </summary>
@@ -1013,7 +988,6 @@ public static class QRCodeGenerator
     {
         Debug.Assert(FitsVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, utf8BOM, version), "The version comes from a fit.");
 
-        // Create ECCInfo
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 
         // UTF-8 BOM bytes ([0xEF, 0xBB, 0xBF]) are written into the Byte-mode data stream,
@@ -1082,28 +1056,19 @@ public static class QRCodeGenerator
     /// <param name="interleavedData">The encoded and interleaved data bytes to be placed in the QR code.</param>
     /// <param name="eccLevel">The error correction level to use for the QR code.</param>
     /// <param name="maskPattern">Pinned mask pattern (0-7), or <see cref="AutomaticMask"/> for penalty-scored selection.</param>
-    /// <returns>A <see cref="QRCodeData"/> object containing the generated QR code matrix.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteQRMatrix(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> interleavedData, QREccLevel eccLevel, int maskPattern)
     {
-        // Function patterns, the blocked-module bitmask and the zigzag order all come
-        // from the version's cached placement tables (ModulePlacer.PlacementLayout).
-        // On .NET 8 and later with AVX2, from version 12, automatic selection takes the
-        // interleaved stream into its own bit planes and writes every module, the version
-        // information included and the format modules light.
-        // Otherwise the template copy paints every function module and zeros the rest,
-        // the data placement writes only the stream bits, and mask selection reads the
-        // cached blocked mask directly (no per-call bitmask build).
+        // On .NET 8 and later with AVX2, from version 12, automatic selection takes the interleaved stream into its own bit planes and writes every module, the version information included and the format modules light.
+        // Otherwise the template copy paints every function module and zeros the rest, and the data placement writes only the stream bits.
         int maskVersion;
         if (maskPattern != AutomaticMask || !ModulePlacer.TryMaskCodeFromStream(buffer, version, interleavedData, eccLevel, out maskVersion))
         {
             var layout = ModulePlacer.GetLayout(version);
             layout.Template.AsSpan().CopyTo(buffer);
 
-            // Place data
             ModulePlacer.PlaceDataWords(buffer, layout, interleavedData);
 
-            // Apply mask
             if (maskPattern != AutomaticMask)
             {
                 ModulePlacer.ApplyMaskPattern(buffer, size, layout.BlockedMask, maskPattern);
@@ -1114,7 +1079,6 @@ public static class QRCodeGenerator
                 maskVersion = ModulePlacer.MaskCode(buffer, size, version, layout.BlockedMask, eccLevel);
             }
 
-            // Place version information (version 7+)
             if (version >= 7)
             {
                 var versionBits = QRCodeConstants.GetVersionBits(version);
@@ -1152,14 +1116,10 @@ public static class QRCodeGenerator
     /// </summary>
     internal static void PlaceFunctionModulesReference(Span<byte> buffer, int size, int version, Span<byte> blockedMask)
     {
-        // Version 1-16: stack allocation (covers 95%+ use cases)
-        // Version 17+: heap allocation (large/rare QR codes)
+        // Versions 1-16 take their rectangles on the stack. Larger versions rent.
         const int StackAllocThreshold = 16;
-        const int StackAllocSize = 40; // Sufficient for version 16 (33 modules needed)
+        const int StackAllocSize = 40; // Sufficient for version 16 (33 rectangles needed)
 
-        // Version 1:  approximately  9
-        // Version 7:  approximately 27
-        // Version 40: approximately 57
         Rectangle[]? rentedBlockedModules = null;
 
         try
@@ -1171,7 +1131,6 @@ public static class QRCodeGenerator
             blockedModulesBuffer.Clear();
             var blockedCount = 0;
 
-            // Place all patterns
             var alignmentPatternLocations = GetAlignmentPatternPositions(version);
             ModulePlacer.PlaceFinderPatterns(buffer, size, blockedModulesBuffer, ref blockedCount);
             ModulePlacer.ReserveSeparatorAreas(size, blockedModulesBuffer, ref blockedCount);
@@ -1180,7 +1139,6 @@ public static class QRCodeGenerator
             ModulePlacer.PlaceDarkModule(buffer, size, version, blockedModulesBuffer, ref blockedCount);
             ModulePlacer.ReserveVersionAreas(size, version, blockedModulesBuffer, ref blockedCount);
 
-            // Generate BitMask
             blockedMask.Clear();
             BuildBlockedMask(blockedMask, size, blockedModulesBuffer.Slice(0, blockedCount));
         }
@@ -1236,13 +1194,12 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// Calculates the maximum bit string length for the given encoding mode, data, and version.
-    /// Used to pre-allocate StringBuilder capacity to avoid resizing.
+    /// The length in bits of the padded data stream of a version at an ECC level, which is its data capacity. Sizes the data buffer.
     /// </summary>
     /// <param name="version">QR code version (1-40).</param>
     /// <param name="eccLevel">Error correction level.</param>
-    /// <param name="encoding">Encoding mode (Numeric, Alphanumeric, Byte, Kanji).</param>
-    /// <returns>Maximum bit string length in characters.</returns>
+    /// <param name="encoding">Encoding mode (Numeric, Alphanumeric, Byte, Kanji). The capacity does not depend on it.</param>
+    /// <returns>The data capacity in bits.</returns>
     internal static int CalculateMaxBitStringLength(int version, QREccLevel eccLevel, EncodingMode encoding)
     {
         if (version is < 1 or > 40)
@@ -1255,8 +1212,6 @@ public static class QRCodeGenerator
         return eccInfo.TotalDataCodewords * 8; // Convert bytes to bits
     }
 
-    // Utilities
-
     /// <summary>
     /// Calculates the number of blocked modules (reserved areas) for the given version.
     /// </summary>
@@ -1265,16 +1220,9 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateBlockedModulesSize(int version)
     {
-        // Blocked modules are reserved areas in the QR matrix that contain fixed patterns:
-        // - Finder patterns (3x)
-        // - Separators (3x)
-        // - Timing patterns (2x)
-        // - Dark module (1x)
-        // - Format information areas (varies by version)
-        // - Version information areas (version 7+)
-        // - Alignment patterns (varies by version, 0 for version 1, increases with version)
-        // The calculation ensures sufficient buffer space for all reserved areas.
-
+        // One rectangle a reserved area: 3 finder patterns, 6 separator strips, 2 timing patterns and the
+        // dark module make 12. The format information takes 6 and the version information, from version 7,
+        // 2 more. The rest are the alignment patterns.
         const int basePatterns = 12;
         var formatVersionAreas = version >= 7 ? 8 : 6;
         var alignmentPatternCount = CalculateAlignmentPatternCount(version);
@@ -1282,20 +1230,15 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// Calculates the number of alignment pattern positions for a given QR code version.
+    /// An upper bound on the number of alignment patterns of a version, which sizes the buffer of blocked rectangles.
     /// </summary>
     /// <param name="version">The QR code version (1-40)</param>
-    /// <returns>The total number of alignment patterns required for the specified version.</returns>
+    /// <returns>At least the number of alignment patterns the version places.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateAlignmentPatternCount(int version)
     {
-        // Alignment patterns help QR code readers correct for distortion:
-        // - Version 1: No alignment patterns (0)
-        // - Version 2+: Multiple alignment patterns arranged in a grid
-        // - Pattern count = (positions × positions) - overlaps with finder patterns
-        // - Overlaps: 3 corners where alignment patterns would conflict with finder patterns
-        // The result is used to allocate buffer space for blocked module tracking.
-
+        // The list holds every grid point already, so the product overshoots the count. Version 1 has no
+        // alignment pattern, and the three positions under the finder patterns are never placed.
         if (version == 1) return 0;
         var positions = GetAlignmentPatternPositions(version);
         var posCount = positions.Count;
@@ -1355,7 +1298,6 @@ public static class QRCodeGenerator
     {
         selectedVersion = 0;
 
-        // ECI header overhead if eci specified
         var eciHeaderBits = eciMode.GetStandardQrHeaderBits();
         var modeIndicatorBits = ModeIndicatorBits;
 
@@ -1380,13 +1322,11 @@ public static class QRCodeGenerator
             _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
         };
 
-        // Iterate through versions to find the minimum suitable version
-        // Character count indicator size changes at version 10 and 27
+        // The character count indicator widens at versions 10 and 27
         for (var version = minVersion; version <= maxVersion; version++)
         {
             var countIndicatorBits = encoding.GetCountIndicatorLength(version);
 
-            // Total required bits
             var totalRequiredBits = eciHeaderBits + modeIndicatorBits + countIndicatorBits + dataBits;
 
             // Actual capacity for this version and ECC level (an index into the ECC table)
@@ -1401,7 +1341,6 @@ public static class QRCodeGenerator
 
         return false;
 
-        // Calculates actual bit count for numeric encoding.
         // 3 digits → 10 bits, 2 digits → 7 bits, 1 digit → 4 bits.
         static long CalculateNumericBits(int length)
         {
@@ -1416,7 +1355,6 @@ public static class QRCodeGenerator
             return bits;
         }
 
-        // Calculates actual bit count for alphanumeric encoding.
         // 2 characters → 11 bits, 1 character → 6 bits.
         static long CalculateAlphanumericBits(int length)
         {
@@ -1429,15 +1367,10 @@ public static class QRCodeGenerator
         }
     }
 
-    // ---------------------------------------------------------------
-    // Mixed-mode segmentation (QRSegmentation.Optimal).
-    //
-    // Kept in its own non-inlined methods so the single-mode entry points above keep
-    // their frame and codegen. The plan buffer lives here rather than in the planner
-    // because a plan is a caller-lent Span<ModeSegment> that never escapes: stack for
-    // short content, pooled for long (a plan can never hold more runs than the
-    // content has characters, so a text-length buffer always suffices).
-    // ---------------------------------------------------------------
+    // Mixed-mode segmentation (QRSegmentation.Optimal), in its own non-inlined methods so the single-mode
+    // entry points above keep their frame and codegen. The plan buffer lives here and not in the planner,
+    // because a plan is a caller-lent Span<ModeSegment> that never escapes: stack for short content, pooled
+    // for long. A plan never holds more runs than the content has characters, so a text-length buffer suffices.
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static QRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
@@ -1677,12 +1610,10 @@ public static class QRCodeGenerator
             : QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount);
         if (!built)
         {
-            // The plan that justified this version could not be rebuilt (it needed
-            // more runs than the buffer holds, the decoder would misread it, or the
-            // exact re-cost disagreed with the dynamic program). Fall back to the
-            // single-mode fit, which reports the ordinary "does not fit" error when
-            // there is no such fit. That is the honest outcome, because with the plan gone
-            // nothing else can be emitted.
+            // The plan that justified this version could not be rebuilt: it needs more runs than the buffer
+            // holds, the decoder would misread it, or the exact re-cost disagrees with the dynamic program.
+            // Only the single-mode fit is left to emit, and it reports the ordinary "does not fit" error
+            // when there is none.
             segmentCount = 0;
             if (!TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, false, options.Version.Min, options.Version.Max, out version))
                 ThrowDoesNotFit(in analysis, eccLevel, in options);

@@ -9,7 +9,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// Table-driven placement for Standard QR: everything the placer derives from the version alone is built once per version by the reference painters and cached (<see cref="PlacementLayout"/>): the painted function-module template, the blocked-module bitmask, the zigzag walk over free modules as core indices, and the walk segmented into runs of rows where both strip columns are free.
 /// </summary>
 /// <remarks>
-/// Benchmark-driven (kernel 4.5-9x over the per-call painters + acc64 walk at v40..v1, see the Performance section of specs/standardqr-encoder.md). The reference implementations (<see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>, <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>) remain the source of truth: they build the tables and the parity tests hold the fast paths to them byte for byte.
+/// The reference implementations (<see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>, <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>) remain the source of truth: they build the tables and the parity tests hold the fast paths to them byte for byte.
 /// Memory per version used: size² template + size²/8 mask + 2 B per free module + a few hundred ops (≤ 95 KB at v40, ~1.3 MB if all 40 versions were ever used).
 /// </remarks>
 internal static partial class ModulePlacer

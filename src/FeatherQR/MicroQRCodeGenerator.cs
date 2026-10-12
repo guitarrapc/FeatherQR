@@ -142,11 +142,7 @@ public static class MicroQRCodeGenerator
         return requiredSize;
     }
 
-    // The automatic-selection sizing core. This was public in the unreleased 1.2.0 surface
-    // as TryGetRequiredBufferSize(text, ecc, out size, requestedVersion, quietZoneSize);
-    // only the public overload was dropped, so the options overload's automatic path is the
-    // same code it always ran. The version argument went once nothing passed one: a pinned
-    // version is a one-version range, sized by TryGetRequiredBufferSizeRanged.
+    // Sizing under automatic selection. A pinned version is a one-version range, sized by TryGetRequiredBufferSizeRanged.
     private static bool TryCalculateSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, int quietZoneSize, bool allowKanji)
     {
         size = default;
@@ -163,13 +159,7 @@ public static class MicroQRCodeGenerator
 
     // ---- options overloads ---------------------------------------------------------
     //
-    // The only Create shape. The 1.1.1 parameter lists (requestedVersion, quietZoneSize)
-    // were frozen through 1.2.0 and removed in 2.0.0, which is what lets `options` carry a
-    // default here: while both sets existed, Create(text, ecc) would have been
-    // ambiguous between them.
-    //
-    // Sizing is deliberately not paired: only TryGetRequiredBufferSize is offered, because
-    // "does not fit" is a data-dependent answer rather than a defect.
+    // No throwing sizing method beside TryGetRequiredBufferSize: "does not fit" is an answer about the data, not a defect.
 
     /// <summary>
     /// Encodes text into a Micro QR code.
@@ -246,8 +236,7 @@ public static class MicroQRCodeGenerator
 
     private static void ValidateQuietZone(int quietZoneSize)
     {
-        // 17 + 2·qz squared must stay far below int.MaxValue. 10000 modules of
-        // quiet zone is already absurd, so a simple hard cap keeps the math safe.
+        // 17 + 2·qz squared must stay far below int.MaxValue. 10000 modules of quiet zone is already absurd, so a simple hard cap keeps the math safe.
         if (quietZoneSize < 0 || quietZoneSize > 10_000)
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
     }
@@ -257,10 +246,8 @@ public static class MicroQRCodeGenerator
     /// </summary>
     private static MicroQRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, bool allowKanji)
     {
-        // Micro QR has no ECI, so analysis runs with the default charset rules,
-        // Kanji mode included when the caller asked for it. For Byte mode the analyzer's DataLength is already
-        // the encoded byte count (ISO-8859-1 char count or UTF-8 byte count), for
-        // Kanji mode the character count.
+        // Micro QR has no ECI, so analysis runs with the default charset rules, Kanji mode included when the caller asked for it.
+        // For Byte mode the analyzer's DataLength is already the encoded byte count (ISO-8859-1 char count or UTF-8 byte count), for Kanji mode the character count.
         var analysis = Analyze(textSpan, allowKanji);
         if (TrySelectVersion(in analysis, eccLevel, out var version))
             return PrepareConfiguration(in analysis, eccLevel, version);
@@ -424,14 +411,14 @@ public static class MicroQRCodeGenerator
         return PrepareConfiguration(in analysis, eccLevel, version);
     }
 
-    /// <summary>The parameter name a pinned version's errors report: the version was a <c>requestedVersion</c> parameter before ranges replaced it, and callers may read the name.</summary>
+    /// <summary>The parameter name a pinned version's errors report. No parameter has this name, but callers may read it from the exception, so it stays.</summary>
     private const string PinnedVersionParamName = "requestedVersion";
 
     /// <summary>
     /// The actionable "does not fit" error, built off the success path: which constraint binds (mode availability versus length) and what the applicable maximum is, among the versions <paramref name="range"/> allows.
     /// </summary>
     /// <remarks>
-    /// A pinned version and the unconstrained range keep the messages they have always had. A narrowed range names itself and looks only at its own versions, so the version a message offers is one the caller allowed.
+    /// A pinned version and the unconstrained range each have their own message. A narrowed range names itself and looks only at its own versions, so the version a message offers is one the caller allowed.
     /// </remarks>
     private static ArgumentException NotFittingError(EncodingMode mode, int dataLength, MicroQREccLevel eccLevel, MicroQRVersionRange range)
     {
@@ -466,8 +453,7 @@ public static class MicroQRCodeGenerator
 
         if (!range.IsAny)
         {
-            // A range that offers the level nowhere was refused before any fit could fail
-            // (TrySelectVersionInRange), so a range with no best version lacks the mode.
+            // A range that offers the level nowhere was refused before any fit could fail (TrySelectVersionInRange), so a range with no best version lacks the mode.
             if (bestMax < 0)
             {
                 return new ArgumentException(
@@ -482,8 +468,7 @@ public static class MicroQRCodeGenerator
                 "Shorten the content, lower the ECC level, widen the version range, or use Standard QR (QRCodeGenerator) for longer content.");
         }
 
-        // No version supports this mode/ECC combination at any length, a constraint
-        // problem, not a length problem, so say which constraint binds.
+        // No version supports this mode/ECC combination at any length, a constraint problem, not a length problem, so say which constraint binds.
         if (bestMax < 0)
         {
             return new ArgumentException(
@@ -562,19 +547,13 @@ public static class MicroQRCodeGenerator
         return headerBits + dataBits;
     }
 
-    // ---------------------------------------------------------------
-    // Mixed-mode segmentation (MicroQRSegmentation.Optimal).
-    //
-    // Kept in its own non-inlined methods so the single-mode entry points above keep
-    // their frame and codegen. Micro QR content never exceeds 35 characters, so the
-    // plan buffer is always a small stackalloc and nothing here rents.
-    // ---------------------------------------------------------------
+    // Mixed-mode segmentation (MicroQRSegmentation.Optimal), in its own non-inlined methods so the single-mode entry points above keep their frame and codegen.
+    // Micro QR content never exceeds 35 characters, so the plan buffer is always a small stackalloc and nothing here rents.
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static MicroQRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
     {
-        // Quiet zone first, then segmentation: the same precedence as the other
-        // symbologies, so every surface reports the same error first.
+        // Quiet zone first, then segmentation: the same precedence as the other symbologies, so every surface reports the same error first.
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
@@ -589,8 +568,7 @@ public static class MicroQRCodeGenerator
         Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
         if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, version, eccLevel, plan, out var segmentCount))
         {
-            // The plan that justified this version could not be rebuilt, so fall back to
-            // the single-mode fit, which owns the error when there is none.
+            // The plan that justified this version could not be rebuilt, so fall back to the single-mode fit, which owns the error when there is none.
             if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
                 throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
             return CreateCore(textSpan, PrepareConfiguration(in analysis, eccLevel, version), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
@@ -718,9 +696,8 @@ public static class MicroQRCodeGenerator
     /// Runs the encode → ECC → placement → masking → format pipeline into a byte-per-module core buffer, every module of which it writes.
     /// Allocation-free: all intermediates are stackalloc.
     /// </summary>
-    // Called on .NET 10, where the JIT inlines it into the span Create when the inline budget allows. Inlined, M2 and M4 took 1.08 to
-    // 1.15 times as long as called at the default quiet zone and 1.04 to 1.08 with none (x64). .NET 8 inlines it into CreateCore, and
-    // there inlined took 0.93 to 1.02 of the time called took (2026-10-08).
+    // Called on .NET 10, where the JIT would inline it into the span Create when the inline budget allows, and the encode is
+    // slower inlined than called. .NET 8 inlines it into CreateCore, where inlined is no slower.
 #if NET10_0_OR_GREATER
     [MethodImpl(MethodImplOptions.NoInlining)]
 #endif

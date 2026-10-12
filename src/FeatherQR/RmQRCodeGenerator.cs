@@ -310,13 +310,9 @@ public static class RmQRCodeGenerator
         RmQRModulePlacer.PlaceSymbol(core, stride, config.Version, config.EccLevel, finalMessage);
     }
 
-    // ---------------------------------------------------------------
-    // Mixed-mode segmentation (RmQRSegmentation.Optimal).
-    //
-    // Kept in its own non-inlined methods so the single-mode entry points above keep
-    // their frame and codegen. The plan buffer lives here rather than in the planner
-    // because a plan is a caller-lent Span<ModeSegment> that never escapes.
-    // ---------------------------------------------------------------
+    // Mixed-mode segmentation (RmQRSegmentation.Optimal), in its own non-inlined methods so the
+    // single-mode entry points above keep their frame and codegen. The plan buffer lives here and
+    // not in the planner, because a plan is a caller-lent Span<ModeSegment> that never escapes.
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static RmQRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, bool allowKanji, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int quietZoneSize, RmQRSegmentation segmentation)
@@ -385,14 +381,10 @@ public static class RmQRCodeGenerator
 
         if (useSegments && !TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, plan, out segmentCount))
         {
-            // The plan for this version could not be built: it needed more runs
-            // than the buffer holds, the decoder would misread it, the exact
-            // re-cost disagreed with the dynamic program, or, for a requested
-            // version, which the scan accepts unpriced, the content is unplannable
-            // or the stream simply does not fit it. Fall back to the single-mode
-            // fit, which throws the ordinary "content is too long" error when there
-            // is no such fit, the honest outcome, because with the plan gone
-            // nothing else can be emitted.
+            // No plan could be built for this version: it needs more runs than the buffer holds, the
+            // decoder would misread it, or the exact re-cost disagrees with the dynamic program. The scan
+            // accepts a requested version unpriced, so there the content can also be unplannable or too long.
+            // Only the single-mode fit is left to emit, and it throws "content is too long" when there is none.
             segmentCount = 0;
             version = RmQRSegmentPlanner.SelectSingle(in analysis, eccLevel, requestedVersion, fitStrategy, height);
         }

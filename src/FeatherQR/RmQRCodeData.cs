@@ -20,8 +20,8 @@ public sealed class RmQRCodeData
     //
     // RmQRCodeData stores CORE modules only (no quiet zone), bit-packed
     // MSB-first in flat row-major order, zero-padded to a whole byte, and the
-    // packed bits ARE the serialization payload. See QRCodeData for the
-    // measurements that motivate the layout.
+    // packed bits ARE the serialization payload. See QRCodeData for why
+    // the layout is not a byte per module.
     //
     // The difference that matters here is that rMQR is RECTANGULAR, so there is
     // no single "size": the row stride is _coreWidth, and width and height are
@@ -293,12 +293,11 @@ public sealed class RmQRCodeData
     /// <remarks>
     /// <para>
     /// Coordinates match the indexer: one unit is one module, the origin is the top-left corner including the quiet zone, <see cref="ModuleRect.X"/> is the column and <see cref="ModuleRect.Y"/> the row.
-    /// Scale by the pixel size of one module.
-    /// Consumers scale by the pixel size of one module. <see cref="Width"/> and <see cref="Height"/> give the total extent in modules.
+    /// Scale by the pixel size of one module. <see cref="Width"/> and <see cref="Height"/> give the total extent in modules.
     /// </para>
     /// <para>
     /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
-    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol, but a styled one draws its finder patterns as whole patterns instead).
+    /// Currently they are maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol. A styled one draws its finder patterns as whole patterns instead.
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()

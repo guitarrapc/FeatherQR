@@ -14,10 +14,10 @@ namespace FeatherQR.Internals;
 /// </summary>
 /// <remarks>
 /// A run's cost is not a per-character constant, so the dynamic program carries the packing-group remainder in its state: Numeric with 0, 1 or 2 digits in the open group, Alphanumeric with 0 or 1 characters in the open pair, Byte, and a virtual start.
-/// The six costs live in locals and each target is the cheaper of continuing its run or opening it from the cheapest state, so a character is a handful of adds and mins. The program used to relax every state from every state through two stack arrays, which cost six times as much per character as the arithmetic.
+/// The six costs live in locals and each target is the cheaper of continuing its run or opening it from the cheapest state, so a character is a handful of adds and mins. Relaxing every state from every state through arrays would cost far more in memory traffic than the arithmetic.
 /// The common shapes get their own loop: a Latin charset (every character one byte) with Byte allowed, for costs, for costs with parents, and for the prefix walk. Everything else (UTF-8, a Micro QR version without a mode) shares one general loop per entry point. A run outside the alphanumeric alphabet leaves only Byte reachable, so every loop steps such a run as one add per character.
 /// Micro QR restricts modes per version (M1 is Numeric-only, M2 has no Byte mode). Its planner disables the missing transitions via <c>allowAlnum</c>/<c>allowByte</c>, and a character no allowed mode encodes leaves the cost at <see cref="Unreachable"/>.
-/// Ties are broken as the all-states relaxation did (the lowest predecessor state wins), so the reconstructed plan is the same plan. <c>ModeSegmenterByteRunParityTest</c> holds every loop to that reference.
+/// Ties go to the lowest predecessor state, as in an all-states relaxation, so the reconstructed plan is the same plan. <c>ModeSegmenterByteRunParityTest</c> holds every loop to that reference.
 /// With parents, a state is carried as a key: its cost shifted up three bits with the state's number below it. The minimum of keys is the minimum cost and, among equal costs, the lowest state, so the predecessor is the low bits of the minimum the cost-only loop takes anyway.
 /// Only three predecessors vary (those of Numeric1, Alnum1 and Byte, while the others are constants of the packing groups), so the table is two bytes a character, and the walk back steps from one place a run can begin to the one before it rather than from character to character.
 /// </remarks>
@@ -470,7 +470,7 @@ internal static partial class ModeSegmenter
     /// </summary>
     /// <remarks>
     /// After any character either Kanji or the other six states are reachable, never both, so Kanji's predecessor takes the byte Byte's takes at an ASCII position: the table stays <see cref="ParentBytesPerChar"/> bytes a character, and <see cref="WalkBack"/> steps a Kanji run the way it steps a Byte run.
-    /// A program of its own rather than a flag on the seven-state loops, so every text that is not eligible runs exactly the program it ran before.
+    /// A program of its own rather than a flag on the seven-state loops, so a text that is not eligible pays nothing for the eighth state.
     /// </remarks>
     public static int ComputeCostsKanji(ReadOnlySpan<char> text, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, int cciKanji, Span<byte> parents, out int finalState)
     {
@@ -987,7 +987,7 @@ internal static partial class ModeSegmenter
     /// </summary>
     /// <remarks>
     /// No run of a Kanji plan crosses from one kind of stretch to the other (Kanji holds no ASCII, and no other mode holds a character with a cell), so each stretch opens at least one run, and a planner's screen adds a header per stretch rather than one in all.
-    /// For interleaved text that is most of the plan's cost, and the one-header screen let through versions its plan could not fit.
+    /// For interleaved text that is most of the plan's cost, and a one-header screen would let through versions its plan cannot fit.
     /// </remarks>
     public static int CheapestSixthsKanji(ReadOnlySpan<char> text, out int utf8Sixths, out int cellRuns, out int asciiRuns)
     {

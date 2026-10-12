@@ -134,7 +134,7 @@ internal static partial class ModeSegmenter
                     }
                     else
                     {
-                        // One byte, one more above U+007F, one more above U+07FF. A compare is all ones, so it takes one off.
+                        // One byte, one more above U+007F, one more above U+07FF. A compare that holds is all ones, which is -1, so subtracting it adds one.
                         byteBits = (Vector128.Create(1) - Vector128.GreaterThan(chars, Vector128.Create(0x7F)) - Vector128.GreaterThan(chars, Vector128.Create(0x7FF))) << 6;
                     }
                 }

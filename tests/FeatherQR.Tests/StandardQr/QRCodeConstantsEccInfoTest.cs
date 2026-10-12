@@ -39,7 +39,7 @@ public class QRCodeConstantsEccInfoTest
     [Arguments(40, QREccLevel.H, 1276)]
     public async Task DataCodewords_MatchTheStandard(int version, QREccLevel level, int dataCodewords)
     {
-        // ISO/IEC 18004 Table 9 anchors, including the two symbols the benchmarks named one version high.
+        // ISO/IEC 18004 Table 9 anchors.
         await Assert.That(QRCodeConstants.GetEccInfo(version, level).TotalDataCodewords).IsEqualTo(dataCodewords);
     }
 

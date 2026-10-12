@@ -115,7 +115,7 @@ internal static class MicroQRSegmentPlanner
     /// At each candidate the Kanji plan (Kanji runs beside runs of the ASCII) is taken where it fits, otherwise the UTF-8 plan the seven-state program gives the same text. Neither carries an ECI header, since Micro QR has none.
     /// </summary>
     /// <remarks>
-    /// The UTF-8 plan is weighed so that Optimal never needs a larger version than it did before Kanji plans. Both need Byte or Kanji mode, so M1 and M2 are skipped as the mode pre-filter skips them for UTF-8 text.
+    /// The UTF-8 plan is weighed so that Optimal never needs a larger version than the UTF-8 plan alone would. Both need Byte or Kanji mode, so M1 and M2 are skipped as the mode pre-filter skips them for UTF-8 text.
     /// The Kanji screen prices a character with a cell at 13 bits, and a header for every stretch of characters with a cell and every stretch of ASCII (<see cref="KanjiScreenBits(int, int, int, MicroQRVersion)"/>).
     /// At the UTF-8 rate of 24 bits a kana, the screen would reject M3 for 「日本語12345」, whose Kanji plan fits M3-L.
     /// With a <paramref name="kanjiTable"/>, each Kanji cost run keeps its predecessors there, so the one that accepts is the plan's table: the build would run the same program at the same widths.
@@ -256,14 +256,10 @@ internal static class MicroQRSegmentPlanner
             return false;
         }
 
-        // A plan the byte-segment decoder would misread is worse than no plan.
-        // Micro QR has no ECI, so the decoder resolves each Byte run's charset
-        // heuristically. Two shapes lose to that once a split isolates them, and
-        // both fall back to the single-mode stream:
-        //  - a mid-content U+FEFF at a run start is consumed as a BOM (the program
-        //    builds no such plan under UTF-8, so this refuses a model that disagreed);
-        //  - a Latin-1 run whose narrowed bytes read as UTF-8 or Shift_JIS (the
-        //    disambiguating bytes now live in another run) decodes as different text.
+        // Micro QR has no ECI, so the decoder resolves each Byte run's charset heuristically.
+        // Two shapes are misread once a split isolates them, and both fall back to the single-mode stream:
+        //  - a mid-content U+FEFF at a run start is consumed as a BOM. The program builds no such plan under UTF-8, so this refuses a model that disagreed.
+        //  - a Latin-1 run whose narrowed bytes read as UTF-8 or Shift_JIS, because the disambiguating bytes now live in another run.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount))
             || (charset == EciMode.Iso8859_1 && HasLatin1RunTheHeuristicReadsOtherwise(text, segments.Slice(0, segmentCount))))
         {
@@ -273,9 +269,8 @@ internal static class MicroQRSegmentPlanner
 
         ModeSegmenter.FillUnitCounts(text, charset, segments.Slice(0, segmentCount));
 
-        // Re-cost the reconstructed plan from the byte counts the encoder will
-        // actually emit. Disagreement is a cost-model bug and rejects the plan
-        // rather than becoming a stream that overruns the data codewords.
+        // Re-cost the reconstructed plan from the byte counts the encoder will actually emit.
+        // Disagreement is a cost-model bug and rejects the plan rather than becoming a stream that overruns the data codewords.
         var measuredBits = MeasurePlan(version, segments.Slice(0, segmentCount));
         Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 

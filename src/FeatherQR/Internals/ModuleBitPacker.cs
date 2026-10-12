@@ -44,8 +44,7 @@ internal static class ModuleBitPacker
 
     /// <summary>
     /// Packs modules that are each 0 or 1, eight a step, without the fold <see cref="Pack"/>'s scalar loop makes so that any non-zero
-    /// byte is dark. Without a vector step this ran 1.4 to 1.6 times as fast as that loop on .NET Framework 4.8 and about twice as fast on
-    /// .NET 8 with hardware intrinsics off (2026-10-06). Internal so tests run it on any machine.
+    /// byte is dark. Without a vector step this is faster than that loop. Internal so tests run it on any machine.
     /// </summary>
     internal static void PackZeroOrOneScalar(ReadOnlySpan<byte> modules, Span<byte> bits)
     {
@@ -81,9 +80,8 @@ internal static class ModuleBitPacker
 #if NET8_0_OR_GREATER
         if (Avx2.IsSupported && count >= 32)
         {
-            // Dark lanes -> 0xFF. Reverse the lanes inside each 8-lane group so the
-            // move-mask (lane i -> bit i) yields MSB-first bytes. The 32-bit mask's
-            // little-endian bytes are exactly modules 0-7, 8-15, 16-23, 24-31.
+            // Dark lanes -> 0xFF. Reverse the lanes inside each 8-lane group so the move-mask (lane i -> bit i) yields MSB-first bytes.
+            // The 32-bit mask's little-endian bytes are exactly modules 0-7, 8-15, 16-23, 24-31.
             var reverse = Vector256.Create((byte)7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8, 23, 22, 21, 20, 19, 18, 17, 16, 31, 30, 29, 28, 27, 26, 25, 24);
             for (; i + 32 <= count; i += 32)
             {
@@ -94,9 +92,7 @@ internal static class ModuleBitPacker
         }
         if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) && count - i >= 16)
         {
-            // explicit byte-shuffle intrinsics (pshufb / tbl): the portable Vector128.Shuffle
-            // only lowers to them when the JIT sees a constant index operand at import, which
-            // the .NET 8 JIT does not for a hoisted local (it emits a per-lane software loop)
+            // explicit byte-shuffle intrinsics (pshufb / tbl): the portable Vector128.Shuffle only lowers to them when the JIT sees a constant index operand at import, which the .NET 8 JIT does not for a hoisted local (it emits a per-lane software loop)
             var reverse = Vector128.Create((byte)7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8);
             for (; i + 16 <= count; i += 16)
             {
@@ -119,10 +115,7 @@ internal static class ModuleBitPacker
 #endif
         if (BitConverter.IsLittleEndian)
         {
-            // SWAR: 8 modules per 64-bit load. Fold any non-zero byte to 0x01, then
-            // gather the eight low bits MSB-first: multiplying by 0x8040201008040201
-            // places module i (byte i) at bit 63 - i, no carries between the partial
-            // products because every byte is 0 or 1.
+            // SWAR: 8 modules per 64-bit load. Fold any non-zero byte to 0x01, then gather the eight low bits MSB-first: multiplying by 0x8040201008040201 places module i (byte i) at bit 63 - i, no carries between the partial products because every byte is 0 or 1.
             for (; i + 8 <= count; i += 8)
             {
                 var x = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref src, i));
@@ -167,8 +160,7 @@ internal static class ModuleBitPacker
 #if NET8_0_OR_GREATER
         if (Avx2.IsSupported && count >= 32)
         {
-            // 4 source bytes -> 32 modules: broadcast each byte over 8 lanes, keep its
-            // lane's bit (128 .. 1), compare-equal -> 0/1
+            // 4 source bytes -> 32 modules: broadcast each byte over 8 lanes, keep its lane's bit (128 .. 1), compare-equal -> 0/1
             var sel = Vector256.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3);
             var bitm = Vector256.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
             var one = Vector256.Create((byte)1);

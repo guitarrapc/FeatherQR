@@ -99,8 +99,6 @@ public class FinderPatternFinderParityTest
         // Random noise at widths crossing every mask-build block boundary
         // (scalar-only < 16, exactly one 16-px step, one 64-px block, 64+tail)
         // and threshold extremes (0 = nothing dark, 255 = everything below max).
-        // Any mask-build bug (bit order, tail handling, compare semantics)
-        // shifts run boundaries and diverges the kernels here.
         var simd = new FinderPattern[3];
         var scalar = new FinderPattern[3];
 

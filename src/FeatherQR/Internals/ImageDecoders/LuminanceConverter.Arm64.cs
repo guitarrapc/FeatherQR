@@ -15,22 +15,22 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// The kernel shape, however, is not the AVX2 one.
 /// NEON has no <c>pmaddubsw</c>, so the shuffle-into-<c>[R, G, G, B]</c> trick has nothing to feed. It has <c>UDOT</c> instead (ARMv8.2 dot product), which multiplies four byte pairs into each 32-bit lane and therefore computes <c>77R + 150G + 29B + 0·A</c> for four whole pixels in one instruction, with no deinterleave at all.
 /// Weighting alpha 0 is also what makes Rgb888x correct, since its fourth byte is padding.
-/// A transliteration of the x64 kernel using <c>LD4</c> to build channel planes was measured and lost by 1.2-1.5x.
+/// A transliteration of the x64 kernel, with <c>LD4</c> building channel planes, is slower.
 /// </para>
 /// <para>
 /// Alpha is handled by row mode rather than per block.
-/// Testing "is every alpha 255?" every 16 pixels costs a cross-lane reduction plus a vector-to-GPR move, which was measured at 27 % of the kernel. Instead each row is converted optimistically while the pixels are ANDed into a vector accumulator, and one cross-lane test per row decides whether the row was in fact opaque.
+/// Testing "is every alpha 255?" every 16 pixels costs a cross-lane reduction plus a vector-to-GPR move. Instead each row is converted optimistically while the pixels are ANDed into a vector accumulator, and one cross-lane test per row decides whether the row was in fact opaque.
 /// A row that carries alpha is redone by the general path and the mode is sticky, so an image with alpha pays the wasted pass once rather than once per row.
 /// </para>
 /// <para>
 /// The general path keeps every alpha shape on the vector unit.
 /// Fully transparent composites to white, which is exactly luminance 255, so those pixels are replaced by 0xFFFFFFFF. A genuinely partial alpha uses the exact composite <c>c' = 255 − ceil((255 − c)·a / 255)</c>, which is equal to the scalar <c>(c·a + 255·(255 − a)) / 255</c> and stays integer-exact in 16-bit lanes because the product is at most 65,025 and <c>floor(t / 255) = (t + 1 + (t &gt;&gt; 8)) &gt;&gt; 8</c> there.
 /// Premultiplied alpha adds 255 − a to every channel, which is exactly 256 · (255 − a) on the sum, so it collapses to an add before the shift and never falls back.
-/// Measured 14-16x over the per-pixel loop on opaque input (Apple M2). See LuminanceConverterParityTest for the equivalence proof by test.
+/// See LuminanceConverterParityTest for the equivalence proof by test.
 /// </para>
 /// <para>
 /// The row modes are separate methods on purpose.
-/// Fusing them into one measured 2.3x <em>slower</em> on the largest inputs, on code size alone, in scenarios where the fused-in code never executed. That is the same instruction-cache failure the AVX2 kernel records for its fused variant.
+/// Fused into one, they are slower on the largest inputs on code size alone, in scenarios where the fused-in code never executes. The AVX2 kernel keeps two loops for the same reason.
 /// </para>
 /// </remarks>
 internal static partial class LuminanceConverter
@@ -251,7 +251,7 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// A whole composite row behind one call, so the body stays out of the straight-alpha method while the call is amortized over the row rather than paid every 16 pixels (which cost partial alpha 12 % when measured per block).
+    /// A whole composite row behind one call, so the body stays out of the straight-alpha method while the call is amortized over the row rather than paid every 16 pixels.
     /// The sticky row mode means only the first classified row still composites per block.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -276,11 +276,11 @@ internal static partial class LuminanceConverter
     /// <summary>
     /// The composite from four already-loaded pixel vectors.
     /// The channel planes are built with two rounds of UZP rather than LD4: LD4 has no ref-taking overload, and the pointer form is not worth enabling unsafe code across the library for a path only partial alpha reaches.
-    /// The UZP ladder itself is free. The partial alpha scenario measured identically either way.
+    /// The UZP ladder itself is free: partial alpha runs at the same speed either way.
     /// </summary>
     /// <remarks>
     /// NoInlining is load-bearing here.
-    /// This body is large, and inlining it into the classified block puts it inside the straight-alpha row loop, where a transparent-background image (which only ever whitens) and the large opaque images (which never reach the classified path at all) both pay for code they never execute: 63.5 µs against 41.9 and 89.8 against 72.0 when it was inlined.
+    /// This body is large, and inlining it into the classified block puts it inside the straight-alpha row loop, where a transparent-background image (which only ever whitens) and the large opaque images (which never reach the classified path at all) both pay for code they never execute.
     /// Only partial alpha calls this, so the call costs nothing where it happens.
     /// </remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]

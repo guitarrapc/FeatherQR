@@ -237,7 +237,7 @@ public class SymbolImageBuilderColorOptionTest
     [Test]
     public async Task WithModuleShape_RectangleDefault_MatchesTheOmittedShape()
     {
-        // The null that used to mean "plain squares" had this value all along.
+        // "Plain squares" is this value, not an absent option.
         var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
 
         using var named = new QRCodeImageBuilder(qr)
@@ -254,7 +254,7 @@ public class SymbolImageBuilderColorOptionTest
     [Test]
     public async Task WithFinderPatternShape_RectangleDefault_MatchesTheOmittedShape()
     {
-        // Why the finder shape could stop taking null: omitting it and naming the square render the same.
+        // Why the finder shape takes no null: omitting it and naming the square render the same.
         // Plain modules on purpose, because that is where the two spellings really do take different paths.
         // Omitted leaves the finders to the module runs, named sends them through the finder pass. With
         // styled modules both spellings resolve to the same substituted square, so that case would compare

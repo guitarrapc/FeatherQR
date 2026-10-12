@@ -13,10 +13,8 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A mutation sweep found all of these unpinned: the production logic is right,
-/// but weakening any one of them passed the whole suite. Two are behaviour-visible
-/// rather than merely uncovered. The Latin-1 destination guard turns into an
-/// <see cref="IndexOutOfRangeException"/> escaping a bool-returning <c>TryDecode</c>,
+/// Two of these are visible to a caller. A weakened Latin-1 destination guard lets an
+/// <see cref="IndexOutOfRangeException"/> escape a bool-returning <c>TryDecode</c>,
 /// and a wrong ECI mask turns a symbol that should be rejected into a `Success` with
 /// text decoded under the wrong charset.
 /// </para>

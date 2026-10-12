@@ -10,11 +10,6 @@ namespace FeatherQR.Internals.StandardQR;
 /// <summary>
 /// Transposed mask selection for versions 12-40 on AVX2, four rows or columns per vector (the design is in ModulePlacer.Masking.Transposed.cs).
 /// </summary>
-/// <remarks>
-/// Measured against the SoA tiers it replaced: 0.82 to 0.90 of their mask selection time at versions 12 to 27 and 0.36 to 0.44 at
-/// 28 to 40 on the JIT (2026-10-04). Full per-pattern tables instead of the periodic ones gained 1 to 4 % for eight times the memory,
-/// and the scalar 64x64 transpose was 7 to 16 % slower.
-/// </remarks>
 internal static partial class ModulePlacer
 {
     /// <summary>Mask selection for versions 12-40 on AVX2: scores all eight candidates transposed, applies the winner to <paramref name="buffer"/>, returns it.</summary>

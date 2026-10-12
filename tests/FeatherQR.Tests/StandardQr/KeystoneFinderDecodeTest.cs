@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Symbols past 20 % keystone, where the stages in front of the finders' frame decide: the finder a perspective draws taller than wide has to become a candidate, the dimension has to come from each finder line's own sizes, and a triple holding a false candidate has to give way to the next confirmed one.
-/// Every decode render was chosen from a search to fail on the commit before and to fail with its own mechanism switched off, and to hold under nudges (turn ±0.5°, density ±0.02, keystone ±0.005) but for two: the second alternative-triple render, which reads at one nudge of seven with that piece off, and the one whose first alternative is false, whose premise holds at its exact parameters, as its assertions check.
+/// Every decode render fails with its own mechanism switched off. The render whose first alternative is false holds its premise at its exact parameters only, as its assertions check.
 /// </summary>
 public class KeystoneFinderDecodeTest
 {
@@ -61,7 +61,7 @@ public class KeystoneFinderDecodeTest
     /// <summary>
     /// A finder drawn 1.8 times as tall as wide, alone on a light field: a candidate, though the row's own window refuses its column.
     /// With the light ring filled where the rising diagonal crosses it, every other line still reads 1:1:3:1:1, and it is refused: past the row's window a column is taken only as the finder a perspective stretches, whose every line through the centre is a finder's.
-    /// Drawn square, the same broken finder is a candidate as before, because inside the row's window the rising diagonal is not asked.
+    /// Drawn square, the same broken finder is still a candidate, because inside the row's window the rising diagonal is not asked.
     /// </summary>
     [Test]
     [Arguments(7.2f, false, true)]

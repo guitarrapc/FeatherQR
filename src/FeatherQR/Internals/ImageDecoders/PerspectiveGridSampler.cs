@@ -9,7 +9,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// Standard QR samples its four-point, parallelogram and finders' frame grids with it, and Micro QR its perspective search.
 /// </summary>
 /// <remarks>
-/// It was <c>QRImageDecoder.SampleGrid</c> until 2026-09-29, and Micro QR called it there, against the rule that symbology namespaces never reference each other.
+/// It sits outside both because symbology namespaces never reference each other.
 /// rMQR's grid is not square and keeps its own sampler, with an affine tier.
 /// </remarks>
 internal static partial class PerspectiveGridSampler
@@ -19,8 +19,8 @@ internal static partial class PerspectiveGridSampler
     /// Handles rotation, scale, shear and mild perspective.
     /// </summary>
     /// <remarks>
-    /// The loop is bound by scalar conversion/clamp/branch overhead, not by the divisions (module computations are independent, so out-of-order execution hides division latency, halving the division count measured no gain).
-    /// The SIMD paths process 8 module centers per iteration with the exact scalar op sequence (no FMA), so lane results are bit-identical to the scalar path: one Vector256 on AVX2 (measured 2.7x at version 40, see the PerspectiveSample findings log), two independent Vector128 chains plus a 4-lane cleanup on NEON/WASM (measured 1.9x at version 40 on Apple M2, see the PerspectiveSampleArm findings log).
+    /// The loop is bound by scalar conversion, clamp and branch overhead, not by the divisions: module computations are independent, so out-of-order execution hides division latency.
+    /// The SIMD paths process 8 module centers per iteration with the exact scalar op sequence (no FMA), so lane results are bit-identical to the scalar path: one Vector256 on AVX2, two independent Vector128 chains plus a 4-lane cleanup on NEON and WASM.
     /// </remarks>
     internal static void Sample(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int dimension, Span<byte> modules)
     {

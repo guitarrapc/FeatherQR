@@ -156,7 +156,7 @@ internal static class RmQRVersionSelector
     /// </summary>
     public static RmQRVersion Select(EncodingMode mode, int dataLength, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
     {
-        // Deliberately keep the pre-ECI hot path separate. Forwarding this overload through the larger ECI selector measurably changes end-to-end JIT codegen.
+        // Kept apart from the ECI overload on purpose: forwarding through that larger selector changes the JIT's code for this hot path.
         if (!RmQRConstants.IsValidEccLevel(eccLevel))
             throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid rMQR ECC level: {eccLevel}");
         if (fitStrategy is < RmQRFitStrategy.MinimizeArea or > RmQRFitStrategy.MinimizeHeight)

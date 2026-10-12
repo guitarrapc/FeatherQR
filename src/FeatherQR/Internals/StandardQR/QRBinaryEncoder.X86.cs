@@ -25,9 +25,8 @@ namespace FeatherQR.Internals.StandardQR;
 /// is one 40-bit append.
 /// </para>
 /// <para>
-/// A run long enough for a step runs its steps on a local copy of the writer, stored back before anything else writes: with its fields in
-/// registers the steps took 0.86 to 0.93 of their time at 300 to 7,089 characters, against about a nanosecond more for the copy, which a
-/// run too short for a step does not pay (2026-10-05).
+/// A run long enough for a step runs its steps on a local copy of the writer, stored back before anything else writes, so its fields
+/// stay in registers through the steps. A run too short for a step does not pay for the copy.
 /// </para>
 /// </remarks>
 internal ref partial struct QRBinaryEncoder

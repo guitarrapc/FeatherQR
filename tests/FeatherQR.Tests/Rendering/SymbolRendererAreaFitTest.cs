@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Standard QR and Micro QR used to fill the area on both axes, so a non-square area gave the symbol non-square modules, found or missed depending on the aspect ratio and the reader, while rMQR's overload and every builder fitted. The same width and height gave a readable symbol from one entry point and an unreadable one from another.
+/// A symbol that fills a non-square area on both axes has non-square modules, found or missed depending on the aspect ratio and the reader. Every overload fits, as every builder does, so the same width and height give the same symbol from every entry point.
 /// </para>
 /// <para>
 /// The public geometry helpers answer for the same area the caller passed to <c>Render</c>, so they have to fit the same way, or they point beside what was drawn.
@@ -29,16 +29,15 @@ public class SymbolRendererAreaFitTest
             {
                 yield return (symbology, entry, 900, 450);
                 yield return (symbology, entry, 300, 900);
-                // This payload still decoded stretched to 1.5:1, so this row cannot catch a lost fit (the
-                // two above do). It pins that a canvas which was readable before stays readable fitted.
+                // This payload decodes stretched to 1.5:1 too, so this row cannot catch a lost fit (the
+                // two above do). It pins that a mild aspect ratio reads fitted.
                 yield return (symbology, entry, 600, 400);
             }
         }
 
-        // rMQR has always fitted. It stays in the table as the reference the others now match. Its size rows are
-        // here because nothing else renders a non-square area through that overload: while the table paired rMQR
-        // with the renderer alone, the rMQR size overload could transpose its width and height unnoticed. The area
-        // rows come along so the three entry points are read the same way for every symbology.
+        // rMQR's size rows are here because nothing else renders a non-square area through that overload: without
+        // them it could transpose its width and height unnoticed. The area rows come along so the three entry
+        // points are read the same way for every symbology.
         foreach (var entry in new[] { "renderer", "extensionArea", "extensionSize" })
         {
             yield return ("rmqr", entry, 900, 450);
@@ -89,7 +88,7 @@ public class SymbolRendererAreaFitTest
 
     /// <summary>
     /// The area is the caller's, so the background covers all of it, not just the fitted symbol,
-    /// and nothing outside it is touched. rMQR's overload has always done exactly this.
+    /// and nothing outside it is touched.
     /// </summary>
     [Test]
     [Arguments("qr")]
@@ -220,8 +219,8 @@ public class SymbolRendererAreaFitTest
 
     /// <summary>
     /// Every path through the renderer fits, not only the merged runs plain modules take: per-module
-    /// drawing (custom shapes, gaps), the finder shapes (including the layer a translucent background
-    /// needs) and the gradient land exactly where they would in the fitted square drawn on its own.
+    /// drawing (custom shapes, gaps), the finder shapes (on a translucent background too) and the
+    /// gradient land exactly where they would in the fitted square drawn on its own.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(StyledNonSquareAreas))]
@@ -306,7 +305,7 @@ public class SymbolRendererAreaFitTest
     /// <summary>
     /// An inverted area reads two ways, a mirror or the same bounds written backwards, and for an
     /// asymmetric symbol the two are different pictures, so it is refused rather than guessed. All
-    /// three symbologies refuse it alike. rMQR used to draw outside an area inverted vertically.
+    /// three symbologies refuse it alike.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(InvertedAreas))]
@@ -476,7 +475,7 @@ public class SymbolRendererAreaFitTest
         {
             "percentZero" => IconData.FromImage(logo, iconSizePercent: 0, iconBorderWidth: 2),
             "negativeBorder" => IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: -1),
-            // Module counts near int.MaxValue: the total used to wrap negative and pass both limits.
+            // Module counts near int.MaxValue: a total that wraps negative passes both limits.
             "borderModulesOverflow" => IconData.FromImageByModules(logo, iconSizeModules: 1, iconBorderModules: int.MaxValue, maxCoreOccupancyPercent: 100),
             "sizeModulesOverflow" => IconData.FromImageByModules(logo, iconSizeModules: int.MaxValue, iconBorderModules: 1, maxCoreOccupancyPercent: 100),
             _ => IconData.FromImageByModules(logo, iconSizeModules: data.GetCoreSize(), iconBorderModules: 1, maxCoreOccupancyPercent: 100),
@@ -865,7 +864,7 @@ public class SymbolRendererAreaFitTest
         }
 
         // A canvas scale rounds each edge on its own, so these squares need both float steps of slack per
-        // axis. A one-step slack shrinks them. Found by searching scaled squares for the widest rounding.
+        // axis. A one-step slack shrinks them.
         foreach (var (x, y, side, scale) in new[]
         {
             (-23.474365f, 1407.5728f, 664.66833f, 2.25f),
@@ -904,9 +903,8 @@ public class SymbolRendererAreaFitTest
     }
 
     /// <summary>
-    /// A square the caller meant comes back as given, so it draws exactly the pixels it drew before
-    /// the fit existed. Shrinking it by the rounding step moved module edges by a whole pixel at some
-    /// offsets.
+    /// A square the caller meant comes back as given. Shrinking it by the rounding step moves module
+    /// edges by a whole pixel at some offsets.
     /// </summary>
     [Test]
     public async Task GetSquareArea_SquareAtFractionalCoordinates_ComesBackAsGiven()
@@ -943,9 +941,9 @@ public class SymbolRendererAreaFitTest
     /// The limit of a slack measured in float steps, written down because it looks like a defect and is
     /// not fixable from here: at 1e9 a step is 64, so this 400x600 area is stored as 384x576 and passes
     /// as square. Tightening cannot separate the two: a square whose edges are each scaled needs two
-    /// steps per axis (measured over three million of them), and this rectangle is one and a half steps
-    /// from square, so any slack that fits real squares admits it. Nothing renders at these coordinates
-    /// either way, since the same step quantises every module edge.
+    /// steps per axis, and this rectangle is one and a half steps from square, so any slack that fits
+    /// real squares admits it. Nothing renders at these coordinates either way, since the same step
+    /// quantises every module edge.
     /// </summary>
     [Test]
     public async Task GetSquareArea_WhereAFloatStepDwarfsTheArea_CannotTellASquareFromARectangle()

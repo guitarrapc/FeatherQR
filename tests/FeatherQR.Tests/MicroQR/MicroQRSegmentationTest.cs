@@ -432,8 +432,8 @@ public class MicroQRSegmentationTest
 #if !DEBUG
     /// <summary>
     /// The span destination is the library's zero-allocation path. The mixed-mode
-    /// planner must keep it that way (Micro QR plans are all-stackalloc). Debug
-    /// builds are excluded per repo notes.
+    /// planner must keep it that way (Micro QR plans are all-stackalloc). Release
+    /// only: Debug allocates where Release does not.
     /// </summary>
     /// <remarks>
     /// Runs alone, as its Standard QR and rMQR twins do. Those two rent from

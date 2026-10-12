@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The Alphanumeric and Numeric payload writers of <see cref="QRBinaryEncoder"/>, the portable, x64 and ARM64 tiers entered directly (the
-/// WebAssembly tier is held to the old writers by the timing mode's parity check on its build), against the payload written
+/// WebAssembly tier is held to the plain loops by the timing mode's parity check on its build), against the payload written
 /// from the definition (ISO/IEC 18004 7.4.3 and 7.4.4): the character's index in the alphabet, first * 45 + second in 11 bits and 6 for a
 /// last odd character. Three digits in 10 bits, two in 7, one in 4. Every field MSB first.
 /// </summary>

@@ -21,7 +21,7 @@ internal static class AttemptStatus
 
     /// <summary>
     /// Whether the attempt got past the format information, which a grid on the symbol does and a grid off it does less often, so one that got past it is worth refining.
-    /// How much less differs: about 1.5 % of random grids read rMQR's two copies, while Micro QR's single copy lets 7 to 21 % through by version (14 to 38 % in either orientation), so there it thins the grids refined rather than ruling texture out.
+    /// How much less differs: rMQR's two copies refuse nearly every random grid, while Micro QR's single copy lets a good share through, so there it thins the grids refined rather than ruling texture out.
     /// </summary>
     public static bool IsPastFormat(DecodeStatus status)
         => status is not DecodeStatus.NotDetected

@@ -3,8 +3,8 @@ namespace FeatherQR.Tests;
 public class QRCodeGeneratorVersionBoundaryTest
 {
     /// <summary>
-    /// Tests exact version boundaries using actual measured capacities.
-    /// These values come from DiagnoseActualCapacities_AllModes output.
+    /// The longest numeric text a version holds at each level still gets that version.
+    /// The lengths are the ones <c>DiagnoseActualCapacities_AllModes</c> prints.
     /// </summary>
     [Test]
     // Version 1 boundaries (Numeric mode)
@@ -54,13 +54,10 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Arguments(QREccLevel.H, 3057, 40)]
     public async Task Create_ExactBoundary_Numeric(QREccLevel eccLevel, int maxChars, int expectedVersion)
     {
-        // Arrange
         var plainText = new string('1', maxChars); // Numeric mode
 
-        // Act
         var qrCode = QRCodeGenerator.Create(plainText, eccLevel);
 
-        // Assert
         await Assert.That(qrCode.Version).IsEquivalentTo(expectedVersion);
         await Assert.That(qrCode.Size > 0).IsTrue();
     }
@@ -96,13 +93,10 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Arguments(QREccLevel.H, 1852, 40)]
     public async Task Create_ExactBoundary_Alphanumeric(QREccLevel eccLevel, int maxChars, int expectedVersion)
     {
-        // Arrange
         var plainText = new string('A', maxChars); // Alphanumeric mode
 
-        // Act
         var qrCode = QRCodeGenerator.Create(plainText, eccLevel);
 
-        // Assert
         await Assert.That(qrCode.Version).IsEquivalentTo(expectedVersion);
     }
 
@@ -137,14 +131,12 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Arguments(QREccLevel.H, 424, 40)]
     public async Task Create_ExactBoundary_ByteUtf8(QREccLevel eccLevel, int maxChars, int expectedVersion)
     {
-        // Arrange: UTF-8 multi-byte (3 bytes per char). Left at the default charset, text
+        // UTF-8 multi-byte (3 bytes per char). Left at the default charset, text
         // that is all kana goes out in Kanji mode, so UTF-8 is asked for.
         var plainText = new string('あ', maxChars);
 
-        // Act
         var qrCode = QRCodeGenerator.Create(plainText, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
 
-        // Assert
         await Assert.That(qrCode.Version).IsEquivalentTo(expectedVersion);
     }
 
@@ -176,23 +168,19 @@ public class QRCodeGeneratorVersionBoundaryTest
     /// Tests that exceeding capacity by 1 character bumps to next version.
     /// </summary>
     [Test]
-    // Numeric mode overflow tests
     [Arguments(QREccLevel.L, 42, 2)]    // v1 max=41, 42 should be v2
     [Arguments(QREccLevel.L, 78, 3)]    // v2 max=77, 78 should be v3
     [Arguments(QREccLevel.L, 1409, 17)] // v16 max=1408, 1409 should be v17
-    [Arguments(QREccLevel.L, 7090, -1)] // v40 max=7089, 7090 should fail or stay v40
-    [Arguments(QREccLevel.M, 5597, -1)] // v40 max=7089, 7090 should fail or stay v40
-    [Arguments(QREccLevel.Q, 3994, -1)] // v40 max=7089, 7090 should fail or stay v40
-    [Arguments(QREccLevel.H, 3058, -1)] // v40 max=7089, 7090 should fail or stay v40
+    [Arguments(QREccLevel.L, 7090, -1)] // v40 max=7089, 7090 fits no version
+    [Arguments(QREccLevel.M, 5597, -1)] // v40 max=5596, 5597 fits no version
+    [Arguments(QREccLevel.Q, 3994, -1)] // v40 max=3993, 3994 fits no version
+    [Arguments(QREccLevel.H, 3058, -1)] // v40 max=3057, 3058 fits no version
     public async Task Create_OverflowBoundary_Numeric(QREccLevel eccLevel, int charCount, int expectedNextVersion)
     {
-        // Arrange
         var plainText = new string('1', charCount);
 
-        // Act & Assert
         if (expectedNextVersion == -1)
         {
-            // Data too long for max version
             Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(plainText, eccLevel));
         }
         else
@@ -220,13 +208,10 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Arguments(40)]
     public async Task Create_ForcedVersion_GeneratesCorrectly(int requestedVersion)
     {
-        // Arrange
         var plainText = "TEST";
 
-        // Act
         var qrCode = QRCodeGenerator.Create(plainText, QREccLevel.L, new QRCodeGeneratorOptions { Version = requestedVersion });
 
-        // Assert
         await Assert.That(qrCode.Version).IsEquivalentTo(requestedVersion);
         var expectedSize = 21 + (requestedVersion - 1) * 4 + 8; // Core size + quiet zone
         await Assert.That(qrCode.Size).IsEquivalentTo(expectedSize);
@@ -238,7 +223,6 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Test]
     public async Task Create_AllVersions_WithRequestedVersion_GenerateSuccessfully()
     {
-        // Act & Assert
         for (int version = 1; version <= 40; version++)
         {
             var plainText = "1";
@@ -265,19 +249,15 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Arguments(QREccLevel.M, 1083, 17)]  // v16 overflow (M)
     public async Task Create_StackHeapBoundary_Numeric(QREccLevel eccLevel, int charCount, int expectedVersion)
     {
-        // Arrange
         var plainText = new string('1', charCount);
 
-        // Act
         var qrCode = QRCodeGenerator.Create(plainText, eccLevel);
 
-        // Assert
         await Assert.That(qrCode.Version).IsEquivalentTo(expectedVersion);
     }
 
     /// <summary>
     /// Tests automatic version selection for various data sizes (with tolerance).
-    /// Kept for backward compatibility and fuzzy testing.
     /// </summary>
     [Test]
     [Arguments(10, 1, 2)]      // Small data -> v1 or v2
@@ -289,13 +269,10 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Arguments(5000, 32, 35)]  // Maximum -> v32-v35
     public async Task Create_AutoVersionSelection_InRange(int charCount, int minVersion, int maxVersion)
     {
-        // Arrange
         var plainText = new string('1', charCount);
 
-        // Act
         var qrCode = QRCodeGenerator.Create(plainText, QREccLevel.L);
 
-        // Assert
         await Assert.That(qrCode.Version).IsBetween(minVersion, maxVersion);
     }
 

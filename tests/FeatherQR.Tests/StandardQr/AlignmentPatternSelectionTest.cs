@@ -14,7 +14,7 @@ public class AlignmentPatternSelectionTest
 
     /// <summary>
     /// Two real patterns in the window, the one on the prediction to the right: the row scan
-    /// meets the left one first, and the first hit used to win.
+    /// meets the left one first, so a search that takes its first hit returns the wrong one.
     /// </summary>
     [Test]
     [Arguments(false)]
@@ -85,7 +85,8 @@ public class AlignmentPatternSelectionTest
 
     /// <summary>
     /// The centre is in the same coordinates as the finder centres, where integers are pixel
-    /// edges. The vertical refinement used to land half a pixel above the pattern's centre.
+    /// edges. A vertical refinement that leaves that convention lands half a pixel off the
+    /// pattern's centre.
     /// </summary>
     [Test]
     [Arguments(false)]

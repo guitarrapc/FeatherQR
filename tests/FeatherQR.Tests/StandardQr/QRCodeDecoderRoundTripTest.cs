@@ -145,8 +145,8 @@ public class QRCodeDecoderRoundTripTest
     public async Task Decode_CharSpanDestination_IsAllocationFree()
     {
         // Steady-state decode (span in, span out, no quiet zone) must not allocate.
-        // Debug builds heap-allocate stackalloc initializers (see repo notes), so
-        // this assertion is Release-only.
+        // Debug builds heap-allocate stackalloc initializers, so this assertion is
+        // Release-only.
         var content = "0123456789";
         var calculated = Sizing.Required(content, QREccLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];

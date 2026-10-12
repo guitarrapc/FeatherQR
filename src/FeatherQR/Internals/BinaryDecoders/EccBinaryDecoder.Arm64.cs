@@ -7,7 +7,7 @@ using System.Runtime.Intrinsics.Arm;
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
-/// ARM64 / NEON syndrome kernel: all ≤30 syndrome accumulators live in two 128-bit registers, and every group of eight data bytes updates every syndrome with two PMULL pairs plus six table reads (measured 11-61x the scalar log-domain kernel as a four-byte step, and the eight-byte tree below is a further 2.3x on version 40 blocks).
+/// ARM64 / NEON syndrome kernel: all ≤30 syndrome accumulators live in two 128-bit registers, and every group of eight data bytes updates every syndrome with two PMULL pairs plus six table reads.
 /// </summary>
 /// <remarks>
 /// This is deliberately NOT a transliteration of the GFNI kernel in EccBinaryDecoder.X86.cs.
@@ -19,24 +19,20 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// acc'      = Reduce(PMULL(acc, α^8i)) ^ Reduce(PMULL(D(c0..c3), α^4i)) ^ D(c4..c7)
 /// </code>
 /// <para>
-/// Four design points, each of which was measured against its alternative rather than assumed, and the number that decided each one is quoted with it:
-/// </para>
-/// <para>
 /// <b>Table reads, not multiplies, for the data terms.</b> <c>c·α^(k·i)</c> depends only on the byte c and the step k, so <see cref="AlphaTables"/> holds it as a ready-made 32-byte vector: three loads + three XORs replace six PMULL + six EOR.
-/// The tables cost 24 KB.
-/// A 3 KB nibble-split alternative was measured and lost by 20-78%, so the footprint is buying real work. But that verdict is from a core with a 128 KB L1D, which is also why the scalar fallback is kept fast.
+/// The tables cost 24 KB. A 3 KB nibble-split form is slower.
 /// </para>
 /// <para>
 /// <b>Reduction by table lookup.</b> The high half of a PMULL product has degree ≤ 6, so splitting it into nibbles indexes two 16-entry tables holding the already reduced contribution: <c>UZP → AND → TBL → EOR</c> instead of <c>UZP → PMULL → UZP → PMUL → EOR</c>.
-/// The reduction sits on the carried dependency chain, and every change that shortened that chain won.
+/// The reduction sits on the carried dependency chain, so the shorter form is the faster one.
 /// </para>
 /// <para>
-/// <b>The reduction tables are hoisted into locals.</b> This is load-bearing, not style: the JIT does not CSE <c>Vector128.Create</c> over a static array across the loop body, so leaving them inline makes every reduction pay two extra loads, worth up to 20% of the kernel.
+/// <b>The reduction tables are hoisted into locals.</b> The JIT does not CSE <c>Vector128.Create</c> over a static array across the loop body, so leaving them inline makes every reduction pay two extra loads.
 /// </para>
 /// <para>
-/// <b>Eight bytes a step, as a tree.</b> With a four-byte step the loop was bound by the carried chain (acc → PMULL → UZP → TBL → EOR, about 14 cycles a step on Apple M2), not by throughput. The second accumulator group ran mostly in the first group's stall slots, which is why halving the vector work bought only about 20%.
-/// Horner re-associates: the multiply that joins two four-byte data terms depends on data alone and falls off the chain, so eight bytes cost one carried reduce instead of two. Measured 0.44x of the four-byte step on the syndrome pass alone at version 40-L blocks (148 bytes, 30 ECC) and 0.59x at 40-H (45 bytes), and through <see cref="TryCorrect"/> on a clean block 0.53x to 0.54x at 145 to 153 bytes, 0.75x to 0.83x over rMQR's 25 to 68 byte blocks, 0.76x to 0.81x at Micro QR M3 and M4, level at M2 and 1.07x (5 ns) at M1's five-byte block, Apple M2.
-/// A sixteen-byte tree (three off-chain multiplies a step) measured the same at 148 bytes and 10% slower at 45, so the loop is now throughput-bound at about 100 instructions per eight bytes, and two throughput hypotheses did not move it: pairing the two half-row loads through immediate offsets lost 10%, and pre-splitting the multiplier halves to remove the per-PMULL register copy tied.
+/// <b>Eight bytes a step, as a tree.</b> A four-byte step is bound by the carried chain (acc → PMULL → UZP → TBL → EOR), not by throughput.
+/// Horner re-associates: the multiply that joins two four-byte data terms depends on data alone and falls off the chain, so eight bytes cost one carried reduce instead of two.
+/// From eight bytes on the loop is throughput-bound, so a sixteen-byte tree (three off-chain multiplies a step) gains nothing.
 /// </para>
 /// </remarks>
 internal static partial class EccBinaryDecoder

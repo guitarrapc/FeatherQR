@@ -54,11 +54,11 @@ public class LuminanceConverterParityTest
     };
 
     /// <summary>Alpha shapes: 0 opaque, 1 transparent, 2 transparent-or-opaque, 3 arbitrary partial.</summary>
-    /// <summary>
+    /// <remarks>
     /// <paramref name="alphaOffset"/> matters: writing the shaped alpha at a fixed byte 3
     /// puts it on the BLUE channel for a layout whose alpha is byte 0, so the four alpha
     /// shapes degenerate into four samples of one shape.
-    /// </summary>
+    /// </remarks>
     private static byte[] MakePixels(int width, int height, int rowBytes, int alphaShape, int seed, int alphaOffset = 3)
     {
         var colour = alphaOffset == 0 ? 1 : 0;
@@ -131,10 +131,10 @@ public class LuminanceConverterParityTest
     /// <summary>
     /// The scalar tier against that naive reference. This is not redundant with the
     /// vector-parity test below: that one uses the scalar tier <em>as</em> its expected
-    /// value, so once the scalar tier stopped being a plain per-pixel loop, since it
-    /// specializes per layout, walks by ref and takes four pixels per iteration, an
-    /// error shared by both tiers would pass unnoticed. This test is what pins the
-    /// scalar tier to the specification.
+    /// value, and the scalar tier is not a plain per-pixel loop. It specializes per
+    /// layout, walks by ref and takes four pixels per iteration, so an error shared by
+    /// both tiers would pass unnoticed there. This test is what pins the scalar tier to
+    /// the specification.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(Layouts))]
@@ -269,10 +269,8 @@ public class LuminanceConverterParityTest
 
     /// <summary>
     /// Every tier walks by ref with no bounds check of its own, so the extents are
-    /// validated once at the entry point. `main` got this for free from per-row
-    /// re-slicing. The ref walk that replaced it does not, and a short destination
-    /// silently corrupted the bytes after it (in practice a pooled rental) instead of
-    /// throwing.
+    /// validated once at the entry point. Without that, a short destination has the
+    /// bytes after it overwritten (in practice a pooled rental) instead of throwing.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(Layouts))]
@@ -336,9 +334,8 @@ public class LuminanceConverterParityTest
     /// <remarks>
     /// Comparing only the first width × height bytes cannot see this: an over-write
     /// lands past the compared region and every asserted byte is still correct.
-    /// Verified by mutation: rounding <c>blockEnd</c> up in
-    /// <c>LuminanceConverter.X86.cs</c> leaves the parity assertions green and is
-    /// caught only by the tail.
+    /// A <c>blockEnd</c> rounded up in <c>LuminanceConverter.X86.cs</c> leaves the
+    /// parity assertions green and is caught only by the tail.
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(Layouts))]
@@ -365,9 +362,8 @@ public class LuminanceConverterParityTest
         // Every alpha shape, not just one per alpha mode: the straight-alpha and
         // premultiplied kernels are separate loops with their own block arithmetic, and
         // within straight alpha the opaque, whitening and compositing paths are three
-        // more (verified by mutation: an over-run in an uncovered path passed the whole
-        // class). Shape 0 is opaque, 2 is transparent-or-opaque (whitening), 3 is
-        // arbitrary partial alpha (compositing).
+        // more. An over-run in a path no shape reaches passes. Shape 0 is opaque, 2 is
+        // transparent-or-opaque (whitening), 3 is arbitrary partial alpha (compositing).
         var alphaModes = ao < 0 ? new[] { false } : [false, true];
 
         foreach (var premultiplied in alphaModes)
@@ -442,15 +438,13 @@ public class LuminanceConverterParityTest
     /// partial once more.
     /// </para>
     /// <para>
-    /// Honest about what this adds: the row modes are fail-SAFE by construction, since every
-    /// mode but the optimistic one is a specialization of the exact composite, so picking
-    /// the wrong mode costs speed, not bytes. The one mode that can be wrong is the
-    /// optimistic pass, and its accept test is per row. Verified by mutation: hoisting
-    /// the row/dest refs out of the row loop, and deciding the row mode once from row 0
-    /// (<c>y &gt; 0 || opaque</c>), both fail here, but both also happen to fail the
-    /// uniform test above, on the single 16x5 partial-alpha case whose first row the
-    /// generator happens to make opaque. That is luck of the seed, not coverage. This
-    /// test is what makes the transitions deliberate.
+    /// The row modes are fail-SAFE by construction, since every mode but the optimistic
+    /// one is a specialization of the exact composite, so picking the wrong mode costs
+    /// speed, not bytes. The one mode that can be wrong is the optimistic pass, and its
+    /// accept test is per row. A row mode decided once from row 0
+    /// (<c>y &gt; 0 || opaque</c>), or row and destination refs hoisted out of the row
+    /// loop, fail the uniform test above only on the single 16x5 partial-alpha case whose
+    /// first row the seed makes opaque. This test makes the transitions deliberate.
     /// </para>
     /// </remarks>
     [Test]

@@ -84,8 +84,7 @@ public class SymbolCornersTest
     /// carry that on every mapping: the global fit (version 2), the anchored four-point
     /// transform (version 20 under keystone), and the piecewise mesh, which reads version 20
     /// once its bottom-right alignment pattern is lost and attaches the corners with its own
-    /// transposed flag. Review finding: without a mesh row a mesh site that dropped the flag
-    /// passed the suite.
+    /// transposed flag. Only the mesh row fails a mesh site that drops the flag.
     /// </summary>
     [Test]
     [Arguments(2, 0f, false)]
@@ -131,8 +130,8 @@ public class SymbolCornersTest
     /// <summary>
     /// The bottom-right corner is anchored on the alignment centre, which resolves to about a pixel
     /// at any module size, so its error is near-constant in pixels and grows in modules as the
-    /// capture coarsens (version 2, every degree: 4.09 px at 6 px per module, 3.63 at 8, 3.94 at 12).
-    /// These rows pin the pixel bound. The half-module one holds only from 8 up.
+    /// capture coarsens. These rows pin the pixel bound. The half-module one holds only from
+    /// 8 px per module up.
     /// </summary>
     [Test]
     [Arguments(3, 34)]
@@ -153,9 +152,9 @@ public class SymbolCornersTest
     /// An alignment pattern the decoder cannot find drops versions 2 to 6, which have no other,
     /// onto the finders-only fit version 1 gets, while error correction still returns <see cref="DecodeStatus.Success"/>.
     /// One damaged module is enough, so version 1 is not the only loose case.
-    /// The version 2 tilt is taken in both keystone directions: 3 % used to read only with the
-    /// top edge shrinking, because the sampler read half a pixel toward the bottom-right, the
-    /// same way the finders-only corner errs there.
+    /// The version 2 tilt is taken in both keystone directions: the finders-only corner errs
+    /// toward the bottom-right, and a sampler that reads half a pixel the same way reads
+    /// further with the top edge shrinking than with it growing.
     /// </summary>
     [Test]
     [Arguments(2, 0.02f)]
@@ -173,8 +172,8 @@ public class SymbolCornersTest
         var expected = Expected(matrix, flat);
         await AssertCorners(info.Corners, expected, PixelsPerModule * 1.5f, mirrored: false);
 
-        // The upper bound alone passes even if the erase stops working (0.31 module intact against
-        // 0.59 to 1.00 erased), so assert the fallback is genuinely the path taken.
+        // The upper bound alone passes even if the erase stops working, so assert the fallback
+        // is genuinely the path taken.
         var bottomRight = Distance(info.Corners.BottomRight, expected.BottomRight);
         await Assert.That(bottomRight).IsGreaterThan(PixelsPerModule * 0.5f)
             .Because($"the finders-only fallback should be in use, but BottomRight is only {bottomRight:F2}px out — did the erase miss the alignment pattern?");
@@ -218,10 +217,9 @@ public class SymbolCornersTest
 
     /// <summary>
     /// Right angles are exact for Micro QR (the axis-aligned fast path). Oblique angles go
-    /// through the single-finder axis sweep, whose far corners carry the residual: a 1°
-    /// sweep at 8 px per module measured 0.2 to 0.9 modules depending on the angle (review
-    /// finding), so the oblique cases are held to one module, which is the bound the
-    /// contract states for the single-finder symbologies.
+    /// through the single-finder axis sweep, whose far corners carry the residual, so the
+    /// oblique cases are held to one module, which is the bound the contract states for the
+    /// single-finder symbologies.
     /// </summary>
     [Test]
     [Arguments(90, 0.5f)]
@@ -322,20 +320,18 @@ public class SymbolCornersTest
 
     /// <summary>
     /// A grid anchored on the sub-finder reads a keystone through error correction without following
-    /// it, so its far corners carry the residual, more on some versions than others (measured
-    /// 2026-09-28: R11x59 0.89 module at 2 % a side and 1.21 at 4 %, R7x43 1.07 at 4 %, R17x43 1.86
-    /// at 8 %, R11x27 2.10 at 10 %). A grid traced round the perimeter, which reads the stronger
-    /// keystones, is fitted to the symbol's own edges (R17x139 0.16 at 10 %).
+    /// it, so its far corners carry the residual, more on some versions than others, and each row
+    /// has its own bound. A grid traced round the perimeter, which reads the stronger keystones, is
+    /// fitted to the symbol's own edges, so the last row is held to a quarter of a module.
     /// </summary>
     [Test]
     [Arguments(RmQRVersion.R11x59, "RMQR CORNERS", 0.02f, 1f)]
     [Arguments(RmQRVersion.R11x59, "RMQR CORNERS", 0.04f, 1.5f)]
     [Arguments(RmQRVersion.R7x43, "RMQR", 0.04f, 1.5f)]
     [Arguments(RmQRVersion.R17x139, "RMQR CORNERS ARE RECTANGULAR", 0.04f, 1f)]
-    // Measured: R9x43 1.12 at 4 %, R13x77 1.00 at 2 %
     [Arguments(RmQRVersion.R9x43, "RMQR", 0.04f, 1.5f)]
     [Arguments(RmQRVersion.R13x77, "RMQR CORNERS", 0.02f, 1.5f)]
-    // The contract's "about two modules" at its largest measured
+    // The versions with the largest residual, at the contract's "about two modules"
     [Arguments(RmQRVersion.R17x43, "RMQR", 0.08f, 2f)]
     [Arguments(RmQRVersion.R11x27, "RMQR", 0.1f, 2.25f)]
     [Arguments(RmQRVersion.R17x139, "RMQR CORNERS", 0.1f, 0.25f)]

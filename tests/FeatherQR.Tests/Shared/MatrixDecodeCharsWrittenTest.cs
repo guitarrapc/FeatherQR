@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The matrix span overloads report no characters written when they return <c>false</c>, as the image overloads do.
 /// Each symbol carries more than one segment, so a destination too short for the last one fails after the earlier
-/// segments were written. Until 2.0.0 the overloads counted those.
+/// segments were written, and those are not counted.
 /// </summary>
 /// <remarks>
 /// A module matrix with a quiet zone is decoded from a copy of its core, one without it in place, and the

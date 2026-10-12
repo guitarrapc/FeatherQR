@@ -88,9 +88,8 @@ internal static class FinderAxisEstimator
         var count = 0;
 
         // First candidate: the axis fitted to the whole sweep. Near the axis the span
-        // grows only as 1/cos, so its minimum is flat and pixel noise picks it (measured
-        // 5-11 degrees off at 3 px/module). Toward the corners it peaks sharply, and a
-        // fit of every direction uses both.
+        // grows only as 1/cos, so its minimum is flat and pixel noise picks it. Toward
+        // the corners it peaks sharply, and a fit of every direction uses both.
         if (destination.Length > 0 && TryFitAxis(uSizes, vSizes, out var fittedDegrees, out var fittedSize))
         {
             if (TryMeasureFrame(luminance, width, height, threshold, candidate, fittedDegrees, fittedSize, fittedSize, maxRunLength, out destination[count]))
@@ -355,7 +354,7 @@ internal static class FinderAxisEstimator
     /// </summary>
     /// <remarks>
     /// The walk samples at integer pixel steps, so the first pixel past an edge overshoots it by up to one pixel.
-    /// Reporting step − 0.5 centers that error: without the correction the module size is systematically overestimated (~+0.07..+0.25 px measured), which at small pixels-per-module snaps a Standard QR dimension estimate one whole version low (e.g. a 512 px version 14 render read as version 13).
+    /// Reporting step − 0.5 centers that error: without the correction the module size is systematically overestimated, which at small pixels-per-module snaps a Standard QR dimension estimate one whole version low.
     /// </remarks>
     public static bool TryDarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY, float maxRunLength, out float inner, out float outer)
     {

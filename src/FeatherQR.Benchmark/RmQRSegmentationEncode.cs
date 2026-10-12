@@ -14,7 +14,7 @@
 ///   Length, shape held fixed   : mixed-20 / -60 / -120 / -150 (half letters, half digits)
 ///   Shape, length held at 120  : numeric / alnum / byte / mixed / alt1 / alt10
 ///
-/// and to cover every filter the scan can terminate in (measured DP passes per encode in brackets. The scan is bounded before it is priced, so most shapes never build a table at all):
+/// and to cover every filter the scan can terminate in (DP passes per encode in brackets. The scan is bounded before it is priced, so most shapes never build a table at all):
 ///
 ///   numeric-*  : all digits, so one mode is provably optimal and the short-circuit
 ///                returns before any bound is computed [0 passes]

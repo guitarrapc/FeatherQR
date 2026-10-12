@@ -142,7 +142,7 @@ internal static partial class RmQRModulePlacer
         }
 
         // Stretches of rows where both columns of a pair are data: the same byte-swapped
-        // 16-bit store per row as the portable tier, but no longer conditional on the
+        // 16-bit store per row as the portable tier, but not conditional on the
         // whole pair being clean.
         var runs = layout.Runs;
         for (var i = 0; i < runs.Length; i++)

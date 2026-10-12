@@ -10,7 +10,7 @@ public class FinderOutlineTest
 {
     private const string Content = "RMQR 43";
 
-    /// <summary>Square to 40° of shear, 2.5 to 5 px/module, with the seed a square frame turned up to 15° off the finder's rows (measured 2026-09-28: every such seed measures these).</summary>
+    /// <summary>Square to 40° of shear, 2.5 to 5 px/module, with the seed a square frame turned up to 15° off the finder's rows.</summary>
     public static IEnumerable<(RmQRVersion Version, float Keystone, float PixelsPerModule, float SeedDegrees)> Finders()
     {
         foreach (var (version, keystone) in new[] { (RmQRVersion.R11x43, 0f), (RmQRVersion.R11x43, 0.2f), (RmQRVersion.R7x99, 0.12f), (RmQRVersion.R17x139, 0.2f), (RmQRVersion.R7x139, 0.2f) })

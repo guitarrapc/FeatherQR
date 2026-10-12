@@ -23,7 +23,6 @@ public class FinderCrossCheckParityTest
         {
             foreach (var module in new[] { 1, 2, 3, 4, 7 })
             {
-                // One scene a size and module: of the bound and walk faults planted by hand, a second seed caught none this one misses
                 var columns = BuildRunColumns(lines, length, module, seed: 17);
                 var rows = Transpose(columns, lines, length);
                 foreach (var expected in ExpectedTotals(module))

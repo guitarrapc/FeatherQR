@@ -6,16 +6,15 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The type shapes 2.0.0 unified: one value kind for every sizing and decode result,
+/// The type shapes the three symbologies share: one value kind for every sizing and decode result,
 /// option objects that are immutable where a builder keeps the caller's instance and
 /// plain settable values where the library keeps nothing after a call, and no extension
 /// point that was not designed as one.
 /// </summary>
 /// <remarks>
-/// Shape tests, not behaviour tests. Each of these was inconsistent across the three
-/// symbologies before 2.0.0. Standard QR's sizing result was a <c>record struct</c> with
-/// a public constructor while the other two were plain structs, and the drift was
-/// invisible until someone read all three files side by side. A rule a test states is a
+/// Shape tests, not behaviour tests. A drift between the three symbologies, one sizing
+/// result a <c>record struct</c> with a public constructor beside two plain structs, is
+/// invisible until someone reads all three files side by side. A rule a test states is a
 /// rule the next type has to follow.
 /// </remarks>
 public class TypeShapeTest
@@ -50,18 +49,15 @@ public class TypeShapeTest
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A sweep, not a list. The rule was first written over a hand-listed set of option
-    /// structs and <see cref="IconData"/> was found missing from it a review round later,
-    /// with its two factories both hardcoding <see cref="ImageIconShape"/>, so every other
-    /// shape was unreachable below C# 9. A list only states the rule for the types someone
-    /// remembered. The sweep states it for the next type too.
+    /// A sweep, not a list. A list only states the rule for the types someone remembered.
+    /// The sweep states it for the next type too.
     /// </para>
     /// <para>
-    /// The generator options were swept here until their constructors went. The
-    /// constructor this rule made them carry had to list every option, so an option added
-    /// in a later release would have changed its signature under every compiled caller.
-    /// They are left out by name now: <see cref="GeneratorOptions_EveryOptionHasAPlainSetter"/>
-    /// refuses an <c>init</c> accessor on one of them, and
+    /// The generator options are left out by name. The constructor this rule would make
+    /// them carry has to list every option, so an option added in a later release would
+    /// change its signature under every compiled caller.
+    /// <see cref="GeneratorOptions_EveryOptionHasAPlainSetter"/> refuses an <c>init</c>
+    /// accessor on one of them, and
     /// <see cref="GeneratorOptions_HaveNoConstructorOrFactoryThatListsTheOptions"/> the
     /// constructor this rule would ask for.
     /// </para>
@@ -157,9 +153,8 @@ public class TypeShapeTest
     /// and the initializer keeps.
     /// </summary>
     /// <remarks>
-    /// The three generator options had the same check for their constructors, which went
-    /// with those constructors. <see cref="GeneratorOptionsAssignmentTest"/> compares the
-    /// routes that remain for them.
+    /// The three generator options have no constructor to compare.
+    /// <see cref="GeneratorOptionsAssignmentTest"/> compares the routes they have.
     /// </remarks>
     [Test]
     public async Task IconData_ConstructorAgreesWithTheObjectInitializer()
@@ -189,7 +184,7 @@ public class TypeShapeTest
         // IconData's guard is the one place the two routes deliberately differ. The
         // constructor is reached from language versions with no nullable analysis, where
         // a null compiles silently, so it throws. The initializer needs `null!` to get
-        // there at all and keeps its existing behaviour of drawing no icon.
+        // there at all, and a null there draws no icon.
         await Assert.That(() => new IconData(null!)).Throws<ArgumentNullException>();
         await Assert.That(new IconData { Icon = null! }.Icon).IsNull();
     }
@@ -237,9 +232,9 @@ public class TypeShapeTest
     /// The record only has to be declared without positional parameters.
     /// </summary>
     /// <remarks>
-    /// The first cut of this rule demoted them to plain structs, which threw away
-    /// <c>ToString</c>, <c>==</c> and <see cref="IEquatable{T}"/> for nothing: what had to
-    /// go was the public constructor and the <c>init</c> setters, not the record.
+    /// A plain struct would throw away <c>ToString</c>, <c>==</c> and
+    /// <see cref="IEquatable{T}"/> for nothing: what a library-built value must not have is
+    /// the public constructor and the <c>init</c> setters, not the record.
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(ResultValues))]
@@ -379,9 +374,9 @@ public class TypeShapeTest
                 .Because($"{open.Name} is an extension point, so it needs a protected constructor");
         }
 
-        // Ask what the type HAS, not what a filtered query happens to contain: an earlier
-        // version of this assertion ran All() over the non-public constructors, which a
-        // public constructor empties, so the violation it names passed vacuously.
+        // Ask what the type HAS, not what a filtered query happens to contain: All() over
+        // the non-public constructors alone passes a type whose only constructor is public,
+        // since that list is then empty.
         var builderBase = typeof(SymbolImageBuilderBase<>);
         await Assert.That(builderBase.GetConstructors(BindingFlags.Public | BindingFlags.Instance)).IsEmpty()
             .Because("a public constructor on the builder base would open it to outside derivation");
@@ -394,8 +389,8 @@ public class TypeShapeTest
     }
 
     /// <summary>
-    /// <see cref="GradientOptions"/> copies the arrays it is given. Before 2.0.0 it stored
-    /// the caller's array, so mutating that array afterwards silently changed the options,
+    /// <see cref="GradientOptions"/> copies the arrays it is given. If it stored the
+    /// caller's array, mutating that array afterwards would silently change the options,
     /// and <see cref="GradientOptions.Default"/> could be repainted for the whole process.
     /// </summary>
     [Test]
@@ -420,10 +415,10 @@ public class TypeShapeTest
     /// rebuilds with one member changed and nothing translated.
     /// </summary>
     /// <remarks>
-    /// It used to be asymmetric. Colours came out as a span and went in as an array, and
-    /// "no stops" came out empty but went in as <c>null</c>, so recolouring cost a
-    /// <c>ToArray()</c> and a ternary just to carry the stops across, and a caller who
-    /// omitted the ternary silently lost them.
+    /// An asymmetric pair would cost the caller a translation. With colours out as a span
+    /// and in as an array, and "no stops" out as empty but in as <c>null</c>, recolouring
+    /// takes a <c>ToArray()</c> and a ternary just to carry the stops across, and a caller
+    /// who omits the ternary silently loses them.
     /// </remarks>
     [Test]
     public async Task GradientOptions_RebuildsFromItsOwnProperties()
@@ -464,8 +459,8 @@ public class TypeShapeTest
 
     /// <summary>
     /// Equality compares the colours, not the array references. The generated
-    /// <c>record</c> equality it replaces reported two identical gradients as different,
-    /// because arrays compare by reference.
+    /// <c>record</c> equality reports two identical gradients as different, because
+    /// arrays compare by reference.
     /// </summary>
     [Test]
     public async Task GradientOptions_EqualityIsStructural()
@@ -502,8 +497,7 @@ public class TypeShapeTest
     /// <summary>
     /// A caller varies the direction of a ready-made gradient with <c>with</c>, the same
     /// way the generator options structs are varied. The copy shares the colour array,
-    /// which is safe precisely because the array is private and never handed out. That
-    /// sharing was the bug when the array was a public <c>init</c> property.
+    /// which is safe precisely because the array is private and never handed out.
     /// </summary>
     [Test]
     public async Task GradientOptions_WithExpression_ChangesTheDirectionAndKeepsTheColors()
@@ -579,10 +573,8 @@ public class TypeShapeTest
         await Assert.That(bigger.Icon).IsSameReferenceAs(icon.Icon);
         await Assert.That(bigger).IsNotEqualTo(icon);
 
-        // The summary names every option type, so every option type is exercised here.
-        // GradientOptions has its own case above, but these three had none. The quiet zone goes
-        // to 3, which is the default of none of the three (4, 2 and 2), so that a setter
-        // that left the default does not pass.
+        // The quiet zone goes to 3, which is the default of none of the three (4, 2 and 2),
+        // so that a setter that left the default does not pass.
         var qr = new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = 5 } with { QuietZoneSize = 3 };
         await Assert.That(qr.QuietZoneSize).IsEqualTo(3);
         await Assert.That(qr.Version).IsEqualTo(QRVersionRange.Exactly(5));
@@ -597,9 +589,9 @@ public class TypeShapeTest
     }
 
     /// <summary>
-    /// <see cref="IconData"/> is configured at construction and never after. The
-    /// properties were settable, which let a caller reach a state the factory methods
-    /// validate against and the renderer then rejects at draw time.
+    /// <see cref="IconData"/> is configured at construction and never after. A settable
+    /// property would let a caller reach a state the factory methods validate against and
+    /// the renderer then rejects at draw time.
     /// </summary>
     [Test]
     public async Task IconData_PropertiesAreInitOnly()
@@ -688,8 +680,8 @@ public class TypeShapeTest
     /// accessor is public or protected.
     /// </summary>
     /// <remarks>
-    /// A settable class is the shape <see cref="IconData"/> had before 2.0.0, which let a
-    /// caller reach a state its factory methods validate against. A <c>readonly</c> struct
+    /// A settable class lets a caller reach a state its factory methods validate against,
+    /// which is why <see cref="IconData"/> is not one. A <c>readonly</c> struct
     /// with a setter that writes into something its copies share would be assignable too.
     /// Neither is a struct that is not <c>readonly</c>, so
     /// <see cref="GeneratorOptions_AreTheOnlyStructsACallerAssignsTo"/> does not see them,
@@ -796,9 +788,8 @@ public class TypeShapeTest
     /// <c>record</c> gives a struct.
     /// </summary>
     /// <remarks>
-    /// <c>with</c> and the equality assertions work on a plain struct too. When this rule
-    /// was written, the rest of the suite passed with <c>record</c> taken off the three
-    /// declarations.
+    /// <c>with</c> and the equality assertions work on a plain struct too, so they do not
+    /// hold the <c>record</c> on the three declarations.
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(GeneratorOptionStructs))]
@@ -825,13 +816,12 @@ public class TypeShapeTest
     /// static method with parameters that returns the struct.
     /// </summary>
     /// <remarks>
-    /// A constructor existed while the options were <c>init</c>-only, for compilers before
-    /// C# 9. It had to list every option, so an option added in a later release would have
-    /// changed its signature under every compiled caller, or stood beside it as a second
-    /// constructor and made <c>new QRCodeGeneratorOptions(eciMode: …)</c> ambiguous. With
-    /// <c>set</c> accessors the object initializer serves C# 7.3 too, and a constructor would
-    /// only bring that problem back. So would a static method on the struct that returns
-    /// one from the options, which is the same constructor under another name. The rule
+    /// A constructor has to list every option, so an option added in a later release would
+    /// change its signature under every compiled caller, or stand beside it as a second
+    /// constructor and make <c>new QRCodeGeneratorOptions(eciMode: …)</c> ambiguous. With
+    /// <c>set</c> accessors the object initializer serves C# 7.3 too, so no caller needs
+    /// one. A static method on the struct that returns one from the options is the same
+    /// constructor under another name. The rule
     /// reads those two shapes: it does not see a method that hands the struct back through
     /// an <c>out</c> parameter, or one declared on another type.
     /// </remarks>

@@ -137,7 +137,7 @@ public class RmQRCodeImageBuilderUnitTest
     {
         // Width-only sizing (the static helpers' rule and the no-size default) must give the
         // symbol at exactly that width: no letterbox band from the rounded height, and an
-        // opaque image (the wide versions used to lose 1-3 columns to transparent pad).
+        // opaque image. The wide versions are where a rounded height leaves columns of pad.
         var data = RmQRCodeGenerator.Create("RM" + (int)version, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
         using var bitmap = new RmQRCodeImageBuilder(data).ToBitmap();
         await Assert.That(bitmap.Width).IsEqualTo(512);

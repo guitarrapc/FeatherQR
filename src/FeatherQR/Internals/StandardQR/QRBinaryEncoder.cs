@@ -53,16 +53,13 @@ internal ref partial struct QRBinaryEncoder
     /// <param name="eci">ECI mode for character encoding.</param>
     public void WriteMode(EncodingMode encoding, EciMode eci)
     {
-        // ECI mode requires special header before mode indicator
         if (eci != EciMode.Default)
         {
-            // ECI mode indicator: 0111 (4 bits)
             _writer.Write((int)EncodingMode.ECI, 4);
-            // ECI assignment number (8 bits for 00000000-000000FF)
+            // The one-codeword form of the ECI designator, which holds assignment numbers 0-127.
             _writer.Write((int)eci, 8);
         }
 
-        // Standard mode indicator (4 bits)
         _writer.Write((int)encoding, 4);
     }
 
@@ -200,11 +197,9 @@ internal ref partial struct QRBinaryEncoder
             // it anyway because overflowing it would corrupt the mode indicator above.
             Debug.Assert(segment.UnitCount < (1 << countBits), "run length must fit the character count indicator");
 
-            // The bit budget the caller cleared comes from UnitCount, but the payload
-            // below is written from the run's characters. A plan whose two disagree
-            // would clear the budget and then overrun, so this is a runtime check, not
-            // an assert. Byte mode under UTF-8 is the exception: its unit count is only
-            // knowable after transcoding, so WriteUtf8Segment verifies it there instead.
+            // The bit budget the caller cleared comes from UnitCount, but the payload below is written from the run's characters.
+            // A plan whose two disagree would clear the budget and then overrun, so this is a runtime check, not an assert.
+            // Under UTF-8 a Byte run's unit count is known only after transcoding, so WriteUtf8Segment checks it there.
             if ((mode != EncodingMode.Byte || eci != EciMode.Utf8) && segment.UnitCount != segment.Length)
                 throw new ArgumentException($"Segment plan gives a {segment.Length}-character run a unit count of {segment.UnitCount}; they must agree outside UTF-8 Byte mode.", nameof(segments));
             if (mode == EncodingMode.Kanji && eci != EciMode.Default)
@@ -310,13 +305,11 @@ internal ref partial struct QRBinaryEncoder
     /// Writes numeric data: three digits in 10 bits, a last two in 7, a last one in 4.
     /// </summary>
     /// <remarks>
-    /// The digits are '0'-'9', found so by the analysis or the plan, as the writer has always taken them: a writer does not check them,
-    /// and a character outside them writes wrong fields, not an exception. Its group can spill into the fields appended with it (the
-    /// 30-bit append of nine digits, the 40-bit step of twelve), where the writer of one field a group spoiled only that field. A run
-    /// under sixteen digits, at most five groups, is written here (<see cref="WriteNumericTail"/>): a call to a writer cost more than it
-    /// saved there, 1.12 times the old loop's time at twelve
-    /// digits interpreted on WebAssembly. WebAssembly has no vector tier: twelve digits a step on its SIMD took 0.95 to 0.96 of the portable
-    /// writer's time AOT-compiled and 1.10 to 1.65 interpreted at 40 to 7,089 digits, and one flag gates both (2026-10-05).
+    /// The digits are '0'-'9', found so by the analysis or the plan. A writer does not check them, and a character outside them writes
+    /// wrong fields, not an exception. Its group can spill into the fields appended with it (the 30-bit append of nine digits, the
+    /// 40-bit step of twelve). A run under sixteen digits, at most five groups, is written here (<see cref="WriteNumericTail"/>): a
+    /// call to a writer costs more than it saves there, interpreted on WebAssembly. WebAssembly has no vector tier: twelve digits a
+    /// step on its SIMD is faster than the portable writer AOT-compiled and slower interpreted, and one flag gates both.
     /// </remarks>
     private void WriteNumericData(ReadOnlySpan<char> digits)
     {
@@ -326,8 +319,8 @@ internal ref partial struct QRBinaryEncoder
             return;
         }
 #if NET8_0_OR_GREATER
-        // The SSSE3 step runs from 40 digits. It took 1.08 to 1.22 of the portable writer's time at 16 to 24 and at 32 digits, 0.80 to
-        // 0.93 at 28 and 1.00 to 1.07 at 36, and 0.77 to 1.00 from 40, on the JIT with and without AVX2 and on default NativeAOT (2026-10-05).
+        // The SSSE3 step runs from 40 digits. It reads sixteen chars to write twelve, and under 40 digits, where it runs once or twice,
+        // it can lose to the portable writer.
         if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported && digits.Length >= 40)
         {
             WriteNumericSsse3(ref _writer, digits);
@@ -411,7 +404,7 @@ internal ref partial struct QRBinaryEncoder
     /// The analysis or the plan has found every character in the alphabet, so the writers check a whole step at once rather than each
     /// character. A step with a character outside the alphabet is not written: the pairs ahead of that character are written a pair at
     /// a time (<see cref="WriteAlphanumericTail"/>), and <see cref="WriteAlphanumericChecked"/> takes the run from the pair that holds it,
-    /// and throws at that character as the writer always has. A run under eight characters, shorter than any step, is written here
+    /// and throws at that character. A run under eight characters, shorter than any step, is written here
     /// (<see cref="WriteAlphanumericTail"/>), with no call to a writer.
     /// </remarks>
     private void WriteAlphanumericData(ReadOnlySpan<char> chars)
@@ -450,9 +443,8 @@ internal ref partial struct QRBinaryEncoder
     /// The portable writer from <paramref name="start"/>, where a vector tier stopped. A value is one table load, -1 outside the alphabet
     /// (<see cref="CharacterSets.AlphanumericValues"/>), and a step's characters and values are checked by one OR: a character past 0x7F,
     /// or a -1, sets a bit no character or value of the alphabet sets.
-    /// Not inlined: inlined into its two-parameter entry, an earlier body, whose throwing path still sat in its loop, ran out of the JIT's
-    /// inlining budget before its 8-byte store, which was left a call: 1.64 times the old writer's time at 16 characters, against 0.77 not
-    /// inlined. This body inlined reads 0.81 against 0.71 at 16 characters and level from 300 (JIT with AVX2, 2026-10-05).
+    /// Not inlined: on short runs it is faster compiled on its own than inlined into its two-parameter entry. There a body whose throwing
+    /// path sits in its loop runs out of the JIT's inlining budget before its 8-byte store, which is left a call.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void WriteAlphanumericScalar(ref BitWriter writer, ReadOnlySpan<char> chars, int start)
@@ -508,7 +500,7 @@ internal ref partial struct QRBinaryEncoder
 
     /// <summary>
     /// The writer with a check a character: the path of a run with a character outside the alphabet, which throws there after writing
-    /// the pairs ahead of it. Not inlined: inside a writer's loop it took the inlining budget its appends need.
+    /// the pairs ahead of it. Not inlined: inside a writer's loop it takes the inlining budget the appends need.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void WriteAlphanumericChecked(ref BitWriter writer, ReadOnlySpan<char> chars)

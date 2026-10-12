@@ -59,7 +59,6 @@ if (command == "probe-kanji-mapping")
 if (command == "probe-kanji")
 {
     // Which external encoder lineages can emit Kanji mode, per symbology.
-    // Backs the fixture plan for Kanji decode support.
     return KanjiProbe.Run();
 }
 if (command == "spot-check-structured-append")

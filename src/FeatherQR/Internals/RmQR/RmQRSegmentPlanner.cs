@@ -32,7 +32,7 @@ internal static class RmQRSegmentPlanner
 
     /// <summary>
     /// Count indicator triples memoised during a version scan.
-    /// The 32 versions share 13 distinct triples, but the bounds narrow the band so far that measured sweeps never stored more than 3. Sized for that plus headroom: undersizing is safe, not wrong, because the store is guarded and a miss simply recomputes.
+    /// The 32 versions share 13 distinct triples, but the bounds narrow the band to a few of them. Undersizing is safe, not wrong, because the store is guarded and a miss simply recomputes.
     /// </summary>
     private const int MemoCapacity = 8;
 
@@ -78,7 +78,7 @@ internal static class RmQRSegmentPlanner
         var mode = analysis.EncodingMode;
         var dataLength = analysis.DataLength;
 
-        // Validate before any planning so argument errors keep their current type, message and precedence. The selector re-validates on the paths reaching it.
+        // Validate before any planning so argument errors keep the selector's type, message and precedence. The selector re-validates on the paths reaching it.
         RmQRVersionSelector.ValidateFitArguments(eccLevel, fitStrategy, height, requestedVersion, charset);
 
         // All-Numeric content is already at the optimum: splitting a Numeric run never lowers its payload and every extra run adds a header.
@@ -91,7 +91,7 @@ internal static class RmQRSegmentPlanner
 
         if (requestedVersion is { } requested)
         {
-            // Single mode already fits: mixing cannot shrink a fixed version, so the stream stays exactly as it is today.
+            // Single mode already fits: mixing cannot shrink a fixed version, so the stream stays the single-mode one.
             selected = requested;
             if (Fits(requested, eccLevel, mode, dataLength, charset))
                 return true;
@@ -177,7 +177,7 @@ internal static class RmQRSegmentPlanner
     /// At each candidate, in the strategy's order, the Kanji plan (Kanji runs beside runs of the ASCII, no ECI header) is taken where it fits, otherwise the UTF-8 plan the seven-state program gives the same text.
     /// </summary>
     /// <remarks>
-    /// The UTF-8 plan is weighed so that Optimal never needs a larger symbol than it did before Kanji plans: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
+    /// The UTF-8 plan is weighed so that a Kanji-eligible text never needs a larger symbol than its UTF-8 plan gives: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
     /// Each program has its own three filters, the ones <see cref="TrySelectVersion"/> describes. The Kanji plan's are re-derived for its eighth state: the screen prices a character with a cell at 13 bits, and the floor runs at Kanji's narrowest count indicator, 2 bits, so that a plan filling R7x43 exactly is not skipped. The upper bound re-prices the floor plan's Kanji runs too. The memo key carries Kanji's width, which tells apart versions whose other three widths agree (R13x77 and R15x59, R13x139 and R17x99).
     /// </remarks>
     private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRVersion single, bool hasSingle, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan)

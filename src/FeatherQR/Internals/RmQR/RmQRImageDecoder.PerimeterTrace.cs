@@ -13,7 +13,7 @@ internal static partial class RmQRImageDecoder
     /// </summary>
     /// <remarks>
     /// Every edge of an rMQR symbol is a timing pattern, so each dark run along it has two ends at known columns and faces the quiet zone.
-    /// A trace predicts the next run from the step the last ones measured, so it follows perspective however strong: over a wide symbol the step changes by a quarter from one end to the other and the columns lean up to 40° either way, which no frame measured at the finder extrapolates.
+    /// A trace predicts the next run from the step the last ones measured, so it follows perspective however strong: over a wide symbol the step changes from one end to the other and the columns lean, which no frame measured at the finder extrapolates.
     /// The runs expected are the ones the encoder paints (<see cref="RmQRModulePlacer.GetFunctionTemplate"/>).
     /// False when a line misses more than <see cref="MaxMissedRuns"/> runs in a row or reads none, or the points do not determine a plane.
     /// </remarks>

@@ -24,10 +24,8 @@ internal static partial class TextAnalyzer
         var i = 0;
         var length = text.Length;
 
-        // AVX2 processing 16 chars at once
         for (; i <= length - 16; i += 16)
         {
-            // load 16 chars as Vector256<ushort>
             var chars = Vector256.Create(
                 text[i], text[i + 1], text[i + 2], text[i + 3],
                 text[i + 4], text[i + 5], text[i + 6], text[i + 7],
@@ -37,12 +35,8 @@ internal static partial class TextAnalyzer
 
             var charsInt16 = chars.AsInt16();
 
-            // ASCII check (0-127). Both thresholds must be tested UNSIGNED: a UTF-16
-            // code unit at or above U+8000 (surrogates, U+FFFD, most of the CJK
-            // compatibility area) is negative as an Int16, so a signed
-            // CompareGreaterThan reports it as in-range and the text would be declared
-            // Latin-1 encodable. c > 127 <=> any bit from bit 7 up is set, and vptest
-            // answers that directly without a compare.
+            // ASCII check (0-127). Both thresholds must be tested UNSIGNED: a UTF-16 code unit at or above U+8000 (surrogates, U+FFFD) is negative as an Int16, so a signed compare reports it as in range and the text would be declared Latin-1 encodable.
+            // c > 127 <=> any bit from bit 7 up is set, and vptest answers that without a compare.
             if (!hasNonAscii)
             {
                 var aboveAscii = Vector256.Create(unchecked((short)0xFF80));
@@ -62,7 +56,6 @@ internal static partial class TextAnalyzer
                 }
             }
 
-            // Numeric check (0-9)
             if (!hasNonNumeric)
             {
                 var char0 = Vector256.Create((short)'0');
@@ -78,7 +71,6 @@ internal static partial class TextAnalyzer
                 }
             }
 
-            // Alphanumeric check (require scalar processing due to complexity)
             if (!hasNonAlphanumeric && hasNonNumeric)
             {
                 if (!IsAllAlphanumericAvx2(charsInt16))
@@ -115,7 +107,6 @@ internal static partial class TextAnalyzer
 
         var encoding = DetermineEncoding(hasNonNumeric, hasNonAlphanumeric);
 
-        // If there are user constraints (e.g. requestedVersion), calculate actual data length.
         var actualEciMode = requestedEciMode == EciMode.Default
             ? DetermineEciMode(hasNonAscii, hasNonIso88591)
             : requestedEciMode;
@@ -160,10 +151,8 @@ internal static partial class TextAnalyzer
             Avx2.Or(Avx2.Or(plus, minus), Avx2.Or(Avx2.Or(period, slash), colon))
         );
 
-        // combine all checks
         var isValid = Avx2.Or(Avx2.Or(isDigit, isUpper), isSpecial);
 
-        // Check all bits are flagged.
         var allOnes = Vector256.Create((short)-1);
         var mask = Avx2.CompareEqual(isValid, allOnes);
 
@@ -188,10 +177,8 @@ internal static partial class TextAnalyzer
         var i = 0;
         var length = text.Length;
 
-        // SSE2 processing 8 chars at once
         for (; i <= length - 8; i += 8)
         {
-            // load 8 chars as Vector128<ushort>
             var chars = Vector128.Create(
                 text[i], text[i + 1], text[i + 2], text[i + 3],
                 text[i + 4], text[i + 5], text[i + 6], text[i + 7]
@@ -199,13 +186,9 @@ internal static partial class TextAnalyzer
 
             var charsInt16 = chars.AsInt16();
 
-            // ASCII check (0-127). Both thresholds must be tested UNSIGNED: a UTF-16
-            // code unit at or above U+8000 (surrogates, U+FFFD, most of the CJK
-            // compatibility area) is negative as an Int16, so a signed
-            // CompareGreaterThan reports it as in-range and the text would be declared
-            // Latin-1 encodable. c > 127 <=> any bit from bit 7 up is set. SSE2 has no
-            // PTEST, so the test is AND against zero (MoveMask cannot see bit 8-15 of a
-            // lane, which is exactly where the ISO-8859-1 answer lives).
+            // ASCII check (0-127). Both thresholds must be tested UNSIGNED: a UTF-16 code unit at or above U+8000 (surrogates, U+FFFD) is negative as an Int16, so a signed compare reports it as in range and the text would be declared Latin-1 encodable.
+            // c > 127 <=> any bit from bit 7 up is set. SSE2 has no PTEST, so the test is AND against zero.
+            // MoveMask alone sees only bits 7 and 15 of a lane, not the rest of the high byte, where the ISO-8859-1 answer lives.
             if (!hasNonAscii)
             {
                 var aboveAscii = Sse2.And(charsInt16, Vector128.Create(unchecked((short)0xFF80)));
@@ -225,7 +208,6 @@ internal static partial class TextAnalyzer
                 }
             }
 
-            // Numeric check (0-9)
             if (!hasNonNumeric)
             {
                 var char0 = Vector128.Create((short)'0');
@@ -241,7 +223,6 @@ internal static partial class TextAnalyzer
                 }
             }
 
-            // Alphanumeric check (require scalar processing due to complexity)
             if (!hasNonAlphanumeric && hasNonNumeric)
             {
                 if (!IsAllAlphanumericSse2(charsInt16))
@@ -278,7 +259,6 @@ internal static partial class TextAnalyzer
 
         var encoding = DetermineEncoding(hasNonNumeric, hasNonAlphanumeric);
 
-        // If there are user constraints (e.g. requestedVersion), calculate actual data length.
         var actualEciMode = requestedEciMode == EciMode.Default
             ? DetermineEciMode(hasNonAscii, hasNonIso88591)
             : requestedEciMode;
@@ -323,10 +303,8 @@ internal static partial class TextAnalyzer
             Sse2.Or(Sse2.Or(plus, minus), Sse2.Or(Sse2.Or(period, slash), colon))
         );
 
-        // combine all checks
         var isValid = Sse2.Or(Sse2.Or(isDigit, isUpper), isSpecial);
 
-        // Check all bits are flagged.
         var allOnes = Vector128.Create((short)-1);
         var allValid = Sse2.CompareEqual(isValid, allOnes);
 

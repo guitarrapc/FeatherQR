@@ -11,7 +11,7 @@ public class SpreadRingDecodeTest
     private const string Content = "FQR SPREAD 0123";
 
     /// <summary>
-    /// Every dark edge moved by a fifth or a seventh of a module, turned. Each render fails on the commit before and reads under nudges of ±0.05 px/module, ±0.5° and ±0.01 of a module.
+    /// Every dark edge moved by a fifth or a seventh of a module, turned. None of these renders reads without the like edges.
     /// </summary>
     [Test]
     [Arguments(1, 3f, 23f, -0.2f, false)]

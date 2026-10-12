@@ -76,7 +76,6 @@ internal ref struct BitWriter
         _accumulator |= v << (64 - _accumulatorBits - bitCount);
         _accumulatorBits += bitCount;
 
-        // store a full 32-bit word once available
         if (_accumulatorBits >= 32)
         {
             BinaryPrimitives.WriteUInt32BigEndian(_buffer.Slice(_bytePosition), (uint)(_accumulator >> 32));

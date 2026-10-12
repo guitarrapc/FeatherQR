@@ -5,7 +5,7 @@ using SkiaSharp;
 using FeatherQR;
 using FeatherQR.SkiaSharp;
 
-// Verification sample for the Corners member on the decode results (2.0.0):
+// Verification sample for the Corners member on the decode results:
 // - A successful image decode reports where the symbol sits, in the image's pixel coordinates.
 // - The corners are named in the SYMBOL's own frame, so a rotated capture reports a rotated
 //   quadrilateral, not the image-axis bounding box, and TopLeft stays the corner beside the
@@ -22,14 +22,14 @@ var outputDirectory = Path.Combine(Environment.CurrentDirectory, "samples", "Dot
 Directory.CreateDirectory(outputDirectory);
 
 // One flat symbol, rendered without a quiet zone of its own so the module area is the whole
-// bitmap; each scene then draws it onto a white canvas through a different matrix.
+// bitmap. Each scene then draws it onto a white canvas through a different matrix.
 var qrData = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
 using var flat = new QRCodeImageBuilder(qrData)
     .WithModulePixelSize(pixelsPerModule)
     .WithColors(SKColors.Black, SKColors.White)
     .ToBitmap();
 
-// Each scene transforms the symbol about its own origin; Compose does the placing, so a matrix
+// Each scene transforms the symbol about its own origin. Compose does the placing, so a matrix
 // here only has to say what the camera did, not where the result lands on the canvas.
 var scenes = new (string Name, string What, SKMatrix Matrix)[]
 {
@@ -51,11 +51,11 @@ foreach (var (name, what, matrix) in scenes)
         continue;
     }
 
-    // Corners is populated on success only; a matrix-level decode or a failure leaves it empty.
+    // Corners is populated on success only. A matrix-level decode or a failure leaves it empty.
     var corners = info.Corners;
 
     // y grows downward, so a symbol as printed winds clockwise and gives a positive cross
-    // product; a mirrored capture reverses that.
+    // product. A mirrored capture reverses that.
     var cross = (corners.TopRight.X - corners.TopLeft.X) * (corners.BottomLeft.Y - corners.TopLeft.Y)
               - (corners.TopRight.Y - corners.TopLeft.Y) * (corners.BottomLeft.X - corners.TopLeft.X);
     var mirrored = cross < 0;
@@ -96,7 +96,7 @@ static SKBitmap Annotate(SKBitmap scene, SymbolCorners corners)
     using var outline = new SKPaint { Style = SKPaintStyle.Stroke, StrokeWidth = 3, Color = new SKColor(0xFF, 0x3B, 0x30), IsAntialias = true };
     canvas.DrawPath(path, outline);
 
-    // TopLeft is the corner beside the finder pattern that defines the symbol's top-left; marking
+    // TopLeft is the corner beside the finder pattern that defines the symbol's top-left. Marking
     // it is what makes a rotation or a mirror visible at a glance.
     using var marker = new SKPaint { Style = SKPaintStyle.Fill, Color = new SKColor(0x00, 0x7A, 0xFF), IsAntialias = true };
     canvas.DrawCircle(corners.TopLeft.X, corners.TopLeft.Y, 7, marker);
@@ -177,8 +177,8 @@ static SKPoint Project(SKMatrix m, SKPoint p)
         (m.SkewY * p.X + m.ScaleY * p.Y + m.TransY) / w);
 }
 
-// Keystone: a perspective term in y, so the bottom edge and the height both shrink to 1/(1+strength)
-// — 89 % at 0.12. x is centred first, so the symbol narrows about its own axis.
+// Keystone: a perspective term in y, so the bottom edge and the height both shrink to 1/(1+strength),
+// 89 % at 0.12. x is centred first, so the symbol narrows about its own axis.
 static SKMatrix Keystone(SKBitmap flat, float strength)
 {
     float w = flat.Width, h = flat.Height;

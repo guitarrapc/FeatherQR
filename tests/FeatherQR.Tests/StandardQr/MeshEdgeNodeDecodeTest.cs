@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// A version 25 or 30 symbol on a bent card, photographed at a tilt, through blur and sensor noise, with the small modules of a distant shot: the grid through the finders and the alignment anchor reads by no sampling, and the mesh over the alignment lattice reads, its nodes on the timing lines and beside the finders measured with the rest.
-/// The shots were chosen from a sweep of tilts, bends, blurs, noise and distances at levels L and M where a mesh whose coordinate-6 row and column were extrapolated from the interior nodes did not read.
+/// The shots vary tilt, bend, blur, noise and distance at levels L and M, and none reads through a mesh whose coordinate-6 row and column are extrapolated from the interior nodes.
 /// </summary>
 public class MeshEdgeNodeDecodeTest
 {

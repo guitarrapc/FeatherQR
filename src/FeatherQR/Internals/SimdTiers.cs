@@ -114,9 +114,8 @@ internal sealed class SimdKernel
 /// every instruction-set flag a kernel's files read must be the condition of a tier declared here for that kernel, and every tier declared here must be read there.
 /// </para>
 /// <para>
-/// The kernels do not read this table. Each dispatch keeps its own <c>IsSupported</c> reads. That was measured, not chosen.
-/// With every dispatch moved onto <see langword="bool"/> properties declared here, the JIT's machine code for the kernels stayed the same but its inlining did not: <c>ModulePlacer.MaskCode</c> stopped being inlined into its caller, and <c>TextAnalyzer.Analyze</c> inlined 167 methods, not 9, before dropping its dead tiers.
-/// A probe put the flag behind a property, an aggressively inlined property and a <see langword="static"/> <see langword="readonly"/> field: the JIT inlined the dispatch into its caller only when the dispatch read <c>IsSupported</c> itself. (ILC compiled all of them alike.)
+/// The kernels do not read this table. Each dispatch keeps its own <c>IsSupported</c> reads:
+/// the JIT inlines a dispatch into its caller only when the dispatch reads <c>IsSupported</c> itself, not when the flag sits behind a property, an aggressively inlined property or a <see langword="static"/> <see langword="readonly"/> field.
 /// </para>
 /// <para>
 /// A lower tier also finishes the tail of a higher one (<c>ModuleBitPacker</c>), takes inputs too small for it (<c>PerspectiveGridSampler.Sample</c>) or takes inputs it does not pay on (<c>RmQRMatrixDecoder.ExtractCodewords</c> on WebAssembly, under 44 stream bits per eight columns), so a tier listed as runnable is one the dispatch can take, not the only one it takes. <see cref="SimdKernel.Active"/> is the most preferred of them.
@@ -289,7 +288,7 @@ internal static class SimdTiers
         new("LuminanceConverter",      [Sse2],          [Avx2],               [AdvSimdDp, Vector128], [PackedSimd]),
         new("LuminanceInverter",       [Vector128],     [Vector256],          [Vector128],          [Vector128]),
         new("LuminanceHalver",         [Vector128],     [Vector256],          [Vector128],          [PackedSimd]),
-        // WebAssembly keeps the 128-bit tier though AOT-compiled it counts dense input (soft, noise, a gradient) 4-11 % slower than scalar: at most 2 % of a decode, inside the runs' spread, against 0.09-0.31 on rendered symbols
+        // WebAssembly keeps the 128-bit tier though AOT-compiled it counts dense input (soft, noise, a gradient) slower than scalar: a decode of such input does not move, and rendered symbols count several times faster
         new("Binarizer",               [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("LocalBinarizer",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),
         new("FinderRowMask",           [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
@@ -297,35 +296,32 @@ internal static class SimdTiers
         new("PerspectiveGridSampler",  [Sse2],          [Vector256],          [Vector128],          [PackedSimd]),
 
         // ---- Standard QR ----
-        // WebAssembly stays scalar: the expand is 0.5 % of a version 40 encode AOT-compiled and 0.3 % interpreted
+        // WebAssembly stays scalar: the expand is too small a share of an encode there
         new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
         new("ModulePlacerMaskCode",    [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
-        // x64 with AVX2 keeps the SSE4.1 tier: 32 characters a step took 0.91 to 0.92 of its time at 300 and 4,296 characters, 1.00 at 40 and 1.09 at 9, and holding the writer in registers took as much off the sixteen-character loop. ARM64's step took 0.40 to 0.43 of the portable writer's time from 300 characters up on .NET 10 and 0.60 to 0.64 on .NET 8 (Apple M2), where the payload was 4.2 to 4.7 % of a version 40 alphanumeric encode, and that encode 0.97 to 0.98 of its time
+        // x64 with AVX2 keeps the SSE4.1 tier: 32 characters a step gain only on long runs, no more than holding the writer in registers gives the sixteen-character loop, and lose on short ones
         new("QRAlphanumericWriter",    [Sse41],         [Sse41],              [AdvSimd],            [PackedSimd]),
-        // x64 with AVX2 keeps the SSSE3 tier: 24 digits a step read 0.97 to 1.08 of its time at 10 to 7,089 digits. ARM64's step took 0.57 to 0.61 of the portable writer's time from 500 digits up on .NET 10 and 0.70 to 0.82 on .NET 8 (Apple M2), where the payload was 3.0 to 3.6 % of a version 40 numeric encode, and that encode 0.98 to 1.00 of its time. WebAssembly stays scalar: twelve digits a step on its SIMD took 0.95 to 0.96 of the portable writer's time AOT-compiled and 1.10 to 1.65 interpreted, at 40 to 7,089 digits
+        // x64 with AVX2 keeps the SSSE3 tier: 24 digits a step are no faster. WebAssembly stays scalar: twelve digits a step on its SIMD gain little AOT-compiled and lose interpreted, and one flag gates both
         new("QRNumericWriter",         [Ssse3],         [Ssse3],              [AdvSimd],            [Scalar]),
-        // WebAssembly keeps the 128-bit tier though the interpreter runs it 16-21 % slower than scalar: AOT-compiled it is 1.5x faster, and the search is under 2 % of any shape there
+        // WebAssembly keeps the 128-bit tier though the interpreter runs it slower than scalar: AOT-compiled it is faster, and the search is a small share of a decode there
         new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("QRSampleGridPiecewise",   [Sse2],          [Avx2],               [AdvSimd],            [PackedSimd]),
         new("StructuredAppendLanes",   [Sse2],          [Vector256],          [AdvSimd],            [PackedSimd]),
-        // x64 and WebAssembly stay scalar: the parity pass is 1.2 % of a 45,000-character set on a default NativeAOT publish, 0.7 to 0.8 % with AVX2, 0.8 % on WebAssembly AOT
+        // x64 and WebAssembly stay scalar: the parity pass is too small a share of a Structured Append encode there
         new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
-        // x64 and WebAssembly stay scalar: the scanner is 0.2 % or less of a Structured Append encode on a default NativeAOT publish (0.3 % with AVX2, the same scalar time over a shorter encode), 0.1 % on WebAssembly AOT
+        // x64 and WebAssembly stay scalar: the scanner is too small a share of a Structured Append encode there
         new("StructuredAppendScanner", [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
 
         // ---- Micro QR ----
-        // WebAssembly stays scalar: a vector step for the 8 to 15 chars saves 1.5 % of an M4 Byte encode AOT-compiled and 2.5 % interpreted
+        // WebAssembly stays scalar: a vector step for the 8 to 15 chars saves too little of an M4 Byte encode
         new("MicroQRByteSegment",      [Sse2],          [Sse2],               [AdvSimd],            [Scalar]),
-        // WebAssembly stays scalar: the 16-module vector unpack places an M4 symbol in 0.25 µs against 0.27 AOT-compiled, and 1.59 against 1.43 interpreted
+        // WebAssembly stays scalar: the 16-module vector unpack gains little AOT-compiled and loses interpreted, and one flag gates both
         new("MicroQRModulePlacer",     [Ssse3],         [Avx2Pext, Ssse3],    [AdvSimd],            [Scalar]),
         new("MicroQRSampleGrid",       [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
 
         // ---- rMQR ----
-        // ARM64 and WebAssembly stay scalar. On WebAssembly the writers are 2.5 to 6.8 % of an rMQR encode. A 16-character Alphanumeric step runs
-        // 0.62 to 0.86 of the table loop, at most 2.5 % of an encode, and inlined into the encode's switch it slowed the Numeric encode 6 % AOT-compiled.
-        // A 24-digit Numeric step ran 1.26x the SWAR loop interpreted. On ARM64 the writers are 3.8 to 11 % of an rMQR encode. Its Alphanumeric batch
-        // saved 19 to 28 % of the writer alone, at most 2.7 % of an encode, and lost end to end to the same switch, and its Numeric batch read −9 % at
-        // 361 digits and +6 % at 12 (the rMQR encoder record)
+        // ARM64 and WebAssembly stay scalar: a vector step gains a few percent of an encode at most, and inside the encode's switch, which the
+        // three writers share, it slows the others and loses end to end (the rMQR encoder record)
         new("RmQRValueSegments",       [Sse41],         [Sse41],              [Scalar],             [Scalar]),
         new("RmQRLatin1Segment",       [Sse2],          [Sse2],               [Vector128],          [Vector128]),
         new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),

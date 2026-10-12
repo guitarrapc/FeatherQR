@@ -5,24 +5,19 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="QRCodeGeneratorOptions"/> and <see cref="MicroQRCodeGeneratorOptions"/>,
-/// the only way to configure a generator since 2.0.0 removed the released parameter
-/// lists (specs/qrcode-symbologies.md, Public API direction).
+/// the only way to configure a generator (specs/qrcode-symbologies.md, Public API direction).
 /// </summary>
 /// <remarks>
 /// <para>
 /// Two things are pinned here. First, <c>default(T)</c> has to carry the documented
 /// defaults, which for quiet zone is 4 (Standard QR) and 2 (Micro QR) rather than the
-/// zero value, while 0 stays expressible. Second, the output of every configuration the
-/// removed overloads could express, captured from those overloads before they were
-/// deleted: they were the shipped contract, and removing the spelling must not change
-/// the symbol.
+/// zero value, while 0 stays expressible. Second, the released output of every
+/// configuration pinned below, so a change of the symbol fails here.
 /// </para>
 /// <para>
-/// The one place the options surface does <em>more</em> than the released one did is
-/// Standard QR sizing. The released <c>GetRequiredBufferSize</c> never had a version parameter,
-/// so an ignored <c>Version</c> would have been a silent trap. Sizing honours it and
-/// reports a version that cannot hold the content the same way Micro QR and rMQR
-/// already do.
+/// Standard QR sizing honours <c>Version</c>, and reports a version that cannot hold the
+/// content the same way Micro QR and rMQR do. An ignored <c>Version</c> would size a
+/// different symbol than the encode writes.
 /// </para>
 /// </remarks>
 public class GeneratorOptionsTest
@@ -94,14 +89,9 @@ public class GeneratorOptionsTest
 
     // ---- Standard QR: the released output, frozen as values ---------------------------
     //
-    // These are the configurations the 1.1.1 parameter list overloads could express, and
-    // this test used to run each one through both spellings and compare. The overloads
-    // were removed in 2.0.0, so what they produced is pinned here instead: version, matrix
-    // size, and the SHA-256 of both the serialized matrix and the destination buffer, all
-    // captured from the released overloads on 2026-09-06 immediately before the removal.
-    // A difference now is an encoder change rather than a disagreement between two
-    // spellings, which is the stronger of the two guarantees. The three entry points
-    // (string, span, destination) are still cross-checked on every row.
+    // The released output of each configuration: version, matrix size, and the SHA-256 of
+    // both the serialized matrix and the destination buffer. A difference is an encoder
+    // change. The three entry points (string, span, destination) are cross-checked on every row.
 
     public readonly record struct StandardQrCase(
         string Text, QREccLevel Ecc, bool Utf8Bom, EciMode Eci, int RequestedVersion, int QuietZone,
@@ -223,7 +213,7 @@ public class GeneratorOptionsTest
     }
 
     private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
-    // ---- Standard QR sizing honours Version (the one added capability) ---------------
+    // ---- Standard QR sizing honours Version ------------------------------------------
 
     [Test]
     public async Task StandardQrSizing_ExplicitVersion_ReportsThatVersion()
@@ -270,11 +260,8 @@ public class GeneratorOptionsTest
     [Test]
     public async Task DefaultLiteralAsTheThirdArgument_StillMeansAllDefaults()
     {
-        // Adding the options overloads moved this call: `default` now binds to the options
-        // parameter rather than to `utf8BOM` / `requestedVersion`, because a candidate that
-        // needs no optional-parameter substitution wins. Both readings mean "all defaults",
-        // so the symbol must be unchanged. (Three sibling shapes did not compile at all
-        // before, being ambiguous with the Span<byte> destination overload.)
+        // `default` as the third argument binds to the options parameter, not to the
+        // Span<byte> destination overload, and means "all defaults".
         var standardDefault = QRCodeGenerator.Create("hello world", QREccLevel.M, default);
         var standardOmitted = QRCodeGenerator.Create("hello world", QREccLevel.M);
         await Assert.That(standardDefault.Version).IsEqualTo(standardOmitted.Version);
@@ -285,7 +272,7 @@ public class GeneratorOptionsTest
         await Assert.That(microDefault.Version).IsEqualTo(microOmitted.Version);
         await Assert.That(microDefault.GetRawData().AsSpan().SequenceEqual(microOmitted.GetRawData())).IsTrue();
 
-        // the span spellings, which were ambiguous before the options overloads existed
+        // the same with a span as the first argument
         await Assert.That(QRCodeGenerator.Create("hello world".AsSpan(), QREccLevel.M, default).Version).IsEqualTo(standardOmitted.Version);
         await Assert.That(MicroQRCodeGenerator.Create("12345".AsSpan(), MicroQREccLevel.L, default).Version).IsEqualTo(microOmitted.Version);
     }

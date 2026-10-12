@@ -20,7 +20,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// Alpha is handled without leaving the vector path in the two shapes that occur in practice.
 /// Straight alpha: fully transparent pixels composite to white, and white is exactly luminance 255, so the pixel is replaced by 0xFFFFFFFF before the shuffle. A partial alpha falls back to the scalar formula for the rest of the row.
 /// Premultiplied: the composite adds 255 − a to every channel, which (because the weights sum to 256) is exactly 256 · (255 − a) on the sum, so it collapses to adding 255 − a to the luminance. That is exact for every alpha, so that path never falls back.
-/// Measured 14-30x over the per-pixel loop. See LuminanceConverterParityTest for the equivalence proof by test.
+/// See LuminanceConverterParityTest for the equivalence proof by test.
 /// </para>
 /// </remarks>
 internal static partial class LuminanceConverter
@@ -55,8 +55,8 @@ internal static partial class LuminanceConverter
     /// </summary>
     internal static void ConvertRgbaAvx2(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha, bool premultiplied)
     {
-        // Two loops rather than one with a mode flag: a single fused method measured
-        // 2-3x slower than either, on code size alone (5.7 KB vs 1.4 KB).
+        // Two loops rather than one with a mode flag: a single fused method is
+        // slower than either, on code size alone.
         if (hasAlpha && premultiplied)
             ConvertPremultipliedAvx2(pixels, luminance, width, height, rowBytes, bgra);
         else

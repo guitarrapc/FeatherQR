@@ -353,11 +353,11 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     }
 
     /// <summary>
-    /// Configure how the version is chosen among those that hold the content (default <see cref="RmQRFitStrategy.MinimizeArea"/>, fewest modules. Note it may prefer a taller, narrower rMQR code, use <see cref="RmQRFitStrategy.MinimizeHeight"/> or <see cref="WithHeight"/> for the flattest fit).
+    /// Configure how the version is chosen among those that hold the content. The default, <see cref="RmQRFitStrategy.MinimizeArea"/>, takes the fewest modules and may prefer a taller, narrower rMQR code. Use <see cref="RmQRFitStrategy.MinimizeHeight"/> or <see cref="WithHeight"/> for the flattest fit.
     /// </summary>
     /// <param name="fitStrategy">Fit strategy.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the icon size, border or occupancy limit is out of range.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the rMQR code.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="fitStrategy"/> is not a defined strategy.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made rMQR code.</exception>
     public RmQRCodeImageBuilder WithFitStrategy(RmQRFitStrategy fitStrategy)
     {
         if (_data is not null)

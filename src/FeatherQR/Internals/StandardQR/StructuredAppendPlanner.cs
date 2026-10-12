@@ -30,7 +30,7 @@ internal static partial class StructuredAppendPlanner
     /// How far above the plan's floor (the headers plus the count's share of the whole text's minimal plan) the walk that settles the count is placed.
     /// </summary>
     /// <remarks>
-    /// The balanced budget sits 3 to 22 bits above that floor on every content measured, periodic or not: what separates them is one chunk's rounding and a run header or two at the cuts, not the content. 31 keeps the bracket under it at five probes.
+    /// What separates the balanced budget from that floor is one chunk's rounding and a run header or two at the cuts, not the content. 31 covers that and keeps the bracket under it at five probes.
     /// Not a correctness parameter: a walk that fails at it falls back to the walk at the capacity, and the search runs from there.
     /// </remarks>
     private const int FloorMarginBits = 31;
@@ -85,7 +85,7 @@ internal static partial class StructuredAppendPlanner
         // What no split can cost less than, priced once. Every search below is gated on it.
         var cheapest = kanji ? CheapestPayloadBitsKanji(text) : CheapestPayloadBits(text, charset);
 
-        // A chunk's cost is the cheaper of its single-mode stream and its minimal plan, and the two are the same number for content holding no run dense enough to repay a mode header. Deciding that once, in one pass, is what keeps the searches below off the segmentation program, whose every probe is a pass of its own, the split it would find is the split the closed-form cost finds, so the searches run as Single and the symbols are still written exactly as the caller asked.
+        // A chunk's cost is the cheaper of its single-mode stream and its minimal plan, and the two are the same number for content holding no run dense enough to repay a mode header. Deciding that once, in one pass, is what keeps the searches below off the segmentation program, whose every probe is a pass of its own. The split it would find is the split the closed-form cost finds, so the searches run as Single and the symbols are still written exactly as the caller asked.
         // A Kanji set is searched as asked: under Optimal its chunks are Kanji plans, which a chunk holding both kinds of character needs.
         var searched = kanji
             ? segmentation
@@ -129,7 +129,7 @@ internal static partial class StructuredAppendPlanner
                 return true;
             }
 
-            // The chunks' plans cost at least the whole text's plan between them, so the count is at least fewest. A walk near the plan's floor that holds fewest chunks therefore settles it, and measured balanced budgets sit within FloorMarginBits of that floor.
+            // The chunks' plans cost at least the whole text's plan between them, so the count is at least fewest. A walk near the plan's floor that holds fewest chunks therefore settles it, and FloorMarginBits above that floor is where a balanced budget is expected.
             var whole = WholeTextPlanBits(text, charset, maxVersion, wholeTextPlans, kanji);
             // No stream of the text costs less than its plan, so a plan the largest symbol does not hold without the set header rules the one symbol out.
             mayBeOneSymbol = whole + charset.GetStandardQrHeaderBits() <= largest;
@@ -150,7 +150,7 @@ internal static partial class StructuredAppendPlanner
                 }
                 else
                 {
-                    // Attempted only with headroom: when the bound's count leaves each symbol less than two margins of slack, packing losses usually put it out of reach and the walk would be wasted, so the walk at the capacity counts as it always did.
+                    // Attempted only with headroom: when the bound's count leaves each symbol less than two margins of slack, packing losses usually put it out of reach and the walk would be wasted, so the walk at the capacity counts instead.
                     var floor = setHeaders + (whole + fewest - 1) / fewest;
                     var target = floor + FloorMarginBits;
                     if (target + FloorMarginBits < largest)

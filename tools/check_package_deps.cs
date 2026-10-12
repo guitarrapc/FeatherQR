@@ -45,8 +45,8 @@ var expected = new Dictionary<string, Dictionary<string, string[]>>(StringCompar
         ["net10.0"] = ["FeatherQR", "SkiaSharp"],
     },
     // The GS1 data package depends on the core at the lockstep version and nothing else: it works on text,
-    // adds its entry points to the core generators, and brings the Apache-2.0 notice for its generated table
-    // (gs1-support-plan.md, G2 and G8). The netstandard shims arrive through FeatherQR.
+    // adds its entry points to the core generators, and brings the Apache-2.0 notice for its generated table.
+    // The netstandard shims arrive through FeatherQR.
     ["FeatherQR.Gs1"] = new(StringComparer.OrdinalIgnoreCase)
     {
         [".NETStandard2.0"] = ["FeatherQR"],

@@ -29,19 +29,13 @@ internal static partial class TextAnalyzer
     /// <summary>
     /// Analyzes the input text to determine the most efficient encoding mode (Numeric, Alphanumeric, Byte). If SIMD is supported, uses SIMD instructions for faster analysis.
     /// </summary>
-    /// <param name="text"></param>
-    /// <param name="requestedEciMode"></param>
-    /// <returns></returns>
+    /// <param name="text">The text to inspect.</param>
+    /// <param name="requestedEciMode">The character encoding the caller asked for, or Default to choose one from the text.</param>
+    /// <returns>The narrowest encoding mode the text fits, its length in that mode's units, and the ECI mode to declare.</returns>
     public static TextAnalysisResult Analyze(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
-        // ISO/IEC 18004 does not define behavior for empty data.
-        // However from other practical libraries, when data was empty EncodingMode should use Byte mode.
-        // Empty data means no actual data to encode, so the difference in only in mode indicator bits (4 bits for Numeric/Alphanumeric vs 4+4 bits for Byte).
-        //
-        // Why not Numeric or Alphanumeric?
-        // - If we use Numeric mode, empty data == no number => ❌ contradiction
-        // - If we use Alphanumeric mode, empty data == no character => ❌ contradiction
-        // - If we use Byte mode, empty data == 0 length byte => ✔️ valid
+        // ISO/IEC 18004 does not define empty data. Byte mode, not Numeric or Alphanumeric:
+        // a segment of zero bytes is valid, and a number or a string of no character is not.
         if (text.IsEmpty)
         {
             var actualEciMode = requestedEciMode == EciMode.Default ? EciMode.Default : requestedEciMode;
@@ -49,20 +43,19 @@ internal static partial class TextAnalyzer
         }
 
 #if SIMD_SUPPORTED
-        // SIMD path for x86/x64 AVX2 support (16 chars at once)
         if (Avx2.IsSupported)
         {
             return AnalyzeAvx2(text, requestedEciMode);
         }
 
-        // SIMD path for x86/x64 SSE2 support (8 chars at once)
+        // From 8 chars, one SSE2 step
         if (Sse2.IsSupported && text.Length >= 8)
         {
             return AnalyzeSse2(text, requestedEciMode);
         }
 
 #if NET8_0_OR_GREATER
-        // SIMD path for ARM64 NEON support (16 chars at once, 8-char remainder blocks)
+        // From 8 chars, the NEON path's smallest block (16 chars a step, 8-char remainder blocks)
         if (AdvSimd.Arm64.IsSupported && text.Length >= 8)
         {
             return AnalyzeAdvSimd(text, requestedEciMode);
@@ -170,7 +163,6 @@ internal static partial class TextAnalyzer
 
         var encoding = DetermineEncoding(hasNonNumeric, hasNonAlphanumeric);
 
-        // If there are user constraints (e.g. requestedVersion), calculate actual data length.
         var actualEciMode = requestedEciMode == EciMode.Default
             ? DetermineEciMode(hasNonAscii, hasNonIso88591)
             : requestedEciMode;
@@ -215,7 +207,7 @@ internal static partial class TextAnalyzer
     /// Bytes a Byte-mode segment carries, which is what its character count indicator declares.
     /// </summary>
     /// <remarks>
-    /// Only UTF-8 has to be counted. Latin-1 is one byte per <c>char</c>, out-of-range ones included, since the writer narrows each and the encoder replaces each, so the length is the count and no pass over the text is needed. The classification pass has already answered which of the two the charset resolves to, so the rescan that answer used to cost is gone with it.
+    /// Only UTF-8 has to be counted. Latin-1 is one byte per <c>char</c>, out-of-range ones included, since the writer narrows each and the encoder replaces each, so the length is the count and no pass over the text is needed. Which of the two the charset resolves to is the classification pass's answer, so that needs no pass either.
     /// Pinned against <see cref="Encoding"/> and against the bytes the writer emits, per charset and content class, by <c>TextAnalyzerByteCountTest</c>.
     /// </remarks>
     private static int CalculateByteCount(ReadOnlySpan<char> text, EciMode eciMode, bool hasNonIso88591)

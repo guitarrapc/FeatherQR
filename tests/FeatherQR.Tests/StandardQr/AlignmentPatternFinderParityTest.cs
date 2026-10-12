@@ -48,13 +48,10 @@ public class AlignmentPatternFinderParityTest
     [Test]
     public async Task SimdAndScalarRowScans_Agree_NoiseWindowsAndThresholds()
     {
-        // Random noise with window lengths crossing every mask-build block
-        // boundary (scalar-only < 16, exactly one 16-px step, one 64-px block,
-        // 64+tail) and threshold extremes (0 = nothing dark, 255 = everything
-        // below max). The scene width IS the window: a huge allowance clamps
-        // [minX, maxX] to the full row. Any mask-build bug (bit order, tail
-        // handling, compare semantics) shifts run boundaries and diverges the
-        // kernels here.
+        // Random noise with window lengths crossing every mask-build block boundary
+        // (scalar-only < 16, exactly one 16-px step, one 64-px block, 64+tail) and
+        // threshold extremes (0 = nothing dark, 255 = everything below max). The scene
+        // width IS the window: a huge allowance clamps [minX, maxX] to the full row.
         const float ModuleSize = 4f;
         const int Height = 40;
 

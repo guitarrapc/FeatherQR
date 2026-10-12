@@ -43,7 +43,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// <summary>
     /// Starts a builder that draws a QR code you have already generated.
     /// The QR code is used exactly as given, so only the appearance options apply.
-    /// Most encoding options throw <see cref="InvalidOperationException"/> on a builder created this way. <see cref="WithErrorCorrection"/> and <see cref="WithEciMode"/> are accepted and then ignored, because they shipped that way in 1.1.1.
+    /// Most encoding options throw <see cref="InvalidOperationException"/> on a builder created this way. <see cref="WithErrorCorrection"/> and <see cref="WithEciMode"/> are accepted and then ignored.
     /// </summary>
     /// <param name="qrCodeData">The QR code to draw.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="qrCodeData"/> is null.</exception>

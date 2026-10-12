@@ -361,11 +361,9 @@ internal static partial class RmQRImageDecoder
         charsWritten = 0;
 
         // The finder-side format copy sits within 12 modules of the finder, so the local frame reads it before any refinement, as long as the finder's scale is close.
-        // A render that snaps modules to whole pixels can give the finder a scale 3-6 % off, most of a pixel at column 11 below 2 px/module, so the scales nearest the measured one are tried in turn.
-        // A corrected scale must read an exact codeword:
-        // within 3 bits, a quarter of random reads match one of the 64 words, so nine tries on noise would nearly always "read" a version and pay for its searches.
-        // Only while the larger of the finder's two axes measures under 6 px per module, a bound taken from measurement,the search buys fewer reads as the density rises and costs every other symbology's image its failure time.
-        // A trade, not a free cut: renders above the bound that read only at a corrected scale are given up.
+        // A render that snaps modules to whole pixels can give the finder a scale a few percent off, most of a pixel at column 11 below 2 px/module, so the scales nearest the measured one are tried in turn.
+        // A corrected scale must read an exact codeword: within 3 bits, a quarter of random reads match one of the 64 words, so nine tries on noise would nearly always "read" a version and pay for its searches.
+        // Only while the larger of the finder's two axes measures under 6 px per module: the search buys fewer reads as the density rises and costs every other symbology's image its failure time. Renders above the bound that read only at a corrected scale are given up.
         var moduleLength = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
         var formatRead = false;
 
@@ -398,7 +396,7 @@ internal static partial class RmQRImageDecoder
                 ref best, ref attemptsRemaining, out var anchoredStatus);
 
             // A copy can read exactly at a scale a few percent off, and a frame built on it fails where the next scale reads, so the search goes on while frames fail.
-            // Once frames anchored on the sub-finder read format information, a failure is the data's: on a damaged symbol every later scale only repeated them.
+            // Once frames anchored on the sub-finder read format information, a failure is the data's: on a damaged symbol every later scale would only repeat them.
             if (IsTerminal(status))
                 return status;
             if (IsPastFormat(anchoredStatus))
@@ -552,7 +550,7 @@ internal static partial class RmQRImageDecoder
             if (predictedLength > 0f && observedLength > 0f)
             {
                 observed = true;
-                // (a) Rotation-corrected, isotropically rescaled frame: exact for a
+                // Rotation-corrected, isotropically rescaled frame: exact for a
                 // rotated or uniformly mis-scaled affine capture.
                 var scale = observedLength / predictedLength;
                 var cos = (predictedX * observedX + predictedY * observedY) / (predictedLength * observedLength);
@@ -565,8 +563,8 @@ internal static partial class RmQRImageDecoder
                     return status;
                 frameStatus = Deeper(frameStatus, status);
 
-                // (b) Anisotropic rescale without rotation. Non-square modules already read above, since the frame scales each axis on its own.
-                // This grid reads crisp rows under 2 px: there the snapped rows put the sub-finder off its predicted row, and the turn (a) makes of that misses the far rows.
+                // Anisotropic rescale without rotation. Non-square modules already read above, since the frame scales each axis on its own.
+                // This grid reads crisp rows under 2 px: there the snapped rows put the sub-finder off its predicted row, and the turn the isotropic frame makes of that misses the far rows.
                 var determinant = dX * dY * (uX * vY - uY * vX);
                 if (Math.Abs(determinant) > 1e-6f)
                 {
@@ -584,7 +582,7 @@ internal static partial class RmQRImageDecoder
             }
         }
 
-        // (c) The perimeter traced from this frame: it needs no sub-finder, and it measures the perspective the search below can only try, so it comes first.
+        // The perimeter traced from this frame: it needs no sub-finder, and it measures the perspective the search below can only try, so it comes first.
         // Every frame traces its own, even where another traced from the same side: under noise the start decides the trace.
         // Only from an exact copy, as at a corrected scale: within 3 bits a quarter of random reads name a version, and each would start a trace on another symbology's image.
         // A traced grid that fails leaves the frame's status to the anchored ones: at low density it can get past the format information and would stop the scales before one whose anchored grid reads
@@ -595,7 +593,7 @@ internal static partial class RmQRImageDecoder
                 return status;
         }
 
-        // (d) Perspective: only after an attempt got past format decoding (the grid is roughly right, RS still fails) and with the sub-finder observed. Search the two projective coefficients. For each, the sub-finder fixes the Jacobian column scale and the frame rotation exactly, and the sub-finder-side format copy must read back consistently before the full grid is sampled.
+        // Perspective: only after an attempt got past format decoding (the grid is roughly right, RS still fails) and with the sub-finder observed. Search the two projective coefficients. For each, the sub-finder fixes the Jacobian column scale and the frame rotation exactly, and the sub-finder-side format copy must read back consistently before the full grid is sampled.
         if (observed && IsPastFormat(frameStatus))
         {
             var status = TryPerspectiveVariants(
@@ -671,7 +669,7 @@ internal static partial class RmQRImageDecoder
             var shearRadians = shearDegrees * (Math.PI / 180d);
             var shearCos = (float)Math.Cos(shearRadians);
             var shearSin = (float)Math.Sin(shearRadians);
-            // The row spacing was measured perpendicular to the column axis,
+            // The row spacing is taken perpendicular to the column axis,
             // i.e. it is the leaning axis projected onto that normal: undo the projection.
             Rotate(vX / shearCos, vY / shearCos, shearCos, shearSin, out var svX, out var svY);
             var uDotV = uX * svX + uY * svY;
@@ -841,8 +839,7 @@ internal static partial class RmQRImageDecoder
         // Reject before searching when the whole template can only land outside the image.
         // Every sample sits at predicted + (offU + i)·u + (offV + j)·sv with |offU| ≤ radius/2 and |i| ≤ 2,
         // and the 12° lean bounds |svX| by |vX| + tan 12°·|vY|, so |vX| + |vY| over-estimates it.
-        // A frame whose prediction misses the image entirely would otherwise score 0 at all 7,803 ring positions before returning false.
-        // Most wrong frames do NOT predict off-image, so this is the cheaper and rarer of the two guards here. End to end it is worth about a sixth of the failure-path win and the row-wise early exit below is worth the rest. On a frame it does catch it replaces a ~400 µs search with a few ns.
+        // A frame whose prediction misses the image entirely would otherwise score 0 at every ring position, up to 7,803 of them, before returning false.
         var reach = radius * 0.5f + 2f;
         var extentX = reach * (Math.Abs(uX) + Math.Abs(vX) + Math.Abs(vY)) + 1f;
         var extentY = reach * (Math.Abs(uY) + Math.Abs(vX) + Math.Abs(vY)) + 1f;
@@ -1188,17 +1185,13 @@ internal static partial class RmQRImageDecoder
     /// <remarks>
     /// The Vector128 kernel samples the exact same pixels as the scalar loop, so the two tiers are interchangeable (pinned by RmQRSampleGridParityTest).
     /// That is stricter than it looks: rMQR's scalar form divides each numerator by the denominator, and Standard QR's row kernel, which multiplies by one reciprocal instead, is NOT bit-equivalent to it, which is why this kernel is its own implementation rather than a shared one.
-    ///
-    /// Measured on Apple M2 (RmQrSampleArm findings log), 2.4-3.8x over the scalar loop.
-    /// Two thirds of that comes from vectorizing the convert/clamp/gather, and the rest from the affine special case, which is not a heuristic. Every first attempt at a clean capture goes through a frame built with perspectiveX = perspectiveY = 0, and there the denominator is exactly 1f, so both divisions can be skipped without changing a sampled byte.
+    /// A frame built with perspectiveX = perspectiveY = 0 has a denominator of exactly 1f, so the kernel skips both divisions there without changing a sampled byte.
     /// </remarks>
     internal static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {
 #if NET8_0_OR_GREATER
         // Every rMQR width is >= 27, so the vector path takes every real symbol. The
         // guard only covers direct callers (tests) below one full 8-module block.
-        // RmQRSampleGridParityTest pins that against the version table, so a widened
-        // threshold fails there instead of silently retiring the kernel.
         if (Vector128.IsHardwareAccelerated && columns >= Simd128MinColumns)
         {
             SampleGridSimd128(luminance, width, height, threshold, transform, columns, rows, modules);

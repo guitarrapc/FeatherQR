@@ -21,25 +21,14 @@ internal static partial class Binarizer
     /// </summary>
     internal static void FillHistogramAdvSimd(ReadOnlySpan<byte> luminance, Span<int> histogram)
     {
-        // Why: histogram[v]++ waits on the previous store to the same bin, and a rendered symbol is 0 and 255
-        // in long runs. That chain costs this core twice what it costs x64. So 0 and 255 are counted in
-        // registers, and every other pixel goes to one of four lanes, which cuts the chain to a quarter.
-        //
         // Each 32-pixel block (two 128-bit loads) takes one of three paths:
         //   pure   (all 0 or 255)   : counted in registers only, nothing stored
         //   sparse (1-12 others)    : 0 and 255 counted in registers, the others walked one by one
         //   dense  (13 or more)     : eight pixels a load into four lanes, and two dense blocks in a row
         //                             start a stretch of 31 blocks taken without the test
         //
-        // What ARM64 makes cheap and dear:
-        //   - No movemask, and a general-register popcount round-trips through the vector unit. A block's
-        //     extremes are counted by one add across the compare masks instead (lanes are 0, -1 or -2).
-        //   - Zeros accumulate in byte counters, drained every 120 blocks, and the 255s are what is left.
-        //   - The other-pixel mask (one bit a byte, from a narrowing shift) is built only when a sparse block has any.
-        //   - Four lanes, pixel i into lane i % 4, fit this core's 128 KB L1 where they lost on x64. Each lane
-        //     is its own reference: one base plus 256·k makes the JIT sign-extend on the way to every load.
-        //   - The 4 KB of lanes is past the stack budget, so it is rented once a call, cleared (a rental can
-        //     hold the previous call's counts), merged into the bins at the end and returned.
+        // A general-register popcount round-trips through the vector unit, so the masks are added across instead.
+        // The 4 KB of lanes is past the stack budget, so it is rented.
         histogram = histogram.Slice(0, HistogramBins);
         var rented = ArrayPool<int>.Shared.Rent(4 * HistogramBins);
         try
@@ -53,8 +42,8 @@ internal static partial class Binarizer
     }
 
     /// <summary>
-    /// The walk itself, in its own method so the rental's try region does not reach the block loop: a loop inside one holds its vectors in registers less readily, and this tier was measured without it.
-    /// Kept out of line: under dynamic PGO the Tier1 caller inlined it back into the try region, and measured alone the dense inputs lost 10 to 33 % to the scalar tier.
+    /// The walk itself, in its own method so the rental's try region does not reach the block loop: a loop inside one holds its vectors in registers less readily.
+    /// Kept out of line: under dynamic PGO the Tier1 caller inlines it back into the try region.
     /// </summary>
     /// <param name="luminance">Grayscale pixels.</param>
     /// <param name="histogram">Receives the 256 bins, overwritten.</param>

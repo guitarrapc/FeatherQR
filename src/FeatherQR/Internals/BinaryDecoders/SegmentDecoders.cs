@@ -48,12 +48,9 @@ internal static class SegmentDecoders
     /// <summary>Decodes a numeric segment payload of <paramref name="count"/> digits.</summary>
     public static DecodeStatus DecodeNumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
-        // Bitstream sufficiency before destination sufficiency, as byte mode already
-        // does. A count read off the wire can exceed what the remaining bits could
-        // possibly encode, and such a stream is malformed whatever buffer the caller
-        // passed. Reporting DestinationTooSmall for it would tell a caller sizing its
-        // buffer to grow and, because callers treat that status as "the symbol was
-        // read", would stop the image decoder looking for the real symbol.
+        // Bitstream sufficiency before destination sufficiency. A count the remaining bits cannot
+        // encode is a malformed stream, and callers treat DestinationTooSmall as "the symbol was
+        // read", which would stop the image decoder looking for the real symbol.
         // 3 digits per 10 bits, then 2 per 7 and 1 per 4: 10·(n/3) + the remainder's cost.
         if (totalBits - reader.BitPosition < 10 * (count / 3) + ((count % 3) switch { 2 => 7, 1 => 4, _ => 0 }))
             return DecodeStatus.InvalidBitstream;
@@ -61,7 +58,6 @@ internal static class SegmentDecoders
         if (destination.Length - charsWritten < count)
             return DecodeStatus.DestinationTooSmall;
 
-        // Groups of 3 digits (10 bits), then 2 digits (7 bits) or 1 digit (4 bits)
         while (count >= 3)
         {
             if (totalBits - reader.BitPosition < 10)
@@ -108,7 +104,6 @@ internal static class SegmentDecoders
         if (destination.Length - charsWritten < count)
             return DecodeStatus.DestinationTooSmall;
 
-        // Pairs of characters (11 bits), then a single character (6 bits)
         while (count >= 2)
         {
             if (totalBits - reader.BitPosition < 11)
@@ -266,7 +261,7 @@ internal static class SegmentDecoders
             return DecodeShiftJis(bytes, destination, ref charsWritten);
 
 #if NET8_0_OR_GREATER
-        // A UTF-8 BOM (the encoder can emit one with utf8BOM: true) is consumed, not decoded,
+        // A UTF-8 BOM (the encoder writes one under Utf8Bom) is consumed, not decoded,
         // but an explicit ECI ISO-8859-1 declaration wins over it: there, EF BB BF is the
         // legitimate Latin-1 text "ï»¿".
         if (charset != ByteSegmentCharset.Iso8859_1)
@@ -290,10 +285,9 @@ internal static class SegmentDecoders
                 return DecodeStatus.DestinationTooSmall;
         }
 #else
-        // Resolve the effective charset. A UTF-8 BOM (the encoder can emit one with
-        // utf8BOM: true) is consumed, not decoded, but an explicit ECI ISO-8859-1
-        // declaration wins over the BOM heuristic: there, EF BB BF is the legitimate
-        // Latin-1 text "ï»¿".
+        // A UTF-8 BOM (the encoder writes one under Utf8Bom) is consumed, not decoded,
+        // but an explicit ECI ISO-8859-1 declaration wins over it: there, EF BB BF is the
+        // legitimate Latin-1 text "ï»¿".
         var useUtf8 = charset switch
         {
             ByteSegmentCharset.Utf8 => true,
@@ -529,7 +523,6 @@ internal static class SegmentDecoders
 
     /// <summary>
     /// Reads an ECI assignment number (ISO/IEC 18004 7.4.2, identical in ISO/IEC 23941): 1-3 bytes, length signaled by the leading bits (0xxxxxxx = 8 bits, 10xxxxxx = 16, 110xxxxx = 24).
-    /// Lifted from the Standard QR bitstream decoder when rMQR became the second consumer.
     /// </summary>
     public static DecodeStatus ReadEciDesignator(ref BitReader reader, int totalBits, out int eciValue)
     {

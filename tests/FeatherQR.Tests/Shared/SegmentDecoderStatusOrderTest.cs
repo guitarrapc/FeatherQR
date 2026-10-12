@@ -65,9 +65,9 @@ public class SegmentDecoderStatusOrderTest
     }
 
     /// <summary>
-    /// Micro QR ranks its failures the same way. M3-L used to report
-    /// <c>DataUncorrectable</c> here, because sizes are tried 17 down to 11 and a
-    /// wrong-size attempt reached Reed-Solomon before the right size did.
+    /// Micro QR ranks its failures the same way. Sizes are tried 17 down to 11, so on
+    /// M3-L a wrong-size attempt reaches Reed-Solomon before the right size does, and its
+    /// <c>DataUncorrectable</c> must not be the status reported.
     /// </summary>
     [Test]
     [Arguments(MicroQRVersion.M3, MicroQREccLevel.L, "ABCDEFGHIJ", 10)]

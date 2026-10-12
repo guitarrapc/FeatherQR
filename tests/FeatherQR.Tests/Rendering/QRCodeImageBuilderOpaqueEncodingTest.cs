@@ -46,7 +46,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
 
     /// <summary>
     /// The same canvas without that request: the pad takes the opaque background, so the image is
-    /// opaque and a JPEG of it has no black bands where the alpha used to be.
+    /// opaque and a JPEG of it has no black bands in place of a transparent pad.
     /// </summary>
     [Test]
     public async Task DefaultClearWithPadding_ProducesOpaqueImage()

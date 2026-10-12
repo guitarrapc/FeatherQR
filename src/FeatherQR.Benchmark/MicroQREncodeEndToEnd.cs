@@ -13,7 +13,6 @@
 /// </summary>
 public class MicroQREncodeEndToEnd
 {
-    // Representative payloads: numeric M2-L, alphanumeric M3-L, byte M4-M, Kanji M4-M.
     private string _numeric = default!;
     private string _alphanumeric = default!;
     private string _byte = default!;

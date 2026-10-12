@@ -52,9 +52,9 @@ internal static partial class AlignmentPatternFinder
         if (maxX - minX < 3 * moduleSize || maxY - minY < 3 * moduleSize)
             return false;
 
-        // Scan rows outward from the middle of the window and keep the cross-checked hit nearest the prediction: data can pass every check too, and the first hit in scan order was measured to be a false one while the real pattern sat on the prediction.
+        // Scan rows outward from the middle of the window and keep the cross-checked hit nearest the prediction: data can pass every check too, and the first hit in scan order can be a false one while the real pattern sits on the prediction.
         // A row farther than the best hit plus the cross check's recentering (under a module and a pixel) cannot beat it.
-        // Row stride: the pattern's center dark run is ~1 module tall, so scanning every half-run-th row cannot miss it, and the vertical cross-check recenters exactly regardless of which row inside the run was hit. Measured 4x on the not-found sweep (see the AlignmentFind findings log).
+        // Row stride: the pattern's center dark run is ~1 module tall, so scanning every half-run-th row cannot miss it, and the vertical cross-check recenters exactly regardless of which row inside the run was hit.
         var expected = ExpectedRuns.FromAxes(axisX, axisY, moduleSize);
         var best = new NearestHit(expectedX, expectedY);
         var step = Math.Max(1, (int)(expected.Column / 2f));
@@ -152,7 +152,7 @@ internal static partial class AlignmentPatternFinder
     private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, bool forceScalar, ref NearestHit best)
     {
 #if NET8_0_OR_GREATER
-        // SIMD path: classify pixels into a dark bitmask with vector compares (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then walk RUNS via tzcnt instead of pixels (measured 6.4x on the x64 not-found sweep). Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
+        // SIMD path: classify pixels into a dark bitmask with vector compares (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then walk RUNS via tzcnt instead of pixels. Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
         if (!forceScalar && Vector128.IsHardwareAccelerated && maxX - minX + 1 >= 16)
         {
             ScanRowMask(luminance, width, height, threshold, y, minX, maxX, expected, axisX, axisY, ref best);
@@ -210,7 +210,7 @@ internal static partial class AlignmentPatternFinder
                     best.Offer(centerX, centerY);
             }
 
-            // Slide: keep [dark, light] as the new [?, light]... the window must start with a light run, so the completed dark+light become runs 1-2 shifted down by one color pair.
+            // Slide by one colour pair: a window starts with a light run, so the light run just completed opens the next one and the incoming dark run is its middle.
             runs[0] = runs[2];
             runs[1] = 1; // the incoming dark run
             runs[2] = 0;
@@ -222,7 +222,7 @@ internal static partial class AlignmentPatternFinder
     /// Each light run plus the dark run must be within 50% of two modules, and no run longer than two.
     /// </summary>
     /// <remarks>
-    /// A light and a dark run together span two edges of the same polarity, which grey edge pixels on one side of the threshold shift together, so the pair keeps its length where each run on its own gains or loses a pixel: at 3 px/module and 45° a light run measured 2 px against an expected 4.2.
+    /// A light and a dark run together span two edges of the same polarity, which grey edge pixels on one side of the threshold shift together, so the pair keeps its length where each run on its own gains or loses a pixel.
     /// </remarks>
     private static bool IsAlignmentRatio(int lightBefore, int dark, int lightAfter, float run)
     {

@@ -21,14 +21,13 @@ internal static partial class RmQRMatrixDecoder
     {
         charsWritten = 0;
 
-        // 1. Version from the physical dimensions
         if (!RmQRConstants.TryGetVersion(height, width, out var version) || modules.Length < width * height)
         {
             info = new RmQRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, 0);
             return DecodeStatus.InvalidMatrix;
         }
 
-        // 2. Format information (both copies) → ECC. Only copies that agree with the dimension-derived version count, so a copy miscorrected toward another version's word cannot veto the valid one.
+        // Only format copies that agree with the dimension-derived version count, so a copy miscorrected toward another version's word cannot veto the valid one.
         ReadFormatCopies(modules, width, height, out var finderSideRaw, out var subFinderSideRaw);
         if (!RmQRFormatInformationDecoder.TryDecode(finderSideRaw, subFinderSideRaw, version, out var eccLevel, out _))
         {
@@ -39,13 +38,12 @@ internal static partial class RmQRMatrixDecoder
         var eccInfo = RmQRConstants.GetEccInfo(version, eccLevel);
         var totalCodewords = RmQRConstants.GetTotalCodewordCount(version);
 
-        // 3. Extract the interleaved codeword stream (inverse zigzag + unmask)
         Span<byte> stream = stackalloc byte[MaxTotalCodewords];
         stream = stream.Slice(0, totalCodewords);
 
         ExtractCodewords(modules, width, height, version, stream);
 
-        // 4. Deinterleave into Reed-Solomon blocks, correct each, and gather the data codewords over the front of the stream.
+        // The correction gathers the data codewords over the front of the stream.
         // The capacity cap is unreachable while every table entry equals ⌊ecc/2⌋ (see the remarks on this class). It is the seam a reserved p would use.
         Span<byte> blocks = stackalloc byte[MaxTotalCodewords];
         if (!EccBlockDecoder.TryCorrect(stream, blocks.Slice(0, totalCodewords), eccInfo, RmQRConstants.GetErrorCorrectionCapacity(version, eccLevel), out var errorsCorrected))
@@ -55,7 +53,6 @@ internal static partial class RmQRMatrixDecoder
         }
         var data = stream.Slice(0, eccInfo.TotalDataCodewords);
 
-        // 5. Bit stream → text
         var status = RmQRBinaryDecoder.DecodeBitStream(data, eccInfo.TotalDataCodewords * 8, version, destination, out charsWritten, out var fnc1);
         if (status != DecodeStatus.Success)
             charsWritten = 0; // only a read counts its characters, not the segments written before a failure
@@ -110,8 +107,7 @@ internal static partial class RmQRMatrixDecoder
     /// <remarks>
     /// Everything the walk derives from the version alone (which modules are function modules, their order, the mask bit at each one) is hoisted into lazily built per-version tables, exactly as the placer does for the encode direction.
     /// Two tiers consume those tables: a bit-plane kernel on x64 with AVX2 and fast BMI2 (see RmQRMatrixDecoder.X86.cs) and a portable table walk everywhere else.
-    /// Measured 16-64x and 8-12x respectively over the per-module reference walk across R7x43..R17x139 (see the decoder kernel parity tests for equivalence).
-    /// ARM64 has a third tier (RmQRMatrixDecoder.Arm64.cs) built on pair-interleaved planes instead, because NEON has no PEXT/PDEP. It is 1.1-3.3x the portable tier.
+    /// ARM64 has a third tier (RmQRMatrixDecoder.Arm64.cs) built on pair-interleaved planes instead, because NEON has no PEXT/PDEP.
     /// The pair planes on portable vectors (RmQRMatrixDecoder.Vector128.cs) take x64 without fast PEXT, and WebAssembly for symbols with enough stream bits per column (<see cref="PairPlanesVector128Pay"/>).
     /// </remarks>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream)
@@ -210,8 +206,7 @@ internal static partial class RmQRMatrixDecoder
         ExtractCodewordsScalar(modules, layout.Order, stream);
     }
 
-    // Outlined so the dispatch every matrix decode runs does not carry the messages' formatting: inline, it was most of
-    // the method (530 → 102 instructions on the ARM64 JIT, 348 → 96 on a default x64 NativeAOT publish).
+    // Outlined so the dispatch every matrix decode runs does not carry the messages' formatting, which inline is most of the method.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowPinnedTierAbsent(ExtractKernel kernel)
         => throw new PlatformNotSupportedException($"{nameof(ExtractKernel)}.{kernel} was pinned, but that tier does not run on this machine. Guard the call with {nameof(IsBitPlaneTierSupported)} / {nameof(IsPairPlaneTierSupported)} / {nameof(IsPairPlaneVector128TierSupported)}.");
@@ -252,9 +247,9 @@ internal static partial class RmQRMatrixDecoder
     }
 
     // ---------------------------------------------------------------
-    // Per-version extraction tables (built once from the placer's own predicates, so they are correct by construction, and published with a volatile write, where a benign
-    // race builds identical tables twice).
-    // Memory per version: 2 bytes per stream bit plus 24 bytes per column pair, and where a pair-plane tier runs the pair-plane run tables on top of that. Measured: R17x139 is 5,368 B without them (3,712 B of order plus 69 column pairs) and 7,368 B with them. Decoding all 32 versions costs about 68 KB and about 100 KB respectively.
+    // Per-version extraction tables, built once from the placer's own predicates, so they are correct by construction, and published with a volatile write.
+    // A benign race builds identical tables twice.
+    // Memory per version: 2 bytes per stream bit plus 24 bytes per column pair, and where a pair-plane tier runs the pair-plane run tables on top of that.
     // ---------------------------------------------------------------
 
     /// <summary>Low bits of an <see cref="ExtractLayout.Order"/> entry: the core module index.</summary>
@@ -272,7 +267,7 @@ internal static partial class RmQRMatrixDecoder
     /// <summary>
     /// Everything the pair-plane kernels derive from the version alone.
     /// Unlike the x64 form, a lane here is a whole column PAIR: the transpose interleaves the two columns as it goes, so the plane word already is the pair's output field with the function modules still in it, and the kernel only has to compress it.
-    /// The compression is described as runs of consecutive data bits, because function modules come from rectangular blocks and not from scattered modules (a pair averages 1.0-2.3 runs, worst case 5-11).
+    /// The compression is described as runs of consecutive data bits, because function modules come from rectangular blocks and not from scattered modules.
     /// </summary>
     internal sealed class PairPlaneLayout
     {
@@ -502,7 +497,7 @@ internal static partial class RmQRMatrixDecoder
 
     /// <summary>
     /// Whether the portable pair planes beat the walk on this symbol: on every symbol on x64, and on WebAssembly from
-    /// <see cref="MinPackedSimdBitsPerBlock"/> stream bits per eight columns, below which the interpreter lost to the walk.
+    /// <see cref="MinPackedSimdBitsPerBlock"/> stream bits per eight columns, below which the interpreter loses to the walk.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool PairPlanesVector128Pay(int width, int bitCount) =>

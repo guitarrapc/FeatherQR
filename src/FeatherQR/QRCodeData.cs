@@ -31,14 +31,12 @@ public sealed class QRCodeData
     // │ _quietZoneSize: 4 (border width)                        │
     // │ _size: 33 (25 + 4*2, including quiet zone)              │
     // │ _bits.Length: 79 bytes (ceil(25 * 25 / 8))              │
-    // │   (previous byte-per-module layout: 1,089 bytes)        │
     // └─────────────────────────────────────────────────────────┘
     //
     // The quiet zone is VIRTUAL: it is all-light by definition, so the public
     // indexer answers false for coordinates outside the core area instead of
     // storing border modules. _size/_quietZoneSize only affect coordinate
-    // translation. The COORDINATE SPACE seen through the public indexer is
-    // unchanged from the byte-per-module days:
+    // translation. The coordinates of the public indexer include it:
     //
     // Visual Representation (33×33 with QuietZone=4):
     //
@@ -117,15 +115,9 @@ public sealed class QRCodeData
     //   - _size == _baseSize, no coordinate translation
     //   - bitIndex = row × _size + col directly
     //
-    // Why this layout (measured in the MatrixStorage kernel benchmark):
-    // - 8.7x smaller per-instance allocation (34,225 -> 3,944 bytes at v40/qz4),
-    //   which was essentially 100% of Create's allocation.
-    // - _bits IS the serialization payload, so GetRawData collapses to
-    //   header + copy (~800x) and deserialization to the mirror copy, the
-    //   previous implementation round-tripped through a byte-per-module
-    //   temporary (a ~31 KB stackalloc at v40).
-    // - The cost is one shift+mask per indexer read (~+45% on a raw
-    //   full-matrix sweep), negligible under real rendering work.
+    // Why not a byte per module: an instance is an eighth of the size, and _bits is the
+    // serialization payload, so GetRawData is the header plus one copy. The price is a
+    // shift and a mask per indexer read.
     //
     // =====================================================================
     // Serialization / Deserialization
@@ -260,20 +252,17 @@ public sealed class QRCodeData
     {
         ValidateQuietZone(quietZoneSize);
 
-        // Validate minimum size
         if (rawDataSpan.Length < 4)
             throw new InvalidDataException($"Invalid QR code data: too short ({rawDataSpan.Length} bytes).");
 
-        // Validate header
+        // "QRR"
         if (rawDataSpan[0] != 0x51 || rawDataSpan[1] != 0x52 || rawDataSpan[2] != 0x52)
             throw new InvalidDataException("Invalid QR code data: header mismatch.");
 
-        // Read and validate size
         var baseSizeFromFile = (int)rawDataSpan[3];
         if (baseSizeFromFile < 21 || baseSizeFromFile > 177)
             throw new InvalidDataException($"Invalid QR code size: {baseSizeFromFile}.");
 
-        // set version from size
         Version = VersionFromSize(baseSizeFromFile);
         _baseSize = baseSizeFromFile;
         _quietZoneSize = quietZoneSize;
@@ -418,12 +407,11 @@ public sealed class QRCodeData
     /// <remarks>
     /// <para>
     /// Coordinates match the indexer: one unit is one module, the origin is the top-left corner including the quiet zone, <see cref="ModuleRect.X"/> is the column and <see cref="ModuleRect.Y"/> the row.
-    /// Scale by the pixel size of one module.
-    /// Consumers scale by the pixel size of one module. <see cref="Size"/> gives the total extent in modules.
+    /// Scale by the pixel size of one module. <see cref="Size"/> gives the total extent in modules.
     /// </para>
     /// <para>
     /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
-    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol. A styled one draws its finder patterns as whole patterns instead).
+    /// Currently they are maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol. A styled one draws its finder patterns as whole patterns instead.
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()

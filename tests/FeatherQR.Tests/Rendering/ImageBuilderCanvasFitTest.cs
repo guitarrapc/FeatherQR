@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The square symbologies used to stretch the symbol across a non-square canvas. Module centres stayed correct and nothing threw, so what broke was detection: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio holds on one axis only once the cells stop being square. Where that starts is not a constant worth pinning. Measured on Standard QR with this library and ZXing.Net, failures start around 1.25:1 and neither reads anything past 1.8:1, so these cases assert decodability well inside the band rather than hunting for the edge.
+/// A symbol stretched across a non-square canvas keeps its module centres correct and throws nothing. What breaks is detection: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio holds on one axis only once the cells stop being square. Where that starts is not a constant worth pinning, so these cases assert decodability well inside the range where a stretch fails rather than hunting for its edge.
 /// </para>
 /// <para>
 /// Aspect ratio, not size: <see cref="SymbolImageBuilderBase{TSelf}.WithSize(int, int)"/> has no lower bound, and a canvas too small for the symbol gives it sub-pixel modules that nothing reads. Every canvas here is large enough that the module scale is not the variable under test.
@@ -23,7 +23,7 @@ public class ImageBuilderCanvasFitTest
 {
     private const string Content = "https://githu";
 
-    /// <summary>Canvases whose aspect ratio the fill behaviour could not survive, in both orientations.</summary>
+    /// <summary>Canvases whose aspect ratio a stretched symbol does not survive, in both orientations.</summary>
     public static IEnumerable<(string, int, int)> NonSquareCanvases()
     {
         foreach (var symbology in new[] { "qr", "microqr", "rmqr" })
@@ -103,9 +103,8 @@ public class ImageBuilderCanvasFitTest
     }
 
     /// <summary>
-    /// Styling narrows the aspect window well below what plain rendering survives, and it is where
-    /// the fill behaviour failed first, so the same canvases have to hold with a circle-based
-    /// module and finder shape.
+    /// Styling narrows the aspect window a stretched symbol survives well below plain rendering's,
+    /// so the same canvases have to hold with a circle-based module and finder shape.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(NonSquareCanvases))]
@@ -332,7 +331,7 @@ public class ImageBuilderCanvasFitTest
     }
 
     /// <summary>
-    /// Transparent surroundings with an opaque symbol background stay available. They are now
+    /// Transparent surroundings with an opaque symbol background are available. They are
     /// asked for rather than assumed.
     /// </summary>
     [Test]
@@ -347,8 +346,7 @@ public class ImageBuilderCanvasFitTest
 
     /// <summary>
     /// The pad that <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize(int)"/> leaves
-    /// follows the same rule. This is the one place where the default changes without the
-    /// geometry changing: it used to be transparent.
+    /// follows the same rule: the background, not transparent, unless a clear colour is set.
     /// </summary>
     [Test]
     public async Task ModulePixelSizePad_DefaultsToTheBackgroundColour()
@@ -454,7 +452,7 @@ public class ImageBuilderCanvasFitTest
 
     /// <summary>
     /// A pinned module size is a promise the canvas can contradict, and it can contradict it on
-    /// one axis alone. The existing negatives are all too small on both, so either half of the
+    /// one axis alone. The other negative cases are too small on both, so either half of the
     /// guard satisfies them by itself.
     /// </summary>
     [Test]

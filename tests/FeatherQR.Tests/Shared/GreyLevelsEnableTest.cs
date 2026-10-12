@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class GreyLevelsEnableTest
 {
-    /// <summary>Two-valued images at every size a decoder sees, the two counts that showed the rounding included (a 555 × 555 render: 126,063 dark and 181,962 light).</summary>
+    /// <summary>Two-valued images at every size a decoder sees, the counts of a 555 × 555 render included (126,063 dark and 181,962 light), where a float mean rounds past the level.</summary>
     [Test]
     public async Task TwoValuedImage_NeverEnablesTheLevels_WhateverItsPixelCount()
     {
@@ -127,7 +127,7 @@ public class GreyLevelsEnableTest
         await Assert.That(GreyLevels.FromHistogram(insideTheBound, 20).IsEnabled).IsFalse();
     }
 
-    /// <summary>The levels and the scale are the class means as before: a pixel at the light level reads 0, at the dark level 1, halfway between 0.5.</summary>
+    /// <summary>The levels and the scale are the class means: a pixel at the light level reads 0, at the dark level 1, halfway between 0.5.</summary>
     [Test]
     public async Task Darkness_ReadsTheShareBetweenTheClassMeans()
     {

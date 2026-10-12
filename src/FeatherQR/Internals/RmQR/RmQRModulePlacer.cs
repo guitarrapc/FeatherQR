@@ -23,7 +23,7 @@ namespace FeatherQR.Internals.RmQR;
 /// (<see cref="PlaceFunctionModules"/>, <see cref="PlaceFormat"/>, <see cref="PlaceData"/>).
 /// The function-module predicate (<see cref="IsFunctionModule"/>) and the mask (<see cref="GetMaskBit"/>) are the single source of truth the matrix decoder reuses, so both sides always agree.</item>
 /// <item><see cref="PlaceSymbol(Span{byte}, RmQRVersion, RmQREccLevel, ReadOnlySpan{byte})"/>
-/// is the fast path (benchmark-driven, 16-27x over the reference).
+/// is the fast path.
 /// Everything derived from the version alone is built once and cached (<see cref="Layout"/>). Placement is then a template copy, one vector pass that expands the message bits and XORs the masks, and a store pass.
 /// The store pass is documented on <see cref="ScatterPairs"/>, its ARM64 tier in RmQRModulePlacer.Arm64.cs.
 /// Zero allocations after the one-time tables.</item>
@@ -146,7 +146,7 @@ internal static partial class RmQRModulePlacer
 
     // 512 modules covers every version with <= 63 total codewords. Larger symbols rent.
     // Both paths carry VectorSlack bytes past the module count: the AVX2 expand step writes 32 bytes per 4 message bytes, and the ARM64 store tier reads a fixed 32 bytes per column pair, so the last pair of the last transpose block reads past the module count.
-    // The measured worst case is 20 bytes of over-read (R7x43, and 22 in theory, at rows == 5), so 32 leaves a 10-byte margin, not a large one. Re-measure before shrinking it.
+    // A pair of 5 rows is 10 bytes, so the over-read is at most 22 bytes and 32 leaves a 10-byte margin, not a large one. Work it out again before shrinking it.
     // Garbage in the slack cannot reach the output: the UZP/TBL/ZIP chain is a pure permutation and every stored byte comes from a lane below `rows`.
     private const int StackBitBudget = 512;
     private const int VectorSlack = 32;
@@ -252,8 +252,7 @@ internal static partial class RmQRModulePlacer
         var k = 0;
 #if NET8_0_OR_GREATER
         // One predictable compare per placement, not per iteration.
-        // It buys the SWAR tail below real coverage: on every machine the suite runs on, some vector tier consumes the whole message, so without this the portable expand, which is the WHOLE loop on netstandard2.0/2.1 and non-SIMD targets, is unreachable
-        // from any test.
+        // It buys the SWAR tail below real coverage: on every machine the suite runs on, some vector tier consumes the whole message, so without this the portable expand, which is the WHOLE loop on netstandard2.0/2.1 and non-SIMD targets, is unreachable from any test.
         if (kernel != PlaceKernel.Portable)
         {
             if (Avx2.IsSupported)
@@ -411,8 +410,6 @@ internal static partial class RmQRModulePlacer
     // builds identical tables twice. Memory per version: w×h bytes per ECC template
     // used + 5 bytes per data module (core index, row/col code, mask) + a few pair
     // descriptors, plus the ARM64 block/run/single segmentation where it is built.
-    // Measured for R17x139: about 12 KB, and 784 B more on ARM64. Across every version
-    // and ECC about 150 KB, and about 16 KB more on ARM64.
     // ---------------------------------------------------------------
 
     /// <summary>A column pair (col, col-1) of the zigzag walk.</summary>
@@ -696,7 +693,7 @@ internal static partial class RmQRModulePlacer
             }
         }
 
-        // Corner patterns: top-right and bottom-left. Painted BEFORE the finder separators: on height 9 the bottom-left corner cell (h-2, 0) = (7, 0) lies on separator row 7, and the separator (light) wins there (both external lineages agree).
+        // Corner patterns: top-right and bottom-left. Painted BEFORE the finder separators: on height 9 the bottom-left corner cell (h-2, 0) = (7, 0) lies on separator row 7, and the separator (light) wins there.
         core[width - 2] = 1;
         core[width - 1] = 1;
         core[width + width - 1] = 1;

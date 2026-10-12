@@ -11,7 +11,7 @@ internal static partial class QRImageDecoder
     /// The fourth point of a symbol nothing anchored, from its finders' edges: the bottom-left finder's top edge and the top-right finder's left edge, each the ring's outer edge followed across the finder and fitted as a line, meet where the symbol's module row and column 7 from the far corner do.
     /// </summary>
     /// <remarks>
-    /// The parallelogram and the frame place that point from the three centres alone, flat or by the finders' foreshortening. A symbol bent round a cylinder is neither: its centres are measured within a fifth of a module and its fourth point lands a module out, and with the point measured on the image the same centres read. The edges are what the image holds of the symbol's far side.
+    /// The parallelogram and the frame place that point from the three centres alone, flat or by the finders' foreshortening. A symbol bent round a cylinder is neither: its centres are placed well and the fourth point from them is not, and with the point measured on the image the same centres read. The edges are what the image holds of the symbol's far side.
     /// </remarks>
     internal static bool TryFourthPointFromEdges(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, float moduleSize, out float x, out float y)
     {

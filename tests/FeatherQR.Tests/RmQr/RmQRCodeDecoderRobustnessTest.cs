@@ -81,12 +81,9 @@ public class RmQRCodeDecoderRobustnessTest
     {
         var info = RmQRConstants.GetEccInfo(version, ecc);
         var blocks = info.BlocksInGroup1 + info.BlocksInGroup2;
-        // Deliberately the Reed-Solomon strength, NOT GetErrorCorrectionCapacity: this
-        // is the test that pins "rMQR reserves no misdecode-protection codewords p", so
-        // it must fail if the decoder's capacity ever drops below full RS strength.
-        // Deriving t from the API under test makes it self-consistent with any wrong
-        // (lower) capacity. Verified by mutation: capacity - 1 leaves this whole class
-        // green. RmQRConstantsUnitTest pins the capacity table against the same value.
+        // The Reed-Solomon strength, not GetErrorCorrectionCapacity. rMQR reserves no
+        // misdecode-protection codewords, and a t taken from the API under test would
+        // agree with any lower capacity the decoder used.
         var t = info.ECCPerBlock / 2;
         var (modules, width, height, text) = Symbol(version, ecc);
 
@@ -185,7 +182,7 @@ public class RmQRCodeDecoderRobustnessTest
     /// correctable errors: a "closer copy wins" arbitration would name the wrong
     /// version whichever side carries the impostor, but the copy that agrees with the
     /// physical dimensions is valid, so the symbol must still decode ("either copy
-    /// alone suffices"). Both roles are exercised and both regress under the old rule.
+    /// alone suffices"). The impostor is tried on each side.
     /// </summary>
     [Test]
     [Arguments(true)]

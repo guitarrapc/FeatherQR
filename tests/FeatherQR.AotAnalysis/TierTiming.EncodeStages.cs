@@ -34,13 +34,13 @@ internal static partial class TierTiming
         // The smallest version the transposed scorer takes.
         .. QRStageShapes("qr-v12-byte-M", () => DeterministicText(270), QREccLevel.M, 12),
         .. QRStageShapes("qr-v19-byte-M", () => DeterministicText(620), QREccLevel.M, 19),
-        // 1,000 characters at M, where a pinned mask once encoded in twice the automatic time (the forced rows below).
+        // 1,000 characters at M, the symbol a pinned mask's cost is read on (the forced rows below).
         .. QRStageShapes("qr-v26-byte-M", () => DeterministicText(1000), QREccLevel.M, 26),
         .. QRStageShapes("qr-v40-byte-L", () => DeterministicText(2900), QREccLevel.L, 40),
         .. QRStageShapes("qr-v39-byte-H", () => DeterministicText(1200), QREccLevel.H, 39),
         .. QRStageShapes("qr-v40-alnum-L", () => Pick(4296, AlphanumericAlphabet), QREccLevel.L, 40),
         .. QRStageShapes("qr-v40-num-L", () => Pick(7089, "0123456789"), QREccLevel.L, 40),
-        // Structured Append sets of one mode, where the payload writer runs over the whole text: the writer plan's set shapes.
+        // Structured Append sets of one mode, where the payload writer runs over the whole text.
         .. SetStageShapes("sa-alnum-30000-L", () => Pick(30000, AlphanumericAlphabet), QREccLevel.L, 7),
         .. SetStageShapes("sa-num-50000-L", () => Pick(50000, "0123456789"), QREccLevel.L, 8),
         .. MicroStageShapes("micro-m2-num", "0123456789", MicroQREccLevel.L, MicroQRVersion.M2),
@@ -161,9 +161,8 @@ internal static partial class TierTiming
     }
 
     /// <summary>
-    /// A pinned pattern applied to the unmasked matrix. The pattern is a captured variable, as the generator passes it: given as a
-    /// literal, the JIT inlined the call into the row and folded the predicate per pattern, which timed the version 26 path at half
-    /// what an encode pays for it.
+    /// A pinned pattern applied to the unmasked matrix. The pattern is a captured variable, as the generator passes it. Given as a
+    /// literal, the JIT inlines the call into the row and folds the predicate per pattern, which is not the code an encode runs.
     /// </summary>
     private static Func<int> ForcedMask(QRStages s, int pattern) => () =>
     {

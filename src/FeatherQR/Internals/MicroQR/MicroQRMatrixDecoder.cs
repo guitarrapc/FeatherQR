@@ -71,7 +71,6 @@ internal static class MicroQRMatrixDecoder
     {
         charsWritten = 0;
 
-        // 1. Version from size
         var version = MicroQRConstants.VersionFromSize(size);
         if (version == 0)
         {
@@ -79,7 +78,6 @@ internal static class MicroQRMatrixDecoder
             return DecodeStatus.InvalidMatrix;
         }
 
-        // 2. Format information (symbol number → version/ECC, mask pattern)
         var rawFormat = ReadFormatBits(pixels, modules);
         if (!MicroQRFormatInformationDecoder.TryDecode(rawFormat, out var formatVersion, out var eccLevel, out var maskPattern, out var formatDistance)
             || formatVersion != version)
@@ -99,11 +97,10 @@ internal static class MicroQRMatrixDecoder
         Span<byte> block = stackalloc byte[MaxTotalCodewords].Slice(0, dataCodewords + eccCodewords);
         block.Clear();
 
-        // 3. Extract codewords (inverse zigzag + unmask)
         ExtractCodewords(pixels, modules, size, maskPattern, dataBitCount, dataCodewords, block);
 
-        // 4. Reed-Solomon correction, capped at the ISO Table 9 capacity and, on a sampled grid, at what its
-        //    structure earns: counted only for a read, which texture rarely reaches, the quiet zone last
+        // The correction is capped at the ISO Table 9 capacity and, on a sampled grid, at what its structure earns.
+        // The structure is counted only for a read, which texture rarely reaches, the quiet zone last.
         if (!EccBinaryDecoder.TryCorrect(block, eccCodewords, out var errorsCorrected)
             || errorsCorrected > MicroQRConstants.GetErrorCorrectionCapacity(version, eccLevel)
             || (sampled && !MicroQRGridEvidence.SuspendedOnThisThread && !Earns(pixels, modules, size, version, eccLevel, formatDistance, errorsCorrected, luminance, width, height, threshold, quietZone)))
@@ -112,7 +109,6 @@ internal static class MicroQRMatrixDecoder
             return DecodeStatus.DataUncorrectable;
         }
 
-        // 5. Bitstream → text
         var status = MicroQRBinaryDecoder.DecodeBitStream(block.Slice(0, dataCodewords), dataBitCount, version, destination, out charsWritten);
         if (status != DecodeStatus.Success)
             charsWritten = 0; // only a read counts its characters, not the segments written before a failure
@@ -211,8 +207,7 @@ internal static class MicroQRMatrixDecoder
     /// <remarks>
     /// The bits gather in a register with no branch on a module's value. A branch per module mispredicts about half the time on a symbol
     /// the predictor has not seen, and setting one bit of a stored byte at a time makes every module wait on the store before it.
-    /// On an Apple M2 that made M4's 192 modules about four times slower on symbols that change from call to call, under the JIT and NativeAOT alike.
-    /// A benchmark that decodes one symbol over and over hides most of it, because the predictor learns that symbol's pattern.
+    /// A benchmark that decodes one symbol over and over hides most of that cost, because the predictor learns that symbol's pattern.
     /// </remarks>
     private static void ReadRun<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, PlacedModule[] placement, int maskPattern, int start, int end, Span<byte> destination)
         where TModules : struct, IMicroQRModules

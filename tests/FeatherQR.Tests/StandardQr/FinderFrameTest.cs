@@ -216,7 +216,7 @@ public class FinderFrameTest
 
     /// <summary>
     /// The count along each finder line from its own two ends is the plane's: the far end at weight w measures 1/w² of the near one, and the distance over their geometric mean is the modules between the centres.
-    /// The mean of all four sizes, the estimate before, is short by more than a version here.
+    /// The mean of all four sizes is short by more than a version here.
     /// </summary>
     [Test]
     [Arguments(97, 0.45f, 0f)]
@@ -238,7 +238,7 @@ public class FinderFrameTest
     }
 
     /// <summary>
-    /// A line whose whole-pixel runs are one size beside a line the frame foreshortens counts by its own sizes. The mean of all four held the other line's far end, 40 % large here, and put a version 40 two versions short.
+    /// A line whose whole-pixel runs are one size beside a line the frame foreshortens counts by its own sizes. The mean of all four would bring in the other line's far end, 40 % large here, and count the flat line short.
     /// </summary>
     [Test]
     public async Task Estimate_FlatLineBesideAForeshortenedOne_CountsByItsOwnSizes()
@@ -256,7 +256,7 @@ public class FinderFrameTest
         await Assert.That(Math.Abs(estimate - expected)).IsLessThan(1e-3f);
     }
 
-    /// <summary>Where the frame is the parallelogram, the estimate divides both lines by the mean of all four sizes, as it did before any line counted by its own.</summary>
+    /// <summary>Where the frame is the parallelogram, the estimate divides both lines by the mean of all four sizes.</summary>
     [Test]
     public async Task Estimate_OfTheParallelogram_IsTheMeanOfFourBitForBit()
     {
@@ -312,7 +312,7 @@ public class FinderFrameTest
         await Assert.That(refused).IsGreaterThan(10);
     }
 
-    /// <summary>The timing match as it was before it gave a dimension up early: every timing module of every dimension within four versions counted.</summary>
+    /// <summary>The timing match without giving a dimension up early: every timing module of every dimension within four versions counted.</summary>
     private static int MatchTimingDimensionCountingEveryModule(byte[] luminance, int width, int height, byte threshold, GreyLevels grey, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, QRImageDecoder.FinderModuleSizes sizes, QRImageDecoder.FinderFrame frame)
     {
         var estimate = QRImageDecoder.EstimateModules(topLeft, topRight, bottomLeft, sizes, frame);

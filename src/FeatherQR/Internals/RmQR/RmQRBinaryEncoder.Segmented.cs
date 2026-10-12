@@ -47,14 +47,12 @@ internal static partial class RmQRBinaryEncoder
         if (charset != EciMode.Default)
             WriteEciHeader(ref dest, ref acc, ref accBits, ref bytePos, charset);
 
-        // Hoisted out of the loop on purpose: a stackalloc inside it would accumulate
-        // per iteration. Byte-mode capacity tops out at 150 bytes, so any run of a
-        // plan that passed the bit check above transcodes into this budget.
+        // Hoisted out of the loop on purpose: a stackalloc inside it would accumulate per iteration.
+        // Byte-mode capacity tops out at 150 bytes, so any run of a plan that passed the bit check above transcodes into this budget.
         Span<byte> utf8 = stackalloc byte[StackByteBudget];
         var expectedStart = 0;
 
-        // The count widths once for the version, not a mode lookup per run: a Kanji plan of
-        // interleaved text has a run every few characters.
+        // The count widths once for the version, not a mode lookup per run: a Kanji plan of interleaved text has a run every few characters.
         var numericCountBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
         var alnumCountBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
         var byteCountBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
@@ -70,16 +68,12 @@ internal static partial class RmQRBinaryEncoder
             var modeIndex = segment.ModeIndex;
             var countBits = modeIndex switch { 0 => numericCountBits, 1 => alnumCountBits, 2 => byteCountBits, _ => kanjiCountBits };
 
-            // The count indicator width always covers the largest unit count a version
-            // can hold, and a run holds no more than that, so this cannot bind. Assert
-            // it anyway because overflowing it would corrupt the mode indicator above.
+            // The count indicator width always covers the largest unit count a version can hold, and a run holds no more than that, so this cannot bind. Assert it anyway because overflowing it would corrupt the mode indicator above.
             Debug.Assert(segment.UnitCount < (1 << countBits), "run length must fit the character count indicator");
 
-            // The budget checked above comes from UnitCount, but the payload below is
-            // written from the run's characters. A plan whose two disagree would clear
-            // the budget and then overrun, so this is a runtime check, not an assert.
-            // Byte mode under UTF-8 is the exception: its unit count is only knowable
-            // after transcoding, so WriteUtf8Segment verifies it there instead.
+            // The budget checked above comes from UnitCount, but the payload below is written from the run's characters.
+            // A plan whose two disagree would overrun, so this is a runtime check, not an assert.
+            // Byte mode under UTF-8 is the exception: its unit count is known only after transcoding, where WriteUtf8Segment checks it.
             if ((modeIndex != 2 || charset != EciMode.Utf8) && segment.UnitCount != segment.Length)
                 throw new ArgumentException($"Segment plan gives a {segment.Length}-character run a unit count of {segment.UnitCount}; they must agree outside UTF-8 Byte mode.", nameof(segments));
             if (modeIndex == 3 && charset != EciMode.Default)
@@ -131,8 +125,7 @@ internal static partial class RmQRBinaryEncoder
             return;
         }
 
-        // Unreachable for a plan that passed the capacity check, but kept so a caller
-        // that hand-builds a plan cannot overrun the stack budget.
+        // Unreachable for a plan that passed the capacity check, but kept so a caller that hand-builds a plan cannot overrun the stack budget.
         var rented = ArrayPool<byte>.Shared.Rent(chars.Length * 3);
         try
         {

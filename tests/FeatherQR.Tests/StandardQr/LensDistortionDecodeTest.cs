@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// A symbol photographed through a lens that draws its corners nearer the centre than a pinhole would: its rows and columns bow, the three finder centres still measure well, and no plane through them and an alignment pattern follows the bow across a symbol of version 7 or more.
 /// The mesh over the alignment lattice does, with every pattern of the lattice measured, the ones on the timing lines among them, and each cell curved through three nodes a side.
-/// The shots are versions 7 to 40 through a lens term of 6 to 10 %, each asserted to read by no sampling of the grid through the finders and the fourth point. Four take the geometry of sweep renders, versions 28 to 36 that read only with the offset carried along the timing lines, two of them only with the dimension read at the finders.
+/// The shots are versions 7 to 40 through a lens term of 6 to 10 %, each asserted to read by no sampling of the grid through the finders and the fourth point. Four of them, versions 28 to 36, read only with the offset carried along the timing lines, two of those only with the dimension read at the finders.
 /// </summary>
 public class LensDistortionDecodeTest
 {

@@ -149,7 +149,7 @@ public class BinaryInterleaverParityTest
 
     /// <summary>
     /// Naive reference: round-robin over rows with per-element index multiplication
-    /// and per-element range conditions (the pre-optimization implementation shape).
+    /// and per-element range conditions.
     /// </summary>
     private static void ReferenceInterleaveCodewords(ReadOnlySpan<byte> data, ReadOnlySpan<byte> ecc, Span<byte> output, in ECCInfo eccInfo)
     {

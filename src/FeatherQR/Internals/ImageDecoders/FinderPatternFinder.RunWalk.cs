@@ -6,7 +6,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
 /// The run measurement of the cross-checks: from a supposed centre outwards along one line, the five runs of a 1:1:3:1:1 cross section and where the walk ended.
-/// The verdict on the runs stays with the cross-checks. What is here is only the walk, which is where a refused cross-check spends its time, and 97 to 98 % of cross-checks on a large symbol are refusals.
+/// The verdict on the runs stays with the cross-checks. What is here is only the walk, which is where a refused cross-check spends its time, and nearly every cross-check on a large symbol is a refusal.
 /// </summary>
 internal static partial class FinderPatternFinder
 {
@@ -205,7 +205,6 @@ internal static partial class FinderPatternFinder
     /// The centre run is measured first, in both directions, because every other bound follows from it. The pixels read are the ones <see cref="MeasureRuns"/> reads, in another order, and fewer of them.
     /// Each side run is then allowed what is left of two budgets: the longest side run this centre admits, and the largest total it admits less what has been measured and one pixel for each side run still to come, since an empty side run is refused too.
     /// Both are at most the expected total, so a walk that finishes never stopped a run where the reference's cap would not have.
-    /// On a large symbol a refused cross-check reads 0.55 to 0.60 of the pixels it used to.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool MeasureRunsBounded(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, int stepX, int stepY, int expectedTotal, Span<int> runs, out int end)
@@ -309,7 +308,7 @@ internal static partial class FinderPatternFinder
         => throw new ArgumentOutOfRangeException(nameof(centerX), $"Centre ({centerX}, {centerY}) is outside the {width} x {height} image, or the image is larger than its {length} pixel buffer");
 
     /// <summary>
-    /// The axis walk as it was inside the cross-check, kept as the reference <see cref="MeasureRuns"/> is held to: one loop for both axes, the axis chosen per pixel, every pixel a checked index.
+    /// The axis walk <see cref="MeasureRuns"/> is held to as its reference: one loop for both axes, the axis chosen per pixel, every pixel a checked index.
     /// Off the decode path except through <see cref="TryFindScalar"/>.
     /// </summary>
     internal static bool MeasureAxisRunsReference(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, bool vertical, int expectedTotal, Span<int> runsOut, out int end)
@@ -368,7 +367,7 @@ internal static partial class FinderPatternFinder
     }
 
     /// <summary>
-    /// The top-left to bottom-right walk as it was inside the diagonal cross-check, kept as the reference <see cref="MeasureRuns"/> is held to. Its side runs have no cap.
+    /// The top-left to bottom-right walk <see cref="MeasureRuns"/> is held to as its reference along (1, 1). Its side runs have no cap.
     /// </summary>
     internal static bool MeasureDiagonalRunsReference(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, Span<int> runsOut, out int end)
     {

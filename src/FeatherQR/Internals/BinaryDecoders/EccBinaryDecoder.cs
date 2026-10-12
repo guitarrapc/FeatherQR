@@ -197,12 +197,8 @@ internal static partial class EccBinaryDecoder
         }
 
         // Verify the correction: recomputed syndromes must all be zero. This guards
-        // against silent miscorrection (worse than failing) at the cost of one extra
-        // syndrome pass, taken only on blocks that actually had errors. Note the size
-        // of that cost: a corrected block runs the syndrome pass TWICE, which is most
-        // of the gap between a clean and a corrected decode (about 10 us of the 12.8 us
-        // difference at rMQR R17x139) and why a faster syndrome kernel pays more on
-        // damaged input than on clean.
+        // against silent miscorrection, which is worse than failing. A corrected block
+        // therefore runs the syndrome pass twice.
         Span<byte> check = stackalloc byte[SyndromeLanes];
         if (ComputeSyndromes(codeword, eccCount, check))
             return false;
@@ -222,8 +218,8 @@ internal static partial class EccBinaryDecoder
     /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register, one multiply per data byte for every syndrome at once), the AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs) or the 128-bit kernel on the other vector targets (see EccBinaryDecoder.Vector128.cs). Each keeps every syndrome in vector lanes rather than walking the codeword once per syndrome.
     /// </para>
     /// <para>
-    /// The scalar path keeps the Horner multiply in log domain: the multiplier's log is the constant i, so each step is one zero-check + one log load + one exp load (measured 0.84-0.90x of the GaloisField.Multiply form). It runs four syndromes per pass over the codeword.
-    /// That interleaving is not cosmetic: the per-syndrome walk is bound by the dependent log → exp load chain rather than by throughput, so four independent accumulators measured 2.2-2.9x the single walk on large blocks.
+    /// The scalar path keeps the Horner multiply in log domain: the multiplier's log is the constant i, so each step is one zero-check + one log load + one exp load. It runs four syndromes per pass over the codeword.
+    /// The per-syndrome walk is bound by the dependent log → exp load chain rather than by throughput, so four independent accumulators finish sooner than four walks.
     /// This is the tier netstandard2.0/2.1 runs, and any build without 128-bit vectors.
     /// </para>
     /// </remarks>

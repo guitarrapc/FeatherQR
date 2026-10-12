@@ -52,7 +52,7 @@ internal enum FinderRowKernel
 /// <para>
 /// The scan strides over rows. The band of rows showing the 1:1:3:1:1 signature is 3 modules tall for an axis-aligned symbol, and narrower under rotation, where the ratios drift off-centre (see CandidateRowStride). The module size is unknown before detection, but the worst case, a version-40 symbol filling the frame, bounds it from below. So a stride of 3·height/(4·177) hits the band of every supported axis-aligned symbol.
 /// When TryFind's stride pass cannot select a consistent triple, or selects a poor one with once-seen candidates left out, the rows it skipped are scanned as a complementary pass, together exactly one full-image sweep, so its striding cannot lose a symbol a full scan would find. That fallback, not the stride arithmetic, is what makes TryFind safe under rotation too.
-/// On net8.0+ each row is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any 128-bit acceleration) and walked run-by-run via trailing-zero counts instead of pixel-by-pixel (measured ~11x combined on the found path on x64 and 3.3-4.1x on Apple M2).
+/// On net8.0+ each row is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any 128-bit acceleration) and walked run-by-run via trailing-zero counts instead of pixel-by-pixel.
 /// With 128-bit vectors or wider, rows of 32 to 4,095 pixels go to the edge-list kernel instead (FinderPatternFinder.RowEdges.cs): every edge of the row at once, and the windows classified many a step without a branch.
 /// </para>
 /// </remarks>
@@ -117,7 +117,7 @@ internal static partial class FinderPatternFinder
     /// <summary>
     /// Row stride for <see cref="FindCandidates"/>.
     /// The band of rows carrying the 1:1:3:1:1 signature is 3 modules tall only while the symbol is axis-aligned: under rotation the run ratios drift off-centre and the band that survives the cross-checks narrows.
-    /// Measured over module sizes 3-8 px at every rotation, its floor is 5 rows at the 3 px/module bottom of the decode envelope, so a stride of 4 lands in every in-envelope band with a row to spare and 6 does not.
+    /// Over module sizes 3-8 px at every rotation its floor is 5 rows, at the 3 px/module bottom of the decode envelope, so a stride of 4 lands in every in-envelope band with a row to spare and 6 does not.
     /// The caller's strideless retry makes detection correct either way. This value decides how often that retry is paid.
     /// </summary>
     private const int CandidateRowStride = 4;
@@ -130,7 +130,6 @@ internal static partial class FinderPatternFinder
     /// Strided like <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels)"/>, but with no fallback of its own: this scan has only a flat candidate list, and every signal available inside it is a statement about the image rather than about the symbol being looked for.
     /// A confirmation test (any candidate seen on two or more rows) reads like a per-symbol signal but is not one. A second QR code, a printed logo, or salt-and-pepper noise confirms by itself and would suppress the pass the real symbol needed.
     /// The only question that distinguishes them is "did anything actually decode", which only the caller can answer, so the widening lives there: the image decoders run this scan first and re-run <see cref="FindCandidatesFullSweep"/> when nothing decoded, a read too long for the destination counting as decoded.
-    /// Skipping three rows in four is most of the rMQR image path: end to end the span decode of the widest symbol is 2.7x a strideless build's.
     /// </remarks>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -305,7 +304,7 @@ internal static partial class FinderPatternFinder
                 return true;
             }
 
-            // Complementary rescan: only the rows the stride pass skipped, keeping its candidates, so the detection envelope cannot regress. Costs one full sweep in total.
+            // Only the rows the stride pass skipped, keeping its candidates: one full sweep in total, so the stride loses no symbol a full scan finds.
             ScanSkippedRows(luminance, width, height, threshold, grey, kernel, edges, candidates, ref candidateCount);
 
             if (strideSelected)
@@ -358,7 +357,7 @@ internal static partial class FinderPatternFinder
             return;
         }
 
-        // SIMD path: classify pixels into a dark bitmask with vector compares (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then walk RUNS via tzcnt instead of pixels, result bit-identical to the scalar walk. Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
+        // Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
         if (kernel != FinderRowKernel.Scalar && Vector128.IsHardwareAccelerated && width >= 16)
         {
             ScanRowMask(luminance, width, height, threshold, grey, y, candidates, ref candidateCount);
@@ -416,7 +415,7 @@ internal static partial class FinderPatternFinder
                 continue;
             }
 
-            // Window full (5 runs) and the 5th (dark) run just completed: evaluate, then shift out the oldest dark/light pair. The window still starts with a dark run, and the incoming light run continues at index 3.
+            // The window is full and its fifth run, a dark one, has just ended
             if (IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, x, y, 1, 0) || IsRepeatedNearFinderRatio(luminance, width, height, threshold, runs[0], runs[1], runs[2], runs[3], runs[4], x, y))
             {
                 TryAddCandidate(luminance, width, height, threshold, grey, runs, x, y, referenceWalk, candidates, ref candidateCount);
@@ -568,7 +567,7 @@ internal static partial class FinderPatternFinder
     /// </summary>
     /// <remarks>
     /// Each edge moves from its pixel boundary by the coverage of the two pixels beside it, which is exact for an edge a box filter drew.
-    /// The tolerance stays the strict one, so a window of whole pixels measures as it did and is refused as it was.
+    /// The tolerance stays the strict one, so a window of whole pixels measures the same here and is refused again.
     /// </remarks>
     private static bool IsFinderRatioByCoverage(ReadOnlySpan<byte> luminance, int width, int height, in GreyLevels grey, ReadOnlySpan<int> runs, int endX, int endY, int stepX, int stepY)
         => grey.IsEnabled
@@ -783,7 +782,7 @@ internal static partial class FinderPatternFinder
     /// </summary>
     /// <remarks>
     /// At 1 to 1.5 px/module a crisp render draws each module 1 or 2 px wide, so a run is up to a whole module off and the half-module tolerance means nothing. The edges themselves are exact, and the pattern they frame either is a finder, module for module, or is not: a stronger test than three ratios, and independent of how wide each module came out.
-    /// The column is held to the same window as in the ratio path, so a finder drawn taller than wide is read here too, but the rising diagonal is not asked: the 49 modules include every light-ring module that diagonal crosses, so they already refuse what it would refuse. Asking it anyway refused no broken ring more, and lost real stretched finders at 1.25 × 1.6-1.75 px, where a whole-pixel walk at 45° crosses module corners.
+    /// The column is held to the same window as in the ratio path, so a finder drawn taller than wide is read here too, but the rising diagonal is not asked: the 49 modules include every light-ring module that diagonal crosses, so they already refuse what it would refuse. Asking it anyway refuses no broken ring more, and loses real stretched finders at 1.25 × 1.6-1.75 px, where a whole-pixel walk at 45° crosses module corners.
     /// </remarks>
     private static bool TryCrossCheckWholePattern(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<int> rowRuns, int endX, int y, bool referenceWalk, out float centerX, out float centerY, out int refinedTotal)
     {
@@ -918,7 +917,7 @@ internal static partial class FinderPatternFinder
 
     /// <summary>
     /// Scores within this of the best are a tie, broken toward the triple confirmed on more rows.
-    /// Wide enough for keystone and pixel noise, where a false candidate at the fourth corner of the square scored within 0.01 of the real triple (the four corners of a square make four right isosceles triangles), and far below the 0.33 a false candidate off the corners scores.
+    /// Wide enough for keystone and pixel noise, where a false candidate at the fourth corner of the square scores within 0.01 of the real triple (the four corners of a square make four right isosceles triangles), and far below the 0.33 a false candidate off the corners scores.
     /// </summary>
     private const float SelectionTieTolerance = 0.05f;
 

@@ -243,7 +243,7 @@ internal static partial class TierTiming
         new("kernel/MaskCode-v28-scalar", () => MaskScoring(28, score: true, scalar: true)),
         .. Enumerable.Range(12, 29).Where(v => v is not (12 or 20 or 27 or 28 or 40)).Select(v => new Shape($"kernel/MaskCode-v{v}", () => MaskScoring(v, score: true))),
         .. Enumerable.Range(12, 29).Where(v => v is not (12 or 20 or 27 or 28 or 40)).Select(v => new Shape($"kernel/MaskCode-v{v}-scalar", () => MaskScoring(v, score: true, scalar: true))),
-        // The 128-bit transposed tier entered directly, beside the scalar kernel the 128-bit builds ran before it
+        // The 128-bit transposed tier entered directly, beside the scalar rows above
         .. Enumerable.Range(12, 29).Select(v => new Shape($"kernel/MaskCode-v{v}-v128", () => MaskScoring(v, score: true, v128: true))),
         new("kernel/MaskForced-v1", () => MaskScoring(1, score: false, forced: 3)),
         new("kernel/MaskForced-v6", () => MaskScoring(6, score: false, forced: 3)),
@@ -1358,7 +1358,7 @@ internal static partial class TierTiming
         return acc.ToScalar() + acc.GetElement(3);
     }
 
-    /// <summary>The samplers before VectorCast: the saturating conversion, then the clamp on the integers.</summary>
+    /// <summary>The saturating conversion, then the clamp on the integers: the form pixel-vectorcast is timed against.</summary>
     private static int PixelIntClamp(byte[] data)
     {
         ref var start = ref MemoryMarshal.GetArrayDataReference(data);
@@ -1383,7 +1383,7 @@ internal static partial class TierTiming
         return acc.ToScalar() + acc.GetElement(3);
     }
 
-    /// <summary>The scalar samplers' clamp before PixelIndex: the cast, then both edges on the integer. 16,384 coordinates a call, a
+    /// <summary>The plain clamp clamp-pixelindex is timed against: the cast, then both edges on the integer. 16,384 coordinates a call, a
     /// sixth of them past an edge, into a limit the runtime cannot fold.</summary>
     private static int ClampBase(byte[] data)
     {
@@ -1433,7 +1433,7 @@ internal static partial class TierTiming
         return sum;
     }
 
-    /// <summary>The integer edges as before PixelIndex. A negative result from a positive coordinate is an overflow the cast did not saturate.</summary>
+    /// <summary>The integer edges as in clamp-base. A negative result from a positive coordinate is an overflow the cast did not saturate.</summary>
     private static int ClampSignFix(byte[] data)
     {
         var sum = 0;

@@ -15,26 +15,15 @@ internal static partial class Binarizer
     /// </summary>
     internal static void FillHistogramVector256(ReadOnlySpan<byte> luminance, Span<int> histogram)
     {
-        // Why: histogram[v]++ waits on the previous store to the same bin (store-to-load forwarding), and a rendered symbol
-        // is 0 and 255 in long runs, so the scalar walk spends most of its time in that chain. Here the two extremes never go
-        // through memory: each block is compared against 0 and against 255, the two masks are counted with a popcount, and
-        // the two totals go into their bins once, at the end.
-        //
         // Each 32-pixel block takes one of three paths:
         //   pure or sparse   12 or fewer other pixels: the extremes counted from the masks, the others walked one by one
-        //                    through the third mask (the lowest set bit is the next, clear it, increment its bin)
-        //   dense            13 or more: the scalar tier's groups of eight, so a photo-like image costs what it costs there,
-        //                    the compares would only be added to it
-        //   a stretch        two dense blocks in a row with no 0 and no 255 at all start 31 blocks taken without the test.
-        //                    A photo-like image is such blocks end to end, and the test in front of each one is what made it
-        //                    slower than the scalar tier. A rendered or resampled symbol almost never has one.
+        //   dense            13 or more: the scalar tier's groups of eight, since the compares would only add to their cost
+        //   a stretch        two dense blocks in a row with no 0 and no 255 at all start 31 blocks taken without the test
         //
         //   block      0   0   0   0  255 255   0   0   0  200 255  ...    32 pixels
         //   isMin      1   1   1   1   0   0    1   1   1   0   0          popcount into minCount
         //   isMax      0   0   0   0   1   1    0   0   0   0   1          popcount into maxCount
         //   others     0   0   0   0   0   0    0   0   0   1   0          one bin increment a set bit
-        //
-        // The cut-over and the stretch length are the two constants above, with what was measured for them.
         ref var h = ref ClearedBins(histogram);
         ref var p = ref MemoryMarshal.GetReference(luminance);
         var offset = 0;
@@ -50,7 +39,6 @@ internal static partial class Binarizer
             var others = ~(isMin | isMax);
             if (BitOperations.PopCount(others) > DenseBlock)
             {
-                // The shipped scalar groups, so a photo-like image costs what it costs on the scalar tier
                 ref var b = ref Unsafe.Add(ref p, offset);
                 CountGroup(ref h, Unsafe.ReadUnaligned<ulong>(ref b));
                 CountGroup(ref h, Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b, 8)));

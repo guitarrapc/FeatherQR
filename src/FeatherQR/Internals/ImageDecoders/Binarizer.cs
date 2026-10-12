@@ -102,14 +102,14 @@ internal static partial class Binarizer
     /// <remarks>
     /// A per-pixel <c>histogram[value]++</c> serializes on store-forwarding whenever consecutive pixels hit the same bin, and a rendered symbol is two values in long runs.
     /// The vector tier never sends those two values through memory. The scalar tier folds a uniform group of eight into one addition, which pays only where runs happen to start on a multiple of eight pixels.
-    /// ARM64 has its own tier: the same blocks without a movemask, and the dense blocks spread over four sub-histograms, which its larger L1 holds where x64's lost to them.
+    /// ARM64 has its own tier: the same blocks without a movemask, and the dense blocks spread over four sub-histograms, which fit its larger L1 and not x64's.
     /// Every tier produces the same 256 bins, and the threshold and the grey levels are functions of the bins alone.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="histogram"/> holds fewer than 256 bins.</exception>
     internal static void FillHistogram(ReadOnlySpan<byte> luminance, Span<int> histogram)
     {
 #if NET8_0_OR_GREATER
-        // A 512-bit tier was measured and left out. ARM64 has its own tier. See the decoder spec.
+        // No 512-bit tier: it would be the library's only one, and no CI runner is sure to execute it.
         if (Vector256.IsHardwareAccelerated)
         {
             FillHistogramVector256(luminance, histogram);
@@ -149,14 +149,13 @@ internal static partial class Binarizer
 
 #if NET8_0_OR_GREATER
     // A block with more pixels than this that are neither 0 nor 255 goes to the scalar groups: walking a full
-    // mask costs more a pixel than the increment it replaces. 12 and 20 of 32 measured the same. 6 sent
-    // blocks rich in the two counted values back through memory and lost a third on resampled images.
+    // mask costs more a pixel than the increment it replaces. A cut-over much lower sends blocks rich in the
+    // two counted values back through memory.
     private const int DenseBlock = 12;
 
     // After two blocks in a row holding neither counted value, this many blocks are taken untested: a photo-like
-    // image is such blocks end to end, and the test in front of every one made its threshold 8 to 11 % slower than
-    // the scalar walk alone. A rendered or resampled symbol almost never has such a block, so a stretch does not
-    // start on one. 7 left 2 to 3 %, and 31 measured level with the scalar walk end to end.
+    // image is such blocks end to end, and the test in front of every one is cost with no gain there. A rendered
+    // or resampled symbol almost never has such a block, so a stretch does not start on one.
     private const int UntestedBlocks = 31;
 #endif
 

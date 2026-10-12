@@ -208,17 +208,16 @@ public class QRSegmentationTest
     /// <summary>
     /// The span destination is the library's zero-allocation path, and the mixed-mode
     /// planner must keep it that way, pooled branches included (the plan buffer
-    /// rents above 64 characters, the parent table above 73). Debug builds are
-    /// excluded per repo notes.
+    /// rents above 64 characters, the parent table above 73). A Debug build allocates
+    /// where a Release build does not, so this runs in Release only.
     /// </summary>
     /// <remarks>
     /// Runs alone. Pooled branches take their buffers from <see cref="System.Buffers.ArrayPool{T}"/>,
     /// whose per-core stacks are shared with every other thread: a test running concurrently can
     /// empty the bucket between this thread's return and its next rent, and the rent that would
     /// have hit the cache allocates a fresh array instead. That shows up here as a multiple of one
-    /// array (measured: 1,048 bytes and up, in a full parallel run roughly one time in three) and it
-    /// is the pool being a shared resource, not the encoder allocating. Exclusivity is the fix rather
-    /// than a tolerance, which would blunt the guard this test exists to be.
+    /// array, and it is the pool being a shared resource, not the encoder allocating. A tolerance
+    /// would blunt the guard, so the test runs alone instead.
     /// </remarks>
     [Test]
     [NotInParallel]

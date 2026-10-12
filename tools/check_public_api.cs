@@ -19,7 +19,7 @@ using System.Text;
 // be the same everywhere, and nothing else checks that.
 //
 // This is the gate public_api.cs deliberately is not. The two render the same listing from
-// the same assembly - public_api.cs through reflection, for a page with documentation and
+// the same assembly: public_api.cs through reflection, for a page with documentation and
 // source links, and this one through metadata, for four target frameworks and a diff. Their
 // type and member text is expected to match line for line, which is how each keeps the
 // other honest.
@@ -133,8 +133,8 @@ static void WriteDiff(string expected, string actual, string indent)
     }
 
     // A block is one type, keyed by the name a reader would say out loud. Its declaration is
-    // kept as the first line of the block, so a change to the declaration alone - a class that
-    // became sealed, a base type that moved - is a line in the diff rather than a silent pass.
+    // kept as the first line of the block, so a change to the declaration alone, such as a class that
+    // became sealed or a base type that moved, is a line in the diff rather than a silent pass.
     static Dictionary<string, List<string>> Blocks(string text)
     {
         var blocks = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -334,7 +334,7 @@ static string Render(string assemblyPath)
 
     // Members of one type, sorted so the listing is stable: metadata order is declaration
     // order, which would make the diff churn on an edit that changed nothing a caller sees.
-    // Enum values are the exception - their order is their meaning, so it is kept.
+    // Enum values are the exception: their order is their meaning, so it is kept.
     IEnumerable<string> Members(TypeDefinition type)
     {
         if (BaseFullName(type) == "System.Enum")
@@ -390,7 +390,7 @@ static string Render(string assemblyPath)
 
             // A property is as accessible as its more accessible accessor, and the other one is
             // printed with its own modifier, the way source spells it: { get; protected set; }.
-            // Read off one accessor alone, a setter narrowed to protected looked like a public one.
+            // Read off one accessor alone, a setter narrowed to protected looks like a public one.
             var isPublic = (readable && getterIsPublic) || (writable && setterIsPublic);
             var anchor = readable ? getter!.Value : setter!.Value;
 
@@ -408,7 +408,7 @@ static string Render(string assemblyPath)
 
             var type_ = Annotate(signature.ReturnType, Nullability(property.GetCustomAttributes(), TypeNullableContext(type)));
             // Same modifiers a method carries, off the accessor: a property turning abstract is a
-            // break, and reading only "static" here hid one.
+            // break, and reading only "static" here hides it.
             lines.Add((2, Line(property.GetCustomAttributes(), Access(isPublic),
                 Modifier(anchor.Attributes), null, type_, $"{name} {text}")));
         }

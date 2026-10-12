@@ -49,10 +49,10 @@ public class QRCodeDecoderImageTest
     [Test]
     [Arguments(12)]
     [Arguments(13)]
-    [Arguments(14)] // 512px / 81 modules = 6.32 px/module, snapped one version low before the run-boundary fix
+    [Arguments(14)] // 512px / 81 modules = 6.32 px/module
     [Arguments(15)]
     [Arguments(16)]
-    [Arguments(17)] // 5.51 px/module, same regression
+    [Arguments(17)] // 5.51 px/module
     [Arguments(18)]
     [Arguments(20)]
     [Arguments(25)]
@@ -60,8 +60,8 @@ public class QRCodeDecoderImageTest
     {
         // A fixed 512px canvas gives fractional pixels-per-module at most versions.
         // The pixel-quantized module-size measurement must not snap the dimension
-        // estimate to a neighboring version (regression: v14/v17/v18/v20 read as
-        // one version lower and failed with DataUncorrectable).
+        // estimate to a neighboring version: read one version low, v14, v17, v18
+        // and v20 fail with DataUncorrectable.
         var content = "https://github.com/guitarrapc/FeatherQR";
         var qr = QRCodeGenerator.Create(content, QREccLevel.H, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 4 });
         using var bitmap = new SKBitmap(new SKImageInfo(512, 512, SKColorType.Bgra8888, SKAlphaType.Premul));
@@ -102,9 +102,8 @@ public class QRCodeDecoderImageTest
 
     /// <summary>
     /// A thermal printer, a laser marker or a camera at an angle hands the decoder modules that are
-    /// not square, so it must keep the finder's horizontal and vertical module scales apart. Every
-    /// right-angle rotation decodes to 2.35:1 either way, where the finder cross-check's 12:5 window
-    /// ends. This is 1.25:1, 8 x 10 px.
+    /// not square, so it must keep the finder's horizontal and vertical module scales apart.
+    /// This is 1.25:1, 8 x 10 px.
     /// </summary>
     [Test]
     [Arguments(0)]
@@ -310,8 +309,8 @@ public class QRCodeDecoderImageTest
     /// pixel that comes out grey. A grey darker than the threshold widens every dark run by a
     /// pixel (ink spread), a lighter one narrows it (erosion). The finder centres do not move,
     /// but a module size measured across the finder's outer edges does, and on a large symbol
-    /// that error, multiplied by the finder distance, used to exceed the version snap
-    /// (regression: v20-v37 at 3-4 px/module read one or two versions low).
+    /// that error, multiplied by the finder distance, exceeds the version snap: taken from
+    /// that size, v20-v37 at 3-4 px/module read one or two versions low.
     /// </summary>
     [Test]
     [Arguments(20, 3, 64)]
@@ -340,12 +339,12 @@ public class QRCodeDecoderImageTest
     }
 
     /// <summary>
-    /// Anti-aliased renders at low density under rotation and keystone, each of which the
-    /// decoder used to miss. Large versions: pixel quantization along a near-axis ray puts
-    /// the module-size estimate two or more versions off, past the runner-up retry, and the
-    /// symbol's own version information settles it. Small versions near 45 degrees: the
-    /// alignment search checked each run against the plain module size, where a row crosses
-    /// a rotated module up to √2 times longer. The last two pass either way and stay as controls.
+    /// Anti-aliased renders at low density under rotation and keystone. Large versions: pixel
+    /// quantization along a near-axis ray puts the module-size estimate two or more versions
+    /// off, past the runner-up retry, and the symbol's own version information settles it.
+    /// Small versions near 45 degrees: a row crosses a rotated module up to √2 times longer,
+    /// so an alignment search that checks each run against the plain module size misses the
+    /// pattern. The last two pass either way and stay as controls.
     /// </summary>
     [Test]
     [Arguments(25, 3, 1, 0)]
@@ -375,7 +374,7 @@ public class QRCodeDecoderImageTest
 
     /// <summary>
     /// Fixed-size builder renders at about 2 px/module, level L. The alignment pattern's centre
-    /// is pixel-resolved, a third of a module here, and anchoring the transform on it bent the
+    /// is pixel-resolved, a third of a module here, and anchoring the transform on it bends the
     /// bottom-right block by enough to exceed level L's correction. The three finders alone
     /// sample every module right on a flat symbol, so the decoder falls back to them.
     /// </summary>
