@@ -116,7 +116,8 @@ public record struct QRCodeGeneratorOptions
     /// A Structured Append set made with this option can be a Kanji set: no symbol carries an ECI header, and the parity is the XOR of the whole text's Shift_JIS bytes.
     /// </para>
     /// <para>
-    /// Off by default because not every reader reads Kanji mode: some phone scanners show nothing readable for it, where they read UTF-8 behind ECI 26.
+    /// Off by default because not every reader reads Kanji mode. An Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it, where they read UTF-8 behind ECI 26.
+    /// The iPhone camera, Google Lens on iPhone and the dedicated readers tried read it.
     /// Turn it on where the readers are known to read it, an industrial scanner for example, or where the symbol has to be smaller.
     /// </para>
     /// </remarks>
