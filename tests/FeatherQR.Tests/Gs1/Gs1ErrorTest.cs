@@ -42,6 +42,7 @@ public class Gs1ErrorTest
             var message = new Gs1Error(kind, 0, 0).ToString();
             await Assert.That(message).IsNotEmpty().Because(kind.ToString());
             await Assert.That(message).EndsWith(".").Because(kind.ToString());
+            await Assert.That(message).DoesNotContain(": an error.").Because($"{kind} has no description of its own");
         }
     }
 

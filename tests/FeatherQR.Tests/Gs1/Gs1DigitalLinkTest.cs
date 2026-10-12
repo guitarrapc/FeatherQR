@@ -38,13 +38,30 @@ public class Gs1DigitalLinkTest
         "process-ai-data-058",  // the same data
     ];
 
-    public static IEnumerable<Func<(string Id, string Uri, bool Valid, string? ElementString)>> UriCases()
+    /// <summary>The engine's refusal messages for a URI and the kinds this library may report for them. A message not listed here is a value fault, which the library reads and <c>TryValidate</c> refuses.</summary>
+    private static readonly (string Fragment, Gs1ErrorKind[] Kinds)[] UriKindMap =
+    [
+        ("should be in the path info", [Gs1ErrorKind.InvalidKeyQualifierSequence]),
+        ("not a valid key-qualifier sequence", [Gs1ErrorKind.InvalidKeyQualifierSequence]),
+        ("is duplicated", [Gs1ErrorKind.RepeatedAi]),
+        ("is not a valid DL URI data attribute", [Gs1ErrorKind.AiNotAllowedInUri]),
+        ("element is empty", [Gs1ErrorKind.EmptyValue]),
+        ("illegal null character", [Gs1ErrorKind.InvalidPercentEncoding]),
+        ("illegal characters", [Gs1ErrorKind.NotAUri]),
+        ("must contain a domain and path info", [Gs1ErrorKind.NotAUri]),
+        ("No GS1 DL keys found", [Gs1ErrorKind.MissingPrimaryKey, Gs1ErrorKind.CompressedUri]),
+        ("Unknown AI", [Gs1ErrorKind.UnknownAi]),
+        ("value is too short", [Gs1ErrorKind.ValueTooShort]),
+        ("value is too long", [Gs1ErrorKind.ValueTooLong]),
+    ];
+
+    public static IEnumerable<Func<(string Id, string Uri, bool Valid, string? ElementString, string? Error)>> UriCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
             if (c.InputKind != Gs1InputKind.DigitalLink)
                 continue;
-            var captured = (c.Id, c.Input, c.SyntaxEngine.Valid, c.SyntaxEngine.ElementString);
+            var captured = (c.Id, c.Input, c.SyntaxEngine.Valid, c.SyntaxEngine.ElementString, c.SyntaxEngine.Error);
             yield return () => captured;
         }
     }
@@ -67,7 +84,7 @@ public class Gs1DigitalLinkTest
 
     [Test]
     [MethodDataSource(nameof(UriCases))]
-    public async Task TryFromDigitalLink_ReadsAsTheSyntaxEngine((string Id, string Uri, bool Valid, string? ElementString) c)
+    public async Task TryFromDigitalLink_ReadsAsTheSyntaxEngine((string Id, string Uri, bool Valid, string? ElementString, string? Error) c)
     {
         var read = Gs1ElementString.TryFromDigitalLink(c.Uri, out var elementString, out var error);
         if (ReadDifferences.TryGetValue(c.Id, out var differentKind))
@@ -94,10 +111,15 @@ public class Gs1DigitalLinkTest
             await Assert.That((read, error.Kind)).IsEqualTo((false, Gs1ErrorKind.NotAUri)).Because(c.Id);
             return;
         }
-        // The engine refused: either the URI's structure is wrong, or the data it carries fails a check.
+        // The engine refused: either the URI's structure is wrong, in which case the kind follows the engine's message, or the data it carries fails a check.
         if (read)
+        {
             await Assert.That(Gs1Validator.TryValidate(elementString, Year, out error)).IsFalse().Because($"{c.Id}: read as {elementString}");
-        await Assert.That(error.Kind).IsNotEqualTo(Gs1ErrorKind.None).Because(c.Id);
+            return;
+        }
+        var allowed = UriKindMap.FirstOrDefault(m => c.Error!.Contains(m.Fragment, StringComparison.Ordinal)).Kinds;
+        await Assert.That(allowed).IsNotNull().Because($"{c.Id}: the engine's \"{c.Error}\" is a value fault, which this library should read");
+        await Assert.That(allowed!).Contains(error.Kind).Because($"{c.Id}: {c.Error} -> {error}");
         await Assert.That(error.Offset + error.Length).IsLessThanOrEqualTo(Math.Max(c.Uri.Length, 1)).Because($"{c.Id}: {error}");
     }
 
@@ -116,6 +138,7 @@ public class Gs1DigitalLinkTest
     [Arguments("https://id.gs1.org/01/09520123456789", "0109520123456789")]
     [Arguments("https://id.gs1.org/414/9520123456788/7040/1ABC", "4149520123456788" + "70401ABC")]
     [Arguments("https://[2001:db8::1]:8443/01/09520123456788", Gtin)]
+    [Arguments("https://id.gs1.org/01/09520123456788/10/A%F0%9F%98%80", Gtin + "10A\U0001F600")]
     public async Task TryFromDigitalLink_EquivalenceClasses(string uri, string elementString)
     {
         await Assert.That(Gs1ElementString.TryFromDigitalLink(uri, out var read, out var error)).IsTrue().Because(error.ToString());
@@ -163,6 +186,13 @@ public class Gs1DigitalLinkTest
     [Arguments("https://id.gs1.org/01/09520123456788/10/A%1DB", Gs1ErrorKind.InvalidPercentEncoding, 41, 3)]
     [Arguments("https://id.gs1.org/01/09520123456788/10/A%C3%28", Gs1ErrorKind.InvalidPercentEncoding, 41, 3)]
     [Arguments("https://id.gs1.org/01/09520123456788/10/A%C3", Gs1ErrorKind.InvalidPercentEncoding, 41, 3)]
+    [Arguments("https://id.gs1.org/01/09520123456788/10/A%C0%80", Gs1ErrorKind.InvalidPercentEncoding, 41, 3)]
+    [Arguments("https://id.gs1.org/01/09520123456788/10/A%ED%A0%80", Gs1ErrorKind.InvalidPercentEncoding, 41, 3)]
+    [Arguments("https://id.gs1.org/01/09520123456788/10/A%F4%90%80%80", Gs1ErrorKind.InvalidPercentEncoding, 41, 3)]
+    [Arguments("https://id.gs1.org/01/09520123456788/10/A%80", Gs1ErrorKind.InvalidPercentEncoding, 41, 3)]
+    [Arguments("https://id.gs1.org/01/09520123456788/10/A%FF", Gs1ErrorKind.InvalidPercentEncoding, 41, 3)]
+    [Arguments("https://id.gs1.org/01/09520123456788?=x", Gs1ErrorKind.UnknownAi, 37, 0)]
+    [Arguments("https://id.gs1.org/01/09520123456788/22/2A?10=ABC", Gs1ErrorKind.InvalidKeyQualifierSequence, 43, 2)]
     public async Task TryFromDigitalLink_RefusesWithTheKindAndPlace(string uri, Gs1ErrorKind kind, int offset, int length)
     {
         await Assert.That(Gs1ElementString.TryFromDigitalLink(uri, out var elementString, out var error)).IsFalse();
@@ -198,7 +228,7 @@ public class Gs1DigitalLinkTest
     /// <summary>A URI the engine read, read here and built again, is the engine's canonical URI of that data.</summary>
     [Test]
     [MethodDataSource(nameof(UriCases))]
-    public async Task RoundTrip_UriThroughElementString((string Id, string Uri, bool Valid, string? ElementString) c)
+    public async Task RoundTrip_UriThroughElementString((string Id, string Uri, bool Valid, string? ElementString, string? Error) c)
     {
         if (!c.Valid || string.IsNullOrEmpty(c.ElementString) || ReadDifferences.ContainsKey(c.Id))
             return;
@@ -298,6 +328,46 @@ public class Gs1DigitalLinkTest
         await Assert.That((written, new string(exactEs))).IsEqualTo((esLength, back));
         await Assert.That(Gs1ElementString.TryFromDigitalLink(uri, new char[esLength - 1], out written, out error)).IsFalse();
         await Assert.That((written, error.Kind)).IsEqualTo((0, Gs1ErrorKind.DestinationTooSmall));
+    }
+
+    /// <summary>Inputs longer than the stack scratch buffer (512 characters) go through the rented buffer in every form, on success and on refusal.</summary>
+    [Test]
+    public async Task LongInputs_UseTheRentedBuffer()
+    {
+        var longElementString = Gtin + string.Join("\u001D", Enumerable.Range(91, 9).Select(ai => ai + new string('A', 90)));
+        await Assert.That(longElementString.Length).IsGreaterThan(512);
+        await Assert.That(Gs1DigitalLink.TryToDigitalLink(longElementString, Year, null, out var uri, out var error)).IsTrue().Because(error.ToString());
+        await Assert.That(uri.Length).IsGreaterThan(512);
+        await Assert.That(Gs1DigitalLink.TryGetToDigitalLinkLength(longElementString, Year, null, out var length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(uri.Length);
+
+        await Assert.That(Gs1ElementString.TryFromDigitalLink(uri, out var back, out error)).IsTrue().Because(error.ToString());
+        await Assert.That(Pairs(back)).IsEquivalentTo(Pairs(longElementString));
+        await Assert.That(Gs1ElementString.TryGetFromDigitalLinkLength(uri, out length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(back.Length);
+        var exact = new char[length];
+        await Assert.That(Gs1ElementString.TryFromDigitalLink(uri, exact, out var written, out _)).IsTrue();
+        await Assert.That((written, new string(exact))).IsEqualTo((length, back));
+        await Assert.That(Gs1ElementString.TryFromDigitalLink(uri, new char[length - 1], out written, out error)).IsFalse();
+        await Assert.That((written, error.Kind)).IsEqualTo((0, Gs1ErrorKind.DestinationTooSmall));
+
+        await Assert.That(Gs1ElementString.TryRead(uri, default, out var hri, out _)).IsTrue();
+        await Assert.That(Gs1ElementString.TryToHri(back, out var expectedHri, out _)).IsTrue();
+        await Assert.That(hri).IsEqualTo(expectedHri);
+        await Assert.That(Gs1ElementString.TryGetReadLength(uri, default, out length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(hri.Length);
+        var exactHri = new char[length];
+        await Assert.That(Gs1ElementString.TryRead(uri, default, exactHri, out written, out _)).IsTrue();
+        await Assert.That((written, new string(exactHri))).IsEqualTo((length, hri));
+
+        // Refused after the rent: the error comes back and nothing is written.
+        var bad = "https://id.gs1.org/01/09520123456788/10/" + new string('A', 600) + "%2";
+        await Assert.That(Gs1ElementString.TryFromDigitalLink(bad, out back, out error)).IsFalse();
+        await Assert.That((back, error.Kind, error.Offset)).IsEqualTo(("", Gs1ErrorKind.InvalidPercentEncoding, 40 + 600));
+        await Assert.That(Gs1ElementString.TryGetFromDigitalLinkLength(bad, out length, out _)).IsFalse();
+        await Assert.That(length).IsEqualTo(0);
+        await Assert.That(Gs1ElementString.TryRead(bad, default, out hri, out error)).IsFalse();
+        await Assert.That((hri, error.Kind)).IsEqualTo(("", Gs1ErrorKind.InvalidPercentEncoding));
     }
 
     /// <summary>A refused input yields the data's error from every form, a short destination included.</summary>

@@ -190,10 +190,10 @@ internal static partial class Gs1Linters
         return Gs1ErrorKind.None;
     }
 
-    /// <summary>ISO 13616: a country code, two check digits and up to 30 alphanumeric characters, whose rearrangement is 1 mod 97.</summary>
+    /// <summary>ISO 13616: a country code, two check digits and up to 30 alphanumeric characters, whose rearrangement is 1 mod 97. The reference linter wants more than ten characters in all.</summary>
     private static Gs1ErrorKind Iban(ReadOnlySpan<char> value, ref int offset, ref int length)
     {
-        if (value.Length < 10 || value.Length > 34)
+        if (value.Length <= 10 || value.Length > 34)
             return Gs1ErrorKind.InvalidValue;
         for (var i = 0; i < value.Length; i++)
         {

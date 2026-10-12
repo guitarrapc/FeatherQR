@@ -46,6 +46,17 @@ public class Gs1ElementEnumeratorTest
         await Assert.That(elements).IsEquivalentTo([("01", "09520123456788"), ("17", "251231"), ("10", "ABC")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
+    /// <summary>An AI the table does not know under a prefix of predefined length (Table 7-6) takes that length, as the engine reads it, so a following element without a separator still splits.</summary>
+    [Test]
+    public async Task EnumerateElements_ReadsAnUnknownAiOfPredefinedLengthByItsLength()
+    {
+        await Assert.That(Split("3106123456" + "10ABC")).IsEquivalentTo([("3106", "123456"), ("10", "ABC")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(Split("3106123456" + "0109520123456788")).IsEquivalentTo([("3106", "123456"), ("01", "09520123456788")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(Split("4181234567890123" + "10ABC")).IsEquivalentTo([("418", "1234567890123"), ("10", "ABC")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(Split("310612345")).IsEmpty();
+        await Assert.That(Split("01" + "0952012345678\u001D" + "10ABC")).IsEmpty();
+    }
+
     [Test]
     public async Task EnumerateElements_StopsWhereItCannotSplit()
     {

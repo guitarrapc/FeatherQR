@@ -24,7 +24,7 @@ public readonly ref struct Gs1Element
 
 /// <summary>
 /// Enumerates the elements of an element string without allocating, usable in <c>foreach</c>. It splits as a
-/// reader does (<see cref="Gs1ElementString.EnumerateElements"/>): a known AI of fixed length takes its length,
+/// reader does (<see cref="Gs1ElementString.EnumerateElements"/>): an AI of predefined length takes its length,
 /// any other value runs to the next separator, an unknown AI with a known length is read, a redundant or
 /// trailing separator is skipped, and the enumeration stops at the first element it cannot split.
 /// <see cref="Gs1ElementString.TryValidate"/> says why.

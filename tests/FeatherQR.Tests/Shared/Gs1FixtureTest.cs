@@ -7,8 +7,8 @@ namespace FeatherQR.Tests;
 /// pinned dictionary release is the one the provenance names, every oracle verdict comes from the release the
 /// plan pins, the corpus holds the shapes the plan's equivalence classes need, the per-AI and per-linter cases
 /// cover the committed dictionary, and the imported Syntax Engine vectors agree with their source except where
-/// a known cause (listed here and in the fixture spec) explains the difference. No GS1 code exists yet, so
-/// these tests read the fixtures only. Regenerate with <c>dotnet run --project tools/QRInteropFixtures -- regenerate-gs1</c>.
+/// a known cause (listed here and in the fixture spec) explains the difference. These tests read the fixtures
+/// only, and the tests under Gs1/ hold the library to them. Regenerate with <c>dotnet run --project tools/QRInteropFixtures -- regenerate-gs1</c>.
 /// </summary>
 public class Gs1FixtureTest
 {

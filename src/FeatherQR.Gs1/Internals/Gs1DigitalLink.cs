@@ -573,7 +573,8 @@ internal static class Gs1DigitalLink
             if (equals < 0)
                 continue;
             var ai = parameter.Slice(0, equals);
-            if (!IsAllDigits(ai))
+            // A key that is not numeric is an extension and is ignored. An empty key counts as numeric, as the engine counts it, and is no AI.
+            if (ai.Length != 0 && !IsAllDigits(ai))
                 continue;
             if (!Gs1AiTable.TryFind(ai, out var entry))
             {
@@ -784,7 +785,8 @@ internal static class Gs1DigitalLink
 
     /// <summary>
     /// Whether a final path segment looks like the compressed form (Digital Link 1.1, frozen): at least ten
-    /// characters of the base64url alphabet with letters of both cases, which no AI value in a path has.
+    /// characters of the base64url alphabet with letters of both cases. A serial number can look the same, so
+    /// the heuristic runs only after no primary key was found in the path, where no valid URI reaches it.
     /// </summary>
     private static bool LooksCompressed(ReadOnlySpan<char> segment)
     {
@@ -805,20 +807,27 @@ internal static class Gs1DigitalLink
         return upper && lower;
     }
 
+    /// <summary>An <c>http://</c> or <c>https://</c> prefix in either ASCII case (RFC 3986 makes the scheme case-insensitive).</summary>
     private static bool TryReadScheme(ReadOnlySpan<char> text, out int afterScheme)
     {
-        if (text.StartsWith("https://".AsSpan(), StringComparison.OrdinalIgnoreCase))
+        afterScheme = StartsWithAsciiIgnoreCase(text, "https://") ? 8 : StartsWithAsciiIgnoreCase(text, "http://") ? 7 : 0;
+        return afterScheme > 0;
+    }
+
+    /// <summary>A prefix test that folds ASCII letters only and allocates on no target framework (the netstandard2.0 span comparison with <c>OrdinalIgnoreCase</c> allocates once it meets a non-ASCII character).</summary>
+    private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<char> text, string lowerPrefix)
+    {
+        if (text.Length < lowerPrefix.Length)
+            return false;
+        for (var i = 0; i < lowerPrefix.Length; i++)
         {
-            afterScheme = 8;
-            return true;
+            var c = text[i];
+            if ((uint)(c - 'A') <= 25)
+                c = (char)(c + 32);
+            if (c != lowerPrefix[i])
+                return false;
         }
-        if (text.StartsWith("http://".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            afterScheme = 7;
-            return true;
-        }
-        afterScheme = 0;
-        return false;
+        return true;
     }
 
     private static bool IsAllDigits(ReadOnlySpan<char> text)

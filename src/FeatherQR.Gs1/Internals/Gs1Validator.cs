@@ -3,8 +3,9 @@ namespace FeatherQR.Gs1.Internals;
 /// <summary>
 /// Every check on an element string (the strength the builders and <c>TryValidate</c> use): the split, each
 /// element's components against their lengths, character sets and linters, then the rules between elements
-/// (a repeated AI with different values, the requisite and exclusive pairings). Two passes over the text and
-/// no allocation: the pairing checks re-split the string instead of keeping a list of elements.
+/// (the exclusive and requisite pairings, a repeated AI with different values, the serialised key a digital
+/// signature needs). One pass over the components, then a pass or two per pairing rule, and no allocation: the
+/// pairing checks re-split the string instead of keeping a list of elements.
 /// </summary>
 internal static class Gs1Validator
 {
@@ -121,33 +122,13 @@ internal static class Gs1Validator
 
     /// <summary>
     /// The rules between elements, over the split that <see cref="TryValidate"/> has already accepted, in the
-    /// order the Syntax Engine reports them: a repeated AI with another value, then every exclusion, then every
-    /// requisite. Each is a pass over the elements.
+    /// order the Syntax Engine runs its validations: every exclusion, then every requisite, then a repeated AI
+    /// with another value, then the digital signature's serialised key. Each is a pass over the elements.
     /// </summary>
     public static bool CheckPairings(ReadOnlySpan<char> text, out Gs1Error error)
     {
         error = default;
         var position = 0;
-        while (position < text.Length)
-        {
-            if (!Gs1Splitter.TryNext(text, ref position, out var element, out error))
-                return false;
-            var ai = text.Slice(element.AiStart, element.AiLength);
-            var value = text.Slice(element.ValueStart, element.ValueLength);
-            var later = position;
-            while (later < text.Length)
-            {
-                if (!Gs1Splitter.TryNext(text, ref later, out var other, out error))
-                    return false;
-                if (text.Slice(other.AiStart, other.AiLength).SequenceEqual(ai) && !text.Slice(other.ValueStart, other.ValueLength).SequenceEqual(value))
-                {
-                    error = new Gs1Error(Gs1ErrorKind.RepeatedAi, other.AiStart, other.End - other.AiStart);
-                    return false;
-                }
-            }
-        }
-
-        position = 0;
         while (position < text.Length)
         {
             if (!Gs1Splitter.TryNext(text, ref position, out var element, out error))
@@ -179,45 +160,83 @@ internal static class Gs1Validator
                 }
             }
         }
-        return true;
-    }
 
-    /// <summary>
-    /// A requisite group holds when one of its alternatives does: every member present as another element. In a
-    /// group that has a compound alternative (<c>01+21</c>), a single-member alternative that names a key with an
-    /// optional serial component is satisfied only when that component is present, which is how the dictionary
-    /// expresses "a serialised key" for AI (8030).
-    /// </summary>
-    private static bool IsSatisfied(ReadOnlySpan<char> text, in Gs1SplitElement element, in Gs1AiTable.Gs1RequisiteGroup group)
-    {
-        var hasCompound = false;
-        for (var a = 0; a < group.AlternativeCount; a++)
+        position = 0;
+        while (position < text.Length)
         {
-            if (group.Alternative(a).MemberCount > 1)
+            if (!Gs1Splitter.TryNext(text, ref position, out var element, out error))
+                return false;
+            var ai = text.Slice(element.AiStart, element.AiLength);
+            var value = text.Slice(element.ValueStart, element.ValueLength);
+            var later = position;
+            while (later < text.Length)
             {
-                hasCompound = true;
-                break;
+                if (!Gs1Splitter.TryNext(text, ref later, out var other, out error))
+                    return false;
+                if (text.Slice(other.AiStart, other.AiLength).SequenceEqual(ai) && !text.Slice(other.ValueStart, other.ValueLength).SequenceEqual(value))
+                {
+                    error = new Gs1Error(Gs1ErrorKind.RepeatedAi, other.AiStart, other.End - other.AiStart);
+                    return false;
+                }
             }
         }
 
+        return CheckSerialisedKey(text, out error);
+    }
+
+    /// <summary>
+    /// The Syntax Engine's one rule beside the dictionary's pairings (its <c>validateDigSigRequiresSerialisedKey</c>,
+    /// which cannot be turned off): a digital signature (8030) signs a serialised key, so with (8030) present every
+    /// (253), (255) and (8003) must carry its optional serial component, whichever requisite alternative let
+    /// (8030) in. Reported at the key element, where the engine reports it too ("Serial component must be present
+    /// for AI (253) when used with AI (8030)"), as a missing requisite, the kind the test corpus maps that message to.
+    /// </summary>
+    private static bool CheckSerialisedKey(ReadOnlySpan<char> text, out Gs1Error error)
+    {
+        error = default;
+        if (!FindAi(text, "8030".AsSpan(), out _))
+            return true;
+        var position = 0;
+        while (position < text.Length)
+        {
+            if (!Gs1Splitter.TryNext(text, ref position, out var element, out error))
+                return false;
+            var ai = text.Slice(element.AiStart, element.AiLength);
+            var isKey = ai.SequenceEqual("253".AsSpan()) || ai.SequenceEqual("255".AsSpan()) || ai.SequenceEqual("8003".AsSpan());
+            if (isKey && !HasOptionalComponentPresent(text, element))
+            {
+                error = new Gs1Error(Gs1ErrorKind.MissingRequiredAi, element.AiStart, element.End - element.AiStart);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>A requisite group holds when one of its alternatives does: every member present as another element.</summary>
+    private static bool IsSatisfied(ReadOnlySpan<char> text, in Gs1SplitElement element, in Gs1AiTable.Gs1RequisiteGroup group)
+    {
         for (var a = 0; a < group.AlternativeCount; a++)
         {
             var alternative = group.Alternative(a);
             var all = true;
             for (var m = 0; m < alternative.MemberCount && all; m++)
-            {
-                if (!FindMatch(text, element, alternative.Member(m), out var match))
-                {
-                    all = false;
-                }
-                else if (hasCompound && alternative.MemberCount == 1 && !HasOptionalComponentPresent(text, match))
-                {
-                    all = false;
-                }
-            }
+                all = FindMatch(text, element, alternative.Member(m), out _);
             if (all)
                 return true;
         }
+        return false;
+    }
+
+    /// <summary>The first element with this AI.</summary>
+    private static bool FindAi(ReadOnlySpan<char> text, ReadOnlySpan<char> ai, out Gs1SplitElement match)
+    {
+        var position = 0;
+        while (position < text.Length && Gs1Splitter.TryNext(text, ref position, out match, out _))
+        {
+            if (text.Slice(match.AiStart, match.AiLength).SequenceEqual(ai))
+                return true;
+        }
+        match = default;
         return false;
     }
 

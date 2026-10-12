@@ -140,10 +140,32 @@ public class Gs1ElementStringValidateTest
     [Arguments("0109520123456788" + "10Aé", false, Gs1ErrorKind.InvalidCharacter)]
     [Arguments("1", false, Gs1ErrorKind.UnknownAi)]
     [Arguments("0", false, Gs1ErrorKind.UnknownAi)]
+    // A digital signature (8030) needs its key serialised whichever requisite alternative holds (the engine's own rule, validateDigSigRequiresSerialisedKey).
+    [Arguments("0109520123456788" + "21ABC\u001D" + "2539526064000028\u001D" + "8030QUJD", false, Gs1ErrorKind.MissingRequiredAi)]
+    [Arguments("0109520123456788" + "21ABC\u001D" + "25395260640000280000011\u001D" + "8030QUJD", true, Gs1ErrorKind.None)]
+    [Arguments("00195201234567891232" + "2559526064000028\u001D" + "8030QUJD", false, Gs1ErrorKind.MissingRequiredAi)]
+    [Arguments("0109520123456788" + "21ABC\u001D" + "800309520123456788\u001D" + "8030QUJD", false, Gs1ErrorKind.MissingRequiredAi)]
+    // An IBAN of ten characters is too short (lint_iban.c refuses data_len <= 10); a real one passes.
+    [Arguments("4159526064000028" + "8020REF1\u001D" + "8007GB18000000", false, Gs1ErrorKind.InvalidValue)]
+    [Arguments("4159526064000028" + "8020REF1\u001D" + "8007GB82WEST12345698765432", true, Gs1ErrorKind.None)]
+    // A separator inside a predefined-length window cuts the value short, as the engine reads it.
+    [Arguments("01" + "0952012345678\u001D" + "10ABC", false, Gs1ErrorKind.ValueTooShort)]
+    // The engine's order between the pairing rules: exclusions, then requisites, then repeats.
+    [Arguments("0109520123456788" + "10A\u001D" + "10B\u001D" + "3712", false, Gs1ErrorKind.ExcludedAiPair)]
+    [Arguments("10A\u001D" + "10B", false, Gs1ErrorKind.MissingRequiredAi)]
     public async Task TryValidate_EquivalenceClasses(string elementString, bool valid, Gs1ErrorKind kind)
     {
         await Assert.That(Gs1Validator.TryValidate(elementString, Year, out var error)).IsEqualTo(valid);
         await Assert.That(error.Kind).IsEqualTo(kind);
+    }
+
+    /// <summary>The case list passes through <see cref="ReadsBackAs"/>, which uses the split under test, so its size is pinned: a split regression that dropped cases would otherwise pass in silence.</summary>
+    [Test]
+    public async Task Cases_CountIsPinned()
+    {
+        var cases = Cases().Select(make => make()).ToList();
+        await Assert.That(cases.Count).IsEqualTo(962);
+        await Assert.That(cases.Count(c => c.CompareKind)).IsEqualTo(96);
     }
 
     /// <summary>The error points at the element or character at fault, in the input's coordinates.</summary>
@@ -161,6 +183,23 @@ public class Gs1ElementStringValidateTest
 
         Gs1Validator.TryValidate("0109520123456789", Year, out var check);
         await Assert.That((check.Kind, check.Offset, check.Length)).IsEqualTo((Gs1ErrorKind.InvalidCheckDigit, 15, 1));
+
+        Gs1Validator.TryValidate("01" + "0952012345678\u001D" + "10ABC", Year, out var cut);
+        await Assert.That((cut.Kind, cut.Offset, cut.Length)).IsEqualTo((Gs1ErrorKind.ValueTooShort, 2, 13));
+
+        Gs1Validator.TryValidate("0109520123456788" + "310", Year, out var aiCut);
+        await Assert.That((aiCut.Kind, aiCut.Offset, aiCut.Length)).IsEqualTo((Gs1ErrorKind.UnknownAi, 16, 3));
+
+        Gs1Validator.TryValidate("0109520123456788" + "31A3000001", Year, out var aiLetter);
+        await Assert.That((aiLetter.Kind, aiLetter.Offset, aiLetter.Length)).IsEqualTo((Gs1ErrorKind.UnknownAi, 16, 4));
+
+        // An unknown AI under a predefined-length prefix is read by that length (Table 7-6), so a short one is cut, not unknown.
+        Gs1Validator.TryValidate("310612345", Year, out var unknownCut);
+        await Assert.That((unknownCut.Kind, unknownCut.Offset, unknownCut.Length)).IsEqualTo((Gs1ErrorKind.ValueTooShort, 4, 5));
+
+        // The key that lacks its serial component is the place, where the engine points too.
+        Gs1Validator.TryValidate("0109520123456788" + "21ABC\u001D" + "2539526064000028\u001D" + "8030QUJD", Year, out var serial);
+        await Assert.That((serial.Kind, serial.Offset, serial.Length)).IsEqualTo((Gs1ErrorKind.MissingRequiredAi, 22, 16));
     }
 
     /// <summary>The public form uses the current year and otherwise is the internal one.</summary>

@@ -26,9 +26,9 @@ internal readonly struct Gs1SplitElement
 
 /// <summary>
 /// The split of an element string, shared by every reader and check: the AI's length comes from its first
-/// two digits (Table 7-5), a known AI of predefined length (Table 7-6) takes exactly its length, every
-/// other value runs to the next separator, and one separator after a value is consumed whether or not the
-/// AI needed it (General Specifications 7.8.6.3 asks a processing routine to tolerate it).
+/// two digits (Table 7-5), an AI of predefined length (Table 7-6, known to the table or not) takes exactly
+/// its length, every other value runs to the next separator, and one separator after a value is consumed
+/// whether or not the AI needed it (General Specifications 7.8.6.3 asks a processing routine to tolerate it).
 /// </summary>
 internal static class Gs1Splitter
 {
@@ -85,13 +85,26 @@ internal static class Gs1Splitter
         var known = Gs1AiTable.TryFind(ai, out var entry);
         var valueStart = start + aiLength;
         int valueLength;
-        // Only an element string of predefined length (Table 7-6) is read by its length. Any other fixed-length AI
-        // must be followed by a separator (7.8.6.2), so its value runs to the separator and its length is checked after.
-        if (known && entry.IsPredefinedLength && TryGetFixedLength(entry, out var fixedLength))
+        // Only an element string of predefined length (Table 7-6) is read by its length, and it is whether the table
+        // knows the AI or not, since that table is frozen (7.8.3): a known AI gives it through its components, an
+        // unknown one through its prefix. Any other fixed-length AI must be followed by a separator (7.8.6.2), so
+        // its value runs to the separator and its length is checked after. A separator inside the window cuts the
+        // value short, as the engine reads it, rather than becoming part of it.
+        bool predefined;
+        var fixedLength = 0;
+        if (known)
+            predefined = entry.IsPredefinedLength && TryGetFixedLength(entry, out fixedLength);
+        else
+            predefined = Gs1AiTable.TryGetPredefinedLength(text[start], text[start + 1], out fixedLength);
+        if (predefined)
         {
-            if (length - valueStart < fixedLength)
+            if (!known)
+                fixedLength -= aiLength;
+            var window = text.Slice(valueStart, Math.Min(fixedLength, length - valueStart));
+            var cut = window.IndexOf(Separator);
+            if (cut >= 0 || window.Length < fixedLength)
             {
-                error = new Gs1Error(Gs1ErrorKind.ValueTooShort, valueStart, length - valueStart);
+                error = new Gs1Error(Gs1ErrorKind.ValueTooShort, valueStart, cut >= 0 ? cut : window.Length);
                 return false;
             }
             valueLength = fixedLength;

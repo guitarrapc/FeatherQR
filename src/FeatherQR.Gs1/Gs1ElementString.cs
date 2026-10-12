@@ -12,14 +12,16 @@ namespace FeatherQR.Gs1;
 /// <para>
 /// The checks follow the GS1 Barcode Syntax Dictionary release named by the table in this package (the
 /// AI formats, the linters, the requisite and exclusive pairings), which is generated from the dictionary
-/// file and updated once a year. Reading members accept an AI newer than the table as a variable-length
-/// value, since the tables that give an AI's length from its first two digits and the predefined lengths are
-/// frozen by the General Specifications (7.8.2, 7.8.3).
+/// file and updated once a year. Reading members accept an AI newer than the table, since the tables that give
+/// an AI's length from its first two digits and the predefined lengths are frozen by the General Specifications
+/// (7.8.2, 7.8.3): its value takes the predefined length when its first two digits have one and runs to the
+/// next separator otherwise.
 /// </para>
 /// <para>
 /// A two-digit year resolves to the century that puts it within -49 to +50 years of the current year
 /// (General Specifications 7.12), so whether 29 February of a two-digit year exists depends on when the
-/// check runs. Years 00 to 76 read as 2000 to 2076 until 2027, and 00 reads as 2000 until 2050.
+/// check runs. In 2026, 00 to 76 read as 2000 to 2076 and 77 to 99 as 1977 to 1999. The window moves up by
+/// one each year, and from 2050 the year 00 reads as 2100.
 /// </para>
 /// </remarks>
 public static partial class Gs1ElementString
@@ -43,10 +45,10 @@ public static partial class Gs1ElementString
 
     /// <summary>
     /// Splits an element string into its elements without allocating: <c>foreach (var element in
-    /// Gs1ElementString.EnumerateElements(text))</c>. Runs what splitting needs and no more: a known AI of fixed
-    /// length takes its length and any other value runs to the next separator, an unknown AI whose first two
-    /// digits give its length is read, a redundant or trailing separator is skipped, and the enumeration stops
-    /// at the first element it cannot split. <see cref="TryValidate"/> says why.
+    /// Gs1ElementString.EnumerateElements(text))</c>. Runs what splitting needs and no more: an AI of predefined
+    /// length (Table 7-6, known to the table or not) takes its length and any other value runs to the next
+    /// separator, an unknown AI whose first two digits give its length is read, a redundant or trailing separator
+    /// is skipped, and the enumeration stops at the first element it cannot split. <see cref="TryValidate"/> says why.
     /// </summary>
     /// <param name="elementString">The element string, separators as U+001D and no leading FNC1.</param>
     public static Gs1ElementEnumerator EnumerateElements(ReadOnlySpan<char> elementString) => new(elementString);
@@ -87,7 +89,7 @@ public static partial class Gs1ElementString
 
     /// <summary>
     /// Builds the element string of (AI) text, <c>(01)09520123456788(10)ABC</c>: each AI in parentheses and its
-    /// value after it, up to the next parenthesis, with a literal <c>(</c> in a value written <c>\(</c>. Runs every
+    /// value after it, up to the next unescaped <c>(</c>, with a literal <c>(</c> in a value written <c>\(</c>. Runs every
     /// check <see cref="TryValidate"/> runs, and puts the separator after every value that needs one.
     /// </summary>
     /// <remarks>

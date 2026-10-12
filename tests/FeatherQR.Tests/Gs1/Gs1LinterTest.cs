@@ -51,6 +51,17 @@ public class Gs1LinterTest
         await Assert.That(Gs1Linters.Check(Enum.Parse<Gs1Linter>(name), value, Year, out _, out _) == Gs1ErrorKind.None).IsEqualTo(valid);
     }
 
+    /// <summary>The coupon's expiry and start dates are compared as the six-character text, as the reference linter does, not through the two-digit year window.</summary>
+    [Test]
+    [Arguments("01234561234561111012339912314250101", true)]
+    [Arguments("01234561234561111012332501014991231", false)]
+    [Arguments("01234561234561111012332501014250102", false)]
+    [Arguments("01234561234561111012332501024250101", true)]
+    public async Task Couponcode_ComparesDatesAsTheReferenceDoes(string value, bool valid)
+    {
+        await Assert.That(Gs1Linters.Check(Gs1Linter.Couponcode, value, Year, out _, out _) == Gs1ErrorKind.None).IsEqualTo(valid);
+    }
+
     /// <summary>A failing linter names the kind its failure maps to: check digits, dates and times, or a value rule.</summary>
     [Test]
     [Arguments("Csum", "12345678901232", Gs1ErrorKind.InvalidCheckDigit)]

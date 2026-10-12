@@ -186,7 +186,11 @@ internal static partial class Gs1Linters
             reader.Digits(6 + gcpLength);
     }
 
-    /// <summary>A YYMMDD date field, as a comparable number (the resolved year, month and day), or -1 when it is not a date.</summary>
+    /// <summary>
+    /// A YYMMDD date field, as the number its six digits spell, or -1 when it is not a date. The reference linter
+    /// orders the expiry and start dates by comparing the six characters, not through the two-digit year window,
+    /// and the number orders the same way.
+    /// </summary>
     private static int CouponDate(ref CouponReader reader, int year)
     {
         var start = reader.Position;
@@ -200,7 +204,7 @@ internal static partial class Gs1Linters
             reader.Fail(start + dateOffset, dateLength);
             return -1;
         }
-        return ResolveYear(Number(digits.Slice(0, 2)), year) * 10000 + Number(digits.Slice(2, 2)) * 100 + Number(digits.Slice(4, 2));
+        return Number(digits);
     }
 
     /// <summary>

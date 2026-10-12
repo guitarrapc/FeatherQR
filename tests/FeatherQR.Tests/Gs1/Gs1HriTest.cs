@@ -157,6 +157,8 @@ public class Gs1HriTest
     [Arguments("(01)09520123456788(21)A(235)B", Gs1ErrorKind.ExcludedAiPair, 23, 6)]
     [Arguments("(01)09520123456788(10)A\\(1)B(10)A\\(2)B", Gs1ErrorKind.RepeatedAi, 28, 10)]
     [Arguments("(01)09520123456788(10)A\u001DB", Gs1ErrorKind.InvalidCharacter, 23, 1)]
+    [Arguments("(01)09520123456788(10)A\\(B C", Gs1ErrorKind.InvalidCharacter, 26, 1)]
+    [Arguments("(01)0952012345678\u001D(10)ABC", Gs1ErrorKind.InvalidCharacter, 17, 1)]
     [Arguments("(01)09520123456788(10)A(B)C", Gs1ErrorKind.InvalidText, 24, 1)]
     public async Task TryFromHri_RefusesWithThePlaceInTheText(string hri, Gs1ErrorKind kind, int offset, int length)
     {
@@ -214,6 +216,40 @@ public class Gs1HriTest
         var shortHri = new char[hriLength - 1];
         await Assert.That(Gs1ElementString.TryToHri(elementString, shortHri, out written, out error)).IsFalse();
         await Assert.That((written, error.Kind)).IsEqualTo((0, Gs1ErrorKind.DestinationTooSmall));
+    }
+
+    /// <summary>Inputs longer than the stack scratch buffer (512 characters) go through the rented buffer in every form, on success and on refusal.</summary>
+    [Test]
+    public async Task LongInputs_UseTheRentedBuffer()
+    {
+        var longText = "(01)09520123456788" + string.Concat(Enumerable.Range(91, 9).Select(ai => "(" + ai + ")" + new string('A', 90)));
+        await Assert.That(longText.Length).IsGreaterThan(512);
+        await Assert.That(Gs1Hri.TryFromHri(longText, Year, out var elementString, out var error)).IsTrue().Because(error.ToString());
+        await Assert.That(elementString.Length).IsGreaterThan(512);
+        await Assert.That(Gs1Hri.TryGetFromHriLength(longText, Year, out var length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(elementString.Length);
+        var exact = new char[length];
+        await Assert.That(Gs1Hri.TryFromHri(longText, Year, exact, out var written, out _)).IsTrue();
+        await Assert.That((written, new string(exact))).IsEqualTo((length, elementString));
+        await Assert.That(Gs1Hri.TryFromHri(longText, Year, new char[length - 1], out written, out error)).IsFalse();
+        await Assert.That((written, error.Kind)).IsEqualTo((0, Gs1ErrorKind.DestinationTooSmall));
+
+        await Assert.That(Gs1ElementString.TryToHri(elementString, out var hri, out _)).IsTrue();
+        await Assert.That(hri).IsEqualTo(longText);
+        await Assert.That(Gs1ElementString.TryGetToHriLength(elementString, out length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(longText.Length);
+
+        // Refused after the rent: the error comes back and nothing is written.
+        var tooLong = "(01)09520123456788(91)" + new string('A', 600);
+        await Assert.That(Gs1Hri.TryFromHri(tooLong, Year, out elementString, out error)).IsFalse();
+        await Assert.That((elementString, error.Kind, error.Offset)).IsEqualTo(("", Gs1ErrorKind.ValueTooLong, 22 + 90));
+        await Assert.That(Gs1Hri.TryGetFromHriLength(tooLong, Year, out length, out _)).IsFalse();
+        await Assert.That(length).IsEqualTo(0);
+
+        // Formatting reads an over-long value as it is.
+        var longElementString = "0109520123456788" + "91" + new string('A', 600);
+        await Assert.That(Gs1ElementString.TryToHri(longElementString, out hri, out _)).IsTrue();
+        await Assert.That(hri).IsEqualTo("(01)09520123456788(91)" + new string('A', 600));
     }
 
     /// <summary>A refused input yields the error, not a length or a write, from every form.</summary>
