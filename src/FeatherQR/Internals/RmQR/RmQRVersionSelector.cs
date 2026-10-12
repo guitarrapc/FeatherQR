@@ -367,7 +367,7 @@ internal static class RmQRVersionSelector
 
     /// <summary>
     /// <see cref="TrySelect"/> with the FNC1 indicator's bits (3 in first position, 11 in second) in the header beside the ECI prefix.
-    /// The automatic fit walks the strategy's order pricing each version, since the capacity tables have no FNC1 axis; the route is cold, so the walk is affordable.
+    /// The automatic fit walks the strategy's order pricing each version, since the capacity tables have no FNC1 axis. The route is cold, so the walk is affordable.
     /// </summary>
     public static bool TrySelectFnc1(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int fnc1HeaderBits, out RmQRVersion version)
     {

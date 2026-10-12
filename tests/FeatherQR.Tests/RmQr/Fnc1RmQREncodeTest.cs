@@ -256,7 +256,7 @@ public class Fnc1RmQREncodeTest
         await Assert.That(Shape(optimal, info).DataModes).IsEquivalentTo(["Numeric", "Alphanumeric", "Numeric"], CollectionOrdering.Matching);
     }
 
-    /// <summary>Under FNC1 a Kanji-eligible text with ASCII is planned over UTF-8 only; the symbol still reads back.</summary>
+    /// <summary>Under FNC1 a Kanji-eligible text with ASCII is planned over UTF-8 only. The symbol still reads back.</summary>
     [Test]
     public async Task Optimal_KanjiAndAscii_ReadsBack()
     {
@@ -371,7 +371,7 @@ public class Fnc1RmQREncodeTest
     [Test]
     public async Task TooLong_HeadersAlone_SaysSoRatherThanAZeroMaximum()
     {
-        // R7x43-H holds 24 bits; the ECI prefix, the second-position indicator, the mode and the count are 28.
+        // R7x43-H holds 24 bits. The ECI prefix, the second-position indicator, the mode and the count are 28.
         var options = new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Fnc1 = Fnc1Mode.SecondPosition(0), Version = RmQRVersion.R7x43 };
         var error = await Assert.That(() => RmQRCodeGenerator.Create("", RmQREccLevel.H, options)).Throws<ArgumentException>();
         await Assert.That(error!.Message).Contains("headers");

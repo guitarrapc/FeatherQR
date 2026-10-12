@@ -121,7 +121,7 @@ public record struct QRCodeGeneratorOptions
     /// <para>
     /// The mode costs 4 bits in first position and 12 in second, which can move content at a version's edge to the next version. Size a destination buffer with the same value you encode with.
     /// A Structured Append set refuses FNC1 (<see cref="QRCodeGenerator.CreateStructuredAppend(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> throws <see cref="ArgumentException"/>), as no reader is known to read FNC1 across a set.
-    /// Whether the data is valid GS1 data is not checked here; the <c>FeatherQR.Gs1</c> package checks element strings and builds them from <c>(AI)</c> text.
+    /// Whether the data is valid GS1 data is not checked here. The <c>FeatherQR.Gs1</c> package checks element strings and builds them from <c>(AI)</c> text.
     /// </para>
     /// </remarks>
     public Fnc1Mode Fnc1

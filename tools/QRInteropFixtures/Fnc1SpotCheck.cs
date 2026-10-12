@@ -67,7 +67,7 @@ public static class Fnc1SpotCheck
                     var matrix = FromData(data);
 
                     // zxing-cpp's SymbologyIdentifier names the symbol's mode and reports an ECI header through HasECI (the
-                    // identifier modifier for the ECI protocol is the transmitting reader's, Annex F); ZXing.Net raises the
+                    // identifier modifier for the ECI protocol is the transmitting reader's, Annex F). ZXing.Net raises the
                     // identifier to ]Q4 under an ECI header instead.
                     var expectedIdentifier = mode.IsFirstPosition ? "]Q3" : "]Q5";
                     var expectedText = mode.IsSecondPosition ? Fnc1Writers.FormatIndicator(mode.ApplicationIndicator!.Value) + text : text;
@@ -104,7 +104,7 @@ public static class Fnc1SpotCheck
                     {
                         try
                         {
-                            // ZXing.Net's reader misses some clean renders at 4 pixels a module; a second try at 8 tells a
+                            // ZXing.Net's reader misses some clean renders at 4 pixels a module. A second try at 8 tells a
                             // reader miss from a symbol it cannot read.
                             var result = Fnc1Writers.ReadNet(matrix) ?? Fnc1Writers.ReadNet(matrix, pixelsPerModule: 8);
                             if (result is null)

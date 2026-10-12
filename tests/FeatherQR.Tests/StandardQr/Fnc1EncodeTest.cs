@@ -261,7 +261,7 @@ public class Fnc1EncodeTest
         await Assert.That(Shape(optimal, info).DataModes).IsEquivalentTo(["Numeric", "Alphanumeric", "Numeric"], CollectionOrdering.Matching);
     }
 
-    /// <summary>Under FNC1 a Kanji-eligible text with ASCII is planned over UTF-8 only; the symbol still reads back.</summary>
+    /// <summary>Under FNC1 a Kanji-eligible text with ASCII is planned over UTF-8 only. The symbol still reads back.</summary>
     [Test]
     public async Task Optimal_KanjiAndAscii_ReadsBack()
     {
