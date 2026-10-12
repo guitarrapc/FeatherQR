@@ -95,6 +95,58 @@ public class Fnc1EncodeTest
         await Assert.That(shape.DataModes).IsEquivalentTo([mode], CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// Without FNC1, Optimal writes Single's stream wherever no split reaches a smaller version. A literal <c>%</c> is one
+    /// Alphanumeric character there, and writing it twice as the FNC1 rule does would overrun the count the stream declares.
+    /// </summary>
+    [Test]
+    [Arguments("AB%CD")]
+    [Arguments("100%")]
+    [Arguments("%")]
+    [Arguments("%%")]
+    [Arguments("A%B%C%D%")]
+    [Arguments("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:")]
+    public async Task WithoutFnc1_Optimal_AlphanumericWithPercent_IsSinglesSymbol(string text)
+    {
+        var singleOptions = new QRCodeGeneratorOptions { QuietZoneSize = 0 };
+        var optimalOptions = singleOptions with { Segmentation = QRSegmentation.Optimal };
+        var single = QRCodeGenerator.Create(text, QREccLevel.M, singleOptions);
+        var optimal = QRCodeGenerator.Create(text, QREccLevel.M, optimalOptions);
+
+        await Assert.That(QRCodeDecoder.TryDecode(optimal, out var decoded, out var info)).IsTrue().Because(info.Status.ToString());
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(info.Fnc1).IsEqualTo(Fnc1Mode.None);
+        // The premise: no split of these texts reaches a smaller version, so the stream is one Alphanumeric segment.
+        await Assert.That(Shape(optimal, info).DataModes).IsEquivalentTo(["Alphanumeric"], CollectionOrdering.Matching);
+        await Assert.That(Modules(optimal)).IsEquivalentTo(Modules(single), CollectionOrdering.Matching).Because("Optimal emits Single's stream when a split does not shrink the symbol");
+
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var size, optimalOptions)).IsTrue();
+        var spanForm = new byte[size.BufferSize];
+        QRCodeGenerator.Create(text, QREccLevel.M, spanForm, optimalOptions);
+        await Assert.That(spanForm).IsEquivalentTo(Modules(single), CollectionOrdering.Matching).Because("the span form writes the same symbol");
+    }
+
+    [Test]
+    public async Task WithoutFnc1_Optimal_APercentAtEachPositionOfAlphanumericText_ReadsBack()
+    {
+        var failures = new List<string>();
+        var options = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
+        for (var length = 1; length <= 40; length++)
+        {
+            for (var at = 0; at < length; at++)
+            {
+                var chars = new string('A', length).ToCharArray();
+                chars[at] = '%';
+                var text = new string(chars);
+                var data = QRCodeGenerator.Create(text, QREccLevel.L, options);
+                if (!QRCodeDecoder.TryDecode(data, out var decoded, out var info) || decoded != text)
+                    failures.Add($"{text}: {info.Status} \"{decoded}\"");
+            }
+        }
+
+        await Assert.That(failures).IsEmpty();
+    }
+
     [Test]
     public async Task Single_KanjiWithAllowKanji_WritesKanjiMode()
     {
@@ -290,14 +342,31 @@ public class Fnc1EncodeTest
 
     [Test]
     [Arguments(1 << 22)]
+    [Arguments((1 << 22) - 1)]
     [Arguments(-1)]
+    [Arguments(int.MinValue)]
+    [Arguments(int.MaxValue)]
     public async Task Options_UndefinedSegmentation_IsRefused(int value)
     {
         // The field that holds the segmentation beside the FNC1 mode is narrower than an int.
         var options = new QRCodeGeneratorOptions { Segmentation = (QRSegmentation)value };
-        await Assert.That(() => QRCodeGenerator.Create("123", QREccLevel.M, options)).Throws<ArgumentOutOfRangeException>();
+        var error = await Assert.That(() => QRCodeGenerator.Create("123", QREccLevel.M, options)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => QRCodeGenerator.Create("123", QREccLevel.M, options with { Fnc1 = Fnc1Mode.FirstPosition })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSize("123", QREccLevel.M, out _, options)).Throws<ArgumentOutOfRangeException>();
+
+        // The field keeps no value of this range apart, so the message names the range and no number the caller did not give.
+        await Assert.That(error!.Message).Contains("Invalid segmentation: a value below 0 or above 4194302");
+        await Assert.That(error.Message).DoesNotContain("4194303");
+    }
+
+    [Test]
+    [Arguments(7)]
+    [Arguments((1 << 22) - 2)]
+    public async Task Options_UndefinedSegmentationTheFieldHolds_IsReportedAsGiven(int value)
+    {
+        var options = new QRCodeGeneratorOptions { Segmentation = (QRSegmentation)value };
+        var error = await Assert.That(() => QRCodeGenerator.Create("123", QREccLevel.M, options)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(error!.Message).Contains($"Invalid segmentation: {value}");
     }
 
     // Sizing and the span form

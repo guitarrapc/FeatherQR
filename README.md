@@ -90,12 +90,13 @@ FeatherQR supports Standard QR, Micro QR, and rMQR. Examples use Standard QR unl
 
 ## Installation
 
-Pick the package for what you need. All three ship together at the same version.
+Pick the package for what you need. All four ship together at the same version.
 
 | Package | Install when | Namespaces |
 |---|---|---|
 | [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | You want images: PNG, JPEG, WebP, SVG, canvas rendering, or decoding from an `SKBitmap`. Brings `FeatherQR` and SkiaSharp | `FeatherQR`, `FeatherQR.SkiaSharp` |
 | [FeatherQR](https://www.nuget.org/packages/FeatherQR) | You only need module matrices or decoding from your own pixel data, with no image library at all | `FeatherQR` |
+| [FeatherQR.Gs1](https://www.nuget.org/packages/FeatherQR.Gs1) | You handle GS1 data: checking an element string, converting it to and from `(AI)` text or a GS1 Digital Link URI, or reading the text a GS1 QR Code decoded to. Brings `FeatherQR` and no image library | `FeatherQR`, `FeatherQR.Gs1` |
 | [SkiaSharp.QrCode](https://www.nuget.org/packages/SkiaSharp.QrCode) | You are upgrading an existing project and want to keep its install line. An empty package that depends on `FeatherQR.SkiaSharp` | same as `FeatherQR.SkiaSharp` |
 
 ```bash
@@ -1200,7 +1201,7 @@ Runnable examples: [ConsoleApp patterns 27–29](samples/ConsoleApp).
 
 When releasing a new version, follow these steps:
 
-1. (manual) From the repository root, bump version strings in `.props`, `.md` files. The three packages (`FeatherQR`, `FeatherQR.SkiaSharp`, `SkiaSharp.QrCode`) share one version and are packed and pushed together.
+1. (manual) From the repository root, bump version strings in `.props`, `.md` files. The four packages (`FeatherQR`, `FeatherQR.SkiaSharp`, `FeatherQR.Gs1`, `SkiaSharp.QrCode`) share one version and are packed and pushed together.
 
 ```sh
 dotnet ./tools/bump_version.cs patch   # e.g. 0.1.0 → 0.1.1

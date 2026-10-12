@@ -139,6 +139,9 @@ public record struct QRCodeGeneratorOptions
     private const int SegmentationMask = (1 << Fnc1Shift) - 1;
     private const int Fnc1Shift = 22;
 
+    /// <summary>The largest segmentation value the field keeps as given. A value below 0 or above it reads back as the next one up, so an error cannot name the value the caller gave.</summary>
+    internal const int LargestKeptSegmentation = SegmentationMask - 1;
+
     /// <summary>Whether a call takes the cold route: a segmentation other than <see cref="QRSegmentation.Single"/>, an FNC1 mode, or both.</summary>
     internal readonly bool TakesColdRoute => _route != 0;
 

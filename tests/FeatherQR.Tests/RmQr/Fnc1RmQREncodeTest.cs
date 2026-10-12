@@ -100,6 +100,58 @@ public class Fnc1RmQREncodeTest
         await Assert.That(shape.DataModes).IsEquivalentTo([mode], CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// Without FNC1, a literal <c>%</c> in Alphanumeric content is one character under Optimal as under Single. Writing it
+    /// twice as the FNC1 rule does would overrun the count the stream declares.
+    /// </summary>
+    [Test]
+    [Arguments("AB%CD")]
+    [Arguments("100%")]
+    [Arguments("%")]
+    [Arguments("%%")]
+    [Arguments("A%B%C%D%")]
+    [Arguments("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:")]
+    public async Task WithoutFnc1_Optimal_AlphanumericWithPercent_ReadsBack(string text)
+    {
+        var options = new RmQRCodeGeneratorOptions { QuietZoneSize = 0, Segmentation = RmQRSegmentation.Optimal };
+        var optimal = RmQRCodeGenerator.Create(text, RmQREccLevel.M, options);
+
+        await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded, out var info)).IsTrue().Because(info.Status.ToString());
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(info.Fnc1).IsEqualTo(Fnc1Mode.None);
+
+        // Where Optimal keeps Single's version it writes Single's stream, so the two symbols are the same modules.
+        var single = RmQRCodeGenerator.Create(text, RmQREccLevel.M, options with { Segmentation = RmQRSegmentation.Single });
+        if (optimal.Version == single.Version)
+            await Assert.That(Modules(optimal)).IsEquivalentTo(Modules(single), CollectionOrdering.Matching);
+
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out var size, options)).IsTrue();
+        var spanForm = new byte[size.BufferSize];
+        RmQRCodeGenerator.Create(text, RmQREccLevel.M, spanForm, options);
+        await Assert.That(spanForm).IsEquivalentTo(Modules(optimal), CollectionOrdering.Matching).Because("the span form writes the same symbol");
+    }
+
+    [Test]
+    public async Task WithoutFnc1_Optimal_APercentAtEachPositionOfAlphanumericText_ReadsBack()
+    {
+        var failures = new List<string>();
+        var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
+        for (var length = 1; length <= 40; length++)
+        {
+            for (var at = 0; at < length; at++)
+            {
+                var chars = new string('A', length).ToCharArray();
+                chars[at] = '%';
+                var text = new string(chars);
+                var data = RmQRCodeGenerator.Create(text, RmQREccLevel.M, options);
+                if (!RmQRCodeDecoder.TryDecode(data, out var decoded, out var info) || decoded != text)
+                    failures.Add($"{text}: {info.Status} \"{decoded}\"");
+            }
+        }
+
+        await Assert.That(failures).IsEmpty();
+    }
+
     [Test]
     public async Task Single_KanjiWithAllowKanji_WritesKanjiMode()
     {
@@ -335,13 +387,30 @@ public class Fnc1RmQREncodeTest
 
     [Test]
     [Arguments(1 << 22)]
+    [Arguments((1 << 22) - 1)]
     [Arguments(-1)]
+    [Arguments(int.MinValue)]
+    [Arguments(int.MaxValue)]
     public async Task Options_UndefinedSegmentation_IsRefused(int value)
     {
         var options = new RmQRCodeGeneratorOptions { Segmentation = (RmQRSegmentation)value };
-        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, options)).Throws<ArgumentOutOfRangeException>();
+        var error = await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, options)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, options with { Fnc1 = Fnc1Mode.FirstPosition })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123", RmQREccLevel.M, out _, options)).Throws<ArgumentOutOfRangeException>();
+
+        // The field keeps no value of this range apart, so the message names the range and no number the caller did not give.
+        await Assert.That(error!.Message).Contains("Invalid rMQR segmentation: a value below 0 or above 4194302");
+        await Assert.That(error.Message).DoesNotContain("4194303");
+    }
+
+    [Test]
+    [Arguments(7)]
+    [Arguments((1 << 22) - 2)]
+    public async Task Options_UndefinedSegmentationTheFieldHolds_IsReportedAsGiven(int value)
+    {
+        var options = new RmQRCodeGeneratorOptions { Segmentation = (RmQRSegmentation)value };
+        var error = await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, options)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(error!.Message).Contains($"Invalid rMQR segmentation: {value}");
     }
 
     [Test]

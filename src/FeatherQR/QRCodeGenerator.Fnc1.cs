@@ -101,6 +101,22 @@ public static partial class QRCodeGenerator
         return false;
     }
 
+    /// <summary>
+    /// The single-mode symbol the mixed-mode route falls back to. Without an FNC1 mode it is the default route's writer:
+    /// the FNC1 writer applies the <c>%</c> rule to an Alphanumeric stream, so it would write a literal <c>%</c> twice
+    /// under a count that holds it once.
+    /// </summary>
+    private static QRCodeData CreateSingleModeCore(ReadOnlySpan<char> textSpan, in QRConfiguration config, Fnc1Mode fnc1, int quietZoneSize, int maskPattern)
+        => fnc1.IsActive
+            ? CreateCoreFnc1(textSpan, in config, fnc1, quietZoneSize, maskPattern)
+            : CreateCore(textSpan, in config, quietZoneSize, maskPattern);
+
+    /// <inheritdoc cref="CreateSingleModeCore(ReadOnlySpan{char}, in QRConfiguration, Fnc1Mode, int, int)"/>
+    private static int CreateSingleModeCore(ReadOnlySpan<char> textSpan, in QRConfiguration config, Fnc1Mode fnc1, Span<byte> destination, int quietZoneSize, int maskPattern)
+        => fnc1.IsActive
+            ? CreateCoreFnc1(textSpan, in config, fnc1, destination, quietZoneSize, maskPattern)
+            : CreateCore(textSpan, in config, destination, quietZoneSize, maskPattern);
+
     /// <summary><see cref="CreateCore(ReadOnlySpan{char}, in QRConfiguration, int, int)"/> with the FNC1 headers in the stream.</summary>
     private static QRCodeData CreateCoreFnc1(ReadOnlySpan<char> textSpan, in QRConfiguration config, Fnc1Mode fnc1, int quietZoneSize, int maskPattern)
     {
@@ -186,6 +202,7 @@ public static partial class QRCodeGenerator
     private static int EncodeDataFnc1(ReadOnlySpan<char> textSpan, in QRConfiguration config, Fnc1Mode fnc1, Span<byte> buffer)
     {
         Debug.Assert(config.StructuredAppend.IsEmpty, "a Structured Append set refuses FNC1");
+        Debug.Assert(fnc1.IsActive, "without an FNC1 mode the % rule must not reach an Alphanumeric stream");
         var encoder = new QRBinaryEncoder(buffer);
         encoder.WriteModeFnc1(config.Encoding, config.EciMode, fnc1);
         encoder.WriteCharacterCount(config.DataLength, config.Encoding.GetCountIndicatorLength(config.Version));

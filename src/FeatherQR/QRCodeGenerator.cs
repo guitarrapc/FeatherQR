@@ -1490,7 +1490,7 @@ public static partial class QRCodeGenerator
         if (options.Utf8Bom && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {
             var (bomVersion, bomEcc) = ResolveVersionAndEccFnc1(in analysis, eccLevel, in options, fnc1.StandardQrHeaderBits);
-            return CreateCoreFnc1(textSpan, PrepareConfiguration(in analysis, bomEcc, options.Utf8Bom, bomVersion), fnc1, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateSingleModeCore(textSpan, PrepareConfiguration(in analysis, bomEcc, options.Utf8Bom, bomVersion), fnc1, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
         byte[]? rentedKanjiTable = null;
@@ -1517,7 +1517,7 @@ public static partial class QRCodeGenerator
         var fnc1 = options.Fnc1;
         var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, kanjiTable, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits);
         if (!useSegments)
-            return CreateCoreFnc1(textSpan, PrepareConfiguration(in analysis, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel, fnc1.StandardQrHeaderBits), options.Utf8Bom, version), fnc1, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateSingleModeCore(textSpan, PrepareConfiguration(in analysis, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel, fnc1.StandardQrHeaderBits), options.Utf8Bom, version), fnc1, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         // The plan buffer is acquired only once a split is known to pay: content no
         // split can help (all-Numeric included) never rents it.
@@ -1529,7 +1529,7 @@ public static partial class QRCodeGenerator
         {
             var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
-                return CreateCoreFnc1(textSpan, PrepareConfiguration(in analysis, resolvedEcc, options.Utf8Bom, version), fnc1, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+                return CreateSingleModeCore(textSpan, PrepareConfiguration(in analysis, resolvedEcc, options.Utf8Bom, version), fnc1, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
             var config = new QRConfiguration(version, resolvedEcc, analysis.EncodingMode, PlanCharset(in analysis, kanjiPlan), false, QRCodeConstants.GetEccInfo(version, resolvedEcc), analysis.DataLength);
             var result = new QRCodeData(version, options.QuietZoneSize);
@@ -1573,7 +1573,7 @@ public static partial class QRCodeGenerator
         if (options.Utf8Bom && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {
             var (bomVersion, bomEcc) = ResolveVersionAndEccFnc1(in analysis, eccLevel, in options, fnc1.StandardQrHeaderBits);
-            return CreateCoreFnc1(textSpan, PrepareConfiguration(in analysis, bomEcc, options.Utf8Bom, bomVersion), fnc1, destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateSingleModeCore(textSpan, PrepareConfiguration(in analysis, bomEcc, options.Utf8Bom, bomVersion), fnc1, destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
         byte[]? rentedKanjiTable = null;
@@ -1600,7 +1600,7 @@ public static partial class QRCodeGenerator
         var fnc1 = options.Fnc1;
         var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, kanjiTable, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits);
         if (!useSegments)
-            return CreateCoreFnc1(textSpan, PrepareConfiguration(in analysis, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel, fnc1.StandardQrHeaderBits), options.Utf8Bom, version), fnc1, destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateSingleModeCore(textSpan, PrepareConfiguration(in analysis, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel, fnc1.StandardQrHeaderBits), options.Utf8Bom, version), fnc1, destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         ModeSegment[]? rentedPlan = null;
         Span<ModeSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
@@ -1610,7 +1610,7 @@ public static partial class QRCodeGenerator
         {
             var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
-                return CreateCoreFnc1(textSpan, PrepareConfiguration(in analysis, resolvedEcc, options.Utf8Bom, version), fnc1, destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+                return CreateSingleModeCore(textSpan, PrepareConfiguration(in analysis, resolvedEcc, options.Utf8Bom, version), fnc1, destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
             var config = new QRConfiguration(version, resolvedEcc, analysis.EncodingMode, PlanCharset(in analysis, kanjiPlan), false, QRCodeConstants.GetEccInfo(version, resolvedEcc), analysis.DataLength);
             var segments = plan.Slice(0, segmentCount);
@@ -1665,7 +1665,11 @@ public static partial class QRCodeGenerator
     {
         // Single reaches the cold route beside an FNC1 mode, so the check is for a defined value.
         if (segmentation is not (QRSegmentation.Single or QRSegmentation.Optimal))
-            throw new ArgumentOutOfRangeException(nameof(segmentation), $"Invalid segmentation: {segmentation}");
+        {
+            throw new ArgumentOutOfRangeException(nameof(segmentation), (int)segmentation > QRCodeGeneratorOptions.LargestKeptSegmentation
+                ? $"Invalid segmentation: a value below 0 or above {QRCodeGeneratorOptions.LargestKeptSegmentation}"
+                : $"Invalid segmentation: {segmentation}");
+        }
     }
 
     /// <summary>The analysis a plan starts from: under FNC1 the single-mode analysis of that rule (which plans no Kanji), otherwise the plannable one.</summary>

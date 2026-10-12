@@ -253,7 +253,11 @@ public static partial class RmQRCodeGenerator
     private static void ValidateOptimalEntry(ReadOnlySpan<char> textSpan, EciMode eciMode, RmQRSegmentation segmentation)
     {
         if (segmentation != RmQRSegmentation.Optimal)
-            throw new ArgumentOutOfRangeException(nameof(segmentation), $"Invalid rMQR segmentation: {segmentation}");
+        {
+            throw new ArgumentOutOfRangeException(nameof(segmentation), (int)segmentation > RmQRCodeGeneratorOptions.LargestKeptSegmentation
+                ? $"Invalid rMQR segmentation: a value below 0 or above {RmQRCodeGeneratorOptions.LargestKeptSegmentation}"
+                : $"Invalid rMQR segmentation: {segmentation}");
+        }
         ValidateEci(textSpan, eciMode);
     }
 
