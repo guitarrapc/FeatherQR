@@ -8,6 +8,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 internal static class AntiAliasedRenderer
 {
+    [Obsolete]
     public static (byte[] Luminance, int Width, int Height) Render(Func<int, int, bool> isDark, int columns, int rows, float pixelsPerModule, float offsetX, float offsetY)
     {
         var width = (int)MathF.Ceiling(columns * pixelsPerModule) + 2;

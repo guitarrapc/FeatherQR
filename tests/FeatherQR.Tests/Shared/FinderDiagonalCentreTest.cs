@@ -82,6 +82,7 @@ public class FinderDiagonalCentreTest
     }
 
     /// <summary>A lone anti-aliased finder centred in a 15-module square, every dark edge moved outward by <paramref name="spread"/> modules (inward when negative), turned by <paramref name="degrees"/>.</summary>
+    [Obsolete]
     private static (byte[] Luminance, int Side) RenderFinder(float pixelsPerModule, float offsetX, float offsetY, float spread, float degrees)
     {
         var side = (int)MathF.Ceiling(15 * pixelsPerModule) + 2;

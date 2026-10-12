@@ -7,6 +7,7 @@ internal static class Kinds
 {
     private static float Range(Random random, float lo, float hi) => lo + (float)random.NextDouble() * (hi - lo);
 
+    [Obsolete]
     public static Kind[] All(string symbology)
     {
         var qz = Symbologies.QuietZone(symbology);

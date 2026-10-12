@@ -1,4 +1,3 @@
-using FeatherQR.Internals;
 using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals.MicroQR;
 using FeatherQR.Internals.RmQR;

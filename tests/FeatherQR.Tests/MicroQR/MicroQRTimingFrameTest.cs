@@ -79,6 +79,7 @@ public class MicroQRTimingFrameTest
         }
     }
 
+    [Obsolete]
     private static SKBitmap Rotate(SKBitmap source, int degrees)
     {
         var swap = degrees % 180 != 0;

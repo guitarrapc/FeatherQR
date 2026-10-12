@@ -46,6 +46,7 @@ internal static class DrawnCorners
         return (minX, minY, maxX + 1, maxY + 1);
     }
 
+    [Obsolete]
     public static SKBitmap MirrorLeftToRight(SKBitmap source)
     {
         var mirrored = new SKBitmap(source.Width, source.Height);

@@ -1,9 +1,3 @@
-using FeatherQR.Internals.ImageDecoders;
-using FeatherQR.Internals.MicroQR;
-using FeatherQR.Internals.RmQR;
-using FeatherQR.Internals.StandardQR;
-using Symbology = FeatherQR.Tests.UnevenLightingDecodeTest.Symbology;
-
 namespace FeatherQR.Tests;
 
 /// <summary>
