@@ -907,3 +907,173 @@ Lessons:
 - A probe that hands a method an optional argument changes what the method does. The trace gave `CrossCheck` a buffer for its runs, which is how the small-crisp mode is asked for, and reported both rows beside the centre row as refused while the decoder read them.
 
 What is left: against zxing-cpp, 5 (`brightness/image012`, `glare/image037`, `high_version/image030`, `nominal/image003`, `pathological/image017`); against go-qr, 5 (`bright_spots/image016`, `glare/image037`, `high_version/image030`, `nominal/image003`, `pathological/image010`), three in both. By cause, from the probe: `brightness/image012` has rings an over-exposure thinned to a third of a module at 18 px/module, which the like-edge reading fits in the cross-checks but the row scan, which takes the strict ratio alone, never proposes; `pathological/image010` draws only the corners of its rings, so no row or column through a centre crosses one; `pathological/image017` draws its finders' centres as stars; `bright_spots/image016`, `glare/image037` and `nominal/image003` have a finder washed out or blurred at about 3 px/module at every scale and threshold; `high_version/image030` selects the right triple at the regional pass and fails at the grid. None is a class: seven photographs, six causes.
+
+### ARM64: stages two to ten (2026-10-12)
+
+Done: the branch at 0fb54421 was run on the Apple M2 (osx-arm64, SDK 10.0.401, runtimes 8.0.31 and 10.0.12), which had last read it at 867cc95, before the second stage. Everything passes and reads as recorded. The mesh sampler's ARM64 tier, rewritten in the ninth stage and not run until now, picks the reference's pixel and takes 0.43 to 0.65 of the column table's cycles by version and runtime. Two things the x64 entries do not say came out of the timing, both under "What the timing found" below. No code changed.
+
+- The full suite passes on net8.0 and net10.0 in Release (19,344 and 19,438 tests), in Release with `DOTNET_EnableArm64Dp=0`, and in Debug (19,240 and 19,334). `SampleGridPiecewiseParityTest` runs the ARM64 tier there on both runtimes.
+- `tests/FeatherQR.AotAnalysis --simd-class Arm64 --parity` passes as four builds: the JIT, the JIT with `DOTNET_EnableArm64Dp=0`, a default NativeAOT publish and one for `armv8-a,-dotprod`. All 22 parity cases match in each, the mesh sampler's among them, and both publishes pass the trim and AOT analysis with no warning.
+- Through the netstandard2.0 and netstandard2.1 builds of both packages `corpus` writes the file the net10.0 build writes, byte for byte.
+
+Reads, against this machine's run at 867cc95, the same pixels on every image:
+
+| Set | At 867cc95 | Now | x64 record |
+|---|---|---|---|
+| Committed corpus, Standard QR, four turns | 470 of 548 | 493, none lost | 493, with zxing-cpp's 489, the gap 22 and the reverse 30 |
+| Committed corpus, Micro QR and rMQR | 64 of 64 and 12 of 12 | the same | the same |
+| Sweep, Standard QR, 57,600 (six encoders) | 54,953 | 55,630: 677 gained, none lost, no misread | 66,800 with qrtool's symbols, so only the camera rows compare |
+| Camera rows: phone mix, barrel, bowed, blur | 191, 47, 389 and 399 of 400 | 397, 264, 400 and 400 | 397, 264, 400 and 400 |
+| Anti-aliased, 1.0-1.25 and 1.25-1.5 px/module | 356 and 2,371 of 2,400 | 585 and 2,384 | 679 and 2,782 of 2,800 |
+| Sweep, Micro QR, 21,600 | 20,450 | the same reads | unchanged |
+| Sweep, rMQR, 34,560 | 33,149 | 33,153: 2 under keystone, 2 under camera noise, none lost | five more of 30,502, three and two |
+
+The mesh sampler alone, each tier through its own entry at 3 px a module with the nodes on the alignment positions, as cycles a call (a probe reading `proc_pid_rusage`, three processes within 1 %), two nodes a side at 9cd29519 against three now:
+
+| Tier, runtime | Version 13 | 20 | 30 | 40 |
+|---|---|---|---|---|
+| ARM64 tier, .NET 10 JIT, two nodes | 14.6 k | 22.4 k | 41.8 k | 71.4 k |
+| The same, three nodes | 21.0 k | 34.0 k | 68.0 k | 110.8 k |
+| Three over two | 1.44 | 1.52 | 1.63 | 1.55 |
+| The same in time | 6.6 µs for 4.3 | 10.6 for 6.6 | 21.2 for 12.3 | 35.3 for 21.0 |
+| Three over two, .NET 8 JIT | 1.77 | 1.78 | 1.75 | 1.59 |
+| x64, the AVX2 tier, three over two | 1.39 | 1.39 | 1.39 | 1.33 |
+| ARM64 tier over the column table, three nodes, .NET 10 | 0.52 | 0.44 | 0.45 | 0.43 |
+| The same, .NET 8 | 0.65 | 0.54 | 0.51 | 0.48 |
+| Portable 128-bit tier over the ARM64 tier, three nodes, .NET 10 | 0.99 | 0.98 | 0.98 | 0.98 |
+
+On the default NativeAOT publish the report project's pair at version 40 gives 71.7 k cycles for two nodes and 112.0 k for three, 1.56, and 0.44 of the column table. The column table itself costs 1.63 to 1.69 times what it did on .NET 10 and 1.28 to 1.30 on .NET 8 and NativeAOT.
+
+Each stage against the one before it, a default NativeAOT publish of every stage's commit, the report project's shapes in its loop mode as instructions and cycles a call (`/usr/bin/time -l` over a short and a long loop, their difference). Instructions repeat to four digits. Cycles repeat within 1 % on most shapes. Between builds that run the same instructions they still move, 1.3 % on the ramp and in one pass 5 % on `image/qr-v40-3.4px`, so a step is put on a stage by its instructions:
+
+| Stage | Noise, instructions | Noise, cycles | x64, time | Ramp, cycles | x64, time |
+|---|---|---|---|---|---|
+| Second, fe1f19fa | 1.000 | 1.00 | 1.00 | 1.00 | 1.01 |
+| Third, 30c319a3 | 1.000 | 1.00 | 1.01 | 1.00 | 1.01 |
+| Fourth, d8de3b6c | 1.095 | 1.05 | 1.03 | 1.00 | 0.98 |
+| Sixth, 1936e353 | 1.000 | 1.00 | 1.00 | 1.01 | 0.98 |
+| Seventh, b1e88584 | 1.025 | 1.01 to 1.02 | 1.04 | 0.99 | 1.01 |
+| Eighth, 9cd29519 | 1.000 | 1.00 | 1.00 | 1.00 | 1.00 |
+| Ninth, d2c1972e | 1.005 | 1.01 | 1.01 | 1.00 | 1.01 |
+| Tenth, 0fb54421 | 0.999 | 1.00 | 1.01 | 1.00 | 0.99 |
+| All, from 867cc95 | 1.127 | 1.08 | | 1.00 | |
+
+The ramp runs the same instructions at every stage. This probe's own images on the .NET 10 JIT, from 867cc95 to now by cycles: 740 px uniform noise 1.08, blurred noise 1.01, the 12-megapixel scene 1.00, and the ramp 1.04 on the same instructions.
+
+What the timing found:
+
+- The shapes that read are not level. The x64 entries time the photographs that read before and the two no-symbol shapes, and no stage timed the report project's reading shapes. Their instructions a call, the same from the second stage to the eighth on every shape but the two bowed ones (1.011 and 1.012 at the sixth) and Micro QR's (1.002 at the eighth), rise at the ninth and the tenth:
+
+| Shape | Ninth, instructions | Tenth, instructions | All, instructions | All, cycles (two passes) | All, .NET 10 JIT, cycles |
+|---|---|---|---|---|---|
+| `image/qr-v40-3px` | 1.020 | 1.030 | 1.051 | 1.06 to 1.10 | 1.13 |
+| `image/qr-v40-3.4px` | 1.019 | 1.034 | 1.054 | 1.08 | |
+| `image/qr-v40-4px-rot17` | 1.012 | 1.011 | 1.023 | 1.03 | |
+| `image/qr-v40-4px-soft` | 1.008 | 1.016 | 1.024 | 1.04 to 1.05 | |
+| `image/qr-v25-4px-keystone15` | 1.015 | 1.014 | 1.029 | 1.03 to 1.04 | |
+| `image/qr-v6-4px` | 1.000 | 1.011 | 1.012 | 1.01 to 1.02 | 1.01 |
+| `image/qr-v25-4px-bowed` | 1.067 | 1.006 | 1.086 | 1.10 to 1.11 | 1.16 |
+| `image/qr-v40-3.5px-bowed` | 1.057 | 1.003 | 1.073 | 1.08 to 1.09 | 1.12 |
+| `image/micro-m4-8px` | 0.998 | 0.999 | 0.999 | 1.00 | 1.00 |
+| `image/rmqr-r7x43-8px` | 1.000 | 0.999 | 0.999 | 1.00 | |
+| `image/rmqr-r17x139-8px` | 1.000 | 1.040 | 1.040 | 1.04 | 0.98 |
+| `image/rmqr-r17x139-4px-keystone15` | 1.000 | 1.000 | 1.000 | 1.01 | |
+
+  The ninth stage costs the two bowed shapes 6 to 7 %, the ones the mesh sampler runs in, and the other shapes of version 25 and 40 1 to 2 %. The tenth costs 1 to 3 % on Standard QR and 4 % on the R17x139 at 8 px a module, whose scan it shares. Instruction counts are the work done, so x64 is expected to show the same shares, which its photograph timings (a median of 1.00, a 90th percentile of 1.02 and 1.03) are not fine enough to see. Whether this is inside "the success-path benchmarks stay level" is the maintainer's to say: the two bowed shapes read through a mesh that is now built and sampled another way, and the others read as before with more to do. Which piece of each stage adds it was not looked for.
+- The ARM64 tier is level with the portable 128-bit tier: the portable one takes 0.98 to 1.00 of its cycles with three nodes and 0.96 to 1.00 with two, on both JITs. On this machine `QRImageDecoder.PiecewiseSampling.Arm64.cs` buys nothing the 128-bit file does not, and the table could declare `Vector128` for ARM64 at no cost measured here. NativeAOT was not timed on the portable tier, which the report project reaches only through the dispatch.
+
+The machine code of the ARM64 tier, read on the .NET 10 and .NET 8 JIT (tiered compilation off) and on ILC: no multiply and add is fused on any of the three, which the parity needs, and the conversions are `fcvtzs`. The loop body of eight modules is 156 instructions on .NET 10 where two nodes took 114. Thirteen of its values are loaded from the stack frame each pass where four were, eleven table references and two vector constants, each through two instructions because the frame's tables put them out of an immediate's reach. On .NET 8 it is 25 where it was 10, in the same span of the listing. Eighteen of the 42 instructions the third node added to the loop on .NET 10 are these loads, which is part of why it costs 1.44 to 1.78 here against 1.33 to 1.39 on x64. How much was not measured: one run of the sampler is about 4 % of the version 40 bowed shape, so a tier that kept its tables behind fewer references is bounded near 1 % of that read a run, and none was built.
+
+Not covered: BoofCV's and ZXing's photographs and go-qr are not on this machine, so no photograph was timed and Phase 1b was not repeated. qrtool is not here either, so the sweep's rows of every encoder's symbols have no x64 counterpart and only the camera rows compare. linux-arm64 and win-arm64 are CI's legs. The stage chain is NativeAOT alone, with the JIT at its two ends, and .NET 8 was timed on the sampler only.
+
+Lessons:
+
+- Instructions a call name the stage that added work, where cycles and time only suggest it. Between two builds that run the same instructions the cycles of a shape moved by up to 5 % on NativeAOT and 4 % on the JIT, the code landing elsewhere. Counted from the process (`/usr/bin/time -l`, a short loop taken from a long one), instructions repeated to four digits, and put every step on a stage: the fourth and the seventh on noise, the ninth and the tenth on the shapes that read.
+- A stage's cost on what already reads is measured on shapes that read, not only on photographs. Eight stages recorded 0.94 to 1.00 in sum on the photographs that read before, each within its spread, and together they are up to 9 % in instructions on the report project's reading shapes, the last two adding it. The no-symbol shapes are timed for every change to a failure path, and nothing was timed for the other path.
+- A tier written for one architecture is checked against the portable one on that architecture. The 128-bit tier was written after the ARM64 one, as its steps on portable vectors, and compiles to nearly the same loop here. It had only been measured on the builds that have no other tier.
+- A loop's registers are a budget the third node spent. Two more tables a step meant two more references live across the loop, and the JIT keeps what does not fit on the frame and loads it every pass. The cost of an edit to a hand-written tier is read in its loop on each compiler, as its speed was when it was written.
+
+### ARM64: what the ninth and tenth stages add, and the sets on the M2 (2026-10-12)
+
+Done: the two things the entry above left open, on the same machine at the same commit. Each stage's added instructions are put on its pieces, and the photographs, go-qr and qrtool are on the M2 and read as the x64 records have them. No code changed.
+
+What was placed, all under paths the repository ignores:
+
+- BoofCV's `qrcodes_v3.zip` (201,987,330 bytes, SHA-256 a136c676448e9bafbe5c2fe9487728b0da3c823aeace6bc74d1c7fb2f86fe7be) unpacked at `.references/qrcodes_v3`, 536 photographs under `qrcodes/detection`.
+- ZXing.Net at e55cbcb as a sparse checkout at `.references/zxing.net`, its black-box `qrcode-1` to `-6` alone, 179 images.
+- go-qr v2.6.0 (d8a5d8d) at `.references/go-qr`, run with Go 1.24.4 on darwin/arm64 and the workspace file in a scratch directory (`GOWORK`). The checkout is as cloned after every run.
+- qrtool 0.13.2 for `aarch64-apple-darwin` under `tools/QRInteropFixtures/external/qrtool`. `get-qrtool.ps1` fetches the Windows build alone, so this one was fetched by hand and held to the release's `sha256sums.txt`, which carries the hash the script pins for the Windows build.
+
+What the tenth stage adds, as instructions a call on a default NativeAOT publish: the build against the same build with one piece switched off, in thousands.
+
+| Shape | The stage | The row beside the centre row | The window to 7/2 | The ring without corners | The crowded list from six |
+|---|---|---|---|---|---|
+| `image/qr-v40-3px` | 70.7 | 52.2 | 10.6 | 8.2 | -0.2 |
+| `image/qr-v40-3.4px` | 86.6 | 54.2 | 19.1 | 17.6 | 0.0 |
+| `image/qr-v40-4px-rot17` | 51.7 | 36.9 | 10.6 | -1.4 | -0.1 |
+| `image/qr-v40-4px-soft` | 108.1 | 80.9 | 21.1 | 5.1 | -2.2 |
+| `image/qr-v25-4px-keystone15` | 51.5 | 40.8 | 5.2 | 0.5 | -1.4 |
+| `image/qr-v6-4px` | 2.7 | 0.5 | 0.1 | 1.8 | -0.1 |
+| `image/qr-v25-4px-bowed` | 35.5 | 25.2 | 3.7 | 2.0 | -2.2 |
+| `image/qr-v40-3.5px-bowed` | 38.0 | 29.9 | 1.0 | -1.0 | -4.7 |
+| `image/rmqr-r17x139-8px` | 21.2 | 18.5 | 0.2 | 2.2 | -0.2 |
+
+The row beside the centre row is 63 to 87 % of the stage on every shape of version 25 and up and on the R17x139. The version 6 shape moved 2.7 k, most of it the ring. It runs only when the row again does not read and the column's centre run is 12 px or more, which on a clean symbol is a candidate among the data and not a finder: at 3 px a module a finder's own centre run is 9 px, under the piece's floor. Each such candidate is now walked along two more rows before it is refused. The pieces sum to the stage within 13 k on every shape, and a negative cell is the build with the piece off running that much more.
+
+What the ninth stage adds, the same way but with each piece run twice in place of switched off, so that the read takes the path it took: the instructions one more run costs are the piece's own, in thousands.
+
+| Shape | The stage | The version read at the finders | The sampler, two nodes to three | The mesh builder, old to new | Other |
+|---|---|---|---|---|---|
+| `image/qr-v40-3px` | 44.8 | 45.2 | 0 | 0 | 0 |
+| `image/qr-v40-3.4px` | 48.7 | 49.4 | 0 | 0 | 0 |
+| `image/qr-v40-4px-rot17` | 54.7 | 56.8 | 0 | 0 | 0 |
+| `image/qr-v40-4px-soft` | 54.3 | 56.3 | 0 | 0 | 0 |
+| `image/qr-v25-4px-keystone15` | 52.9 | 54.7 | 0 | 0 | 0 |
+| `image/qr-v6-4px` | 0.1 | 0 | 0 | 0 | 0 |
+| `image/qr-v25-4px-bowed` | 361.1 | 50.5 | 244.5 to 365.2 | 227.3 to 406.3 | 11.0 |
+| `image/qr-v40-3.5px-bowed` | 591.4 | 50.1 | 494.3 to 743.5 | 570.2 to 860.1 | 2.2 |
+| `image/none-noise` | 579.6 | 85.7 | 40.3 to 4.4 | 2,227.6 to 2,740.1 | 17.2 |
+
+A cell written 0 is under 3 k either way. On a shape read without the mesh the whole step is `ReadVersionAtFinders`, 45 to 57 k instructions a decode from version 7, paid whether or not the estimate was right. On the two bowed shapes the builder adds most, then the sampler's third node, then the version read. The new builder by its steps, each run twice: the three corner nodes' outlines 157.3 and 143.8 k at versions 25 and 40, the patterns on the timing lines 73.3 and 175.3 k, the interior 185.0 and 559.6 k, which sum within 3 % of the builder. At version 40 the interior alone costs what the old builder cost in all, and the outlines and the timing lines are what is new. On noise the stage is the builder, run on triples that are no symbol.
+
+The photographs, read and timed on the M2 (.NET 10 JIT, one thread, each photograph at its fastest of three rounds, the four builds in turn):
+
+| | M2 | x64 record |
+|---|---|---|
+| BoofCV at 867cc95, 9cd29519, d2c1972e and now | 371, 443, 447 and 456 of 536 | the same |
+| zxing-cpp, the gap and the reverse now | 392, 5 and 69, the same five photographs | the same |
+| ZXing's photographs, four turns, and upright | 681 of 716, and 170 of 179 with zxing-cpp at 165 | 681, and 165 for zxing-cpp |
+| Ninth stage, the 443 that read before | 1.00 in sum (median 1.000, 90th percentile 1.02, 99th 1.05, worst 1.29 on `high_version/image024`) | 1.00 (1.00, 1.02, 1.05, worst 1.33 on the same) |
+| Ninth stage, the four gained and the 89 that still fail | 0.35 and 1.00 | 0.33 and 1.00 |
+| Tenth stage, the 447 that read before | 0.99 in sum (median 1.001, 90th percentile 1.01, 99th 1.09, worst 1.74 on `curved/image044`) | 0.97 (1.00, 1.03, 1.26, worst 1.73 on the same) |
+| Tenth stage, the nine gained and the 80 that still fail | 0.52 and 1.02 (worst 2.07 on `curved/image017`) | 0.51 and 1.03 (worst 2.03 on the same) |
+| From 867cc95 to now: the 371 that read, the 85 gained, the 80 that still fail | 0.87, 0.53 and 1.12 in sum | |
+| The set: this library, zxing-cpp, go-qr on its own clock | 2.5 s, 2.9 s and 9.0 s | 2.3 s, 5.9 s and 9.2 to 9.5 s |
+
+Two rounds of one build differ by 1 % in sum here. The photographs do not show what the clean shapes show: their median is 1.000 at both stages on both machines, and `high_version`, the category of large versions, takes 0.92 of its time at the ninth stage in sum.
+
+go-qr, its own test unchanged:
+
+| | M2, Go 1.24.4 | x64, Go 1.26.4 | Published |
+|---|---|---|---|
+| BoofCV from its own grey conversion | 413 of 536, every category as published | 411, `damaged` 15 for 16 and `lots` 6 for 7 | 413 |
+| gozxing in the same lines | 183 | 182 | 183 |
+| BoofCV from this tool's grey images | 412 | 412 | |
+| Against this library there | gap 5, reverse 49, the five photographs of the tenth stage's entry | the same | |
+| ZXing upright, own conversion and shared image | 166 and 165 of 179 | 166 and 165 | 166 |
+| Against this library's 170 on the shared image | gap 1 (`qrcode-4/29`), reverse 6 | | |
+
+The sweep with qrtool's symbols, 66,800 Standard QR renders as on x64: 64,522 read, none with another text, the two anti-aliased rows 679 and 2,782 of 2,800 as the x64 stages leave them, the other 21 rows of every encoder's symbols in full, and the camera rows as recorded. Micro QR reads 29,395 of 30,800. rMQR reads 47,011 of 48,797, one of qrtool's symbols not produced (R7x43 at level H in Byte mode, "data too long").
+
+Not settled:
+
+- The two photographs between 413 and 411. On the shared grey image go-qr reads the same 412 on both machines, so the difference is in how its own test decodes a photograph to grey, and the two runs differ in the Go toolchain and in the machine. Neither was varied alone.
+- The records give rMQR's sweep as 30,502 renders in the tenth stage's entry. This run holds 48,797 with qrtool and 34,560 without, and no count here is 30,502.
+- Whether either cost is to be taken back. The version read is paid ahead of the estimate's grid on every decode from version 7, and the row beside the centre row by candidates among the data. Both are as their stages built them.
+
+Lessons:
+
+- A piece that only refuses is measured by switching it off, and a piece of the read by running it twice. Switched off, the sampler or the mesh builder would send a bowed symbol down another path and the difference would be that path's. Run twice into the same spans they change nothing but the count, and the count of one more run is the piece.
+- The photographs and the clean shapes are different yardsticks, and a stage needs both. BoofCV's photographs gave 1.00 in the median at both stages on both machines, and the same builds cost a clean version 40 symbol 2 and 3 %. Most of the photographs are small versions that never reach the version read, and a dense clean symbol is where the data offers the row scan candidates.
+- A reader's published figure is reproduced where its author's toolchain is nearer. The 413 came out on this machine at once, where x64 had 411 and a reason for it. The shared image is what made the two runs comparable at all: there they agree photograph for photograph.
+- An oracle fetched for another platform is held to the same release as the pinned one. The script pins one build's hash. The release's own list carries that hash and the other builds', which ties a build the script does not name to the release it trusts.
