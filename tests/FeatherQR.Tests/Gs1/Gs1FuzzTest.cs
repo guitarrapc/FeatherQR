@@ -1,0 +1,95 @@
+using FeatherQR.Gs1;
+
+namespace FeatherQR.Tests;
+
+/// <summary>
+/// No <c>Try</c> form throws for any input text (gs1-support-plan.md, "What has to stay true"): mutations of
+/// every corpus input (characters inserted, deleted and replaced, separators and non-ASCII among them) and
+/// random strings go through <see cref="Gs1ElementString.TryValidate"/> and
+/// <see cref="Gs1ElementString.EnumerateElements"/> without an exception, and an accepted string always
+/// enumerates at least one element.
+/// </summary>
+public class Gs1FuzzTest
+{
+    private const int Seed = 20261012;
+    private const int MutationsPerInput = 12;
+    private const int RandomStrings = 5000;
+
+    private static readonly char[] Alphabet = ['0', '1', '2', '9', 'A', 'z', '%', '(', ')', '\\', '\u001D', ' ', 'é', 'あ', '\0', '￿', '=', '/', '-'];
+
+    [Test]
+    public async Task TryValidate_NeverThrows_OnMutatedCorpus()
+    {
+        var random = new Random(Seed);
+        var inputs = Gs1FixtureLoader.EnumerateCases().Select(c => c.Input).Distinct().ToArray();
+        var checkedCount = 0;
+        foreach (var input in inputs)
+        {
+            for (var i = 0; i < MutationsPerInput; i++)
+            {
+                var text = Mutate(input, random);
+                Exercise(text);
+                checkedCount++;
+            }
+        }
+        await Assert.That(checkedCount).IsGreaterThan(10_000);
+    }
+
+    [Test]
+    public async Task TryValidate_NeverThrows_OnRandomStrings()
+    {
+        var random = new Random(Seed + 1);
+        for (var i = 0; i < RandomStrings; i++)
+        {
+            var length = random.Next(0, 60);
+            var chars = new char[length];
+            for (var j = 0; j < length; j++)
+                chars[j] = random.Next(4) == 0 ? Alphabet[random.Next(Alphabet.Length)] : (char)('0' + random.Next(10));
+            Exercise(new string(chars));
+        }
+        await Assert.That(RandomStrings).IsGreaterThan(0);
+    }
+
+    private static void Exercise(string text)
+    {
+        var valid = Gs1ElementString.TryValidate(text, out var error);
+        if (valid && error.Kind != Gs1ErrorKind.None)
+            throw new InvalidOperationException($"accepted with an error: \"{text}\"");
+        if (!valid && error.Kind == Gs1ErrorKind.None)
+            throw new InvalidOperationException($"refused without an error: \"{text}\"");
+        var elements = 0;
+        foreach (var element in Gs1ElementString.EnumerateElements(text))
+        {
+            if (element.Ai.Length is < 2 or > 4 || element.Offset < 0 || element.Offset + element.Ai.Length + element.Value.Length > text.Length)
+                throw new InvalidOperationException($"an element outside its text: \"{text}\"");
+            elements++;
+        }
+        if (valid && elements == 0)
+            throw new InvalidOperationException($"accepted but no element: \"{text}\"");
+        _ = error.ToString();
+    }
+
+    private static string Mutate(string input, Random random)
+    {
+        var chars = input.ToList();
+        var edits = 1 + random.Next(3);
+        for (var e = 0; e < edits; e++)
+        {
+            var at = random.Next(chars.Count + 1);
+            switch (random.Next(3))
+            {
+                case 0:
+                    chars.Insert(at, Alphabet[random.Next(Alphabet.Length)]);
+                    break;
+                case 1 when chars.Count > 0:
+                    chars.RemoveAt(Math.Min(at, chars.Count - 1));
+                    break;
+                default:
+                    if (chars.Count > 0)
+                        chars[Math.Min(at, chars.Count - 1)] = Alphabet[random.Next(Alphabet.Length)];
+                    break;
+            }
+        }
+        return new string(chars.ToArray());
+    }
+}

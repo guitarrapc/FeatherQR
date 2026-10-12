@@ -76,7 +76,7 @@ var types = assemblies.SelectMany(a => a.GetExportedTypes())
 // about what the surface is.
 var model = types
     .Select(t => MemberEntries(t) is var members
-        ? (Type: t, Name: FullName(t), Header: TypeHeader(t), Obsolete: IsObsolete(t), DocId: DocIdOfType(t),
+        ? (Type: t, Name: FullName(t), Header: TypeHeader(t), Obsolete: IsObsolete(t) && !t.IsByRefLike, DocId: DocIdOfType(t),
            // A type has no sequence points of its own, so it borrows the file its first member
            // is in and drops the line: the right file, without claiming to know the exact line
            // the declaration starts on.
@@ -524,6 +524,7 @@ string TypeHeader(Type type)
     else if (type.IsAbstract && !type.IsInterface) modifiers.Add("abstract");
     else if (type.IsSealed && !type.IsEnum && !type.IsValueType) modifiers.Add("sealed");
     if (type.IsValueType && !type.IsEnum && TypeHasAttribute(type, "IsReadOnlyAttribute")) modifiers.Add("readonly");
+    if (type.IsValueType && !type.IsEnum && type.IsByRefLike) modifiers.Add("ref");
     modifiers.Add(kind);
 
     var header = $"{string.Join(" ", modifiers)} {BareName(type)}{GenericSuffix(type.GetGenericArguments())}";

@@ -1,0 +1,61 @@
+// FeatherQR.Gs1
+// 5 exported types
+// net10.0, net8.0, netstandard2.0, netstandard2.1
+
+namespace FeatherQR.Gs1
+{
+
+    public readonly ref struct Gs1Element
+    {
+        public ReadOnlySpan<char> Ai { get; }
+        public ReadOnlySpan<char> Value { get; }
+        public int Offset { get; }
+    }
+
+    public ref struct Gs1ElementEnumerator
+    {
+        public Gs1Element Current { get; }
+        public Gs1ElementEnumerator GetEnumerator();
+        public bool MoveNext();
+    }
+
+    public static class Gs1ElementString
+    {
+        public static Gs1ElementEnumerator EnumerateElements(ReadOnlySpan<char> elementString);
+        public static bool TryValidate(ReadOnlySpan<char> elementString, out Gs1Error error);
+    }
+
+    public readonly struct Gs1Error : IEquatable<Gs1Error>
+    {
+        public Gs1Error(Gs1ErrorKind kind, int offset, int length);
+        public Gs1ErrorKind Kind { get; }
+        public int Length { get; }
+        public int Offset { get; }
+        public override string ToString();
+    }
+
+    public enum Gs1ErrorKind : int
+    {
+        None = 0,
+        DestinationTooSmall = 1,
+        InvalidText = 2,
+        NotAUri = 3,
+        CompressedUri = 4,
+        InvalidPercentEncoding = 5,
+        UnexpectedSeparator = 6,
+        UnknownAi = 7,
+        AiNotAllowedInUri = 8,
+        MissingPrimaryKey = 9,
+        InvalidKeyQualifierSequence = 10,
+        EmptyValue = 11,
+        ValueTooShort = 12,
+        ValueTooLong = 13,
+        InvalidCharacter = 14,
+        InvalidCheckDigit = 15,
+        InvalidDate = 16,
+        InvalidValue = 17,
+        MissingRequiredAi = 18,
+        ExcludedAiPair = 19,
+        RepeatedAi = 20,
+    }
+}

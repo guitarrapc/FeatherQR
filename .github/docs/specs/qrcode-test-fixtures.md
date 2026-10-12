@@ -226,6 +226,8 @@ Where the oracles disagree, by cause (the ids are in the files):
 - Digital Link generation: URI Syntax 1.7.0 section 4.12 orders the canonical query in the lexical order of the AIs. CodeGlyphX does, the engine's `getDLuri` does not (`?3103=…&17=…&3922=…`, 23 cases), so the engine's URIs are valid and not canonical. CodeGlyphX refuses to build from any repeated AI, equal values included, where the engine builds from one instance (`eq-repeat-equal`, `generate-dl-uri-011` to `-014`), and it places (235) after (10) in a path, which the dictionary's alternatives forbid (`parse-ai-data-010`, `process-ai-data-058`, `generate-dl-uri-016`, `-017`, `-020`). It parses a mixed-case `HtTp://` scheme the engine takes as plain text (`parse-dl-uri-012`). Both put a second primary key in the query (`eq-dl-build-two-primary-keys`: `/01/…?00=…`).
 - The dictionary and URI Syntax 1.7.0: the standard's data attributes include (7041) and (8040) to (8043), which dictionary 2026-01-27 does not flag `?`, and both dictionary-driven oracles refuse `?8040=` (`eq-dl-query-8040`). Every other attribute, key and qualifier of 1.7.0 is in the dictionary with the same flags.
 
+What the corpus has checked so far (2026-10-12): `Gs1LinterTest` holds every linter of `FeatherQR.Gs1` to its imported unit tests, `Gs1ElementStringValidateTest` holds `TryValidate` to the Syntax Engine's verdict on every element string of the corpus and on every bracketed case through the engine's element string or a test-side join (kept only where the join reads back into the same AIs), and `Gs1ElementEnumeratorTest` holds the split to the engine's bracketed reading of every accepted string. All agree.
+
 ### Regeneration
 
 ```bash
