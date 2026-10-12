@@ -11,7 +11,7 @@ namespace QRInteropFixtures;
 /// written under <see cref="QRSegmentation.Single"/> and <see cref="QRSegmentation.Optimal"/> at each level, and
 /// zxing-cpp (<c>TextMode.Plain</c>) must report the identifier of the mode (<c>]Q3</c> or <c>]Q5</c>, one higher
 /// under an ECI header), GS1 content for first position, and the text, with the application indicator before it in
-/// second position; ZXing.Net must read first position with <c>]Q3</c> and the text. The cases are the Phase 0
+/// second position. ZXing.Net must read first position with <c>]Q3</c> and the text. The cases are the FNC1 fixture
 /// corpus's data (the GS1 examples, each data mode under FNC1, a literal <c>%</c>, the two separator pairs, FNC1
 /// beside an ECI header, each indicator form), the two examples of ISO/IEC 18004 6.4.8, and adversarial <c>%</c>
 /// and separator sequences. Findings go to the fixture spec and the FNC1 plan.
@@ -153,7 +153,7 @@ public static class Fnc1SpotCheck
     /// <summary>
     /// The same texts as rMQR symbols (both positions, Single and Optimal, M and H), read by zxing-cpp's rMQR reader
     /// only: ZXing.Net has no rMQR reader. A text that fits no rMQR symbol under the options is reported and skipped,
-    /// not counted as a failure (R17x139-H holds 69 data codewords).
+    /// not counted as a failure (R17x139-H holds 76 data codewords).
     /// </summary>
     private static int RunRmQr(out int total, out int skipped)
     {

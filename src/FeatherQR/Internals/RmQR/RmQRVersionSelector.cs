@@ -212,9 +212,20 @@ internal static class RmQRVersionSelector
     {
         if (requestedVersion is { } version)
         {
+            // With the FNC1 indicator beside an ECI prefix the headers alone can exceed a small version, where no content at all fits and "shorten" is no remedy.
+            var headerBits = GetEciHeaderBits(eciMode) + fnc1HeaderBits + RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, mode);
+            var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
+            if (headerBits > capacityBits)
+            {
+                return new ArgumentException(
+                    $"Content does not fit rMQR {version} at ECC level {eccLevel}: the headers alone (ECI, FNC1, mode and count, {headerBits} bits) exceed its {capacityBits} data bits. " +
+                    "Lower the ECC level, choose a larger version, or drop the ECI or FNC1 option.",
+                    nameof(requestedVersion));
+            }
+
             return new ArgumentException(
-                $"Content is too long for rMQR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
-                $"but the maximum is {FormatDataLength(GetMaxDataLengthFnc1(version, eccLevel, mode, eciMode, fnc1HeaderBits), mode)}{(fnc1HeaderBits > 0 ? " under FNC1" : "")}. " +
+                $"Content is too long for rMQR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode, fnc1HeaderBits)} in {mode} mode, " +
+                $"but the maximum is {FormatDataLength(GetMaxDataLengthFnc1(version, eccLevel, mode, eciMode, fnc1HeaderBits), mode, fnc1HeaderBits)}{(fnc1HeaderBits > 0 ? " under FNC1" : "")}. " +
                 "Shorten the content, lower the ECC level, choose a larger version, or use Standard QR (QRCodeGenerator) for longer content.",
                 nameof(requestedVersion));
         }
@@ -238,8 +249,8 @@ internal static class RmQRVersionSelector
 
         var scope = height is { } hh ? $"rMQR height {hh}" : "rMQR";
         return new ArgumentException(
-            $"Content is too long for {scope}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
-            $"but ECC level {eccLevel} fits at most {FormatDataLength(largestMax, mode)} ({largest}){(fnc1HeaderBits > 0 ? " under FNC1" : "")}. " +
+            $"Content is too long for {scope}: {FormatDataLength(dataLength, mode, fnc1HeaderBits)} in {mode} mode, " +
+            $"but ECC level {eccLevel} fits at most {FormatDataLength(largestMax, mode, fnc1HeaderBits)} ({largest}){(fnc1HeaderBits > 0 ? " under FNC1" : "")}. " +
             (height is null
                 ? "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content."
                 : "Shorten the content, lower the ECC level, allow a taller symbol, or use Standard QR (QRCodeGenerator) for longer content."));
@@ -433,10 +444,11 @@ internal static class RmQRVersionSelector
         }
     }
 
-    /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric and Kanji characters, Byte encoded bytes.</summary>
-    private static string FormatDataLength(int dataLength, EncodingMode mode) => mode switch
+    /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric and Kanji characters, Byte encoded bytes. Under FNC1 an Alphanumeric length is in units, since a literal <c>%</c> is two.</summary>
+    private static string FormatDataLength(int dataLength, EncodingMode mode, int fnc1HeaderBits = 0) => mode switch
     {
         EncodingMode.Numeric => $"{dataLength} digits",
+        EncodingMode.Alphanumeric when fnc1HeaderBits > 0 => $"{dataLength} units",
         EncodingMode.Alphanumeric or EncodingMode.Kanji => $"{dataLength} characters",
         _ => $"{dataLength} bytes",
     };

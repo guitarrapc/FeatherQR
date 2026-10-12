@@ -320,7 +320,6 @@ public static partial class QRCodeGenerator
     /// <exception cref="ArgumentOutOfRangeException">Thrown for a quiet zone outside 0 to 10,000, or an undefined level, ECI or segmentation.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = default)
     {
-        // The same one compare as Create: a segmentation or an FNC1 mode goes to the cold sizing.
         if (options.TakesColdRoute)
             return TryGetRequiredBufferSizeCold(text, eccLevel, out size, in options);
 
@@ -1784,13 +1783,14 @@ public static partial class QRCodeGenerator
     /// </summary>
     private static void ThrowDoesNotFit(in TextAnalysisResult analysis, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
-        if (options.Version.IsAny)
-        {
-            // A mixed plan encodes at least what a single mode does, so overflow under
-            // Optimal implies single-mode overflow; GetVersion recomputes only to
-            // throw that exact exception.
+        // A mixed plan encodes at least what a single mode does, so overflow under
+        // Optimal implies single-mode overflow, and the single-mode fit is recomputed
+        // only to throw that route's exact exception. Under FNC1 the single-mode fit
+        // counts the indicator's bits, which GetVersion does not.
+        if (options.Fnc1.IsActive)
+            ResolveVersionAndEccFnc1(in analysis, eccLevel, in options, options.Fnc1.StandardQrHeaderBits);
+        else if (options.Version.IsAny)
             GetVersion(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, false);
-        }
         throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, in analysis), nameof(options));
     }
 

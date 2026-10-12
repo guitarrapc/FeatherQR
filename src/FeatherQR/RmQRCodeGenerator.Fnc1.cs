@@ -6,7 +6,7 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR;
 
 /// <summary>
-/// The cold route of the generator (fnc1-support-plan.md Phase 4): a segmentation other than
+/// The cold route of the generator (specs/rmqr-encoder.md, FNC1): a segmentation other than
 /// <see cref="RmQRSegmentation.Single"/>, an FNC1 mode, or both. The single-mode route under FNC1 is the default
 /// route's steps with the indicator's bits in the version fit and the indicator in the stream, written as its own
 /// methods so the default route keeps its instructions. The mixed-mode route takes the mode as a parameter.

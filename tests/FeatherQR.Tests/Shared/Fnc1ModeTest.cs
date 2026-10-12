@@ -1,7 +1,7 @@
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The construction side of <see cref="Fnc1Mode"/> (fnc1-support-plan.md, decision 1): <see cref="Fnc1Mode.None"/>
+/// The construction side of <see cref="Fnc1Mode"/>: <see cref="Fnc1Mode.None"/>
 /// is <c>default</c>, <see cref="Fnc1Mode.FirstPosition"/> is GS1, and second position takes a two-digit number or
 /// one letter, each form refusing what ISO/IEC 18004 6.4.8.2 does not define, so no contradiction and no invalid
 /// indicator can be expressed, and a decoded mode goes back into the options unchanged.

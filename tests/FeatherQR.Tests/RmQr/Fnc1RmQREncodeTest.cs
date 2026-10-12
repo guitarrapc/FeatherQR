@@ -3,7 +3,7 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Writing FNC1 into an rMQR symbol (fnc1-support-plan.md, Phase 4): the indicator in the standard's order (ECI, FNC1
+/// Writing FNC1 into an rMQR symbol (specs/rmqr-encoder.md, FNC1): the indicator in the standard's order (ECI, FNC1
 /// <c>101</c> or <c>110</c> with the application indicator, data), the <c>%</c> rule applied in reverse in Alphanumeric
 /// segments, the separator pairs no segment can hold kept out of Alphanumeric mode, the version fit with the
 /// indicator's 3 or 11 bits beside the 11-bit ECI header under every strategy and height, every class read back by
@@ -42,12 +42,25 @@ public class Fnc1RmQREncodeTest
         await Assert.That(info.Fnc1).IsEqualTo(Fnc1Mode.SecondPosition(37));
     }
 
+    [Test]
+    public async Task FirstPosition_TwoLiteralPercents_WritesEachTwice()
+    {
+        var data = RmQRCodeGenerator.Create("A%%B", RmQREccLevel.M, First with { Version = RmQRVersion.R7x43 });
+        var (decoded, info, codewords) = Read(data);
+
+        await Assert.That(Convert.ToHexString(codewords)).IsEqualTo("AB1E8DA9AE40")
+            .Because("101 FNC1 first, 010 Alphanumeric, the count 6 in 3 bits, the pairs A% (488), %% (1748) and %B (1721) in 11 bits each, 000 terminator, the pad bits");
+        await Assert.That(decoded).IsEqualTo("A%%B");
+        await Assert.That(info.Fnc1).IsEqualTo(Fnc1Mode.FirstPosition);
+    }
+
     // Single: the mode the text takes under FNC1, and the stream it makes
 
     [Test]
     [Arguments(Gtin + "17231120", "Numeric", false)]
     [Arguments(Gtin + "10ABC123" + Gs + "17231120", "Alphanumeric", true)]
     [Arguments(Gtin + "10AB%CD" + Gs + "17231120", "Alphanumeric", true)]
+    [Arguments("AB%%CD", "Alphanumeric", true)]
     [Arguments("10AB%" + Gs + "CD", "Alphanumeric", true)]
     [Arguments("%", "Alphanumeric", true)]
     [Arguments(Gs, "Alphanumeric", true)]
@@ -101,7 +114,7 @@ public class Fnc1RmQREncodeTest
         await Assert.That(shape.DataModes).IsEquivalentTo(["Kanji"], CollectionOrdering.Matching);
     }
 
-    /// <summary>The standard's header order (decision 5): the 11-bit ECI header, then FNC1, then the data. Non-ASCII text takes UTF-8 behind the ECI header, as it does without FNC1.</summary>
+    /// <summary>The standard's header order: the 11-bit ECI header, then FNC1, then the data. Non-ASCII text takes UTF-8 behind the ECI header, as it does without FNC1.</summary>
     [Test]
     [Arguments(Gtin + "10é" + Gs + "17231120", EciMode.Default, "ECI:3")]
     [Arguments(Gtin + "10€" + Gs + "17231120", EciMode.Default, "ECI:26")]
@@ -141,7 +154,7 @@ public class Fnc1RmQREncodeTest
 
     // Optimal: the separator pairs, and the mix of modes
 
-    /// <summary>A separator pair (decision 4) is resolved by a segment break where the runs are long and by a Byte segment where they are short, whichever costs less.</summary>
+    /// <summary>A separator pair is resolved by a segment break where the runs are long and by a Byte segment where they are short, whichever costs less.</summary>
     [Test]
     public async Task Optimal_SeparatorPair_IsResolvedByABreakOrByByte()
     {
@@ -208,15 +221,15 @@ public class Fnc1RmQREncodeTest
     [Test]
     public async Task Optimal_RequestedVersion_IsHeldByAPlanWhereSingleOverflows()
     {
-        var text = "01049123451234591597033130128" + Gs + "10ABC123" + Gs + "2112345678";
+        var text = "01049123451234591597033130128" + Gs + "10ABC1234" + Gs + "2112345678";
         var options = FirstOptimal with { Version = RmQRVersion.R7x99 };
         await Assert.That(() => RmQRCodeGenerator.Create(text, RmQREccLevel.M, First with { Version = RmQRVersion.R7x99 })).Throws<ArgumentException>()
-            .Because("49 Alphanumeric units cost 3 + 3 + 6 + 270 bits, over R7x99-M's 224");
+            .Because("50 Alphanumeric units cost 3 + 3 + 6 + 275 bits, over R7x99-M's 224");
         var data = RmQRCodeGenerator.Create(text, RmQREccLevel.M, options);
         var (decoded, info, _) = Read(data);
 
         await Assert.That(decoded).IsEqualTo(text);
-        await Assert.That(data.Version).IsEqualTo(RmQRVersion.R7x99).Because("the plan's 97 + 66 + 27 payload bits, headers of 10, 9 and 10, and the indicator's 3 are 222 of the 224");
+        await Assert.That(data.Version).IsEqualTo(RmQRVersion.R7x99).Because("the cheapest plan's 97 + 61 + 34 payload bits, headers of 10, 9 and 10, and the indicator's 3 fill the 224 exactly, and the splits one and two characters later cost 225 and 228");
         await Assert.That(Shape(data, info).DataModes).IsEquivalentTo(["Numeric", "Alphanumeric", "Numeric"], CollectionOrdering.Matching);
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out var size, options)).IsTrue();
         await Assert.That(size.Version).IsEqualTo(RmQRVersion.R7x99);
@@ -304,6 +317,34 @@ public class Fnc1RmQREncodeTest
     }
 
     [Test]
+    public async Task TooLong_HeadersAlone_SaysSoRatherThanAZeroMaximum()
+    {
+        // R7x43-H holds 24 bits; the ECI prefix, the second-position indicator, the mode and the count are 28.
+        var options = new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Fnc1 = Fnc1Mode.SecondPosition(0), Version = RmQRVersion.R7x43 };
+        var error = await Assert.That(() => RmQRCodeGenerator.Create("", RmQREccLevel.H, options)).Throws<ArgumentException>();
+        await Assert.That(error!.Message).Contains("headers");
+        await Assert.That(error.Message).DoesNotContain("maximum is 0 bytes");
+    }
+
+    [Test]
+    public async Task TooLong_Alphanumeric_CountsUnitsNotCharacters()
+    {
+        var error = await Assert.That(() => RmQRCodeGenerator.Create("%%%%", RmQREccLevel.M, First with { Version = RmQRVersion.R7x43 })).Throws<ArgumentException>();
+        await Assert.That(error!.Message).Contains("8 units in Alphanumeric mode").Because("a literal % is two units, and the four characters are not eight");
+    }
+
+    [Test]
+    [Arguments(1 << 22)]
+    [Arguments(-1)]
+    public async Task Options_UndefinedSegmentation_IsRefused(int value)
+    {
+        var options = new RmQRCodeGeneratorOptions { Segmentation = (RmQRSegmentation)value };
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, options)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, options with { Fnc1 = Fnc1Mode.FirstPosition })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123", RmQREccLevel.M, out _, options)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
     public async Task TooLong_ThrowsAsWithoutFnc1()
     {
         await Assert.That(() => RmQRCodeGenerator.Create(new string('7', 362), RmQREccLevel.M, First)).Throws<ArgumentException>();
@@ -367,7 +408,7 @@ public class Fnc1RmQREncodeTest
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(new string('7', 361), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions())).IsTrue().Because("without FNC1 the digits fit");
     }
 
-    // The Phase 0 fixtures: every rMQR symbol another writer made reads back from this writer's symbol of the same data, under Optimal at the same version (the writers split
+    // The committed FNC1 fixtures: every rMQR symbol another writer made reads back from this writer's symbol of the same data, under Optimal at the same version (the writers split
     // the modes, so a mixed-case serial fits a version its single-mode stream does not)
 
     public static IEnumerable<Func<string>> RmQrFixtureIds() => FixtureLoader.EnumerateFixtureIds("RmQrFnc1").Select(id => (Func<string>)(() => id));

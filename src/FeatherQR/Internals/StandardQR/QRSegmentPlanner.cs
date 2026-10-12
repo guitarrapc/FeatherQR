@@ -100,7 +100,7 @@ internal static class QRSegmentPlanner
     /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, out int, out bool, out bool)"/>, keeping the run that priced the Kanji plan it chose.
     /// When <paramref name="kanjiPlan"/> is true, <paramref name="kanjiTable"/> holds that program's predecessors at the selected version's widths, which ended in <paramref name="kanjiFinalState"/> at <paramref name="kanjiPlannedBits"/>, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
     /// An empty <paramref name="kanjiTable"/> keeps nothing; otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character.
-    /// Under FNC1 (<paramref name="fnc1"/> active) the indicator's bits join the stream's headers, the single-mode ceiling and the costs come from the FNC1 program, and no Kanji plan is priced.
+    /// Under FNC1 (<paramref name="fnc1"/> active) the indicator's bits join the stream's headers, the single-mode ceiling is the fit with those bits, the costs come from the FNC1 program, and no Kanji plan is priced.
     /// </summary>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, Span<byte> kanjiTable, Fnc1Mode fnc1, out int selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
@@ -324,6 +324,9 @@ internal static class QRSegmentPlanner
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount, out int planBits, Fnc1Mode fnc1 = default)
     {
+        if (fnc1.IsActive)
+            return TryBuildPlanFnc1(text, charset, version, eccLevel, fnc1, segments, out segmentCount, out planBits);
+
         segmentCount = 0;
         planBits = 0;
         if (text.Length is 0 or > MaxPlannableChars)
@@ -333,7 +336,7 @@ internal static class QRSegmentPlanner
         var cciAlnum = EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
         var cciByte = EncodingMode.Byte.GetCountIndicatorLength(version);
 
-        var parentLength = text.Length * (fnc1.IsActive ? ModeSegmenter.Fnc1ParentBytesPerChar : ModeSegmenter.ParentBytesPerChar);
+        var parentLength = text.Length * ModeSegmenter.ParentBytesPerChar;
         byte[]? rented = null;
         Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
             ? stackalloc byte[ModeSegmenter.MaxStackParents]
@@ -342,18 +345,47 @@ internal static class QRSegmentPlanner
         try
         {
             var window = parents.Slice(0, parentLength);
-            bool reconstructed;
-            if (fnc1.IsActive)
+            plannedBits = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, window, out var finalState);
+            if (!ModeSegmenter.Reconstruct(text, window, finalState, segments, out segmentCount))
             {
-                plannedBits = ModeSegmenter.ComputeCostsFnc1(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, window, out var fnc1State);
-                reconstructed = ModeSegmenter.ReconstructFnc1(text, window, fnc1State, segments, out segmentCount);
+                segmentCount = 0;
+                return false;
             }
-            else
-            {
-                plannedBits = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, window, out var finalState);
-                reconstructed = ModeSegmenter.Reconstruct(text, window, finalState, segments, out segmentCount);
-            }
-            if (!reconstructed)
+        }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+
+        return TryAcceptPlan(text, charset, version, eccLevel, plannedBits, segments, ref segmentCount, out planBits);
+    }
+
+    /// <summary>
+    /// The plan under FNC1: the FNC1 program's table, nine bytes a character, in its own stack buffer, so the route without FNC1 keeps a stack buffer of one constant size (a stackalloc of a run-time size zeroes in a loop).
+    /// </summary>
+    private static bool TryBuildPlanFnc1(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Fnc1Mode fnc1, Span<ModeSegment> segments, out int segmentCount, out int planBits)
+    {
+        segmentCount = 0;
+        planBits = 0;
+        if (text.Length is 0 or > MaxPlannableChars)
+            return false;
+
+        var cciNumeric = EncodingMode.Numeric.GetCountIndicatorLength(version);
+        var cciAlnum = EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
+        var cciByte = EncodingMode.Byte.GetCountIndicatorLength(version);
+
+        var parentLength = text.Length * ModeSegmenter.Fnc1ParentBytesPerChar;
+        byte[]? rented = null;
+        Span<byte> parents = parentLength <= ModeSegmenter.Fnc1MaxStackParents
+            ? stackalloc byte[ModeSegmenter.Fnc1MaxStackParents]
+            : (rented = ArrayPool<byte>.Shared.Rent(parentLength));
+        int plannedBits;
+        try
+        {
+            var window = parents.Slice(0, parentLength);
+            plannedBits = ModeSegmenter.ComputeCostsFnc1(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, window, out var finalState);
+            if (!ModeSegmenter.ReconstructFnc1(text, window, finalState, segments, out segmentCount))
             {
                 segmentCount = 0;
                 return false;

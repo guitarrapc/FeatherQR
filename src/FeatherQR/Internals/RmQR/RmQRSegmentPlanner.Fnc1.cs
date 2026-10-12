@@ -4,9 +4,9 @@ using System.Diagnostics;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// The version scan and the plan under FNC1 (fnc1-support-plan.md, decision 12): the indicator's bits (3 in first
-/// position, 11 in second) join the ECI prefix in every capacity check, the single-mode ceiling and the costs come
-/// from the FNC1 program (<see cref="ModeSegmenter.ComputeCostsFnc1"/>), whose Alphanumeric runs count a literal
+/// The version scan and the plan under FNC1 (specs/rmqr-encoder.md, FNC1): the indicator's bits (3 in first
+/// position, 11 in second) join the ECI prefix in every capacity check, the single-mode ceiling is the fit with
+/// those bits, the costs come from the FNC1 program (<see cref="ModeSegmenter.ComputeCostsFnc1"/>), whose Alphanumeric runs count a literal
 /// <c>%</c> twice and never hold a separator pair, and no Kanji plan is priced. The scan keeps the trivial bound and
 /// the memoised cost run of the scan without FNC1 and drops its floor filter, whose run counting reads the other
 /// program's packed table: GS1 strings are tens of characters, and the route is cold.
@@ -22,7 +22,7 @@ internal static partial class RmQRSegmentPlanner
         return RmQRVersionSelector.SelectFnc1(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, fnc1.RmQrHeaderBits);
     }
 
-    /// <summary><see cref="TrySelectVersion"/> under FNC1; argument errors still throw, in the same order and with the same messages.</summary>
+    /// <summary><see cref="TrySelectVersion"/> under FNC1. Argument errors still throw, in the same order and with the same messages.</summary>
     public static bool TrySelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, out RmQRVersion selected, out bool useSegments)
     {
         useSegments = false;
@@ -103,8 +103,8 @@ internal static partial class RmQRSegmentPlanner
 
         var parentLength = text.Length * ModeSegmenter.Fnc1ParentBytesPerChar;
         byte[]? rented = null;
-        Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
-            ? stackalloc byte[ModeSegmenter.MaxStackParents]
+        Span<byte> parents = parentLength <= ModeSegmenter.Fnc1MaxStackParents
+            ? stackalloc byte[ModeSegmenter.Fnc1MaxStackParents]
             : (rented = ArrayPool<byte>.Shared.Rent(parentLength));
         int plannedBits;
         try

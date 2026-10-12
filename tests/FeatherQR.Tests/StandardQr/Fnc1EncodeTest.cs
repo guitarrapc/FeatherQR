@@ -3,7 +3,7 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Writing FNC1 into a Standard QR symbol (fnc1-support-plan.md, Phase 3): the indicator in the standard's order
+/// Writing FNC1 into a Standard QR symbol (specs/standardqr-encoder.md, FNC1): the indicator in the standard's order
 /// (ECI, FNC1, the application indicator, data), the <c>%</c> rule applied in reverse in Alphanumeric segments (a
 /// separator written <c>%</c>, a literal <c>%</c> written <c>%%</c>), the separator pairs no segment can hold kept
 /// out of Alphanumeric mode, the two examples of ISO/IEC 18004 6.4.8 reproduced bit for bit under
@@ -55,6 +55,7 @@ public class Fnc1EncodeTest
     [Arguments(Gtin + "17231120", "Numeric", false)]
     [Arguments(Gtin + "10ABC123" + Gs + "17231120", "Alphanumeric", true)]
     [Arguments(Gtin + "10AB%CD" + Gs + "17231120", "Alphanumeric", true)]
+    [Arguments("AB%%CD", "Alphanumeric", true)]
     [Arguments("10AB%" + Gs + "CD", "Alphanumeric", true)]
     [Arguments("%", "Alphanumeric", true)]
     [Arguments(Gs, "Alphanumeric", true)]
@@ -108,7 +109,7 @@ public class Fnc1EncodeTest
         await Assert.That(shape.DataModes).IsEquivalentTo(["Kanji"], CollectionOrdering.Matching);
     }
 
-    /// <summary>The standard's header order (decision 5): ECI, then FNC1, then the data. Non-ASCII text takes UTF-8 behind the ECI header, as it does without FNC1.</summary>
+    /// <summary>The standard's header order: ECI, then FNC1, then the data. Non-ASCII text takes UTF-8 behind the ECI header, as it does without FNC1.</summary>
     [Test]
     [Arguments(Gtin + "10é" + Gs + "17231120", EciMode.Default, "ECI:3")]
     [Arguments(Gtin + "10€" + Gs + "17231120", EciMode.Default, "ECI:26")]
@@ -142,11 +143,11 @@ public class Fnc1EncodeTest
     // Second position: every indicator form
 
     [Test]
-    [Arguments(0, "00")]
-    [Arguments(99, "99")]
-    [Arguments(165, "A")]
-    [Arguments(222, "z")]
-    public async Task SecondPosition_EachIndicatorForm_ReadsBackAsItsCodeword(int codeword, string written)
+    [Arguments(0)]
+    [Arguments(99)]
+    [Arguments(165)]
+    [Arguments(222)]
+    public async Task SecondPosition_EachIndicatorForm_ReadsBackAsItsCodeword(int codeword)
     {
         var mode = codeword < 100 ? Fnc1Mode.SecondPosition(codeword) : Fnc1Mode.SecondPosition((char)(codeword - 100));
         var text = "AA1234BBB112";
@@ -157,12 +158,11 @@ public class Fnc1EncodeTest
         await Assert.That(decoded).IsEqualTo(text);
         await Assert.That(info.Fnc1.ApplicationIndicator).IsEqualTo(codeword);
         await Assert.That(shape.Headers).IsEquivalentTo([$"FNC1Second:{codeword}"], CollectionOrdering.Matching);
-        await Assert.That(written.Length).IsBetween(1, 2);
     }
 
     // Optimal: the separator pairs, and the mix of modes
 
-    /// <summary>A separator pair (decision 4) is resolved by a segment break where the runs are long and by a Byte segment where they are short, whichever costs less.</summary>
+    /// <summary>A separator pair is resolved by a segment break where the runs are long and by a Byte segment where they are short, whichever costs less.</summary>
     [Test]
     public async Task Optimal_SeparatorPair_IsResolvedByABreakOrByByte()
     {
@@ -170,7 +170,7 @@ public class Fnc1EncodeTest
         var longData = QRCodeGenerator.Create(longText, QREccLevel.M, FirstOptimal);
         var (longDecoded, longInfo, _) = Read(longData);
         await Assert.That(longDecoded).IsEqualTo(longText);
-        await Assert.That(Shape(longData, longInfo).DataModes).IsEquivalentTo(["Alphanumeric", "Alphanumeric"], CollectionOrdering.Matching).Because("two Alphanumeric runs cost 13 bits more, a Byte run 100 more");
+        await Assert.That(Shape(longData, longInfo).DataModes).IsEquivalentTo(["Alphanumeric", "Alphanumeric"], CollectionOrdering.Matching).Because("two Alphanumeric runs cost 203 bits, a Byte run 268");
 
         var shortText = "A" + Gs + "%B";
         var shortData = QRCodeGenerator.Create(shortText, QREccLevel.M, FirstOptimal);
@@ -226,7 +226,7 @@ public class Fnc1EncodeTest
     [Test]
     public async Task Capacity_TheIndicatorBitsMoveATextAtTheEdge()
     {
-        var digits = new string('7', 41); // 4 + 10 + 136 = 150 of version 1-L's 152 bits
+        var digits = new string('7', 41); // 4 + 10 + 137 = 151 of version 1-L's 152 bits
         await Assert.That(QRCodeGenerator.Create(digits, QREccLevel.L, new QRCodeGeneratorOptions { QuietZoneSize = 0 }).Version).IsEqualTo(1);
         await Assert.That(QRCodeGenerator.Create(digits, QREccLevel.L, First).Version).IsEqualTo(2).Because("4 more bits");
         await Assert.That(QRCodeGenerator.Create(digits, QREccLevel.L, new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.SecondPosition(0), QuietZoneSize = 0 }).Version).IsEqualTo(2).Because("12 more bits");
@@ -273,9 +273,31 @@ public class Fnc1EncodeTest
     [Test]
     public async Task TooLong_ThrowsAsWithoutFnc1()
     {
-        var text = new string('7', 7090);
-        await Assert.That(() => QRCodeGenerator.Create(text, QREccLevel.L, First)).Throws<InvalidOperationException>();
+        // 7089 digits fill version 40-L exactly (23,648 bits), so only the indicator's 4 bits overflow it.
+        var digits = new string('7', 7089);
+        await Assert.That(QRCodeGenerator.Create(digits, QREccLevel.L, new QRCodeGeneratorOptions { QuietZoneSize = 0 }).Version).IsEqualTo(40);
+        await Assert.That(() => QRCodeGenerator.Create(digits, QREccLevel.L, First)).Throws<InvalidOperationException>();
+        await Assert.That(() => QRCodeGenerator.Create(digits, QREccLevel.L, FirstOptimal)).Throws<InvalidOperationException>();
         await Assert.That(() => QRCodeGenerator.Create(new string('7', 41), QREccLevel.L, First with { Version = QRVersionRange.Exactly(1) })).Throws<ArgumentException>();
+        await Assert.That(() => QRCodeGenerator.Create(new string('7', 41), QREccLevel.L, FirstOptimal with { Version = QRVersionRange.Exactly(1) })).Throws<ArgumentException>();
+
+        // 4296 letters are 23,645 bits in one Alphanumeric run, 23,649 with the indicator, and no split is smaller than the one run.
+        var letters = new string('A', 4296);
+        await Assert.That(QRCodeGenerator.Create(letters, QREccLevel.L, new QRCodeGeneratorOptions { QuietZoneSize = 0 }).Version).IsEqualTo(40);
+        await Assert.That(() => QRCodeGenerator.Create(letters, QREccLevel.L, FirstOptimal)).Throws<InvalidOperationException>()
+            .Because("an unconstrained overflow is the same exception under Optimal as under Single");
+    }
+
+    [Test]
+    [Arguments(1 << 22)]
+    [Arguments(-1)]
+    public async Task Options_UndefinedSegmentation_IsRefused(int value)
+    {
+        // The field that holds the segmentation beside the FNC1 mode is narrower than an int.
+        var options = new QRCodeGeneratorOptions { Segmentation = (QRSegmentation)value };
+        await Assert.That(() => QRCodeGenerator.Create("123", QREccLevel.M, options)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => QRCodeGenerator.Create("123", QREccLevel.M, options with { Fnc1 = Fnc1Mode.FirstPosition })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSize("123", QREccLevel.M, out _, options)).Throws<ArgumentOutOfRangeException>();
     }
 
     // Sizing and the span form
@@ -326,11 +348,13 @@ public class Fnc1EncodeTest
     [Test]
     public async Task Sizing_TooLong_ReturnsFalse()
     {
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(new string('7', 7090), QREccLevel.L, out _, First)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(new string('7', 7089), QREccLevel.L, out _, First)).IsFalse().Because("7089 digits fill version 40-L exactly without the indicator");
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(new string('7', 7089), QREccLevel.L, out _, FirstOptimal)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(new string('7', 7089), QREccLevel.L, out _, new QRCodeGeneratorOptions())).IsTrue();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(new string('7', 41), QREccLevel.L, out _, First with { Version = QRVersionRange.Exactly(1) })).IsFalse();
     }
 
-    // The Phase 0 fixtures: every symbol another writer made reads back from this writer's symbol of the same data
+    // The committed FNC1 fixtures: every symbol another writer made reads back from this writer's symbol of the same data
 
     public static IEnumerable<Func<string>> StandardQrFixtureIds() => FixtureLoader.EnumerateFixtureIds("StandardQrFnc1").Select(id => (Func<string>)(() => id));
 

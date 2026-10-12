@@ -8,7 +8,7 @@ internal ref partial struct QRBinaryEncoder
     private const char FieldSeparator = '\u001D';
 
     /// <summary>
-    /// The headers of a stream under FNC1 in the standard's order (ISO/IEC 18004 6.4.8, fnc1-support-plan.md decision 5):
+    /// The headers of a stream under FNC1 in the standard's order (ISO/IEC 18004 6.4.8, specs/standardqr-encoder.md FNC1):
     /// the ECI header when a charset is declared, the FNC1 indicator with its application indicator in second position,
     /// then the data mode indicator. Kept apart from <see cref="WriteMode"/> so the route without FNC1 keeps its code.
     /// </summary>

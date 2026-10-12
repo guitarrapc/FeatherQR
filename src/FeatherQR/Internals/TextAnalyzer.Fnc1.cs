@@ -8,7 +8,7 @@ internal static partial class TextAnalyzer
     /// The single-mode analysis under FNC1 (ISO/IEC 18004 6.4.8.1): the separator U+001D is an Alphanumeric
     /// character, written <c>%</c>, a literal <c>%</c> costs two (written <c>%%</c>), and a separator followed by
     /// a separator or a literal <c>%</c> keeps the text out of Alphanumeric mode, since a reader takes <c>%%</c>
-    /// first within a segment (fnc1-support-plan.md, decision 4). Everything else is the analysis without FNC1:
+    /// first within a segment (specs/standardqr-encoder.md, FNC1). Everything else is the analysis without FNC1:
     /// the ECI follows the content or the request, and with <paramref name="allowKanji"/> a text JIS X 0208 holds
     /// entirely takes Kanji mode. Scalar, kept apart from the SIMD analysis: GS1 strings are tens of characters.
     /// </summary>

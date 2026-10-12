@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// The scalar cost walk under FNC1 (fnc1-support-plan.md, decision 12). The character classes change: the
+/// The scalar cost walk under FNC1 (specs/standardqr-encoder.md, FNC1). The character classes change: the
 /// separator U+001D is an Alphanumeric character (written <c>%</c>), a literal <c>%</c> costs two Alphanumeric
 /// characters (written <c>%%</c>), and the Alphanumeric states split into "the last character was a separator"
 /// and "it was not", because a separator followed by a separator or a literal <c>%</c> cannot share a run (a
@@ -29,6 +29,9 @@ internal static partial class ModeSegmenter
     private const char Fnc1FieldSeparator = '\u001D';
 
     public const int Fnc1ParentBytesPerChar = Fnc1StateCount;
+
+    /// <summary>The stack budget of the FNC1 parent table, 112 characters (1008 bytes): the two-byte table's budget would send a 57-character text to the pool.</summary>
+    public const int Fnc1MaxStackParents = Fnc1ParentBytesPerChar * 112;
 
     /// <summary>The Alphanumeric unit count of a run under FNC1: its characters plus its literal percents, each written twice.</summary>
     public static int AlphanumericUnitsFnc1(ReadOnlySpan<char> chars)

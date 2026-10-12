@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// The data codeword streams under FNC1 (ISO/IEC 23941 7.4.8, fnc1-support-plan.md Phase 4): the headers in the
+/// The data codeword streams under FNC1 (ISO/IEC 23941 7.4.8, specs/rmqr-encoder.md FNC1): the headers in the
 /// standard's order (the 11-bit ECI prefix when a charset is declared, the FNC1 indicator <c>101</c> or <c>110</c>
 /// with its 8-bit application indicator, then the data), and the <c>%</c> rule applied in reverse in an
 /// Alphanumeric run (the separator U+001D written as <c>%</c>, a literal <c>%</c> as <c>%%</c>). Written as its own

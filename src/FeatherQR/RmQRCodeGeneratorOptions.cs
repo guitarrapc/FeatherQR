@@ -67,7 +67,7 @@ public record struct RmQRCodeGeneratorOptions
     public RmQRSegmentation Segmentation
     {
         readonly get => (RmQRSegmentation)(_route & SegmentationMask);
-        set => _route = (_route & ~SegmentationMask) | ((int)value & SegmentationMask);
+        set => _route = (_route & ~SegmentationMask) | ((uint)value <= SegmentationMask ? (int)value : SegmentationMask);
     }
 
     /// <summary>
@@ -83,7 +83,7 @@ public record struct RmQRCodeGeneratorOptions
     /// <para>
     /// The mode costs 3 bits in first position and 11 in second (the 3-bit indicator and the 8-bit application indicator), which can move content at a version's edge to another version under the fit strategy, or out of a requested version. Size a destination buffer with the same value you encode with.
     /// Whether the data is valid GS1 data is not checked here; the <c>FeatherQR.Gs1</c> package checks element strings and builds them from <c>(AI)</c> text.
-    /// Few readers read rMQR at all, and of those zxing-cpp reads both modes; no other writer is known to write second position in rMQR.
+    /// Few readers read rMQR at all. Of those, zxing-cpp reads both modes, and no other writer is known to write second position in rMQR.
     /// </para>
     /// </remarks>
     public Fnc1Mode Fnc1
@@ -92,11 +92,12 @@ public record struct RmQRCodeGeneratorOptions
         set => _route = (_route & SegmentationMask) | (value.RouteBits << Fnc1Shift);
     }
 
-    // One field holds the segmentation (the low 22 bits, which keeps an undefined enum value as it was given so
-    // the generator can refuse it) and the FNC1 mode (the top 10 bits), so the generator's default route tells
-    // "nothing but Single and no FNC1" from everything else with the one compare it already made on the
-    // segmentation alone: a non-zero field sends the call to the cold route, which reads both out. Declared
-    // where the segmentation's own field was, so the struct keeps its layout.
+    // One field holds the segmentation (the low 22 bits) and the FNC1 mode (the top 10 bits), so the generator's
+    // default route tells "nothing but Single and no FNC1" from everything else with the one compare it already
+    // made on the segmentation alone: a non-zero field sends the call to the cold route, which reads both out.
+    // An undefined segmentation value is kept as given when the 22 bits hold it and saturated to the mask when
+    // they do not, so the cold route refuses either (a masked value could read back as Single). Declared where
+    // the segmentation's own field was, so the struct keeps its layout.
     private int _route;
     private const int SegmentationMask = (1 << Fnc1Shift) - 1;
     private const int Fnc1Shift = 22;

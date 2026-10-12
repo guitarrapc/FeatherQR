@@ -105,7 +105,7 @@ public record struct QRCodeGeneratorOptions
     public QRSegmentation Segmentation
     {
         readonly get => (QRSegmentation)(_route & SegmentationMask);
-        set => _route = (_route & ~SegmentationMask) | ((int)value & SegmentationMask);
+        set => _route = (_route & ~SegmentationMask) | ((uint)value <= SegmentationMask ? (int)value : SegmentationMask);
     }
 
     /// <summary>
@@ -130,10 +130,11 @@ public record struct QRCodeGeneratorOptions
         set => _route = (_route & SegmentationMask) | (value.RouteBits << Fnc1Shift);
     }
 
-    // One field holds the segmentation (the low 22 bits, which keeps an undefined enum value as it was given so
-    // the generator can refuse it) and the FNC1 mode (the top 10 bits), so the generators' default route tells
-    // "nothing but Single and no FNC1" from everything else with the one compare it already made on the
-    // segmentation alone: a non-zero field sends the call to the cold route, which reads both out.
+    // One field holds the segmentation (the low 22 bits) and the FNC1 mode (the top 10 bits), so the generator's
+    // default route tells "nothing but Single and no FNC1" from everything else with the one compare it already
+    // made on the segmentation alone: a non-zero field sends the call to the cold route, which reads both out.
+    // An undefined segmentation value is kept as given when the 22 bits hold it and saturated to the mask when
+    // they do not, so the cold route refuses either (a masked value could read back as Single).
     private int _route;
     private const int SegmentationMask = (1 << Fnc1Shift) - 1;
     private const int Fnc1Shift = 22;

@@ -7,7 +7,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR;
 
 /// <summary>
-/// The FNC1 half of the generator (ISO/IEC 18004 6.4.8, fnc1-support-plan.md Phase 3). The single-mode route under
+/// The FNC1 half of the generator (ISO/IEC 18004 6.4.8, specs/standardqr-encoder.md FNC1). The single-mode route under
 /// FNC1 is the resolved route with the indicator's bits in every version fit and the indicator in the stream, written
 /// as its own methods rather than as parameters of the route without FNC1, so that route keeps its instructions.
 /// The mixed-mode route takes the mode from the options it already carries.
