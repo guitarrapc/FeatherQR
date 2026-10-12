@@ -29,6 +29,15 @@ if (command == "spot-check-fnc1")
     // and, for first position, ZXing.Net. Findings go to the fixture spec and the FNC1 plan.
     return Fnc1SpotCheck.Run();
 }
+if (command == "sweep-fnc1")
+{
+    // Generated GS1-like element strings and sequences that stress the % rule, written under FNC1 by both
+    // generators and read by zxing-cpp, ZXing.Net (Standard QR, first position) and this library's decoders.
+    // Optional arguments: the number of texts (default 2000) and the seed. Findings go to the fixture spec.
+    var sweepTexts = args.Length > 1 ? int.Parse(args[1]) : 2000;
+    var sweepSeed = args.Length > 2 ? ulong.Parse(args[2]) : 20261013UL;
+    return Fnc1Sweep.Run(FindRepoRoot(), sweepTexts, sweepSeed);
+}
 if (command == "spot-check-rmqr")
 {
     // Decodes FeatherQR-generated rMQR symbols (all versions × ECC × modes) with zxing-cpp.
@@ -106,7 +115,7 @@ if (command == "import-gs1-syntax-dictionary")
 }
 if (command != "regenerate" && command != "regenerate-structured-append" && command != "regenerate-fnc1" && command != "regenerate-gs1")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|regenerate-fnc1|regenerate-gs1|import-gs1-syntax-dictionary|import-structured-append-samples|spot-check-structured-append|spot-check-fnc1|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|probe-fnc1|generate-kanji-table]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|regenerate-fnc1|regenerate-gs1|import-gs1-syntax-dictionary|import-structured-append-samples|spot-check-structured-append|spot-check-fnc1|sweep-fnc1|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|probe-fnc1|generate-kanji-table]");
     return 1;
 }
 

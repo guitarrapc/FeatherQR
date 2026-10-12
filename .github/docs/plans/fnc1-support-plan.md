@@ -17,7 +17,7 @@ ISO/IEC 18004 (read in its 2006 edition) defines two modes that change how the w
 - A reader signals the mode with the symbology identifier (`]Q3` / `]Q4` first, `]Q5` / `]Q6` second, the even ones under the ECI protocol) and transmits the application indicator before the data.
 - Micro QR has neither mode. rMQR has both, as `101` and `110` (below).
 
-## Where it stands (2026-10-13, branch `fnc1`)
+## Where it stands (2026-10-13)
 
 - Phases 0 to 2 are built: both decoders read both indicators and report `Fnc1Mode` on `QRCodeDecodeInfo.Fnc1` and `RmQRCodeDecodeInfo.Fnc1`, 28 fixtures from three writers are committed, and the rMQR records are corrected. Before Phase 1 the Standard QR decoder returned `UnsupportedContent` for both indicators and the rMQR decoder refused `101` and `110` as reserved.
 - The Micro QR decoder refuses M4 indicators 4-7, which is correct.
@@ -25,6 +25,7 @@ ISO/IEC 18004 (read in its 2006 edition) defines two modes that change how the w
 - The standard's text behind the decode half: ISO/IEC 18004:2006 is on hand (public copy, clauses read and the two examples checked), ISO/IEC 23941:2022 only as a table of contents, so the rMQR mode table rows `101` and `110` still rest on the implementations ([fnc1-support-research.md](references/fnc1-support-research.md), Sources obtained after the merge).
 - The real-image corpus holds one GS1 photograph (`qrcode-2/gs1-figure-4.15.1-2.png`), which the sweep counts in the content column in all four rotations. Its expected text is the element string with raw GS and no identifier, the form this plan returns.
 - `spot-check-fnc1` in QRInteropFixtures reads every FNC1 symbol this library writes with zxing-cpp and ZXing.Net (Phase 3).
+- The first half of Phase 5 is built (2026-10-13): `sweep-fnc1` reads generated content at scale with the same readers, `Fnc1RoundTripSweepTest` holds the round trip in the suite, and `tools/encode_digest.cs` compares what the generators write between two commits. The Playground's encode selector, the second half, is not started.
 
 ## What the investigation found
 
@@ -285,3 +286,18 @@ Lessons:
 - A differential run against the commit before is the test for "the option changes nothing when unset". It needs no expected values, and it is evidence only once it has been shown to fail on the defect.
 - A benchmark row outside the control's band is a lead to trace before it is a number to report. The one such row was a correctness defect.
 - `ShortRun` cannot hold a 10 % gate on this machine. The same machine code moved 18 % within a round, and two rounds that agreed were not evidence.
+
+### Phase 5, first half: the interop sweep (2026-10-13)
+
+Done: three checks, each a different kind of evidence. `sweep-fnc1` in QRInteropFixtures (`Fnc1Sweep.cs`) writes generated content under FNC1 with both generators and reads it with zxing-cpp, with ZXing.Net for Standard QR in first position, and with this library's decoders. The texts are element strings built from the GS1 Syntax Dictionary (an AI, a value of its components' types and lengths, the separator after a value another follows unless the AI is of predefined length), sequences that meet the `%` rule from every side, Alphanumeric, Numeric and Byte runs with the two characters among them, Latin-1 and kana content, and Kanji. Each text is written under `Single` and `Optimal` with the other options drawn at random, and the sequence is a function of the seed. `Fnc1RoundTripSweepTest` is the part that needs no second reader, in the suite: the round trip, sizing against `Create`, the span form against the data form, and `Optimal`'s contract against `Single`, with no mode, first position and second position in both symbologies. `tools/encode_digest.cs` is the differential check of the record above as a tool: one line a case for a fixed corpus through the three generators, to compare between two commits. The Playground's encode selector, the second half of the phase, is not started.
+
+Verified: `sweep-fnc1` on 2,000 texts (seed 20261013) and on 20,000 texts (seed 88172645463325252). zxing-cpp read all 7,702 and all 76,765 symbols with the mode's identifier, GS1 content for first position, the ECI flag and the text, and this library's decoders returned the text and the mode for the same symbols. ZXing.Net read 2,542 of 2,560 and 26,025 of 26,216 Standard QR symbols in first position, and reads every one of the other 18 and 191 with its detector skipped, so those are misses of its detector on a clean render. With two faults planted in the Alphanumeric writers the sweep reported 632 failures on 300 texts across the three readers. `Fnc1RoundTripSweepTest` (six tests, 400 texts each) passes on both frameworks in Debug and Release, and its Standard QR run with no mode fails when the defect of the record above is planted again. `tools/encode_digest.cs` prints 72,928 lines by default and the same digest on two runs, and differs on 1,930 lines with that defect planted. The full suite passes on both frameworks (57,656 tests). No source under `src/` changed in this half.
+
+Lessons:
+
+- An expectation is computed from the text, not from the family that drew it. The first large run reported ten failures, and all ten were the harness's: content drawn as "beyond ASCII" came out as kana alone, the library wrote it in Kanji mode with no ECI header, and the harness expected the header.
+- A reader that returns nothing has not judged the symbol. ZXing.Net's detector misses 0.7 % of these clean renders and its decoder reads all of them. One more read with the detector skipped tells that apart from a symbol it cannot read, where the spot check's mask test needed eight encodes a miss.
+- An escape in a source file can be written as the character. Four `\u` escapes of the digest tool came out as the characters, one of them U+FEFF, which no reading of the text shows. The code points of a new file are printed before it is trusted.
+- A switch is a claim. The digest tool first had one that left FNC1 unset "to compare with a commit before the option", and such a commit cannot compile the file. It was removed before it was documented.
+
+Benchmarks: none. No source under `src/` changed.
