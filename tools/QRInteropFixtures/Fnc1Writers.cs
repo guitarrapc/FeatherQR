@@ -97,12 +97,18 @@ public static class Fnc1Writers
         return reader.From(new ImageView(luminance, width, height, ImageFormat.Lum));
     }
 
-    /// <summary>ZXing.Net's Standard QR reader over the same kind of render.</summary>
-    public static ZXing.Result? ReadNet(ModuleMatrix matrix, int quietZone = FixtureWriter.QuietZoneModules, int pixelsPerModule = 4)
+    /// <summary>
+    /// ZXing.Net's Standard QR reader over the same kind of render. With <paramref name="pureBarcode"/> it skips its
+    /// detector and samples the render as an axis-aligned symbol, which tells a symbol its detector does not find
+    /// from one its decoder cannot read.
+    /// </summary>
+    public static ZXing.Result? ReadNet(ModuleMatrix matrix, int quietZone = FixtureWriter.QuietZoneModules, int pixelsPerModule = 4, bool pureBarcode = false)
     {
         var (luminance, width, height) = Render(matrix, quietZone, pixelsPerModule);
         var bitmap = new ZXing.BinaryBitmap(new HybridBinarizer(new ZXing.RGBLuminanceSource(luminance, width, height, ZXing.RGBLuminanceSource.BitmapFormat.Gray8)));
-        return new NetReader().decode(bitmap);
+        return pureBarcode
+            ? new NetReader().decode(bitmap, new Dictionary<ZXing.DecodeHintType, object> { [ZXing.DecodeHintType.PURE_BARCODE] = true })
+            : new NetReader().decode(bitmap);
     }
 
     /// <summary>Text for a console column: the separator as <c>&lt;GS&gt;</c>, a line feed as <c>\n</c>.</summary>
