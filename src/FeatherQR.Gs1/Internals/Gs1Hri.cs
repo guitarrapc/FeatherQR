@@ -5,7 +5,9 @@ namespace FeatherQR.Gs1.Internals;
 /// <summary>
 /// The (AI) text of an element string and back. The text is <c>(AI)value</c> pairs with nothing between them,
 /// the AI in parentheses and a literal parenthesis in a value written <c>\(</c>, which is the GS1 HRI form
-/// (General Specifications 4.14) minus the blank the specification allows after the closing parenthesis.
+/// (General Specifications 4.14) minus the blank the specification allows after the closing parenthesis. A
+/// backslash in a value is written <c>\\</c>: no GS1 character set holds one, but a decoded symbol can, and
+/// without the escape a value ending in a backslash would run into the next pair when the text is read back.
 /// Formatting runs only what splitting needs. Building runs every check: each value is checked against its
 /// entry as it is copied, then the pairing rules run over the element string built. Errors point into the
 /// text the caller gave, escapes included.
@@ -83,7 +85,7 @@ internal static class Gs1Hri
             for (var i = 0; i < element.ValueLength; i++)
             {
                 var c = elementString[element.ValueStart + i];
-                if (c == Open)
+                if (c == Open || c == Escape)
                     Put(destination, ref written, Escape);
                 Put(destination, ref written, c);
             }
@@ -291,7 +293,7 @@ internal static class Gs1Hri
         var end = valueStart;
         while (end < hri.Length)
         {
-            if (hri[end] == Escape && end + 1 < hri.Length && hri[end + 1] == Open)
+            if (IsEscape(hri, end))
             {
                 end += 2;
                 continue;
@@ -306,18 +308,19 @@ internal static class Gs1Hri
         return true;
     }
 
-    /// <summary>Copies a value as written to its element string form (<c>\(</c> becomes <c>(</c>) and returns the length written.</summary>
+    /// <summary>Whether an escape starts at <paramref name="index"/>: a backslash followed by <c>(</c> or by another backslash. A backslash before anything else is a character of the value.</summary>
+    private static bool IsEscape(ReadOnlySpan<char> text, int index)
+        => text[index] == Escape && index + 1 < text.Length && (text[index + 1] == Open || text[index + 1] == Escape);
+
+    /// <summary>Copies a value as written to its element string form (<c>\(</c> becomes <c>(</c>, <c>\\</c> becomes <c>\</c>) and returns the length written.</summary>
     private static int Unescape(ReadOnlySpan<char> hriValue, Span<char> destination)
     {
         var written = 0;
         for (var i = 0; i < hriValue.Length; i++)
         {
             var c = hriValue[i];
-            if (c == Escape && i + 1 < hriValue.Length && hriValue[i + 1] == Open)
-            {
-                c = Open;
-                i++;
-            }
+            if (IsEscape(hriValue, i))
+                c = hriValue[++i];
             destination[written++] = c;
         }
         return written;
@@ -332,7 +335,7 @@ internal static class Gs1Hri
         {
             if (count == index)
                 return i;
-            i += hriValue[i] == Escape && i + 1 < hriValue.Length && hriValue[i + 1] == Open ? 2 : 1;
+            i += IsEscape(hriValue, i) ? 2 : 1;
             count++;
         }
         return hriValue.Length;
@@ -371,7 +374,7 @@ internal static class Gs1Hri
         var length = 0;
         for (var i = 0; i < hriValue.Length; i++)
         {
-            if (hriValue[i] == Escape && i + 1 < hriValue.Length && hriValue[i + 1] == Open)
+            if (IsEscape(hriValue, i))
                 i++;
             length++;
         }

@@ -55,7 +55,7 @@ public static partial class Gs1ElementString
 
     /// <summary>
     /// Formats an element string as its (AI) text, <c>(01)09520123456788(10)ABC</c>: each AI in parentheses and
-    /// its value after it, a literal <c>(</c> in a value written <c>\(</c>. Runs what splitting needs and no more
+    /// its value after it, a literal <c>(</c> in a value written <c>\(</c> and a <c>\</c> written <c>\\</c>. Runs what splitting needs and no more
     /// (an unknown AI whose first two digits give its length is read, a redundant or trailing separator is
     /// skipped), so a string <see cref="TryValidate"/> would refuse can still format.
     /// </summary>
@@ -89,7 +89,8 @@ public static partial class Gs1ElementString
 
     /// <summary>
     /// Builds the element string of (AI) text, <c>(01)09520123456788(10)ABC</c>: each AI in parentheses and its
-    /// value after it, up to the next unescaped <c>(</c>, with a literal <c>(</c> in a value written <c>\(</c>. Runs every
+    /// value after it, up to the next unescaped <c>(</c>, with a literal <c>(</c> in a value written <c>\(</c> and a
+    /// <c>\</c> written <c>\\</c> (a <c>\</c> before any other character is itself). Runs every
     /// check <see cref="TryValidate"/> runs, and puts the separator after every value that needs one.
     /// </summary>
     /// <remarks>

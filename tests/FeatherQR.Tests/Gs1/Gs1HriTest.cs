@@ -158,6 +158,10 @@ public class Gs1HriTest
     [Arguments("(01)09520123456788(10)A\\(1)B(10)A\\(2)B", Gs1ErrorKind.RepeatedAi, 28, 10)]
     [Arguments("(01)09520123456788(10)A\u001DB", Gs1ErrorKind.InvalidCharacter, 23, 1)]
     [Arguments("(01)09520123456788(10)A\\(B C", Gs1ErrorKind.InvalidCharacter, 26, 1)]
+    // A backslash is written \\, so a value ending in one cannot swallow the next pair; a lone backslash before another character stays as it is.
+    [Arguments("(90)\\\\(91)x", Gs1ErrorKind.InvalidCharacter, 4, 2)]
+    [Arguments("(01)09520123456788(10)A\\\\B", Gs1ErrorKind.InvalidCharacter, 23, 2)]
+    [Arguments("(01)09520123456788(10)A\\xB", Gs1ErrorKind.InvalidCharacter, 23, 1)]
     [Arguments("(01)0952012345678\u001D(10)ABC", Gs1ErrorKind.InvalidCharacter, 17, 1)]
     [Arguments("(01)09520123456788(10)A(B)C", Gs1ErrorKind.InvalidText, 24, 1)]
     public async Task TryFromHri_RefusesWithThePlaceInTheText(string hri, Gs1ErrorKind kind, int offset, int length)
@@ -175,6 +179,14 @@ public class Gs1HriTest
         await Assert.That(hri).IsEqualTo("(01)09520123456788(234)XYZ(10)ABC");
         await Assert.That(Gs1ElementString.TryToHri("0109520123456788\u001D17251231", out hri, out _)).IsTrue();
         await Assert.That(hri).IsEqualTo("(01)09520123456788(17)251231");
+
+        // A backslash, which no GS1 character set holds but a decoded symbol can carry, is escaped too, so the text never reads back as other data.
+        await Assert.That(Gs1ElementString.TryToHri("90\\" + "\u001D" + "91x", out hri, out _)).IsTrue();
+        await Assert.That(hri).IsEqualTo("(90)\\\\(91)x");
+        await Assert.That(Gs1ElementString.TryToHri("0109520123456788" + "10A\\(B", out hri, out _)).IsTrue();
+        await Assert.That(hri).IsEqualTo("(01)09520123456788(10)A\\\\\\(B");
+        await Assert.That(Gs1ElementString.TryGetToHriLength("90\\" + "\u001D" + "91x", out var length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(11);
     }
 
     [Test]
