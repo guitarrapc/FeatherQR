@@ -13,6 +13,8 @@ public class RegionalRetryTest
     {
         public List<byte[]> Inputs { get; } = [];
         public List<int[]> Histograms { get; } = [];
+        public List<byte[]> Sources { get; } = [];
+        public List<bool> Negatives { get; } = [];
     }
 
     private struct RecordingAttempt : ILuminanceAttempt<int>
@@ -20,10 +22,12 @@ public class RegionalRetryTest
         public Calls Calls;
         public DecodeStatus[] Results;
 
-        public readonly DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out int info)
+        public readonly DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out int info)
         {
             var index = Calls.Inputs.Count;
             Calls.Inputs.Add(luminance.Slice(0, width * height).ToArray());
+            Calls.Sources.Add(source.Slice(0, width * height).ToArray());
+            Calls.Negatives.Add(negative);
             Calls.Histograms.Add(histogram.Slice(0, Binarizer.HistogramBins).ToArray());
             charsWritten = 0;
             info = index + 1;
@@ -89,6 +93,25 @@ public class RegionalRetryTest
         await Assert.That(calls.Inputs.Count).IsEqualTo(1);
         await Assert.That(calls.Inputs[0]).IsEquivalentTo(Expected(luminance, side, side), CollectionOrdering.Matching);
         await AssertHistogramIsTheInputs(calls, 0);
+    }
+
+    /// <summary>
+    /// Each polarity's decode is handed the grey image its binarization was made from, and which polarity of it that was: a stage that reads grey levels where the binarization placed the symbol reads them there.
+    /// The negative's source is the image itself, not its negative, with the flag saying so.
+    /// </summary>
+    [Test]
+    public async Task Decode_BothPolarities_HandEachDecodeTheGreyImageAndItsPolarity()
+    {
+        var side = LitSide;
+        var luminance = Lit(negate: false);
+        var calls = new Calls();
+
+        Run(luminance, side, side, calls, DecodeStatus.NotDetected, DecodeStatus.NotDetected);
+
+        await Assert.That(calls.Inputs.Count).IsEqualTo(2);
+        await Assert.That(calls.Sources[0]).IsEquivalentTo(luminance, CollectionOrdering.Matching);
+        await Assert.That(calls.Sources[1]).IsEquivalentTo(luminance, CollectionOrdering.Matching);
+        await Assert.That(calls.Negatives).IsEquivalentTo(new[] { false, true }, CollectionOrdering.Matching);
     }
 
     private static async Task AssertHistogramIsTheInputs(Calls calls, int index)

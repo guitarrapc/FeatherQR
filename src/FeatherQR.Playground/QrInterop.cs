@@ -121,7 +121,7 @@ public static partial class QrInterop
     /// <c>"corners"</c> is the located symbol as eight numbers (top-left, top-right, bottom-right, bottom-left, each x then y) in the decoded image's pixel space, which <c>"imageWidth"</c> and <c>"imageHeight"</c> describe so the page can scale the overlay to whatever size it displays the image at. That space is the file's <em>stored</em> pixels: <c>"orientation"</c> carries the EXIF tag (1-8) the decoder ignored, and the page must map the corners through it, because every browser decode path applies the tag to the picture it shows.
     /// </para>
     /// <para>
-    /// Uses the library's built-in image decoders, Standard QR first, then Micro QR, then rMQR (<c>"symbology"</c> reports which one matched; rMQR has a single fixed mask, so <c>"maskPattern"</c> is -1 for it): clean, screen-rendered images (arbitrary rotation, mirroring and mild perspective included).
+    /// Uses the library's built-in image decoders, Standard QR first, then Micro QR, then rMQR (<c>"symbology"</c> reports which one matched; rMQR has a single fixed mask, so <c>"maskPattern"</c> is -1 for it): rendered images, scans and photographs, at any rotation, mirrored or tilted.
     /// Heavily stylized codes (low-contrast colors, inverted palettes, strong decoration) may report NotDetected even when a computer-vision grade phone scanner reads them.
     /// </para>
     /// </summary>

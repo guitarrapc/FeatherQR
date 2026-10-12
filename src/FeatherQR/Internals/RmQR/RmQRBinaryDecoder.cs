@@ -15,8 +15,7 @@ internal static class RmQRBinaryDecoder
     private const int ModeAlphanumeric = 0b010;
     private const int ModeByte = 0b011;
     private const int ModeKanji = 0b100;
-    // 101 and 110 were once taken for reserved here. zxing-cpp's and qrcode2's mode tables, libzint's
-    // and CodeGlyphX's writers, and zxing-cpp reading their symbols as GS1 all give them these meanings.
+    // FNC1 in first and second position, once taken for reserved here: the evidence is in rmqr-decoder.md
     private const int ModeFnc1First = 0b101;
     private const int ModeFnc1Second = 0b110;
     private const int ModeEci = 0b111;
@@ -24,6 +23,7 @@ internal static class RmQRBinaryDecoder
     // ECI assignment numbers the shared byte decoder can map to a charset.
     private const int EciIso8859_1a = 1;
     private const int EciIso8859_1b = 3;
+    private const int EciShiftJis = 20;
     private const int EciUtf8 = 26;
     private const int EciAscii = 27;
 
@@ -114,6 +114,9 @@ internal static class RmQRBinaryDecoder
                                     break;
                                 case EciUtf8:
                                     charset = ByteSegmentCharset.Utf8;
+                                    break;
+                                case EciShiftJis:
+                                    charset = ByteSegmentCharset.ShiftJis;
                                     break;
                                 default:
                                     return DecodeStatus.UnsupportedContent;

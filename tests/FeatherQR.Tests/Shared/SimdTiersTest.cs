@@ -31,6 +31,7 @@ public class SimdTiersTest
         ["EccBinaryDecoder"] = ["BinaryDecoders/EccBinaryDecoder.cs", "BinaryDecoders/EccBinaryDecoder.Arm64.cs", "BinaryDecoders/EccBinaryDecoder.Vector128.cs"],
         ["LuminanceConverter"] = ["ImageDecoders/LuminanceConverter.cs", "ImageDecoders/LuminanceConverter.Simd.cs"],
         ["LuminanceInverter"] = ["ImageDecoders/LuminanceInverter.cs"],
+        ["LuminanceHalver"] = ["ImageDecoders/LuminanceHalver.cs"],
         ["Binarizer"] = ["ImageDecoders/Binarizer.cs", "ImageDecoders/Binarizer.Vector128.cs"],
         ["LocalBinarizer"] = ["ImageDecoders/LocalBinarizer.Vector128.cs"],
         ["FinderRowMask"] = ["ImageDecoders/FinderPatternFinder.cs", "ImageDecoders/FinderPatternFinder.Simd.cs"],

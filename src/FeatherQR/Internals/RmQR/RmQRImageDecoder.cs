@@ -7,7 +7,7 @@ using static FeatherQR.Internals.ImageDecoders.AttemptStatus;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// Decodes an rMQR Code from a grayscale image: clean, screen-rendered or scanned inputs, including a lighting gradient across the symbol.
+/// Decodes an rMQR Code from a grayscale image: a rendered or scanned symbol, tilted, blurred or noisy, including a lighting gradient across the symbol.
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
@@ -84,6 +84,10 @@ internal static partial class RmQRImageDecoder
     {
         public bool HasMidpointPass => true;
 
+        public bool HasReducedScaleSearch => false;
+
+        public RmQRCodeDecodeInfo AtFullScale(in RmQRCodeDecodeInfo info, int scale) => info.WithCorners(SymbolGeometry.Scaled(info.Corners, scale));
+
         public RmQRCodeDecodeInfo NotDetected => RmQRImageDecoder.NotDetected();
 
         public DecodeStatus DecodeGlobal(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)
@@ -92,7 +96,7 @@ internal static partial class RmQRImageDecoder
             return CandidateScan.Decode<CandidateDecoder, RmQRCodeDecodeInfo>(ref decoder, luminance, histogram, width, height, destination, out charsWritten, out info, out noFinder, out threshold, out grey);
         }
 
-        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
             => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
 
         public DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)

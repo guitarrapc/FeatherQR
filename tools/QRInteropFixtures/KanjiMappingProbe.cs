@@ -115,7 +115,7 @@ public static class KanjiMappingProbe
             }
         }
 
-        var results = new BarcodeReader { Formats = CppFormat.QRCode, TryHarder = true }.From(new ImageView(lum, w, w, ImageFormat.Lum));
+        var results = ZXingCppCalls.Read(new BarcodeReader { Formats = CppFormat.QRCode, TryHarder = true }, lum, w, w);
         if (results.Length != 1)
         {
             Console.WriteLine($"  reader found {results.Length} symbols");

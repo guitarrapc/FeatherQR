@@ -236,7 +236,7 @@ internal static class MicroQRSegmentPlanner
 
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
-    /// Returns false when the content is unplannable at this version, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Latin-1 run the charset heuristic reads as UTF-8; a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
+    /// Returns false when the content is unplannable at this version, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Latin-1 run the charset heuristic reads as UTF-8 or Shift_JIS; a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -262,10 +262,10 @@ internal static class MicroQRSegmentPlanner
         // both fall back to the single-mode stream:
         //  - a mid-content U+FEFF at a run start is consumed as a BOM (the program
         //    builds no such plan under UTF-8; this refuses a model that disagreed);
-        //  - a Latin-1 run whose narrowed bytes read as UTF-8 (the disambiguating
-        //    invalid bytes now live in another run) decodes as different text.
+        //  - a Latin-1 run whose narrowed bytes read as UTF-8 or Shift_JIS (the
+        //    disambiguating bytes now live in another run) decodes as different text.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount))
-            || (charset == EciMode.Iso8859_1 && HasLatin1RunTheHeuristicReadsAsUtf8(text, segments.Slice(0, segmentCount))))
+            || (charset == EciMode.Iso8859_1 && HasLatin1RunTheHeuristicReadsOtherwise(text, segments.Slice(0, segmentCount))))
         {
             segmentCount = 0;
             return false;
@@ -316,10 +316,10 @@ internal static class MicroQRSegmentPlanner
         => PlanCost(text, charset, version, default, out _);
 
     /// <summary>
-    /// Whether any Byte run's narrowed Latin-1 bytes would be read as UTF-8 by the decoder's unspecified-charset resolution (Micro QR has no ECI to pin it).
+    /// Whether any Byte run's narrowed Latin-1 bytes would be read as UTF-8 or Shift_JIS by the decoder's unspecified-charset resolution (Micro QR has no ECI to pin it).
     /// Pure-ASCII runs are exempt: they decode identically either way.
     /// </summary>
-    private static bool HasLatin1RunTheHeuristicReadsAsUtf8(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments)
+    private static bool HasLatin1RunTheHeuristicReadsOtherwise(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments)
     {
         Span<byte> bytes = stackalloc byte[MaxPlannableChars];
         foreach (var segment in segments)
@@ -335,7 +335,7 @@ internal static class MicroQRSegmentPlanner
                 nonAscii |= chars[i] > 0x7F;
             }
 
-            if (nonAscii && SegmentDecoders.ResolvesToUtf8WhenUnspecified(bytes.Slice(0, chars.Length)))
+            if (nonAscii && !SegmentDecoders.ResolvesToIso8859_1WhenUnspecified(bytes.Slice(0, chars.Length)))
                 return true;
         }
         return false;

@@ -22,8 +22,7 @@ internal static class Sweep
         var rows = new ConcurrentBag<ResultRow>();
         var stopwatch = Stopwatch.StartNew();
 
-        // The own-writer kind is the last one
-        foreach (var caseId in Libzint.Fill(symbology, caseCount, kinds.Length - 1))
+        foreach (var caseId in Libzint.Fill(symbology, caseCount, Array.FindIndex(kinds, static k => k.Name == Kinds.OwnWriter)))
         {
             var definition = Cases.Create(symbology, caseId);
             rows.Add(Failure(definition, encoders.First(static e => e.Name == Libzint.Name), "(encode)", definition.VersionName, $"EncodeFailed: {Libzint.Name}{Libzint.DiedStatus}"));

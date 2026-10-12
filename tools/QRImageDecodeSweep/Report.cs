@@ -78,6 +78,31 @@ internal static class Report
         sb.AppendLine(withContent ? string.Create(CultureInfo.InvariantCulture, $" {rows.Count(IsContent):N0} |") : "");
     }
 
+    /// <summary>Every gap image and every reverse image by name, so each can be given a cause.</summary>
+    public static string ImageLists(IReadOnlyList<ResultRow> rows, Func<ResultRow, string> name)
+    {
+        var sb = new StringBuilder();
+        var gap = rows.Where(static r => !r.FeatherQr && !IsContent(r) && r.ZXingCpp).ToList();
+        var reverse = rows.Where(static r => r.FeatherQr && !r.ZXingCpp).ToList();
+        if (gap.Count > 0)
+        {
+            sb.AppendLine("## Gap: zxing-cpp reads, FeatherQR does not get through");
+            sb.AppendLine();
+            foreach (var row in gap)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {name(row)}: {row.Status}");
+            sb.AppendLine();
+        }
+        if (reverse.Count > 0)
+        {
+            sb.AppendLine("## Reverse: FeatherQR reads, zxing-cpp does not");
+            sb.AppendLine();
+            foreach (var row in reverse)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {name(row)}");
+            sb.AppendLine();
+        }
+        return sb.ToString();
+    }
+
     /// <summary>The symbol was located, sampled and error-corrected; what stopped the read, or changed the text, is in the bit stream or its character set.</summary>
     private static bool IsContent(ResultRow row) => row.Misread || row.Status is "InvalidBitstream" or "UnsupportedContent" or "UnmappedCharacter";
 

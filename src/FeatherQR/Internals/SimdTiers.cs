@@ -200,6 +200,8 @@ internal static class SimdTiers
         new("LuminanceConverter", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimdDp, Isa.AdvSimdDp), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // LuminanceInverter: the negative image for the light-on-dark pass
         new("LuminanceInverter", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
+        // LuminanceHalver: the reduced-scale search's halving, each pixel the mean of a two by two block; WebAssembly shifts and narrows with its own instructions
+        new("LuminanceHalver", (SimdTier.Vector256, Isa.Vector256), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // Binarizer.FillHistogram: the luminance histogram behind the global threshold
         new("Binarizer", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // LocalBinarizer: block statistics, block thresholds and the dark count of the regional retry
@@ -286,6 +288,7 @@ internal static class SimdTiers
         new("EccBinaryDecoder",        [Vector128],     [GfniV256, Vector128], [AdvSimd],           [Vector128]),
         new("LuminanceConverter",      [Sse2],          [Avx2],               [AdvSimdDp, Vector128], [PackedSimd]),
         new("LuminanceInverter",       [Vector128],     [Vector256],          [Vector128],          [Vector128]),
+        new("LuminanceHalver",         [Vector128],     [Vector256],          [Vector128],          [PackedSimd]),
         // WebAssembly keeps the 128-bit tier though AOT-compiled it counts dense input (soft, noise, a gradient) 4-11 % slower than scalar: at most 2 % of a decode, inside the runs' spread, against 0.09-0.31 on rendered symbols
         new("Binarizer",               [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("LocalBinarizer",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),

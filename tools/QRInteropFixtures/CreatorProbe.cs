@@ -21,13 +21,11 @@ public static class CreatorProbe
     {
         try
         {
-            var creator = new BarcodeCreator(format);
-            using var barcode = creator.From(text);
+            using var barcode = ZXingCppCalls.Create(new BarcodeCreator(format), text);
 
             // Round-trip through the reader to prove the created symbol is real.
-            using var image = barcode.ToImage(new WriterOptions { Scale = 4 });
-            var imageView = new ImageView(image.ToArray(), image.Width, image.Height, image.Format);
-            var results = new BarcodeReader { Formats = format, TryHarder = true }.From(imageView);
+            using var image = ZXingCppCalls.ToImage(barcode, new WriterOptions { Scale = 4 });
+            var results = ZXingCppCalls.Read(new BarcodeReader { Formats = format, TryHarder = true }, image.ToArray(), image.Width, image.Height, image.Format);
             var roundTrip = results.Length == 1 && results[0].Text == text ? "round-trip OK" : "ROUND-TRIP FAILED";
             Console.WriteLine($"{format}: created ({barcode.Position}), {roundTrip}");
         }

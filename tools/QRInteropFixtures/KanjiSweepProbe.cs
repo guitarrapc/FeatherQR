@@ -141,7 +141,7 @@ public static class KanjiSweepProbe
             }
         }
 
-        var results = new BarcodeReader { Formats = CppFormat.QRCode, TryHarder = true }.From(new ImageView(lum, w, w, ImageFormat.Lum));
+        var results = ZXingCppCalls.Read(new BarcodeReader { Formats = CppFormat.QRCode, TryHarder = true }, lum, w, w);
         return results.Length == 1 ? results[0].Text : null;
     }
 

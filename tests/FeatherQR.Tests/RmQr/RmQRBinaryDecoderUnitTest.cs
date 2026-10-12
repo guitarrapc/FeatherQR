@@ -95,7 +95,7 @@ public class RmQRBinaryDecoderUnitTest
     [Test]
     public async Task Decode_UnsupportedEci_ReportsUnsupportedContent()
     {
-        var data = Bits("111 00010100 011 001 01000001 000", 6); // ECI 20 (Shift JIS): not mapped
+        var data = Bits("111 00000100 011 001 01000001 000", 6); // ECI 4 (ISO-8859-2): not mapped
         await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.UnsupportedContent);
     }
 

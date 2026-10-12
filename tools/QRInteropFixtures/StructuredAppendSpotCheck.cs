@@ -100,7 +100,7 @@ public static class StructuredAppendSpotCheck
                     symbols++;
 
                     var (luminance, width) = RenderLuminance(set[i]);
-                    var cppResults = cpp.From(new ZXingCpp.ImageView(luminance, width, width, ZXingCpp.ImageFormat.Lum));
+                    var cppResults = ZXingCppCalls.Read(cpp, luminance, width, width);
                     var cppText = cppResults.Length == 1 ? cppResults[0].Text.TrimStart('﻿') : null;
                     if (cppResults.Length == 1)
                     {

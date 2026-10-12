@@ -6,7 +6,11 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// <typeparam name="TInfo">The decoder's diagnostic record.</typeparam>
 internal interface ILuminanceAttempt<TInfo>
 {
-    DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info);
+    /// <summary>
+    /// Reads <paramref name="luminance"/>, a binarization of two levels. <paramref name="source"/> is the grey image it was binarized from, for a stage that reads grey levels where the binarization placed the symbol,
+    /// and <paramref name="negative"/> says <paramref name="luminance"/> is the binarization of that image's negative, so that its dark pixels are the light ones there.
+    /// </summary>
+    DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info);
 }
 
 /// <summary>
@@ -75,11 +79,11 @@ internal static class RegionalRetry
         histogram.Clear();
         histogram[LocalBinarizer.Dark] = darkCount;
         histogram[LocalBinarizer.Light] = binarized.Length - darkCount;
-        return attempt.Decode(binarized, histogram, width, height, destination, out charsWritten, out info);
+        return attempt.Decode(binarized, luminance, negative, histogram, width, height, destination, out charsWritten, out info);
     }
 
     /// <summary>Whether every pixel is 0 or 255; symmetric, so it holds for a histogram in either polarity.</summary>
-    private static bool HoldsOnlyExtremes(ReadOnlySpan<int> histogram)
+    internal static bool HoldsOnlyExtremes(ReadOnlySpan<int> histogram)
     {
         foreach (var count in histogram.Slice(1, Binarizer.HistogramBins - 2))
         {

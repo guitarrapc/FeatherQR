@@ -212,10 +212,10 @@ public class DecodeAllocationTest
         return new Scene(luminance, width, height, content);
     }
 
-    /// <summary>The lighting <see cref="UnevenLightingDecodeTest"/> pins to the regional pass for every symbology: a shadow across the middle.</summary>
-    private static Scene Shadowed(Func<int, int, bool> isDark, int columns, int rows, string content)
+    /// <summary>A shadow across the middle, a lighting <see cref="UnevenLightingDecodeTest"/> pins to the regional pass: falling off to the right for Micro QR and rMQR, to the left for Standard QR, which reads the other at the global pass in module space.</summary>
+    private static Scene Shadowed(Func<int, int, bool> isDark, int columns, int rows, string content, float degrees = 0f)
     {
-        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, columns, rows, 4, UnevenLight.Shadow, 0f, 0.55f);
+        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, columns, rows, 4, UnevenLight.Shadow, degrees, 0.55f);
         return new Scene(luminance, width, height, content);
     }
 
@@ -248,10 +248,30 @@ public class DecodeAllocationTest
         LightOnDark,
         /// <summary>A shadow across the middle: the regional pass, both global ones having failed.</summary>
         UnevenLight,
+        /// <summary>Standard QR only: <see cref="ReducedScaleDecodeTest"/>'s texture finer than a module, read at half scale after every pass at full size has failed.</summary>
+        FineTexture,
+        /// <summary>Standard QR only: <see cref="InferredFinderDecodeTest"/>'s symbol with its top-left finder blanked, read through the third finder inferred from the other two.</summary>
+        InferredFinder,
+        /// <summary>Standard QR only: <see cref="TripleSelectionDecodeTest"/>'s tall two-level image, whose strided triple fails and whose symbol reads after the skipped rows are scanned.</summary>
+        UndersampledStride,
+        /// <summary>Standard QR only: <see cref="TripleSelectionDecodeTest"/>'s keystoned grid of nine symbols, read through the crowded list's triples gated by their timing patterns.</summary>
+        Crowded,
+        /// <summary>Standard QR only: <see cref="EdgeFourthPointDecodeTest"/>'s version 1 bent round a cylinder and tilted, read through the fourth point from the finders' edges.</summary>
+        EdgePoint,
+        /// <summary>Standard QR only: <see cref="ModuleSpaceDecodeTest"/>'s shadow at the global pass, the grid failing by the threshold and by coverage and read in module space.</summary>
+        ModuleSpace,
+        /// <summary>Standard QR only: <see cref="ModuleSpaceDecodeTest"/>'s small shadowed symbol, read at the regional pass in module space from the grey image.</summary>
+        ModuleSpaceRegional,
+        /// <summary>Standard QR only: <see cref="FinderOutlineFitDecodeTest"/>'s tilted version 2 with its alignment pattern painted over, read through the plane fitted to the finders' outlines.</summary>
+        OutlineFit,
+        /// <summary>Standard QR only: <see cref="FinderOutlineFitDecodeTest"/>'s bent version 3, read through the plane fitted to the outlines and the alignment anchor.</summary>
+        OutlineFitAnchored,
+        /// <summary>Standard QR only: <see cref="LensDistortionDecodeTest"/>'s version 25 through a lens, its dimension named by the version information read at the finders and its grid read through the mesh.</summary>
+        Lens,
     }
 
     public static IEnumerable<ImageScene> StandardQRScenes()
-        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
+        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded, ImageScene.EdgePoint, ImageScene.ModuleSpace, ImageScene.ModuleSpaceRegional, ImageScene.OutlineFit, ImageScene.OutlineFitAnchored, ImageScene.Lens];
 
     public static IEnumerable<ImageScene> MicroQRScenes()
         => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.SnappedToPixels, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
@@ -321,7 +341,58 @@ public class DecodeAllocationTest
                 {
                     // UnevenLightingDecodeTest's symbol
                     var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
+                    return Shadowed((row, column) => qr[row, column], qr.Size, qr.Size, Content, degrees: 180f);
+                }
+            case ImageScene.ModuleSpace:
+                {
+                    var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
                     return Shadowed((row, column) => qr[row, column], qr.Size, qr.Size, Content);
+                }
+            case ImageScene.ModuleSpaceRegional:
+                {
+                    var (luminance, width, height, text) = ModuleSpaceDecodeTest.Shadowed(3, QREccLevel.M, 3f, 20f, 0f, negated: false, destroyData: false);
+                    return new Scene(luminance, width, height, text);
+                }
+            case ImageScene.OutlineFit:
+                {
+                    var (photograph, _, text) = FinderOutlineFitDecodeTest.Render(2, QREccLevel.L, 4f, 40f, 0f, 1.2f, 200f, alignmentPaintedOver: true, destroyData: false);
+                    return new Scene(photograph.Luminance, photograph.Width, photograph.Height, text);
+                }
+            case ImageScene.OutlineFitAnchored:
+                {
+                    var (photograph, _, text) = FinderOutlineFitDecodeTest.Render(3, QREccLevel.M, 4f, 35f, 45f, 2.5f, 0f, alignmentPaintedOver: false, destroyData: false, bowModules: 3f, blurSigma: 1f);
+                    return new Scene(photograph.Luminance, photograph.Width, photograph.Height, text);
+                }
+            case ImageScene.Lens:
+                {
+                    var (photograph, _, text) = LensDistortionDecodeTest.Render(25, 5f, 15f, 300f, 15f, -0.08f, destroyData: false);
+                    return new Scene(photograph.Luminance, photograph.Width, photograph.Height, text);
+                }
+            case ImageScene.FineTexture:
+                {
+                    var qr = StandardQR(Content, 3);
+                    var (luminance, width, height) = FineTextureRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, 8);
+                    return new Scene(luminance, width, height, Content);
+                }
+            case ImageScene.InferredFinder:
+                {
+                    var (luminance, width, height, _, _) = InferredFinderDecodeTest.Render(InferredFinderDecodeTest.Finder.TopLeft, 200f, 0f);
+                    return new Scene(luminance, width, height, InferredFinderDecodeTest.Content);
+                }
+            case ImageScene.UndersampledStride:
+                {
+                    var (luminance, width, height, _) = TripleSelectionDecodeTest.RenderTall(destroyData: false);
+                    return new Scene(luminance, width, height, TripleSelectionDecodeTest.TallContent);
+                }
+            case ImageScene.Crowded:
+                {
+                    var (luminance, width, height, _) = TripleSelectionDecodeTest.RenderGrid(3, 3, 0.12f, _ => Content);
+                    return new Scene(luminance, width, height, Content);
+                }
+            case ImageScene.EdgePoint:
+                {
+                    var (photograph, _) = EdgeFourthPointDecodeTest.Render(15f, 0f, 2.5f, 4f, destroyData: false);
+                    return new Scene(photograph.Luminance, photograph.Width, photograph.Height, EdgeFourthPointDecodeTest.Content);
                 }
             default:
                 throw new ArgumentOutOfRangeException(nameof(scene), scene, "not a Standard QR scene");
@@ -444,7 +515,7 @@ public class DecodeAllocationTest
     /// <summary>The scene's premise where the pipeline's own passes decide its path: the passes before the one it is about do not read it.</summary>
     private static async Task AssertEarlierPassesFail(Symbology symbology, ImageScene scene, Scene image)
     {
-        if (scene == ImageScene.LightOnDark)
+        if (scene is ImageScene.LightOnDark or ImageScene.FineTexture)
         {
             var histogram = new int[Binarizer.HistogramBins];
             Binarizer.FillHistogram(image.Luminance, histogram);
@@ -457,7 +528,7 @@ public class DecodeAllocationTest
             };
             await Assert.That(positive).IsNotEqualTo(DecodeStatus.Success).Because("the global positive pass must not read it");
         }
-        else if (scene == ImageScene.UnevenLight)
+        else if (scene is ImageScene.UnevenLight or ImageScene.ModuleSpaceRegional)
         {
             await Assert.That(UnevenLightingDecodeTest.GlobalAttemptsRead(symbology, image.Luminance, image.Width, image.Height)).IsFalse().Because("neither global pass may read it");
         }
