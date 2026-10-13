@@ -3,10 +3,10 @@ using System.Text;
 namespace QRInteropFixtures;
 
 /// <summary>
-/// The GS1 data corpus: the standards' own examples, the equivalence classes of the GS1 plan, one
+/// The GS1 data corpus: the standards' own examples, the equivalence classes of the GS1 layer's inputs, one
 /// valid element string per AI of the pinned dictionary, and one failing value per linter the
 /// dictionary names. Every case goes through the oracles unjudged: the fixture records their verdicts,
-/// and the tests of later phases compare this library against them. The hand-written cases are fixed
+/// and the tests under Gs1/ compare this library against them. The hand-written cases are fixed
 /// literals, and the synthesized ones follow from the committed dictionary, so a regeneration with
 /// the same dictionary and oracles is byte-identical.
 /// </summary>
@@ -28,7 +28,7 @@ public static class Gs1Corpus
     {
         yield return ("genspecs", "GS1 General Specifications, Release 26.0", GenSpecs().ToArray());
         yield return ("digital-link-standard", "GS1 Digital Link Standard: URI Syntax, Release 1.7.0", DigitalLinkStandard().ToArray());
-        yield return ("equivalence-classes", "gs1-support-plan.md equivalence classes", EquivalenceClasses(dictionary).ToArray());
+        yield return ("equivalence-classes", "qrcode-test-fixtures.md equivalence classes", EquivalenceClasses(dictionary).ToArray());
         yield return ("per-ai", $"one valid element string per AI of Syntax Dictionary {dictionary.Release}", PerAi(dictionary).ToArray());
         yield return ("linter-mutations", $"one failing value per linter named by Syntax Dictionary {dictionary.Release}", LinterMutations(dictionary, linterVectors).ToArray());
     }
@@ -104,12 +104,12 @@ public static class Gs1Corpus
     private static IEnumerable<Gs1CaseInput> EquivalenceClasses(Gs1SyntaxDictionary dictionary)
     {
         const string group = "equivalence-classes";
-        const string plan = "gs1-support-plan.md equivalence classes";
+        const string source = "qrcode-test-fixtures.md equivalence classes";
         var cases = new List<Gs1CaseInput>();
-        void B(string id, string input, string? note = null) => cases.Add(Case("eq-" + id, group, plan, Gs1InputKind.Bracketed, input, note));
-        void E(string id, string input, string? note = null) => cases.Add(Case("eq-" + id, group, plan, Gs1InputKind.ElementString, input, note));
-        void D(string id, string input, string? note = null) => cases.Add(Case("eq-" + id, group, plan, Gs1InputKind.DigitalLink, input, note));
-        void S(string id, string input, string? note = null) => cases.Add(Case("eq-" + id, group, plan, Gs1InputKind.ScanData, input, note));
+        void B(string id, string input, string? note = null) => cases.Add(Case("eq-" + id, group, source, Gs1InputKind.Bracketed, input, note));
+        void E(string id, string input, string? note = null) => cases.Add(Case("eq-" + id, group, source, Gs1InputKind.ElementString, input, note));
+        void D(string id, string input, string? note = null) => cases.Add(Case("eq-" + id, group, source, Gs1InputKind.DigitalLink, input, note));
+        void S(string id, string input, string? note = null) => cases.Add(Case("eq-" + id, group, source, Gs1InputKind.ScanData, input, note));
 
         var gtin = "(01)" + Gtin;
         foreach (var unknown in new[] { "89", "4000" })

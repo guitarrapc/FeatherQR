@@ -92,7 +92,7 @@ For each kernel, its tiers in the order its dispatch tries them, and the tier th
 | `QRAlphanumericWriter` | `Sse41`, `AdvSimd`, `PackedSimd` | `Sse41` | `Sse41` | `AdvSimd` | `PackedSimd` |
 | `QRNumericWriter` | `Ssse3`, `AdvSimd` | `Ssse3` | `Ssse3` | `AdvSimd` | `Scalar` |
 | `AlignmentRowMask` | `Vector256`, `AdvSimd`, `Vector128` | `Vector128` | `Vector256` | `AdvSimd` | `Vector128` |
-| `QRSampleGridPiecewise` | `Avx2`, `AdvSimd`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Avx2` | `AdvSimd` | `PackedSimd` |
+| `QRSampleGridPiecewise` | `Avx2`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Avx2` | `Vector128` | `PackedSimd` |
 | `StructuredAppendLanes` | `Vector256`, `AdvSimd`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Vector256` | `AdvSimd` | `PackedSimd` |
 | `StructuredAppendParity` | `AdvSimd` | `Scalar` | `Scalar` | `AdvSimd` | `Scalar` |
 | `StructuredAppendScanner` | `AdvSimd` | `Scalar` | `Scalar` | `AdvSimd` | `Scalar` |

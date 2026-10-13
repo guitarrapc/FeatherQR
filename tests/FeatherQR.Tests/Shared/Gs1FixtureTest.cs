@@ -3,9 +3,9 @@ using System.Security.Cryptography;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Pins the GS1 data corpus (Fixtures/Gs1/) that the GS1 layer of gs1-support-plan.md is built against: the
+/// Pins the GS1 data corpus (Fixtures/Gs1/) that the GS1 layer (FeatherQR.Gs1) is built against: the
 /// pinned dictionary release is the one the provenance names, every oracle verdict comes from the release the
-/// plan pins, the corpus holds the shapes the plan's equivalence classes need, the per-AI and per-linter cases
+/// fixture spec pins, the corpus holds the shapes its equivalence classes need, the per-AI and per-linter cases
 /// cover the committed dictionary, and the imported Syntax Engine vectors agree with their source except where
 /// a known cause (listed here and in the fixture spec) explains the difference. These tests read the fixtures
 /// only, and the tests under Gs1/ hold the library to them. Regenerate with <c>dotnet run --project tools/QRInteropFixtures -- regenerate-gs1</c>.
@@ -62,9 +62,9 @@ public class Gs1FixtureTest
         }
     }
 
-    /// <summary>The corpus shapes the plan's equivalence classes name, each present under its id, and the file sizes a regeneration could silently shrink.</summary>
+    /// <summary>The corpus shapes the equivalence classes name, each present under its id, and the file sizes a regeneration could silently shrink.</summary>
     [Test]
-    public async Task Corpus_HasEveryShapeThePlanNeeds()
+    public async Task Corpus_HasEveryShapeTheLayerNeeds()
     {
         var byId = Cases.Value.ToDictionary(c => c.Id, StringComparer.Ordinal);
         var counts = Cases.Value.GroupBy(c => c.Group).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
@@ -116,7 +116,7 @@ public class Gs1FixtureTest
         await Assert.That(byId["genspecs-figure-4-15-1-2-photograph"].SyntaxEngine.Hri).IsEquivalentTo(["(01) 09504000059101", "(21) 12345678p901", "(10) 1234567p", "(17) 141120", "(8200) http://www.gs1.org/demo/"]);
         await Assert.That(byId["genspecs-figure-4-15-1-2-photograph"].Reader!.Hri).IsEqualTo("(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/");
         await Assert.That(byId["genspecs-section-5-7-4-3-scan"].SyntaxEngine.ElementString).IsEqualTo("0110012345678902");
-        // The missing-separator trap the plan's release decision rests on: valid data with another meaning.
+        // The missing-separator trap the release decision rests on (FNC1 encode ships with the GS1 builders): valid data with another meaning.
         await Assert.That(byId["eq-sep-missing-after-variable"].SyntaxEngine.Valid).IsTrue();
         await Assert.That(byId["eq-sep-missing-after-variable"].SyntaxEngine.Bracketed).IsEqualTo("(01)09520123456788(10)ABC17251231");
         // Separator tolerance on read (7.8.6.3), where the oracles differ.

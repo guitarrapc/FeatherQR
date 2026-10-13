@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// URI the Syntax Engine read to the same element string and refuses, or reads into data <c>TryValidate</c> refuses,
 /// every URI the engine refused (the listed deliberate differences apart); <see cref="Gs1ElementString.TryToDigitalLink"/>
 /// builds the engine's URI with its query in the canonical order, which is CodeGlyphX's URI where both built one; the
-/// two round-trip; and the span forms, their length twins and the stem argument behave as the plan says.
+/// two round-trip; and the span forms, their length twins and the stem argument behave as their XML docs say.
 /// </summary>
 public class Gs1DigitalLinkTest
 {
