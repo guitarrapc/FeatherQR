@@ -9,8 +9,17 @@ namespace FeatherQR.Gs1.Internals;
 /// </summary>
 internal static class Gs1SymbolData
 {
-    /// <summary>The longest text a caller's stack buffer is taken for, in characters.</summary>
+    /// <summary>
+    /// The length of each stack buffer, in characters. The element buffer serves (AI) text up to this length, and
+    /// the URI buffer a <see cref="DigitalLinkBound"/> up to it.
+    /// </summary>
     public const int StackLimit = 512;
+
+    /// <summary>The most characters a Standard QR symbol holds: digits, in version 40 at level L.</summary>
+    public const int StandardQrCapacity = 7089;
+
+    /// <summary>The most characters an rMQR symbol holds: digits, in R17x139 at level M.</summary>
+    public const int RmQrCapacity = 361;
 
     /// <summary>
     /// Whether the text is (AI) text. It starts with an opening parenthesis and an element string starts with an
@@ -19,9 +28,23 @@ internal static class Gs1SymbolData
     public static bool IsAiText(ReadOnlySpan<char> text) => text.Length > 0 && text[0] == '(';
 
     /// <summary>
-    /// A length no Digital Link URI of a text exceeds: the stem, each character of the element string as a
-    /// percent escape of three, a question mark or a slash for the rest. The element string is never longer
-    /// than its (AI) text.
+    /// Whether the stack buffer serves as the element buffer. An element string is checked where it is and never
+    /// copied, so only (AI) text longer than the buffer needs a pooled one.
+    /// </summary>
+    public static bool StackBufferServes(ReadOnlySpan<char> text) => text.Length <= StackLimit || !IsAiText(text);
+
+    /// <summary>
+    /// Whether the text is longer than a symbol of the given capacity can hold, whatever it holds. An element
+    /// string goes into the symbol as it is. (AI) text sheds at most half its length on the way: two parentheses
+    /// for an AI of two digits or more, and one backslash for each escaped character. A size form answers from
+    /// this before the checks, whose cost grows with the square of the number of elements.
+    /// </summary>
+    public static bool IsPastCapacity(ReadOnlySpan<char> text, int capacity) => text.Length > (IsAiText(text) ? 2L * capacity : capacity);
+
+    /// <summary>
+    /// A length no Digital Link URI of a text exceeds under a stem, the bound <see cref="Gs1ElementString"/>
+    /// documents for <c>TryToDigitalLink</c>: the stem plus three times the element string plus two. The text's
+    /// length stands in for the element string's, which is never longer.
     /// </summary>
     public static int DigitalLinkBound(int textLength, int stemLength) => stemLength + 3 * textLength + 2;
 

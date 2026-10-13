@@ -41,7 +41,7 @@ if (command == "sweep-fnc1")
 if (command == "spot-check-gs1")
 {
     // Every symbol the GS1 entry points write for the committed GS1 inputs (CreateGs1 and CreateGs1DigitalLink,
-    // Standard QR and rMQR) read by zxing-cpp. Findings go to the fixture spec and the GS1 plan.
+    // Standard QR and rMQR) read by zxing-cpp. Findings go to the fixture spec.
     return Gs1SpotCheck.Run(FindRepoRoot());
 }
 if (command == "spot-check-rmqr")

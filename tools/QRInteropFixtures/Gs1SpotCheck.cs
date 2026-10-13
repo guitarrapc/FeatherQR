@@ -9,13 +9,19 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// <c>spot-check-gs1</c>: the symbols the GS1 entry points write, read by the pinned zxing-cpp reader. The inputs
-/// are the bracketed and element string inputs of the committed GS1 fixtures that the entry points take. Each is
-/// written by <c>CreateGs1</c> as a Standard QR symbol and, where it fits, an rMQR symbol, under <c>Single</c> and
-/// <c>Optimal</c> at level M, and zxing-cpp must report <c>]Q3</c>, GS1 content, no ECI header, the element string
-/// in <c>TextMode.Plain</c> and, in <c>TextMode.HRI</c>, the (AI) text <c>TryToHri</c> gives, where its own table
-/// can split the data (it falls back to escaped text otherwise, and those are counted, not compared). Each input a
-/// URI can carry is also written by <c>CreateGs1DigitalLink</c>, and zxing-cpp must report <c>]Q1</c>, text
-/// content, no ECI header and the URI. Findings go to the fixture spec and the GS1 plan.
+/// are the bracketed and element string inputs of the committed GS1 fixtures, each text once. For every input each
+/// size form, in both symbologies, is asked twice: under the options the symbols are written with, and under the
+/// smallest version, which most data does not fit, so that the fit decides answers too. Each answer and its size
+/// must be what the data layer and the core give together: -1 where the data is not valid or, for a Digital Link
+/// form, no URI can carry it, and otherwise what the core sizes the element string under FNC1 or the URI at under
+/// the same options. An answer that differs fails the run, so a member that refuses what it should write cannot
+/// shorten it. Each input the Standard QR size form takes is written by <c>CreateGs1</c> as a Standard QR symbol
+/// and, where the rMQR size form takes it, an rMQR symbol, under <c>Single</c> and <c>Optimal</c> at level M, and
+/// zxing-cpp must report <c>]Q3</c>, GS1 content, no ECI header, the element string in <c>TextMode.Plain</c> and,
+/// in <c>TextMode.HRI</c>, the (AI) text <c>TryToHri</c> gives without its escapes (zxing-cpp writes a parenthesis
+/// in a value as it is), where its own table can split the data (it falls back to escaped text otherwise, and
+/// those are counted, not compared). Each input a URI can carry is also written by <c>CreateGs1DigitalLink</c>,
+/// and zxing-cpp must report <c>]Q1</c>, text content, no ECI header and the URI. Findings go to the fixture spec.
 /// </summary>
 public static class Gs1SpotCheck
 {
@@ -30,68 +36,120 @@ public static class Gs1SpotCheck
         var refused = 0;
         var taken = 0;
         var linked = 0;
+        var compared = 0;
+        var differing = 0;
         var qr = new Tally();
         var rmqr = new Tally();
         var qrLink = new Tally();
         var rmqrLink = new Tally();
+        var versionOne = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(1) };
+
+        // One size form's answer against the expected one, each as the symbol's size in bytes, or -1 for false.
+        // A difference is reported and fails the run.
+        bool Differs(string id, string member, int actual, int expected)
+        {
+            compared++;
+            if (actual == expected)
+                return false;
+            differing++;
+            Console.WriteLine($"FAIL {id}: {member} answers {Describe(actual)} where the data layer and the core answer {Describe(expected)}");
+            return true;
+
+            static string Describe(int size) => size < 0 ? "false" : $"{size} bytes";
+        }
+
         foreach (var (id, input) in inputs)
         {
-            if (!QRCodeGenerator.TryGetRequiredBufferSizeGs1(input, QREccLevel.M, out _))
+            // The data layer's own verdicts on the text, in the form its first character names.
+            var elementString = input;
+            var valid = input.StartsWith('(') ? Gs1ElementString.TryFromHri(input, out elementString, out _) : Gs1ElementString.TryValidate(input, out _);
+            var uri = "";
+            var carried = valid && Gs1ElementString.TryToDigitalLink(elementString, out uri, out _);
+            var hri = "";
+            if (valid && !Gs1ElementString.TryToHri(elementString, out hri, out var formatError))
+                throw new InvalidOperationException($"{id}: an element string the data layer takes does not format ({formatError})");
+
+            // What the core sizes the element string at under FNC1 in first position, and the URI at as plain text.
+            int Gs1Size(in QRCodeGeneratorOptions options) => valid && QRCodeGenerator.TryGetRequiredBufferSize(elementString, QREccLevel.M, out var size, options with { Fnc1 = Fnc1Mode.FirstPosition }) ? size.BufferSize : -1;
+            int LinkSize(in QRCodeGeneratorOptions options) => carried && QRCodeGenerator.TryGetRequiredBufferSize(uri, QREccLevel.M, out var size, in options) ? size.BufferSize : -1;
+            int RmQrGs1Size(in RmQRCodeGeneratorOptions options) => valid && RmQRCodeGenerator.TryGetRequiredBufferSize(elementString, RmQREccLevel.M, out var size, options with { Fnc1 = Fnc1Mode.FirstPosition }) ? size.BufferSize : -1;
+            int RmQrLinkSize(in RmQRCodeGeneratorOptions options) => carried && RmQRCodeGenerator.TryGetRequiredBufferSize(uri, RmQREccLevel.M, out var size, in options) ? size.BufferSize : -1;
+
+            // What each size form answers, as its size or -1.
+            int Gs1Answer(in QRCodeGeneratorOptions options) => QRCodeGenerator.TryGetRequiredBufferSizeGs1(input, QREccLevel.M, out var size, in options) ? size.BufferSize : -1;
+            int LinkAnswer(in QRCodeGeneratorOptions options) => QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(input, QREccLevel.M, out var size, in options) ? size.BufferSize : -1;
+            int RmQrGs1Answer(in RmQRCodeGeneratorOptions options) => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(input, RmQREccLevel.M, out var size, in options) ? size.BufferSize : -1;
+            int RmQrLinkAnswer(in RmQRCodeGeneratorOptions options) => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(input, RmQREccLevel.M, out var size, in options) ? size.BufferSize : -1;
+
+            var takes = Gs1Answer(default);
+            var takesAgrees = !Differs(id, "QRCodeGenerator.TryGetRequiredBufferSizeGs1", takes, Gs1Size(default));
+            Differs(id, "QRCodeGenerator.TryGetRequiredBufferSizeGs1 (version 1)", Gs1Answer(in versionOne), Gs1Size(in versionOne));
+            if (takesAgrees && takes >= 0)
+            {
+                taken++;
+                foreach (var segmentation in new[] { QRSegmentation.Single, QRSegmentation.Optimal })
+                {
+                    var data = QRCodeGenerator.CreateGs1(input, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0, Segmentation = segmentation });
+                    CheckGs1(qr, $"{id} {segmentation} v{data.Version}", FromData(data), CppFormat.QRCode, FixtureWriter.QuietZoneModules, elementString, hri);
+                }
+            }
+            else if (takesAgrees)
             {
                 refused++;
-                continue;
-            }
-
-            taken++;
-            var elementString = input;
-            if (input[0] == '(' && !Gs1ElementString.TryFromHri(input, out elementString, out var hriError))
-                throw new InvalidOperationException($"{id}: the entry point takes (AI) text the data layer refuses ({hriError})");
-            if (!Gs1ElementString.TryToHri(elementString, out var hri, out var formatError))
-                throw new InvalidOperationException($"{id}: an element string the entry point takes does not format ({formatError})");
-
-            foreach (var segmentation in new[] { QRSegmentation.Single, QRSegmentation.Optimal })
-            {
-                var data = QRCodeGenerator.CreateGs1(input, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0, Segmentation = segmentation });
-                CheckGs1(qr, $"{id} {segmentation} v{data.Version}", FromData(data), CppFormat.QRCode, FixtureWriter.QuietZoneModules, elementString, hri);
             }
 
             foreach (var segmentation in new[] { RmQRSegmentation.Single, RmQRSegmentation.Optimal })
             {
                 var options = new RmQRCodeGeneratorOptions { QuietZoneSize = 0, Segmentation = segmentation };
-                if (!RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(input, RmQREccLevel.M, out _, options))
+                var smallest = options with { Version = RmQRVersion.R7x43 };
+                var takesRmQr = RmQrGs1Answer(in options);
+                var agrees = !Differs(id, $"RmQRCodeGenerator.TryGetRequiredBufferSizeGs1 ({segmentation})", takesRmQr, RmQrGs1Size(in options));
+                Differs(id, $"RmQRCodeGenerator.TryGetRequiredBufferSizeGs1 ({segmentation}, R7x43)", RmQrGs1Answer(in smallest), RmQrGs1Size(in smallest));
+                if (!agrees)
+                    continue;
+                if (takesRmQr < 0)
                 {
-                    rmqr.DoesNotFit++;
+                    if (valid)
+                        rmqr.DoesNotFit++;
                     continue;
                 }
                 var data = RmQRCodeGenerator.CreateGs1(input, RmQREccLevel.M, options);
                 CheckGs1(rmqr, $"{id} {segmentation} {data.Version}", FromData(data), CppFormat.RMQRCode, RmQrQuietZoneModules, elementString, hri);
             }
 
-            if (!QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(input, QREccLevel.M, out _))
-                continue;
-
-            linked++;
-            if (!Gs1ElementString.TryToDigitalLink(elementString, out var uri, out var linkError))
-                throw new InvalidOperationException($"{id}: the entry point builds a URI the data layer does not ({linkError})");
-            var link = QRCodeGenerator.CreateGs1DigitalLink(input, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
-            CheckLink(qrLink, $"{id} v{link.Version}", FromData(link), CppFormat.QRCode, FixtureWriter.QuietZoneModules, uri);
+            var links = LinkAnswer(default);
+            var linksAgrees = !Differs(id, "QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink", links, LinkSize(default));
+            Differs(id, "QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink (version 1)", LinkAnswer(in versionOne), LinkSize(in versionOne));
+            if (linksAgrees && links >= 0)
+            {
+                linked++;
+                var link = QRCodeGenerator.CreateGs1DigitalLink(input, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+                CheckLink(qrLink, $"{id} v{link.Version}", FromData(link), CppFormat.QRCode, FixtureWriter.QuietZoneModules, uri);
+            }
 
             var rmqrOptions = new RmQRCodeGeneratorOptions { QuietZoneSize = 0 };
-            if (!RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(input, RmQREccLevel.M, out _, rmqrOptions))
+            var rmqrSmallest = rmqrOptions with { Version = RmQRVersion.R7x43 };
+            var linksRmQr = RmQrLinkAnswer(in rmqrOptions);
+            var linksRmQrAgrees = !Differs(id, "RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink", linksRmQr, RmQrLinkSize(in rmqrOptions));
+            Differs(id, "RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink (R7x43)", RmQrLinkAnswer(in rmqrSmallest), RmQrLinkSize(in rmqrSmallest));
+            if (!linksRmQrAgrees)
+                continue;
+            if (linksRmQr < 0)
             {
-                rmqrLink.DoesNotFit++;
+                if (carried)
+                    rmqrLink.DoesNotFit++;
                 continue;
             }
             var rmqrData = RmQRCodeGenerator.CreateGs1DigitalLink(input, RmQREccLevel.M, rmqrOptions);
             CheckLink(rmqrLink, $"{id} {rmqrData.Version}", FromData(rmqrData), CppFormat.RMQRCode, RmQrQuietZoneModules, uri);
         }
 
-        Console.WriteLine($"{taken} inputs taken, {refused} refused, {linked} of the taken with a Digital Link URI");
+        Console.WriteLine($"{taken} inputs taken, {refused} refused, {linked} with a Digital Link URI, {differing} of {compared} size form answers that differ from the data layer's and the core's");
         Console.WriteLine($"CreateGs1, Standard QR: {qr.Describe()}");
         Console.WriteLine($"CreateGs1, rMQR: {rmqr.Describe()}");
         Console.WriteLine($"CreateGs1DigitalLink, Standard QR: {qrLink.Describe()}");
         Console.WriteLine($"CreateGs1DigitalLink, rMQR: {rmqrLink.Describe()}");
-        return qr.Failures + rmqr.Failures + qrLink.Failures + rmqrLink.Failures == 0 ? 0 : 1;
+        return differing + qr.Failures + rmqr.Failures + qrLink.Failures + rmqrLink.Failures == 0 ? 0 : 1;
     }
 
     /// <summary>A GS1 symbol: the mode's identifier, GS1 content, the element string, and the (AI) text where zxing-cpp's table splits the data.</summary>
@@ -172,7 +230,7 @@ public static class Gs1SpotCheck
                     if (!c.TryGetProperty("inputKind", out var kind) || kind.GetString() is not ("Bracketed" or "ElementString"))
                         continue;
                     var input = c.GetProperty("input").GetString() ?? "";
-                    if (input.Length > 0 && seen.Add(input))
+                    if (seen.Add(input))
                         inputs.Add((c.GetProperty("id").GetString() ?? "", input));
                 }
             }

@@ -3,10 +3,10 @@ using FeatherQR.Gs1;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The GS1 data layer allocates nothing on its span paths (gs1-support-plan.md, "What has to stay true"):
+/// The GS1 layer allocates nothing on its span paths:
 /// <see cref="Gs1ElementString.TryValidate"/> on an accepted and on a refused element string, a
 /// <c>foreach</c> over <see cref="Gs1ElementString.EnumerateElements"/>, the span forms and length twins
-/// of the (AI) text conversions, and the span and size forms of the generator entry points. Release only, as
+/// of the (AI) text conversions, and the destination and size forms of the generator entry points. Release only, as
 /// <see cref="DecodeAllocationTest"/> is, since a Debug build allocates where an optimized one does not.
 /// </summary>
 [NotInParallel]
@@ -73,9 +73,9 @@ public class Gs1AllocationTest
     }
 
     /// <summary>
-    /// The span and size forms of the entry points, from (AI) text and from an element string, under both
-    /// segmentations, for data they take and data they refuse. The long text is past the stack buffers, where
-    /// the pool's arrays come back to the thread that returned them.
+    /// The destination and size forms of the entry points on data they take, from (AI) text and from an element
+    /// string, under both segmentations, and the size forms on data they refuse, where a destination form throws.
+    /// The long text is past the stack buffers, where the pool's arrays come back to the thread that returned them.
     /// </summary>
     [Test]
     [Arguments("(01)09506000134352(10)ABC123(17)201225")]

@@ -3,7 +3,7 @@ using FeatherQR.Gs1;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// No <c>Try</c> form throws for any input text (gs1-support-plan.md, "What has to stay true"): mutations of
+/// No <c>Try</c> form throws for any input text: mutations of
 /// every corpus input (characters inserted, deleted and replaced, separators and non-ASCII among them) and
 /// random strings go through <see cref="Gs1ElementString.TryValidate"/>, <see cref="Gs1ElementString.EnumerateElements"/>
 /// the (AI) text and Digital Link conversions in both directions and <see cref="Gs1ElementString.TryRead"/>
@@ -12,7 +12,9 @@ namespace FeatherQR.Tests;
 /// The generator entry points get the same texts: their size forms throw nothing, their <c>Create</c> forms
 /// throw the data layer's error in a <see cref="Gs1FormatException"/> or what <c>Create</c> throws for content
 /// that does not fit and nothing else, each succeeds exactly where its size form says yes, and they take exactly
-/// the data the data layer takes, so the buffers they size from the text's length are never too small.
+/// the data the data layer takes. No text here is longer than the entry points' stack buffers, no text that is
+/// taken has a URI bound past them, and none that is taken is too long for a symbol. So nothing is written into
+/// a pooled buffer here, and content that does not fit is not reached.
 /// </summary>
 public class Gs1FuzzTest
 {

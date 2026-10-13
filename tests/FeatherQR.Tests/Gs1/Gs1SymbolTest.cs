@@ -167,6 +167,7 @@ public class Gs1SymbolTest
         await Assert.That(() => QRCodeGenerator.CreateGs1(text, QREccLevel.M, destination, quietZone)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(text, QREccLevel.M, out _, quietZone)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => QRCodeGenerator.CreateGs1DigitalLink(text, QREccLevel.M, quietZone)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => QRCodeGenerator.CreateGs1DigitalLink(text, QREccLevel.M, destination, quietZone)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text, QREccLevel.M, out _, quietZone)).Throws<ArgumentOutOfRangeException>();
 
         await Assert.That(() => QRCodeGenerator.CreateGs1(text, (QREccLevel)9)).Throws<ArgumentOutOfRangeException>();
@@ -221,6 +222,7 @@ public class Gs1SymbolTest
     /// </summary>
     [Test]
     [Arguments("(410)1234567890128", Gs1ErrorKind.MissingPrimaryKey, "(410)1234567890128")]
+    [Arguments("(410)1234567890128(411)1234567890128", Gs1ErrorKind.MissingPrimaryKey, "(410)1234567890128(411)1234567890128")]
     [Arguments("4101234567890128", Gs1ErrorKind.MissingPrimaryKey, "4101234567890128")]
     [Arguments("(01)09520123456788(8200)http://example.com/", Gs1ErrorKind.AiNotAllowedInUri, "(8200)http://example.com/")]
     [Arguments("0109520123456788" + "8200http://example.com/", Gs1ErrorKind.AiNotAllowedInUri, "8200")]
@@ -287,8 +289,9 @@ public class Gs1SymbolTest
     {
         foreach (var stem in new[] { null, "https://brand.example.com/products" })
         {
-            var options = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
+            var options = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal, QuietZoneSize = 0 };
             var data = QRCodeGenerator.CreateGs1DigitalLink(text, QREccLevel.M, options, stem);
+            await Assert.That(data.Size).IsNotEqualTo(QRCodeGenerator.CreateGs1DigitalLink(text, QREccLevel.M, stem: stem).Size).Because("the premise: the options change the symbol, so a form that dropped them would write another one");
             await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text, QREccLevel.M, out var size, options, stem)).IsTrue();
             await Assert.That((size.Version, size.Size)).IsEqualTo((data.Version, data.Size));
 
@@ -416,9 +419,10 @@ public class Gs1SymbolTest
     // Text past the stack buffers
 
     /// <summary>
-    /// Text longer than the entry points' stack buffers goes through pooled ones, and the URI buffer is sized from
-    /// the text alone, so the case here is the URI that grows most: every value character a slash, written as
-    /// three. The symbols are the ones <c>Create</c> writes for the data layer's element string and URI.
+    /// Text longer than the entry points' stack buffers: (AI) text is converted in a pooled element buffer, an
+    /// element string needs none, and the URI of either goes through a pooled URI buffer, which is sized from the
+    /// lengths of the text and the stem. The case here is the URI that grows most: every value character a slash,
+    /// written as three. The symbols are the ones <c>Create</c> writes for the data layer's element string and URI.
     /// </summary>
     [Test]
     public async Task StandardQr_TextPastTheStackBuffers_WritesTheSameSymbols()
@@ -492,6 +496,30 @@ public class Gs1SymbolTest
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(withKey, RmQREccLevel.M, out _)).IsFalse();
         await Assert.That(() => RmQRCodeGenerator.CreateGs1(withKey, RmQREccLevel.M)).ThrowsExactly<ArgumentException>();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(withKey, RmQREccLevel.M, out _)).IsFalse();
+
+        // The destination forms: no rMQR symbol holds an element string past the stack buffer, so what shows that
+        // the pooled buffers held it is the error, the data form's own for content that does not fit. A buffer
+        // that was too short for the conversion would be a Gs1FormatException instead.
+        var large = new byte[40_000];
+        var doesNotFit = await Assert.That(() => RmQRCodeGenerator.CreateGs1(withKey, RmQREccLevel.M)).ThrowsExactly<ArgumentException>();
+        var fromDestinationForm = await Assert.That(() => RmQRCodeGenerator.CreateGs1(withKey, RmQREccLevel.M, large)).ThrowsExactly<ArgumentException>();
+        await Assert.That(fromDestinationForm!.Message).IsEqualTo(doesNotFit!.Message);
+        doesNotFit = await Assert.That(() => RmQRCodeGenerator.CreateGs1DigitalLink(withKey, RmQREccLevel.M)).ThrowsExactly<ArgumentException>();
+        fromDestinationForm = await Assert.That(() => RmQRCodeGenerator.CreateGs1DigitalLink(withKey, RmQREccLevel.M, large)).ThrowsExactly<ArgumentException>();
+        await Assert.That(fromDestinationForm!.Message).IsEqualTo(doesNotFit!.Message);
+
+        // A URI that fits a symbol and is longer than its text: the URI buffer has to hold the URI, whatever the
+        // text's length.
+        var digits = "(01)" + Gtin + "(91)" + new string('7', 90) + "(92)" + new string('7', 90) + "(93)" + new string('7', 30);
+        await Assert.That(Gs1ElementString.TryFromHri(digits, out var digitsElementString, out error)).IsTrue().Because(error.ToString());
+        await Assert.That(Gs1ElementString.TryToDigitalLink(digitsElementString, out var digitsUri, out error)).IsTrue().Because(error.ToString());
+        await Assert.That(digits.Length).IsLessThanOrEqualTo(256).Because("the premise: a buffer sized for the text would hold 256 characters, the pool's array for this length");
+        await Assert.That(digitsUri.Length).IsGreaterThan(256).Because("the premise: the URI would not fit such a buffer");
+        var optimal = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(digits, RmQREccLevel.M, out var digitsSize, optimal)).IsTrue();
+        await Assert.That(RmQRCodeGenerator.CreateGs1DigitalLink(digits, RmQREccLevel.M, new byte[digitsSize.BufferSize], optimal)).IsEqualTo(digitsSize.BufferSize);
+        await Assert.That(RmQRCodeDecoder.TryDecode(RmQRCodeGenerator.CreateGs1DigitalLink(digits, RmQREccLevel.M, optimal), out var digitsDecoded, out _)).IsTrue();
+        await Assert.That(digitsDecoded).IsEqualTo(digitsUri);
     }
 
     // The corpus: every bracketed and element string input of the GS1 fixtures through the entry points
@@ -525,9 +553,9 @@ public class Gs1SymbolTest
     }
 
     /// <summary>
-    /// The entry points agree with the Syntax Engine on what is GS1 data, write the engine's element string, and keep
-    /// the plan's compliance property: a GS1 QR Code written with default options holds FNC1 in first position, no
-    /// ECI header and no Kanji segment. The same under <c>Optimal</c> and in rMQR where the data fits a symbol.
+    /// The entry points agree with the Syntax Engine on what is GS1 data and write the engine's element string, and
+    /// a GS1 QR Code written with default options holds FNC1 in first position, no ECI header and no Kanji segment.
+    /// The same under <c>Optimal</c> and in rMQR where the data fits a symbol.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(CorpusCases))]
@@ -600,6 +628,27 @@ public class Gs1SymbolTest
             await Assert.That(thrown!.Error).IsEqualTo(error).Because(c.Id);
             await Assert.That(thrown.Error.Offset + thrown.Error.Length).IsLessThanOrEqualTo(Math.Max(c.Input.Length, 1)).Because($"{c.Id}: the place is in the caller's text");
             await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(c.Input, QREccLevel.M, out _)).IsFalse().Because(c.Id);
+
+            // The expected error above comes from the resolver the entry point itself calls. For valid (AI) text
+            // a URI cannot carry, the place is also held by its shape: the whole text where no AI is a key, and
+            // otherwise one whole pair.
+            if (c.Valid && c.Input.StartsWith('('))
+            {
+                var end = thrown.Error.Offset + thrown.Error.Length;
+                if (thrown.Error.Kind == Gs1ErrorKind.MissingPrimaryKey)
+                {
+                    await Assert.That((thrown.Error.Offset, end)).IsEqualTo((0, c.Input.Length)).Because(c.Id);
+                }
+                else
+                {
+                    // Which pair: the one whose AI the data layer's builder refuses in the element string.
+                    var refusedAi = AiTheUriBuilderRefuses(c.Input);
+                    await Assert.That(refusedAi).IsNotNull().Because(c.Id);
+                    await Assert.That(c.Input.Substring(thrown.Error.Offset)).StartsWith("(" + refusedAi + ")").Because($"{c.Id}: the place starts the pair of the refused AI");
+                    await Assert.That(end).IsEqualTo(EndOfPair(c.Input, thrown.Error.Offset)).Because($"{c.Id}: the place ends where that pair ends");
+                }
+            }
+
             return;
         }
 
@@ -680,6 +729,38 @@ public class Gs1SymbolTest
     {
         var taken = Gs1SymbolData.TryGetElementString(text, year, new char[Math.Max(text.Length, 1)], out var elementString, out var error);
         return (taken, elementString.ToString(), error);
+    }
+
+    /// <summary>
+    /// The AI of the element at which the data layer's builder refuses the data of (AI) text, read through the
+    /// public members alone, or null where the refusal names no element.
+    /// </summary>
+    private static string? AiTheUriBuilderRefuses(string hri)
+    {
+        if (!Gs1ElementString.TryFromHri(hri, out var elementString, out _) || Gs1ElementString.TryToDigitalLink(elementString, out _, out var refusal))
+            return null;
+        foreach (var element in Gs1ElementString.EnumerateElements(elementString))
+        {
+            if (element.Offset == refusal.Offset)
+                return element.Ai.ToString();
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Where the pair that starts at an opening parenthesis of (AI) text ends: at the next opening parenthesis that
+    /// no backslash escapes, or at the end of the text.
+    /// </summary>
+    private static int EndOfPair(string hri, int start)
+    {
+        for (var i = start + 1; i < hri.Length; i++)
+        {
+            if (hri[i] == '\\')
+                i++;
+            else if (hri[i] == '(')
+                return i;
+        }
+        return hri.Length;
     }
 
     /// <summary>The entry points' Digital Link URI for a text in a given year under the canonical stem.</summary>
