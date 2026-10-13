@@ -7,14 +7,17 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 ## Where it stands (2026-10-13)
 
 - BoofCV's 536 photographs: this library reads 456, zxing-cpp 392 and go-qr 412. Seven are read by one of the others and not here, and 23 here alone.
-- The photograph stages were timed on x64 (.NET 10 JIT) and on an Apple M2. On WebAssembly only the halving kernel was. That one timing found a fault no other build has: AOT-compiled, the portable 16-bit shift ran 16 times slower than `PackedSimd`'s, which left the kernel 4.2 times slower than the scalar loop it replaced.
+- The photograph stages were timed on x64 (.NET 10 JIT) and on an Apple M2. On WebAssembly only the halving kernel was, until Work 1 timed the whole chain there on 2026-10-13 and found no fault. The halving's timing had found one no other build has: AOT-compiled, the portable 16-bit shift ran 16 times slower than `PackedSimd`'s, which left the kernel 4.2 times slower than the scalar loop it replaced.
 - Each decoder returns one symbol a call. 168 of the 536 photographs hold more than one code: 42 hold two, 116 three, 3 four and 7 sixty, which is 864 of the set's 1,232 codes. zxing-cpp reads 720 of the 864. This library reads one code on 150 of the 168 photographs. On the 368 photographs with one code it reads 306 and zxing-cpp 257.
+- Phase 0 of Work 2 (2026-10-14): called again with each read symbol painted over, the one-symbol call reads 765 of the 864 and 1,071 of the 1,232, against zxing-cpp's 720 and 977. No text is unconfirmed and no symbol is read twice.
 
 ## Order
 
-Work 1 first. It is about a day, changes no behaviour unless it finds a fault, and closes a hole in what was measured of code that already ships. Work 2 starts with a measurement that needs no change to `src`, and stops at a decision that is the maintainer's.
+Work 1 came first and is done (2026-10-13, [Progress log](#progress-log)). It changed no behaviour, and closed a hole in what was measured of code that already ships. Work 2 started with a measurement that needs no change to `src`, Phase 0, which is done (2026-10-14, [Progress log](#progress-log)). It stops at a decision that is the maintainer's.
 
 ## Work 1: the photograph stages on WebAssembly
+
+Done on 2026-10-13 with no finding. The ratios are in the Performance lessons of [standardqr-decoder.md](../specs/standardqr-decoder.md), and what follows is the plan as it was run.
 
 ### Why
 
@@ -82,4 +85,68 @@ It is the largest difference left against the readers this library was measured 
 
 Each finished phase is appended here: what was done, what it taught, and the numbers it moved.
 
-Nothing yet.
+### Work 1: the photograph stages on WebAssembly (2026-10-13)
+
+Done, with no finding. Nothing in `src` changed, so no benchmark moved.
+
+What was done:
+
+- `tests/FeatherQR.WasmReport` was published interpreted and AOT-compiled, and `tests/FeatherQR.AotAnalysis` built for the JIT and published as default NativeAOT, at c73392ad (`57bef5c5^`) and at 18747ec9, in two worktrees outside the repository.
+- The 14 `image/` shapes were timed with `--time`, each shape in its own process and the two commits in turn, with the processes pinned to two cores and the builds' servers stopped. Each commit had 11 processes on WebAssembly AOT and on NativeAOT, 15 interpreted, and 7 on the JIT with a 3 s warm-up.
+- The mesh sampler was timed alone the same way, through its dispatch and through its column table. The perspective sampler, whose code no stage changed, was timed beside it and read 0.99 to 1.01 on the four builds.
+- Both WebAssembly builds pass `--simd-class Wasm --parity` at both commits.
+- The record is the table and the sampler's figures in [standardqr-decoder.md](../specs/standardqr-decoder.md) (Performance), the scope row in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions), which no longer lists WebAssembly, and the interpreter's two speeds in that document's lessons. No tier was added, so [qrcode-simd-tiers.md](../specs/qrcode-simd-tiers.md) is as it was.
+
+The numbers, the later commit's time over the earlier one's, each commit's fastest process:
+
+| Build | Ten reading shapes that are not bowed | Bowed, version 25 and 40 | Noise and ramp |
+|---|---|---|---|
+| WebAssembly AOT | 1.00 to 1.02 | 1.10 and 1.08 | 1.80 and 1.42 |
+| WebAssembly interpreted | 0.98 to 1.04 | 1.13 and 1.10 | 1.87 and 1.44 |
+| x64, default NativeAOT | 1.00 to 1.04 | 1.10 and 1.10 | 1.83 and 1.40 |
+| x64, .NET 10 JIT | 0.98 to 1.03 | 1.10 and 1.20 | 1.83 and 1.40 |
+
+- Against default NativeAOT's ratio, shape by shape, WebAssembly AOT is at 0.98 to 1.01 and the interpreter at 0.97 to 1.04, highest on the bowed version 25 symbol. Against the JIT's they are at most 1.02 and 1.04. The bar was 1.10.
+- The mesh sampler through three nodes takes 1.46 times its two-node time AOT-compiled, 1.59 interpreted, 1.34 on NativeAOT and 1.42 on the JIT's AVX2 tier. It still takes 0.34 and 0.45 of the column table's time on the two WebAssembly builds.
+
+What it taught:
+
+- Under Node.js the interpreter runs a process at one of two speeds, 1.3 times apart. The first pass, five processes a commit, read two shapes over the bar (1.14 and 1.16 against NativeAOT's 1.03 and 1.01) and three under 0.92, all of it the mix. `node --no-liftoff` holds the processes to the faster speed. It does not remove the AOT-compiled build's two levels, which are 5 % apart.
+- Default NativeAOT is the x64 build to hold WebAssembly against, since both run 128-bit tiers. The JIT's 1.20 on the bowed version 40 symbol is 99 µs added to 507, where NativeAOT adds 79 to 814 and WebAssembly AOT 57 to 705.
+- The JIT needs the fastest of several processes too. On one commit the turned version 40 shape read 187 to 192 µs in two processes and 220 to 235 in five, after a 3 s warm-up.
+- Step 4's stage commits were not needed. They are still unreachable objects, so a `git gc` can prune them.
+
+### Work 2, Phase 0: the ceiling (2026-10-14)
+
+Done. Nothing in `src` changed, so no benchmark moved. The one change that stays is to `tools/QRImageDecodeSweep`.
+
+What was done:
+
+- `boofcv` now repeats the one-symbol call on each photograph: a read symbol's outline, a module wider on every side, is filled with the symbol's own light level, and the photograph is read again until a call reads nothing. It uses the public call alone. The reads are scored as zxing-cpp's are, and `boofcv-codes.csv` has a row a labelled code with the call that read it and, for a code left unread, what it reads cut out alone.
+- go-qr's lines of 2026-10-11 carry one text a photograph (412 lines of one text, 124 of none), so there was nothing of its to score as codes. Its `DecodeAll` was not run.
+- Where each unread code stopped, and which pass read each later code, came from a trace of the decoder's searches and decodes in a scratch worktree. That build was never part of the repository and is deleted.
+- The record is in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md) (the `boofcv` rules and the read-again table), the scope row "Several symbols in one image" and the Photographs section of [standardqr-decoder.md](../specs/standardqr-decoder.md).
+
+The numbers:
+
+| | Codes | One call | Read again | zxing-cpp |
+|---|---|---|---|---|
+| The 368 photographs of one code | 368 | 306 | 306 | 257 |
+| The 168 of more than one | 864 | 150 | 765 | 720 |
+| All | 1,232 | 456 | 1,071 | 977 |
+
+- Reading again is level with zxing-cpp or ahead in every category, reads 104 codes zxing-cpp does not and misses 10 it reads.
+- All 1,071 reads are agreed and inside a labelled outline. None is a second read of a code, and none differs from zxing-cpp's text at the same code. The photographs counted stay 456, 392 and 210.
+- Time on one thread: 11.9 s for the set against 2.6 s for one call and zxing-cpp's 6.9 s. The one-code photographs take 2.8 times the one call. A 60-code photograph takes 400 to 820 ms against zxing-cpp's 40 to 43.
+- Five codes are labelled twice, so the set's countable codes are 1,227.
+- Of the 156 codes left, 15 read cut out alone. In the last call's trace 79 never had three finders in one pass's list, 68 had their own triple decoded and fail, 7 were tried only with a finder elsewhere and 2 were in a list and never tried.
+- Of the 10 codes zxing-cpp reads and reading again does not: 7 no triple, 2 a triple across two symbols (`bright_spots/image022`, `high_version/image030`), 1 the grid (`glare/image037`).
+
+What it taught, for Phase 1:
+
+- The number M1 asks for is 765 on the multi-code photographs, over zxing-cpp's 720 and not under half of it, so no cause has to come before an API. The decoder already reaches the codes. What is missing is a call that returns them without reading the image again for each. The decision stays the maintainer's.
+- The expected shape, dropping a read symbol's candidates and selecting again in the same scan, reaches most later reads but not on its own. Of the 202 reads after a photograph's first outside the 60-code photographs, the first call's list already held all three finders of 153 in the pass that later read them. It held one or two of 19, 15 of those from a strided list, and 30 were read by a pass the first call ended before. So the entry has to go on to the later passes after a pass reads, and to scan the rows between when a strided list runs out.
+- The candidate list's 32 entries are what a 60-code photograph runs into: ten symbols at most a scan. The first list held all three finders of 59 of the 413 later reads there, and of 367 with the cap at 256 in the scratch build, where the list holds 151 to 182 candidates. The selection over a list that long was not timed.
+- The cost to beat is the failing call. A photograph of one code pays 2.8 times for the call that finds nothing more, so the entry's time on the 368 one-code photographs is the number to watch.
+- Seven of the 15 codes that read alone had their own triple decoded in the whole image and fail. Cut out, the threshold comes from the symbol's own pixels and the scan's row stride from its height. Which of the two reads them was not measured.
+- A label is not a code. The first count of the codes left was 161, and five were second labels of codes already read.
