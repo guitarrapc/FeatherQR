@@ -11,7 +11,7 @@ namespace QRImageDecodeSweep;
 /// The set records where each code is, not what it says, so a read is scored without a known text, two ways:
 /// located, when the read symbol's centre lies inside a labelled code's outline, and agreed, when another reader, or the same reader in another photograph, read the same text.
 /// A photograph counts for a reader when one of its reads is agreed. The set is never committed (its licence is not stated), so the path is given on the command line.
-/// Readers run in their own harness join through a file of result lines (<see cref="ReaderLines"/>): their texts count toward agreement like any other read, and each gets a table and a gap of its own. Their reads carry no position, so they count photographs and not codes.
+/// Readers run in their own harness join through a file of result lines (<see cref="ReaderLines"/>): their texts count toward agreement like any other read, and each gets a table and a gap of its own. Their reads count photographs, and codes too where the lines say where each read is.
 /// This library returns one symbol a call. What it reads of a photograph's other codes is measured by painting each read symbol over and reading again until a call reads nothing (<see cref="ReadAgain"/>), with the public call alone.
 /// </summary>
 internal static class BoofCv
@@ -31,6 +31,9 @@ internal static class BoofCv
 
     /// <summary>Index in <see cref="Photo.Reads"/> of the first reader that comes from result lines.</summary>
     private static int FirstLineReader => readers.Length;
+
+    /// <summary>Whether a reader of the lines is this library, run in a harness of its own: one whose name starts with this library's. Its texts are this library's observation, so they agree with nothing this library read here.</summary>
+    private static bool IsThisLibrary(string reader) => reader.StartsWith(readers[0], StringComparison.Ordinal);
 
     /// <param name="Again">Every read of <see cref="ReadAgain"/>, the one-call read first.</param>
     /// <param name="AgainStatus">The status of the call that ended <see cref="ReadAgain"/>.</param>
@@ -75,11 +78,21 @@ internal static class BoofCv
                 Time(photos[i], images[i].Path);
         }
 
-        // This library's reads of a photograph are one observation of each text, however many calls made them: the one-call read is the first of the reads again
+        // This library's reads of a photograph are one observation of each text, however many calls made them: the one-call read is the first of the reads again,
+        // and a reader of the lines that is this library run elsewhere confirms nothing this library read here
         var observations = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var photo in photos)
         {
-            foreach (var reads in photo.Reads.Skip(1).Prepend(photo.Again))
+            IEnumerable<Read> own = photo.Again;
+            var others = new List<Read[]> { photo.Reads[1], photo.Reads[2] };
+            for (var r = 0; r < lines.Readers.Length; r++)
+            {
+                if (IsThisLibrary(lines.Readers[r]))
+                    own = own.Concat(photo.Reads[FirstLineReader + r]);
+                else
+                    others.Add(photo.Reads[FirstLineReader + r]);
+            }
+            foreach (var reads in others.Prepend([.. own]))
             {
                 foreach (var text in reads.Select(static r => r.Text).Distinct(StringComparer.Ordinal))
                     observations[text] = observations.GetValueOrDefault(text) + 1;
@@ -89,7 +102,7 @@ internal static class BoofCv
 
         Directory.CreateDirectory(outDir);
         WriteCsv(Path.Combine(outDir, "boofcv.csv"), photos, Agreed, lines);
-        WriteCodesCsv(Path.Combine(outDir, "boofcv-codes.csv"), photos, Agreed, text => observations.ContainsKey(text));
+        WriteCodesCsv(Path.Combine(outDir, "boofcv-codes.csv"), photos, Agreed, text => observations.ContainsKey(text), lines);
         return finish(Path.Combine(outDir, "boofcv.md"), Markdown(photos, Agreed, timed) + AgainMarkdown(photos, Agreed) + LinesMarkdown(photos, Agreed, lines));
     }
 
@@ -106,8 +119,8 @@ internal static class BoofCv
         Read[] own = again.Length > 0 ? [again[0]] : [];
         var alone = labels.Select(label => again.Any(read => Inside(label, read.X, read.Y)) ? null : Alone(painted, width, height, label)).ToArray();
 
-        // A read from result lines has no position, so it lies inside no label
-        var fromLines = lines.Readers.Select(reader => lines.Find(reader, category, Path.GetFileName(path)) is { } line ? line.Texts.Select(static t => new Read(t, double.NaN, double.NaN)).ToArray() : []);
+        // A read from result lines lies inside no label unless its line says where it is
+        var fromLines = lines.Readers.Select(reader => lines.Find(reader, category, Path.GetFileName(path)) is { } line ? line.Texts.Select((t, i) => new Read(t, line.Centres?[i].X ?? double.NaN, line.Centres?[i].Y ?? double.NaN)).ToArray() : []);
         return new Photo(category, Path.GetFileName(path), width, height, labels, firstStatus, [own, ZXingCpp(luminance, width, height), ZXingNet(luminance, width, height), .. fromLines], again, lastStatus, alone);
     }
 
@@ -469,6 +482,32 @@ internal static class BoofCv
             List(sb, $"Gap: {name} has an agreed read, FeatherQR none", photos.Where(p => Other(p) && !Own(p)), static p => $"{p.Category}/{p.File} ({p.Width}x{p.Height}, {p.Labels.Count} codes): {p.FeatherQrStatus}");
             List(sb, $"Reverse: FeatherQR has an agreed read, {name} none", photos.Where(p => Own(p) && !Other(p)), static p => $"{p.Category}/{p.File} ({p.Width}x{p.Height}, {p.Labels.Count} codes)");
             List(sb, $"{name} texts no other read confirms", photos.Where(p => p.Reads[index].Any(read => !agreed(read))), p => $"{p.Category}/{p.File}: {Show(p.Reads[index].First(read => !agreed(read)).Text)}");
+
+            // A reader whose lines say where its reads are is counted by codes too, beside reading again and zxing-cpp
+            if (!photos.Any(p => p.Reads[index].Any(static read => !double.IsNaN(read.X))))
+                continue;
+            int Codes(Photo p, IEnumerable<Read> reads) => reads.Where(agreed).Select(read => LabelOf(p, read)).Where(static l => l >= 0).Distinct().Count();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"### {name}, by codes a photograph");
+            sb.AppendLine();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Codes a photograph | Photographs | Codes | {name} codes | FeatherQR codes, read again | zxing-cpp codes |");
+            sb.AppendLine("|---|---|---|---|---|---|");
+            List<(string Name, Photo[] Photos)> byCount = [.. photos.GroupBy(static p => p.Labels.Count).OrderBy(static g => g.Key).Select(static g => (g.Key.ToString(CultureInfo.InvariantCulture), g.ToArray())), ("**More than one**", [.. photos.Where(static p => p.Labels.Count > 1)]), ("**All**", photos)];
+            foreach (var group in byCount)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {group.Name} | {group.Photos.Length:N0} | {group.Photos.Sum(static p => p.Labels.Count):N0} | {group.Photos.Sum(p => Codes(p, p.Reads[index])):N0} | {group.Photos.Sum(p => Codes(p, p.Again)):N0} | {group.Photos.Sum(p => Codes(p, p.Reads[1])):N0} |");
+            sb.AppendLine();
+
+            var all = photos.SelectMany(p => p.Reads[index].Select(read => (Photo: p, Read: read))).ToList();
+            var twice = photos.Sum(p => p.Reads[index].Select(read => LabelOf(p, read)).Where(static l => l >= 0).GroupBy(static l => l).Sum(static g => g.Count() - 1));
+            sb.AppendLine(CultureInfo.InvariantCulture, $"{all.Count:N0} reads: {all.Count(x => agreed(x.Read) && LabelOf(x.Photo, x.Read) >= 0):N0} agreed and inside an outline, {all.Count(x => !agreed(x.Read)):N0} with a text no other read confirms, {all.Count(x => LabelOf(x.Photo, x.Read) < 0):N0} inside no outline, {twice:N0} inside an outline another of its reads of the photograph is in.");
+            sb.AppendLine();
+
+            static string Named(Photo p, int label) => $"{p.Category}/{p.File} code {label}";
+            var gained = photos.SelectMany(p => Enumerable.Range(0, p.Labels.Count).Where(label => ReadsCode(p, p.Reads[index], label, agreed) && !ReadsCode(p, p.Again, label, agreed)).Select(label => Named(p, label))).ToList();
+            var lost = photos.SelectMany(p => Enumerable.Range(0, p.Labels.Count).Where(label => ReadsCode(p, p.Again, label, agreed) && !ReadsCode(p, p.Reads[index], label, agreed)).Select(label => Named(p, label))).ToList();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Codes {name} reads and reading again does not ({gained.Count:N0}): {string.Join(", ", gained)}.");
+            sb.AppendLine();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Codes reading again reads and {name} does not ({lost.Count:N0}): {string.Join(", ", lost)}.");
+            sb.AppendLine();
         }
         return sb.ToString();
     }
@@ -529,10 +568,12 @@ internal static class BoofCv
     /// One row a labelled code: its size, which reader has an agreed read inside it, and, where reading again has none, what the code reads cut out on its own.
     /// A change to what one call returns is compared against these rows code for code.
     /// </summary>
-    private static void WriteCodesCsv(string path, Photo[] photos, Func<Read, bool> agreed, Func<string, bool> seen)
+    private static void WriteCodesCsv(string path, Photo[] photos, Func<Read, bool> agreed, Func<string, bool> seen, ReaderLines lines)
     {
         using var writer = new StreamWriter(path, false, new UTF8Encoding(false)) { NewLine = "\n" };
-        writer.WriteLine("category,file,codes,code,centre_x,centre_y,side_px,featherqr,featherqr_again,featherqr_again_call,zxingcpp,zxingnet,alone");
+        // A reader of the lines that says where its reads are has a column of its own, after the others
+        int[] located = [.. Enumerable.Range(0, lines.Readers.Length).Where(r => photos.Any(p => p.Reads[FirstLineReader + r].Any(static read => !double.IsNaN(read.X))))];
+        writer.WriteLine("category,file,codes,code,centre_x,centre_y,side_px,featherqr,featherqr_again,featherqr_again_call,zxingcpp,zxingnet,alone" + string.Concat(located.Select(r => $",{lines.Readers[r]}")));
         foreach (var p in photos)
         {
             for (var label = 0; label < p.Labels.Count; label++)
@@ -545,7 +586,7 @@ internal static class BoofCv
                 var call = Array.FindIndex(p.Again, r => agreed(r) && LabelOf(p, r) == label);
                 var cut = p.Alone[label];
                 var alone = cut is null ? "" : cut.Text is null ? cut.Status : p.Reads[1].Any(r => LabelOf(p, r) == label && r.Text == cut.Text) || seen(cut.Text) ? "Success" : "SuccessNotSeen";
-                writer.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{p.Category},{p.File},{p.Labels.Count},{label},{outline.Average(static q => q.X):F1},{outline.Average(static q => q.Y):F1},{Math.Sqrt(Math.Abs(area) / 2):F1},{(ReadsCode(p, p.Reads[0], label, agreed) ? 1 : 0)},{(call >= 0 ? 1 : 0)},{(call >= 0 ? call + 1 : 0)},{(ReadsCode(p, p.Reads[1], label, agreed) ? 1 : 0)},{(ReadsCode(p, p.Reads[2], label, agreed) ? 1 : 0)},{alone}"));
+                writer.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{p.Category},{p.File},{p.Labels.Count},{label},{outline.Average(static q => q.X):F1},{outline.Average(static q => q.Y):F1},{Math.Sqrt(Math.Abs(area) / 2):F1},{(ReadsCode(p, p.Reads[0], label, agreed) ? 1 : 0)},{(call >= 0 ? 1 : 0)},{(call >= 0 ? call + 1 : 0)},{(ReadsCode(p, p.Reads[1], label, agreed) ? 1 : 0)},{(ReadsCode(p, p.Reads[2], label, agreed) ? 1 : 0)},{alone}") + string.Concat(located.Select(r => ReadsCode(p, p.Reads[FirstLineReader + r], label, agreed) ? ",1" : ",0")));
             }
         }
     }

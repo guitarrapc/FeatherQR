@@ -715,5 +715,50 @@ public class DecodeAllocationTest
     }
 
     #endregion
+
+    #region Standard QR: several symbols
+
+    /// <summary>
+    /// The entry that returns every symbol of an image allocates the texts it returns and nothing else, for a grid of nine symbols and for one symbol, and holds one module buffer at a time.
+    /// </summary>
+    [Test]
+    [Arguments(3, 3)]
+    [Arguments(1, 1)]
+    public async Task StandardQR_SeveralSymbols_AllocatesOnlyTheirTexts(int across, int down)
+    {
+        var (luminance, width, height, _) = TripleSelectionDecodeTest.RenderGrid(across, down, 0f, static i => $"FQR LOTS {i}");
+        var symbols = new DecodedSymbol[16];
+        QRImageDecoder.ModuleBuffersPeak = 0;
+        var count = QRImageDecoder.DecodeSymbols(luminance, width, height, symbols);
+        await Assert.That(count).IsEqualTo(across * down);
+        await Assert.That(QRImageDecoder.ModuleBuffersPeak).IsEqualTo(1);
+        int[] lengths = [.. symbols.Take(count).Select(static s => s.Text.Length)];
+
+        // What strings of those lengths cost, measured the same way
+        var texts = SteadyStateBytes(() =>
+        {
+            foreach (var length in lengths)
+                GC.KeepAlive(new string('x', length));
+        });
+        var allocated = SteadyStateBytes(() => QRImageDecoder.DecodeSymbols(luminance, width, height, symbols));
+
+        await Assert.That(allocated).IsEqualTo(texts);
+    }
+
+    /// <summary>An image with no symbol goes through every pass of the entry and allocates nothing.</summary>
+    [Test]
+    [MethodDataSource(nameof(RejectedByStandardQR))]
+    public async Task StandardQR_SeveralSymbols_NoSymbol_AllocatesNothing(RejectedImage rejected)
+    {
+        var (luminance, width, height) = Render(rejected);
+        var symbols = new DecodedSymbol[16];
+        await Assert.That(QRImageDecoder.DecodeSymbols(luminance, width, height, symbols)).IsEqualTo(0);
+
+        var allocated = SteadyStateBytes(() => QRImageDecoder.DecodeSymbols(luminance, width, height, symbols));
+
+        await Assert.That(allocated).IsEqualTo(0);
+    }
+
+    #endregion
 #endif
 }

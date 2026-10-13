@@ -10,10 +10,11 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 - The photograph stages were timed on x64 (.NET 10 JIT) and on an Apple M2. On WebAssembly only the halving kernel was, until Work 1 timed the whole chain there on 2026-10-13 and found no fault. The halving's timing had found one no other build has: AOT-compiled, the portable 16-bit shift ran 16 times slower than `PackedSimd`'s, which left the kernel 4.2 times slower than the scalar loop it replaced.
 - Each decoder returns one symbol a call. 168 of the 536 photographs hold more than one code: 42 hold two, 116 three, 3 four and 7 sixty, which is 864 of the set's 1,232 codes. zxing-cpp reads 720 of the 864. This library reads one code on 150 of the 168 photographs. On the 368 photographs with one code it reads 306 and zxing-cpp 257.
 - Phase 0 of Work 2 (2026-10-14): called again with each read symbol painted over, the one-symbol call reads 765 of the 864 and 1,071 of the 1,232, against zxing-cpp's 720 and 977. No text is unconfirmed and no symbol is read twice.
+- Phase 1 of Work 2 (2026-10-14): an internal entry, `QRImageDecoder.DecodeSymbols`, returns the same 1,071 in one call at 2.5 times the one-symbol call's time over the set. The one-symbol call compiles to the code it had. What is left is Phase 2, the maintainer's decisions.
 
 ## Order
 
-Work 1 came first and is done (2026-10-13, [Progress log](#progress-log)). It changed no behaviour, and closed a hole in what was measured of code that already ships. Work 2 started with a measurement that needs no change to `src`, Phase 0, which is done (2026-10-14, [Progress log](#progress-log)). It stops at a decision that is the maintainer's.
+Work 1 came first and is done (2026-10-13, [Progress log](#progress-log)). It changed no behaviour, and closed a hole in what was measured of code that already ships. Work 2 started with a measurement that needs no change to `src`, Phase 0, and went on to the internal entry, Phase 1. Both are done (2026-10-14, [Progress log](#progress-log)). It now stops at Phase 2, a decision that is the maintainer's.
 
 ## Work 1: the photograph stages on WebAssembly
 
@@ -71,8 +72,8 @@ It is the largest difference left against the readers this library was measured 
 
 | | Decision | Recommendation |
 |---|---|---|
-| M1 | Whether reading several symbols ships | Decide on Phase 0's number. Under half of zxing-cpp's 720 on the multi-code photographs, the causes come before any API |
-| M2 | The call's shape | A span the caller lends for the results and a count handed back, so that nothing but the texts is allocated |
+| M1 | Whether reading several symbols ships | Decide on Phase 0's number. Under half of zxing-cpp's 720 on the multi-code photographs, the causes come before any API. The number is 765, and Phase 1's entry returns the same 765 in one call |
+| M2 | The call's shape | A span the caller lends for the results and a count handed back, so that nothing but the texts is allocated. Phase 1's entry has this shape and allocates the texts alone |
 | M3 | Micro QR and rMQR | Out at first. The photographs counted above are all Standard QR |
 | M4 | The release | After 2.0.0. The call is an addition, so it does not hold the release |
 
@@ -150,3 +151,42 @@ What it taught, for Phase 1:
 - The cost to beat is the failing call. A photograph of one code pays 2.8 times for the call that finds nothing more, so the entry's time on the 368 one-code photographs is the number to watch.
 - Seven of the 15 codes that read alone had their own triple decoded in the whole image and fail. Cut out, the threshold comes from the symbol's own pixels and the scan's row stride from its height. Which of the two reads them was not measured.
 - A label is not a code. The first count of the codes left was 161, and five were second labels of codes already read.
+
+### Work 2, Phase 1: the internal entry (2026-10-14)
+
+Done. `src` gained two files and no existing method changed. Nothing public was written.
+
+What was done:
+
+- `QRImageDecoder.DecodeSymbols` (`QRImageDecoder.Symbols.cs`) writes every symbol of an image into a span the caller lends and hands the count back. It runs the one-symbol call's passes without a read ending them. Each pass scans once into one list, a read symbol's candidates leave the list by its outline, and the stages select again from the rest.
+- `FinderPatternFinder.KeptList.cs` holds the search's selection for a list the caller keeps: the strided scan into a list of any length, the skipped rows merged into it, and the triple the search would select from its first 32.
+- Tests first: `SeveralSymbolsDecodeTest` (two, three and four symbols, grids of 9 to 100, four versions in one image, symbols read by the negative, the regional pass and at reduced scale, room for fewer than the image holds, the three negatives of this plan and a symbol with a content verdict), `FinderKeptListParityTest` (23 scenes against the search's own selection) and three cases in `DecodeAllocationTest`. The stub that returned the one-symbol call's read left 15 of the first 28 red.
+- `tools/QRImageDecodeSweep`: result lines may carry each read's centre (`"at"`), and a reader that does is counted by codes. A reader named `FeatherQR ...` is this library and confirms nothing this library read. The entry was run over BoofCV's set by a probe in the test project, deleted after.
+- The record: the Decisions row "Several symbols of one image", two lessons on detection and one on measuring in [standardqr-decoder.md](../specs/standardqr-decoder.md), the scope row, the spec map's "Image level, every symbol", and the entry's table in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md).
+
+The numbers this phase was to give:
+
+| | Codes of 1,232 | Of the 864 on photographs of more than one | Photographs |
+|---|---|---|---|
+| The entry | 1,071 | 765 | 456 |
+| Phase 0's loop | 1,071 | 765 | 456 |
+| zxing-cpp | 977 | 720 | 392 |
+
+- Code for code the entry and the loop differ by two: the entry reads `bright_spots/image021`'s first code and not `brightness/image026`'s third. Every read is agreed and inside a labelled outline, and none is a second read of a code.
+- Time, in one process, the fastest of three calls: 2.46 times the one-symbol call on the 368 one-code photographs, 2.50 over the set, 59 to 150 ms on a 60-code photograph. The loop takes 2.8 times on the one-code photographs, 11.9 s against the one-symbol call's 2.6 over the set, and 400 to 820 ms on those seven, where zxing-cpp takes 40 to 43 ms. With room for one symbol the entry takes 1.00 of the one-symbol call.
+- The one-symbol call's instructions on the report shapes: on the .NET 10 JIT for x64 the 446 library methods compiled while the image and matrix shapes decode are the same instruction for instruction, and on a default NativeAOT publish for x64 all 9,171 methods of the build before are byte for byte the same. The publish is 21 KB larger. ARM64 and WebAssembly were not compared, and the WebAssembly report and the NativeAOT gate pass.
+- Allocation: the texts and nothing else, on a grid of nine and on one symbol, and nothing on an image with no symbol.
+- The suite: 58,068 tests, none failing.
+
+What it taught:
+
+- Phase 0's shape was not enough by itself. With the passes going on after a read and nothing else the entry read 1,038. The stages read 32 candidates and then give a pass up, so what a pass cannot read hid what was scanned after it. A head the stages give up on now leaves the list (1,061), and the passes are run a second time when a later read took candidates out of a list an earlier pass gave up on and a triple's worth is left (1,071). Two rounds read all that four do, and a second round without that rule costs 4.4 times the one-symbol call where the rule costs 2.5.
+- Keeping the one-symbol call's code as it was meant writing the entry's pass beside `DecodeLuminanceCore` and not sharing it. The two hold the same stages in the same order, and the tests hold the entry's first symbol to the one-symbol call's read. A stage added to one has to be added to the other.
+- A pool of a new element type is not free for the code beside it. The first build rented the candidate list from `ArrayPool<FinderPattern>`, and on NativeAOT `Rent`, `Return` and the bucket setup of every other pool came out the same length with other bytes. The list is rented as bytes.
+- 33 faults planted in the two files: 25 caught. The eight left: the two things that keep a symbol from being returned twice, each of which covers for the other and which fail together. The same pair after the rows between are scanned. The order of the two regional polarities, which changes no result. The second round and the inferred stage after a failed triple, which only the photographs show (10 and 6 codes). And the swept triple's decode, which no test render and no photograph of the set needs.
+
+For the maintainer, beside M1 to M4:
+
+- The room the caller lends ends the search, so a caller who knows how many codes to expect pays for no more. A caller who wants all of them pays the failing passes once the last is read: 2.5 times the one-symbol call on a photograph of one code.
+- A symbol drawn inside another is not returned once the outer one is read. `qrcode-2/16` of the committed real images gives one symbol where zxing-cpp gives both. It is the only committed image of more than one symbol.
+- A symbol whose content gives a verdict is left out of the results. The one-symbol call reports the verdict.

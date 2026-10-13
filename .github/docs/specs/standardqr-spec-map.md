@@ -159,6 +159,16 @@ A read or a verdict on the content settles the triple; no other grid, dimension,
 
 Reference tests: [QRCodeDecoderImageTest](../../../tests/FeatherQR.Tests/StandardQr/QRCodeDecoderImageTest.cs) (rotation/mirror/scale/inversion image cases), [QRCodeDecoderPerspectiveTest](../../../tests/FeatherQR.Tests/StandardQr/QRCodeDecoderPerspectiveTest.cs) (keystone envelope, rotation+perspective combinations), [KeystoneFrameDecodeTest](../../../tests/FeatherQR.Tests/StandardQr/KeystoneFrameDecodeTest.cs) (keystone past what the parallelogram of the finders anchors, on synthetic images and zxing-cpp's real images, with corners within half a module), [SmallLatticeMeshDecodeTest](../../../tests/FeatherQR.Tests/StandardQr/SmallLatticeMeshDecodeTest.cs) (versions 7 to 13 bowed off the plane, synthetic and real), [LensDistortionDecodeTest](../../../tests/FeatherQR.Tests/StandardQr/LensDistortionDecodeTest.cs) (versions 7 to 40 photographed through a lens), [ParallelogramCoverageDecodeTest](../../../tests/FeatherQR.Tests/StandardQr/ParallelogramCoverageDecodeTest.cs) (round modules whose parallelogram reads only by coverage).
 
+### Image level, every symbol
+
+Internal, with no public call. The passes and the path above are run without a read ending them.
+
+| Spec reference | Topic | Implementation |
+|---|---|---|
+| - | Every symbol of an image: the one-symbol call's passes in their order, none ended by a read. Each pass scans its rows once into one list. A read symbol's candidates leave the list by its outline, and the stages of the image level run again on what is left. A head of the list the stages give up on leaves it when more is behind it. The passes are run a second time when a later read took candidates out of a list an earlier pass had given up on. The search ends when the caller's room is full | [QRImageDecoder.DecodeSymbols](../../../src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs), over the selection from a kept list in [FinderPatternFinder](../../../src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.KeptList.cs), shared across symbologies |
+
+Reference tests: [SeveralSymbolsDecodeTest](../../../tests/FeatherQR.Tests/StandardQr/SeveralSymbolsDecodeTest.cs) (two to a hundred symbols, symbols read by different passes, the negatives, the first symbol held to the one-symbol call's read), [FinderKeptListParityTest](../../../tests/FeatherQR.Tests/StandardQr/FinderKeptListParityTest.cs) (the selection from a kept list against the search's own), [DecodeAllocationTest](../../../tests/FeatherQR.Tests/Shared/DecodeAllocationTest.cs) (only the texts are allocated).
+
 ## Maintenance Notes
 
 - When adding or moving a spec-referenced implementation, update this map. Keep details (bit layouts, formulas, constraints) in the code comment next to the implementation, not here.
