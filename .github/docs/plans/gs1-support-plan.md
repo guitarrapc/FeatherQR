@@ -691,4 +691,66 @@ Lessons:
 - A length can answer for a member only where the answer does not depend on the data. That is two of the fourteen here.
 - A fix is new code. Fifteen of the seventeen claims that stood in the second round, and all nine of the third, were about something the round before had added or rewritten: a handler, a branch, a member, a test, a check in a tool, a sentence.
 
-Left open: the data layer's pairing checks cost the square of the number of elements (Phase 3 keeps no list), and the entry points make that reachable from the generators for text of any length. Whether to make those passes linear in the data layer is not decided, and is not part of this phase.
+Left open by this review: the data layer's pairing checks cost the square of the number of elements (Phase 3 keeps no list), and the entry points make that reachable from the generators for text of any length. Making those passes linear in the data layer was not part of this phase. It was done the day after, in the next entry.
+
+### Pairing checks in linear time (2026-10-14)
+
+Done: the rules between elements, which the review of Phase 6 left open. Each rule scanned the text for each element, so the checks cost the square of the number of elements. They now take time in proportion to the length of the text, still allocate nothing, and give every verdict and every place they gave before.
+
+What the checks do now:
+
+- A set of the AIs present answers the exclusions and the requisites. It has one bit for each AI a text can name (100 of two digits, 1,000 of three and 10,000 of four, which is 174 words and 1,392 bytes on the stack), and the pass that checks the components fills it. A rule on one AI reads one word of it. A rule on a pattern reads the words of a range of keys, since the wildcards of every pattern in the dictionary are its last digits: `31nn` is 3100 to 3199. `Gs1AiTableTest` holds that property of the table, so a dictionary release that breaks it fails there and not in a verdict.
+- The exclusions and the requisites share one pass. An exclusion anywhere in the text is reported before a missing requisite, so the first element that misses a requisite is noted, and reported after the last element has been asked for its exclusions.
+- The set says that an excluded AI is present and not where. The refusal is placed at the later of the two elements, so one scan of the text finds it, on the refusing path only.
+- An AI that repeats must repeat its value, and the refusal is for the AI whose first element comes first, at its first element with another value. The check runs only when an AI stands twice, which the first pass knows. It takes one pass for each 32 AIs of the text, in the order of their first elements, with a table of 32 slots (640 bytes) and a second set for the AIs it has compared. A text of up to 32 AIs takes one pass, and the dictionary's 541 AIs bound the passes at 17.
+- The serialised key rule runs only when the set holds (8030).
+
+Decisions:
+
+- The repeat check takes passes and not one table. A table of every AI's first element answers in one pass and needs a slot for each AI. Indexed by the table entry and the AI's place in its range that is 2,240 slots of four bytes, about 9 KB of stack where the package's other stack buffers are 1 KB, and a dense index of the 541 AIs needs a new table in the generated file. The passes keep the stack small and the generated table as it is. The benchmark's labels hold three to five AIs.
+- The set is indexed by the AI's digits and not by its table entry. An entry can cover a range (3100 to 3105 is one entry), a rule names single AIs of it, and an index by entry would cost a search of the table for each rule.
+- The old passes stay as the reference, in the test project. `Gs1PairingReference` is the rules as they were, every rule asked of every element by a scan. It keeps no state between elements, so its answer and the place of its error follow from the order of its scans alone.
+
+Tests: the time bound was written first. `Checks_OnFortyThousandElements_TakeUnderFiveSeconds` runs `TryValidate`, `TryFromHri` and `TryToDigitalLink` on valid data of 40,000 elements in three shapes (one AI repeating, a key with its batch, a weighed label whose requisite names its alternatives by pattern). Against the old checks its first form, 20,000 elements in a Debug build with a bound of one second, was stopped after fifteen minutes without an answer. `Gs1PairingParityTest` (13 tests a framework) holds the library to the reference, answer and place, on 420,695 texts: the 2,052 inputs and element strings of the corpus, each of the 541 AIs alone and all 292,681 ordered pairs of them, 85,256 texts that put an AI whose rule has a pattern beside each AI in and near the pattern's range, 40,000 random element strings of up to 16 elements, 18 texts around the serialised key, and 147 texts of the 198 AIs that may stand together, which is what it takes to reach the repeat check with more AIs than one pass compares. On those it holds the place of a repeat for an AI in each pass, the AI that comes first when two repeat with another value, and 24 shuffled texts with several such repeats. The corpus tests pass with no expectation changed.
+
+Planted faults: 28 small faults, one for each decision the new code makes and four on the size forms' answer from the length, were run against the GS1 classes. The first run caught 25, and the run on the final code 27. The two that the first run missed removed the size forms' answer from the length. The test built its two long texts by joining many parts, which rents arrays of the very sizes the test watches for and returns them to the pool, so the buffer of a size form that ran the checks came from the pool and nothing was allocated. The texts are now built without the pool, and each of the two faults fails the test with the whole suite running beside it. The one fault left makes an element its own requisite, which no rule of this dictionary release can show.
+
+The full suite passes on .NET 8 and .NET 10: 61,930 tests in Debug with 798 skipped, and 62,164 in Release with 796 skipped. The Release run includes the data layer's allocation tests, whose refused text repeats an AI with another value and so runs the repeat check.
+
+Figures, Release, .NET 10.0.9, Ryzen 9 7950X3D. Valid data of 20,000 elements, before and after (one call before, the fastest of three after):
+
+| Shape | `TryValidate` | `TryFromHri` | `TryToDigitalLink` |
+|---|---|---|---|
+| (01), then (91) 19,999 times | 4.7 s, 1.2 ms | 4.4 s, 1.7 ms | 4.6 s, 5.3 ms |
+| (01)(10), 10,000 times | 11.4 s, 4.1 ms | 11.4 s, 4.6 ms | 11.7 s, 7.8 ms |
+| (01)(3103)(3922)(17), 5,000 times | 19.0 s, 3.1 ms | 25.5 s, 3.6 ms | 17.3 s, 7.8 ms |
+| (01), then (91) to (99) in turn | 4.0 s, 1.3 ms | 4.1 s, 1.6 ms | 4.5 s, 8.7 ms |
+
+A typical label, as the paired timing reads it: the benchmark's three labels, one call and one label a process, the two builds adjacent in time and alternating which goes first, each process on the first eight cores, five rounds. A cell is the median before and after in µs, then the median of the rounds' ratios. Every call that runs the checks is faster, by 15 to 69 percent. The five calls that run no pairing check are the control and read 0.97 to 1.04:
+
+| Call | retail | logistics | weighed |
+|---|---|---|---|
+| `TryValidate` | 0.60, 0.28 (0.47) | 1.37, 0.43 (0.31) | 1.12, 0.34 (0.31) |
+| `TryFromHri` | 0.60, 0.36 (0.59) | 1.41, 0.56 (0.40) | 1.12, 0.43 (0.39) |
+| `TryToDigitalLink` | 1.52, 1.20 (0.79) | 2.15, 1.19 (0.56) | 2.16, 1.36 (0.63) |
+| `CreateGs1` from (AI) text | 1.72, 1.48 (0.85) | 2.82, 2.00 (0.71) | 2.55, 1.85 (0.73) |
+| `CreateGs1` from an element string | 1.69, 1.42 (0.84) | 2.79, 1.88 (0.68) | 2.49, 1.74 (0.70) |
+| `CreateGs1DigitalLink` from (AI) text | 3.56, 3.01 (0.84) | 5.25, 3.44 (0.66) | 4.88, 3.44 (0.71) |
+| rMQR `CreateGs1` from (AI) text | 1.03, 0.79 (0.77) | 1.96, 1.15 (0.59) | 1.60, 0.91 (0.57) |
+| `TryToHri`, control | 0.14, 0.14 (0.98) | 0.24, 0.24 (0.99) | 0.19, 0.19 (1.01) |
+| `TryFromDigitalLink`, control | 0.39, 0.40 (1.01) | 0.59, 0.60 (1.01) | 0.53, 0.54 (1.02) |
+| `TryRead` of the URI, control | 0.44, 0.45 (1.01) | 0.68, 0.70 (1.02) | 0.61, 0.61 (1.00) |
+| `Create` on the element string, control | 1.08, 1.07 (0.98) | 1.38, 1.43 (1.04) | 1.32, 1.33 (1.01) |
+| `Create` on the URI, control | 1.35, 1.34 (0.97) | 1.56, 1.59 (1.02) | 1.56, 1.58 (1.02) |
+
+The benchmark project's own run of the same day (`Gs1DataLayer` and `Gs1SymbolEncode`, ShortRun) reads the same calls at 0.38 to 0.63 µs for `TryValidate` (0.79 to 1.59 µs before), 0.48 to 0.68 µs for `TryFromHri` (0.77 to 1.80 µs), 1.42 to 1.88 µs for `TryToDigitalLink` (2.13 to 2.83 µs) and 1.51 to 2.92 µs for `CreateGs1` from (AI) text (2.23 to 3.61 µs), with nothing allocated in either run. Between its two runs the rows of code this change does not touch read 0.73 to 1.41 of their first reading, which is why the paired timing is the measure.
+
+Left as it is: `TryToDigitalLink` still scans the text once for each distinct AI it writes into the query, to write them in order. That is time in proportion to the length of the text for a given set of AIs (5.3 ms for 20,000 elements of one such AI and 8.7 ms of nine), and the dictionary's AIs bound it.
+
+Lessons:
+
+- A bound on the clock has to be measured on both sides in the build the suite runs in. The first bound was one second for 20,000 elements. The new checks take 0.3 s there in a Debug build for the URI, and 1.2 to 1.6 s when the other GS1 classes run beside them, so the test now runs alone, on 40,000 elements, with five seconds.
+- A test that shows by the clock that slow code did not run stops showing it when the code gets fast. `TryGetRequiredBufferSizeGs1_TextTooLongForAnySymbol_IsRefusedFromItsLength` held the size forms' answer from the length by the seconds the checks took. It now holds it by the pooled buffer that the checks would build long (AI) text in: two texts whose buffers are of sizes no other test rents, and nothing allocated. The length itself is held by a test of `IsPastCapacity`.
+- The layout of the set cannot be wrong in a way a text shows. Any layout that gives each AI its own bit behaves the same, so the faults planted on it were of another kind: bits that ignore the AI's length, a range one bit short, a range read in its first word only.
+- No requisite of this dictionary release names its own AI, where 368 AIs are matched by an exclusion pattern of their own. The rule that an element is not its own requisite is kept from the old passes, and no text reaches it.
+- The paired harness refused a row the benchmark project runs: for the retail label, `TryFromDigitalLink` into a buffer as long as the original element string answers `false`, since the element string read back from the URI has its elements in the URI's order and needs one separator more. The benchmark's row for that label times the refusal. It is not changed here.

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using FeatherQR.Gs1;
 using FeatherQR.Gs1.Internals;
 
@@ -380,10 +379,23 @@ public class Gs1SymbolMemberTest
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(new string('1', Gs1SymbolData.RmQrCapacity + 1), RmQREccLevel.M, out _)).IsFalse();
     }
 
+    /// <summary>The length that answers for a size form: more than the capacity for an element string, and more than twice the capacity for (AI) text.</summary>
+    [Test]
+    public async Task IsPastCapacity_IsOneCharacterPastTheCapacity_AndPastTwiceItForAiText()
+    {
+        await Assert.That(Gs1SymbolData.IsPastCapacity(new string('1', 100), 100)).IsFalse();
+        await Assert.That(Gs1SymbolData.IsPastCapacity(new string('1', 101), 100)).IsTrue();
+        await Assert.That(Gs1SymbolData.IsPastCapacity("(" + new string('1', 199), 100)).IsFalse();
+        await Assert.That(Gs1SymbolData.IsPastCapacity("(" + new string('1', 200), 100)).IsTrue();
+        await Assert.That(Gs1SymbolData.IsPastCapacity("", 0)).IsFalse();
+    }
+
     /// <summary>
-    /// A size form answers for text longer than any symbol holds from its length. The checks cost the square of the
-    /// number of elements, which for the data here is seconds, so the time is what shows that they did not run. A
-    /// wrong option is still reported first, and the longest data that fits is still sized.
+    /// A size form answers for text longer than any symbol holds from its length, before any check. The checks
+    /// build the element string of long (AI) text in a pooled buffer as long as the text, so a buffer is what
+    /// shows that they did not run: each of the two (AI) texts measured here needs an array of a size that no
+    /// other test rents, which the pool would have to allocate. A wrong option is still reported first, and the
+    /// longest data that fits is still sized.
     /// </summary>
     [Test]
     public async Task TryGetRequiredBufferSizeGs1_TextTooLongForAnySymbol_IsRefusedFromItsLength()
@@ -394,12 +406,24 @@ public class Gs1SymbolMemberTest
         await Assert.That(tooLong.Length).IsGreaterThan(Gs1SymbolData.StandardQrCapacity);
         await Assert.That(tooLongAsAiText.Length).IsGreaterThan(2 * Gs1SymbolData.StandardQrCapacity);
 
-        var clock = Stopwatch.StartNew();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLong, QREccLevel.L, out _)).IsFalse();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLongAsAiText, QREccLevel.L, out _)).IsFalse();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLong, RmQREccLevel.M, out _)).IsFalse();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLongAsAiText, RmQREccLevel.M, out _)).IsFalse();
-        await Assert.That(clock.Elapsed).IsLessThan(TimeSpan.FromSeconds(2)).Because("four runs of the checks on this data take many seconds");
+
+        // The pool hands out arrays of 4,194,304 characters for the first text and of 2,097,152 for the second.
+        // The two sizes differ, so an array rented for one call cannot serve the other. Each text is (AI) text by
+        // its first character, which is all the length's answer reads. Neither is built by joining parts, since
+        // that rents arrays of these sizes and returns them to the pool.
+        var threeMillion = "(" + new string('1', 3_000_000);
+        var oneAndAHalfMillion = "(" + new string('1', 1_500_000);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var qrAnswer = QRCodeGenerator.TryGetRequiredBufferSizeGs1(threeMillion, QREccLevel.L, out _);
+        var rmqrAnswer = RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(oneAndAHalfMillion, RmQREccLevel.M, out _);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        await Assert.That(qrAnswer).IsFalse();
+        await Assert.That(rmqrAnswer).IsFalse();
+        await Assert.That(allocated).IsLessThan(1_000_000).Because("the smaller of the two arrays is 4,194,304 bytes");
 
         var second = new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.SecondPosition(1) };
         await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLong, QREccLevel.L, out _, second)).ThrowsExactly<ArgumentException>();

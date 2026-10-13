@@ -37,7 +37,8 @@ internal static class Gs1SymbolData
     /// Whether the text is longer than a symbol of the given capacity can hold, whatever it holds. An element
     /// string goes into the symbol as it is. (AI) text sheds at most half its length on the way: two parentheses
     /// for an AI of two digits or more, and one backslash for each escaped character. A size form answers from
-    /// this before the checks, whose cost grows with the square of the number of elements.
+    /// this before the checks, so text of any length that no symbol can hold costs neither the checks nor, for
+    /// (AI) text, a pooled buffer as long as the text.
     /// </summary>
     public static bool IsPastCapacity(ReadOnlySpan<char> text, int capacity) => text.Length > (IsAiText(text) ? 2L * capacity : capacity);
 

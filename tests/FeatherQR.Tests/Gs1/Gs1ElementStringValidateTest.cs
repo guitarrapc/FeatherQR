@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FeatherQR.Gs1;
 using FeatherQR.Gs1.Internals;
 
@@ -201,6 +202,72 @@ public class Gs1ElementStringValidateTest
         // The key that lacks its serial component is the place, where the engine points too.
         Gs1Validator.TryValidate("0109520123456788" + "21ABC\u001D" + "2539526064000028\u001D" + "8030QUJD", Year, out var serial);
         await Assert.That((serial.Kind, serial.Offset, serial.Length)).IsEqualTo((Gs1ErrorKind.MissingRequiredAi, 22, 16));
+    }
+
+    /// <summary>
+    /// Valid data of 40,000 elements and its (AI) text, one shape for each kind of rule an element can carry: an AI
+    /// that repeats its value, a key with exclusions beside an attribute with a requisite, and a measure whose
+    /// requisite names its alternatives by pattern.
+    /// </summary>
+    private static (string ElementString, string Hri) ManyElements(string shape)
+    {
+        const string Gtin = "09520123456788";
+        return shape switch
+        {
+            "one AI repeating" => (
+                "01" + Gtin + string.Concat(Enumerable.Repeat("91A\u001D", 39_999)),
+                "(01)" + Gtin + string.Concat(Enumerable.Repeat("(91)A", 39_999))),
+            "a key and its batch" => (
+                string.Concat(Enumerable.Repeat("01" + Gtin + "10ABC\u001D", 20_000)),
+                string.Concat(Enumerable.Repeat("(01)" + Gtin + "(10)ABC", 20_000))),
+            "a weighed label" => (
+                string.Concat(Enumerable.Repeat("01" + Gtin + "3103000195" + "39220299\u001D" + "17251231", 10_000)),
+                string.Concat(Enumerable.Repeat("(01)" + Gtin + "(3103)000195" + "(3922)0299" + "(17)251231", 10_000))),
+            _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "unknown shape"),
+        };
+    }
+
+    /// <summary>
+    /// The checks take time in proportion to the number of elements, in each form that runs them: the element
+    /// string, the (AI) text, and the element string on its way to a URI. A rule that scans the text again for each
+    /// of 40,000 elements reads 1.6 billion elements, which takes several times the five seconds allowed here, so
+    /// the bound is what shows that no rule does. The test runs alone, since the bound is on the clock.
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    [Arguments("one AI repeating")]
+    [Arguments("a key and its batch")]
+    [Arguments("a weighed label")]
+    public async Task Checks_OnFortyThousandElements_TakeUnderFiveSeconds(string name)
+    {
+        var shape = ManyElements(name);
+        var elements = 0;
+        foreach (var _ in Gs1ElementString.EnumerateElements(shape.ElementString))
+            elements++;
+        await Assert.That(elements).IsEqualTo(40_000);
+
+        var elementString = new char[shape.ElementString.Length];
+        var uri = new char[256];
+        var clock = Stopwatch.StartNew();
+        var valid = Gs1ElementString.TryValidate(shape.ElementString, out var error);
+        var validated = clock.Elapsed;
+        clock.Restart();
+        var read = Gs1ElementString.TryFromHri(shape.Hri, elementString, out var elementStringLength, out var hriError);
+        var readFromHri = clock.Elapsed;
+        clock.Restart();
+        var built = Gs1ElementString.TryToDigitalLink(shape.ElementString, uri, out var uriLength, out var uriError);
+        var builtUri = clock.Elapsed;
+
+        await Assert.That(valid).IsTrue().Because(error.ToString());
+        await Assert.That(read).IsTrue().Because(hriError.ToString());
+        await Assert.That(new string(elementString, 0, elementStringLength)).IsEqualTo(shape.ElementString.TrimEnd('\u001D'));
+        await Assert.That(built).IsTrue().Because(uriError.ToString());
+        await Assert.That(new string(uri, 0, uriLength)).StartsWith("https://id.gs1.org/01/09520123456788");
+        var bound = TimeSpan.FromSeconds(5);
+        var times = $"TryValidate {validated.TotalMilliseconds:F0} ms, TryFromHri {readFromHri.TotalMilliseconds:F0} ms, TryToDigitalLink {builtUri.TotalMilliseconds:F0} ms";
+        await Assert.That(validated).IsLessThan(bound).Because(times);
+        await Assert.That(readFromHri).IsLessThan(bound).Because(times);
+        await Assert.That(builtUri).IsLessThan(bound).Because(times);
     }
 
     /// <summary>The public form uses the current year and otherwise is the internal one.</summary>
