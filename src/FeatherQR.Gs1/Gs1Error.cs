@@ -4,7 +4,7 @@ namespace FeatherQR.Gs1;
 /// Why a conversion or check refused its input: the <see cref="Kind"/>, and where in the input
 /// (<see cref="Offset"/> and <see cref="Length"/>, both 0 when the kind names no place). The <c>default</c>
 /// is <see cref="Gs1ErrorKind.None"/>. <see cref="ToString"/> is the message the generator entry points put
-/// in their <c>Gs1FormatException</c>.
+/// in their <see cref="Gs1FormatException"/>.
 /// </summary>
 public readonly record struct Gs1Error
 {

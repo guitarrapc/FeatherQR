@@ -579,3 +579,51 @@ Done: the benchmark class the Verification section asks for, `Gs1DataLayer` in `
 | `TryRead` of the URI | 0.42 µs | 0.94 µs | 0.58 µs | 0 |
 
 What the numbers say: every span form allocates nothing, as the Release test holds. The readers (`TryToHri`, `TryFromDigitalLink`, `TryRead`) cost well under a microsecond. The members that run every check cost one to three microseconds, and `TryToDigitalLink` is the dearest because it validates and then chooses the key's qualifier sequence and sorts the attributes by re-splitting the string per candidate instead of keeping a list. The pairing checks are quadratic in the element count by design (no allocation), which is why the five-element logistics string costs more than the four-element weighed one. Against a symbol encode or decode, which costs tens of microseconds and more, none of this registers. Nothing was tuned, and the figures are the record a later change is measured against.
+
+
+### Phase 6: symbols (2026-10-13)
+
+Done: the twelve generator members of the approved listing and `Gs1FormatException`, which completes the listing. `Gs1QRCodeGenerator` and `Gs1RmQRCodeGenerator` each declare one extension block with `CreateGs1` in the data and destination forms, `TryGetRequiredBufferSizeGs1`, and the same three for `CreateGs1DigitalLink`. One internal file, `Gs1SymbolData`, turns the caller's text into the checked element string or into its URI, and each member is that call followed by the core's public `Create` or `TryGetRequiredBufferSize` with the caller's options. The package's approved listing went from 5 exported types to 8, and the Playground's API page was regenerated (67 types to 70). No file under `src/FeatherQR` or `src/FeatherQR.SkiaSharp` changed, so the encoders and decoders are the code they were and their benchmarks have nothing to move.
+
+What the listing left to the build, each held by a test:
+
+- The first character alone tells the form. Seven fixtures of the bracketed kind do not start with `(`. Six are refused under either reading. The seventh, an element string given where bracketed text was asked for (`010952012345678810ABC`), is refused by the Syntax Engine as bracketed text and taken by the entry points as the element string it is. The corpus test lists it as the one difference of form.
+- An element string is checked and written as given, redundant separators included. (AI) text gets its separators placed, as `TryFromHri` places them.
+- A wrong option is reported before wrong data, the order `Create` keeps between an option and content that does not fit. The entry points see the data first, so on the failing path they size a one-digit text under the caller's options before they throw for the data or answer `false`. On the other path `Create` checks the options itself.
+- `CreateGs1` takes `Fnc1` at its default or first position and refuses second position with an `ArgumentException` that names `options`. `CreateGs1DigitalLink` refuses any FNC1 mode the same way, and a stem that is not an http or https prefix as the data layer does.
+- An error's place is in the caller's text. When a URI cannot carry data given as (AI) text, the builder's place in the element string is mapped back to the pair, and a missing primary key covers the whole text.
+- Two-digit years resolve from the clock, as in `TryValidate`. The corpus tests pin 2026 through the internal resolver and leave a case whose verdict the clock changes to the data layer's tests.
+- The conversions run in stack buffers of 512 characters and in pooled buffers past that. The URI's buffer is sized from the text alone (the stem, three characters a character of text, two more), so the URI is built in one pass where the string form measures first.
+- `Gs1FormatException` has a public constructor that takes the `Gs1Error`, as `Gs1Error` has one. The sketch lists neither.
+
+Tests: `Gs1SymbolTest` holds 2,048 tests per framework. For both symbologies, from (AI) text and from an element string: the round trip through the decoder and `TryRead`, the symbol equal module for module to the one `Create` writes for the element string under FNC1 or for the URI, the named class and the extension as one method, the span and size forms against the data form, the other options passed through, each refusal of an option on each form, twelve refused texts with the data layer's error, a wrong option before wrong data, content that does not fit, URIs under stems, data a URI cannot carry with its place in the text, and text past the stack buffers (866 characters of (AI) text whose URI is more than twice as long, every value character a slash that is written `%2F`). The corpus goes through both entry points, 998 cases of which they take 677. `CreateGs1` takes what the Syntax Engine takes (the one difference of form apart) and writes the engine's element string, and each symbol holds the compliance property under `Single` and `Optimal`, in Standard QR and in rMQR: FNC1 in first position as the only header, so no ECI header, and Numeric, Alphanumeric and Byte segments only, so no Kanji segment. `CreateGs1DigitalLink` writes the data layer's URI for 632 of the 677, the three (01)(235)(10) cases of Phase 5 among them, and refuses the other 45 with the data layer's error at a place inside the text. The corpus photograph reads in the four rotations as its (AI) text, `CreateGs1` writes that text back into a symbol that decodes to the same data, and `CreateGs1DigitalLink` refuses it for (8200) with the place of that pair. The fuzz test gives every mutated and random text to the four `Create` forms and the four size forms: the size forms throw nothing, each `Create` form throws the data layer's error or what `Create` throws for content that does not fit and nothing else, each succeeds exactly where its size form says yes, and they take exactly the data the data layer takes, so no buffer sized from the text was too small. The Release-only allocation test covers the span and size forms of both symbologies on (AI) text, an element string, refused data and, for Standard QR, text past the stack buffers.
+
+Planted faults: 27 single faults in the three files (5 in `Gs1SymbolData`, 11 in each generator file: the bound one character short, the form told one character late, an unchecked element string, each error mapping, the mode not set, each refusal of an option weakened, each option check on the failing path removed, an allocation in each span form, the size forms ignoring the stem or the options), run by `tools/mutation_check.cs` against the symbol, allocation and fuzz classes in Release. The first run caught 25. The two it missed were both in the rMQR Digital Link size form, the option check on refused data and the ignored stem, and the rMQR tests were extended until both failed a test.
+
+Verified:
+
+- zxing-cpp (`spot-check-gs1`, new in QRInteropFixtures): of the 984 distinct bracketed and element string inputs of the fixtures the entry points take 670. `CreateGs1` wrote each as a Standard QR and an rMQR symbol under `Single` and `Optimal` at level M, and zxing-cpp read all 2,680 with `]Q3`, GS1 content, no ECI header, the element string and, in `TextMode.HRI`, the (AI) text `TryToHri` gives. `CreateGs1DigitalLink` wrote the 625 a URI can carry in both symbologies, and zxing-cpp read all 1,250 with `]Q1`, text content and the URI. With the Standard QR entry point's mode planted wrong the run reported 1,340 failures, every Standard QR GS1 symbol and no other.
+- NativeAOT: the AOT analysis project now roots `FeatherQR.Gs1` beside the two core assemblies and runs both entry points on Standard QR and rMQR in its smoke. The publish, where any trim or AOT warning is an error, passed, and the native binary printed the smoke's line.
+- The full suite on the two frameworks: 61,752 tests in Debug with none failing and 798 skipped, and 61,986 in Release, where the allocation tests run, with none failing and 796 skipped. Both approved API listings match the built assemblies on the four target frameworks.
+
+Costs, recorded and not tuned (`Gs1SymbolEncode` in the benchmark project, the three labels of `Gs1DataLayer`, span forms into one buffer, level M). ShortRun, .NET 10.0.9, Ryzen 9 7950X3D, 2026-10-13:
+
+| Operation | retail | logistics | weighed | Allocated |
+|---|---|---|---|---|
+| `Create`, the element string under FNC1 | 0.92 µs | 1.15 µs | 1.10 µs | 0 |
+| `CreateGs1` from (AI) text | 1.51 µs | 2.60 µs | 2.21 µs | 0 |
+| `CreateGs1` from an element string | 1.55 µs | 2.52 µs | 2.18 µs | 0 |
+| `Create`, the URI | 1.14 µs | 1.34 µs | 1.36 µs | 0 |
+| `CreateGs1DigitalLink` from (AI) text | 3.44 µs | 4.66 µs | 4.43 µs | 0 |
+| rMQR `Create`, the element string under FNC1 | 0.35 µs | 0.49 µs | 0.40 µs | 0 |
+| rMQR `CreateGs1` from (AI) text | 0.97 µs | 1.82 µs | 1.49 µs | 0 |
+
+What the numbers say: an entry point costs its `Create` plus the data layer's work for the text and nothing else. `CreateGs1` adds 0.6 to 1.5 µs, which is `TryFromHri` or `TryValidate` on the same label in the table of 2026-10-12. `CreateGs1DigitalLink` adds 2.3 to 3.3 µs, the checks on the element string and then the builder, which runs them again before it chooses the path. Nothing was tuned.
+
+Lessons:
+
+- A fixture's kind names the mode its oracle was run in, not what the text is. The corpus test first expected every bracketed fixture to be read as (AI) text, and the one that holds an element string failed it. The expectation follows the entry points' own rule, and the difference is listed by id.
+- A file derived from its twin needs the twin's tests in full. The rMQR members were generated from the Standard QR file, the rMQR tests were written shorter on the same reasoning, and both faults the planted run missed were in a form only the Standard QR tests exercised. One of them hid behind a test stem one character shorter than the canonical stem, which gave the same symbol with and without it. The test now asserts that its stem changes the version.
+- The order of two errors is behavior. `Create` reports an option before content, and a layer that checks data first reverses that unless it asks for the option check on the path where `Create` never runs.
+
+Left for Phase 7: the Playground, the README's GS1 section and the other documents of the list above, and folding this plan.

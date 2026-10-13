@@ -1,5 +1,5 @@
 // FeatherQR.Gs1
-// 5 exported types
+// 8 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR.Gs1
@@ -73,5 +73,31 @@ namespace FeatherQR.Gs1
         MissingRequiredAi = 18,
         ExcludedAiPair = 19,
         RepeatedAi = 20,
+    }
+
+    public sealed class Gs1FormatException : FormatException
+    {
+        public Gs1FormatException(Gs1Error error);
+        public Gs1Error Error { get; }
+    }
+
+    public static class Gs1QRCodeGenerator
+    {
+        public static QRCodeData CreateGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null);
+        public static QRCodeData CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null, string? stem = null);
+        public static bool TryGetRequiredBufferSizeGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null);
+        public static bool TryGetRequiredBufferSizeGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null, string? stem = null);
+        public static int CreateGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null);
+        public static int CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null, string? stem = null);
+    }
+
+    public static class Gs1RmQRCodeGenerator
+    {
+        public static RmQRCodeData CreateGs1(ReadOnlySpan<char> text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = null);
+        public static RmQRCodeData CreateGs1DigitalLink(ReadOnlySpan<char> text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = null, string? stem = null);
+        public static bool TryGetRequiredBufferSizeGs1(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = null);
+        public static bool TryGetRequiredBufferSizeGs1DigitalLink(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = null, string? stem = null);
+        public static int CreateGs1(ReadOnlySpan<char> text, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = null);
+        public static int CreateGs1DigitalLink(ReadOnlySpan<char> text, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = null, string? stem = null);
     }
 }

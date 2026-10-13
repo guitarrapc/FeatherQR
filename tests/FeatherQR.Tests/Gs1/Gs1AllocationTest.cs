@@ -5,8 +5,8 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The GS1 data layer allocates nothing on its span paths (gs1-support-plan.md, "What has to stay true"):
 /// <see cref="Gs1ElementString.TryValidate"/> on an accepted and on a refused element string, a
-/// <c>foreach</c> over <see cref="Gs1ElementString.EnumerateElements"/>, and the span forms and length twins
-/// of the (AI) text conversions. Release only, as
+/// <c>foreach</c> over <see cref="Gs1ElementString.EnumerateElements"/>, the span forms and length twins
+/// of the (AI) text conversions, and the span and size forms of the generator entry points. Release only, as
 /// <see cref="DecodeAllocationTest"/> is, since a Debug build allocates where an optimized one does not.
 /// </summary>
 [NotInParallel]
@@ -14,6 +14,9 @@ public class Gs1AllocationTest
 {
 #if !DEBUG
     private const string Photograph = "0109504000059101" + "2112345678p901" + "\u001D" + "101234567p" + "\u001D" + "17141120" + "8200http://www.gs1.org/demo/";
+
+    /// <summary>90 characters, the longest value a company-internal AI takes. Six of them put (AI) text past the entry points' 512-character stack buffers.</summary>
+    private const string LongValue = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123ABCDEFGHIJKLMNOPQRSTUVWXYZ0123ABCDEFGHIJKLMNOPQRSTUVWXYZ0123";
 
     private static long SteadyStateBytes(Action call)
     {
@@ -67,6 +70,61 @@ public class Gs1AllocationTest
         await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryRead(uri.AsSpan(), default, hriBuffer, out _, out _))).IsEqualTo(0);
         await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryRead(text.AsSpan(), Fnc1Mode.FirstPosition, hriBuffer, out _, out _))).IsEqualTo(0);
         await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryGetReadLength(uri.AsSpan(), default, out _, out _))).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// The span and size forms of the entry points, from (AI) text and from an element string, under both
+    /// segmentations, for data they take and data they refuse. The long text is past the stack buffers, where
+    /// the pool's arrays come back to the thread that returned them.
+    /// </summary>
+    [Test]
+    [Arguments("(01)09506000134352(10)ABC123(17)201225")]
+    [Arguments("0109506000134352" + "10ABC123" + "\u001D" + "17201225")]
+    [Arguments("(01)09506000134352(91)" + LongValue + "(92)" + LongValue + "(93)" + LongValue + "(94)" + LongValue + "(95)" + LongValue + "(96)" + LongValue)]
+    public async Task StandardQrEntryPoints_SpanAndSizeForms_AllocateNothing(string text)
+    {
+        var destination = new byte[40_000];
+        var optimal = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text.AsSpan(), QREccLevel.L, out _, stem: "https://brand.example.com/")).IsTrue().Because("the premise: the data is taken on both carriers");
+
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.CreateGs1(text.AsSpan(), QREccLevel.L, destination))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.CreateGs1(text.AsSpan(), QREccLevel.L, destination, optimal))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(text.AsSpan(), QREccLevel.L, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(text.AsSpan(), QREccLevel.L, out _, optimal))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.CreateGs1DigitalLink(text.AsSpan(), QREccLevel.L, destination))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.CreateGs1DigitalLink(text.AsSpan(), QREccLevel.L, destination, optimal, "https://brand.example.com/"))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text.AsSpan(), QREccLevel.L, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text.AsSpan(), QREccLevel.L, out _, optimal, "https://brand.example.com/"))).IsEqualTo(0);
+
+        // Refused data: a wrong check digit in the element both forms start with.
+        var refused = text.Replace("09506000134352", "09506000134353");
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1(refused.AsSpan(), QREccLevel.L, out _)).IsFalse();
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(refused.AsSpan(), QREccLevel.L, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(refused.AsSpan(), QREccLevel.L, out _))).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments("(01)09506000134352(10)ABC123(17)201225")]
+    [Arguments("0109506000134352" + "10ABC123" + "\u001D" + "17201225")]
+    public async Task RmQrEntryPoints_SpanAndSizeForms_AllocateNothing(string text)
+    {
+        var destination = new byte[40_000];
+        var optimal = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text.AsSpan(), RmQREccLevel.M, out _, stem: "https://brand.example.com/")).IsTrue().Because("the premise: the data is taken on both carriers");
+
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.CreateGs1(text.AsSpan(), RmQREccLevel.M, destination))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.CreateGs1(text.AsSpan(), RmQREccLevel.M, destination, optimal))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(text.AsSpan(), RmQREccLevel.M, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(text.AsSpan(), RmQREccLevel.M, out _, optimal))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.CreateGs1DigitalLink(text.AsSpan(), RmQREccLevel.M, destination))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.CreateGs1DigitalLink(text.AsSpan(), RmQREccLevel.M, destination, optimal, "https://brand.example.com/"))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text.AsSpan(), RmQREccLevel.M, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text.AsSpan(), RmQREccLevel.M, out _, optimal, "https://brand.example.com/"))).IsEqualTo(0);
+
+        var refused = text.Replace("09506000134352", "09506000134353");
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(refused.AsSpan(), RmQREccLevel.M, out _)).IsFalse();
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(refused.AsSpan(), RmQREccLevel.M, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(refused.AsSpan(), RmQREccLevel.M, out _))).IsEqualTo(0);
     }
 
     [Test]

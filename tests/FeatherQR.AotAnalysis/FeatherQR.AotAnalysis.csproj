@@ -19,6 +19,7 @@
     <!-- Analyze the whole library surface, including code the entry point does not reach. -->
     <TrimmerRootAssembly Include="FeatherQR" />
     <TrimmerRootAssembly Include="FeatherQR.SkiaSharp" />
+    <TrimmerRootAssembly Include="FeatherQR.Gs1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
+    <ProjectReference Include="..\..\src\FeatherQR.Gs1\FeatherQR.Gs1.csproj" />
   </ItemGroup>
 
   <!-- The timing mode's images come from the test suite's renderers (no SkiaSharp, so the WebAssembly report draws the same pixels). -->

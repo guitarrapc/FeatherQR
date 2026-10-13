@@ -30,6 +30,9 @@ public class Gs1DigitalLinkTest
         "parse-dl-uri-012",     // a mixed-case scheme: RFC 3986 makes the scheme case-insensitive, the engine takes it for plain data
     ];
 
+    /// <summary>The ids of <see cref="BuildDifferences"/>, for the tests of the layers above that build a URI.</summary>
+    internal static IReadOnlyCollection<string> BuildDifferenceIds => BuildDifferences;
+
     /// <summary>Element strings the engine could not put in a URI that this library can, by cause.</summary>
     private static readonly HashSet<string> BuildDifferences =
     [

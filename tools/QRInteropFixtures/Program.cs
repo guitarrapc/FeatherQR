@@ -38,6 +38,12 @@ if (command == "sweep-fnc1")
     var sweepSeed = args.Length > 2 ? ulong.Parse(args[2]) : 20261013UL;
     return Fnc1Sweep.Run(FindRepoRoot(), sweepTexts, sweepSeed);
 }
+if (command == "spot-check-gs1")
+{
+    // Every symbol the GS1 entry points write for the committed GS1 inputs (CreateGs1 and CreateGs1DigitalLink,
+    // Standard QR and rMQR) read by zxing-cpp. Findings go to the fixture spec and the GS1 plan.
+    return Gs1SpotCheck.Run(FindRepoRoot());
+}
 if (command == "spot-check-rmqr")
 {
     // Decodes FeatherQR-generated rMQR symbols (all versions × ECC × modes) with zxing-cpp.
@@ -115,7 +121,7 @@ if (command == "import-gs1-syntax-dictionary")
 }
 if (command != "regenerate" && command != "regenerate-structured-append" && command != "regenerate-fnc1" && command != "regenerate-gs1")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|regenerate-fnc1|regenerate-gs1|import-gs1-syntax-dictionary|import-structured-append-samples|spot-check-structured-append|spot-check-fnc1|sweep-fnc1|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|probe-fnc1|generate-kanji-table]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|regenerate-fnc1|regenerate-gs1|import-gs1-syntax-dictionary|import-structured-append-samples|spot-check-structured-append|spot-check-fnc1|sweep-fnc1|spot-check-gs1|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|probe-fnc1|generate-kanji-table]");
     return 1;
 }
 

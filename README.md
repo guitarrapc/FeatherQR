@@ -96,7 +96,7 @@ Pick the package for what you need. All four ship together at the same version.
 |---|---|---|
 | [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | You want images: PNG, JPEG, WebP, SVG, canvas rendering, or decoding from an `SKBitmap`. Brings `FeatherQR` and SkiaSharp | `FeatherQR`, `FeatherQR.SkiaSharp` |
 | [FeatherQR](https://www.nuget.org/packages/FeatherQR) | You only need module matrices or decoding from your own pixel data, with no image library at all | `FeatherQR` |
-| [FeatherQR.Gs1](https://www.nuget.org/packages/FeatherQR.Gs1) | You handle GS1 data: checking an element string, converting it to and from `(AI)` text or a GS1 Digital Link URI, or reading the text a GS1 QR Code decoded to. Brings `FeatherQR` and no image library | `FeatherQR`, `FeatherQR.Gs1` |
+| [FeatherQR.Gs1](https://www.nuget.org/packages/FeatherQR.Gs1) | You handle GS1 data: writing a GS1 QR Code, or a QR code that holds a GS1 Digital Link URI, from `(AI)` text, checking an element string, converting it to and from `(AI)` text or a GS1 Digital Link URI, or reading the text a GS1 QR Code decoded to. Brings `FeatherQR` and no image library | `FeatherQR`, `FeatherQR.Gs1` |
 | [SkiaSharp.QrCode](https://www.nuget.org/packages/SkiaSharp.QrCode) | You are upgrading an existing project and want to keep its install line. An empty package that depends on `FeatherQR.SkiaSharp` | same as `FeatherQR.SkiaSharp` |
 
 ```bash

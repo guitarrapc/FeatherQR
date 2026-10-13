@@ -9,6 +9,10 @@ namespace FeatherQR.Tests;
 /// the (AI) text and Digital Link conversions in both directions and <see cref="Gs1ElementString.TryRead"/>
 /// without an exception, an accepted string always enumerates at least one element, an accepted string formats
 /// and its text reads back, a URI that reads gives an element string that splits, and a built URI reads back.
+/// The generator entry points get the same texts: their size forms throw nothing, their <c>Create</c> forms
+/// throw the data layer's error in a <see cref="Gs1FormatException"/> or what <c>Create</c> throws for content
+/// that does not fit and nothing else, each succeeds exactly where its size form says yes, and they take exactly
+/// the data the data layer takes, so the buffers they size from the text's length are never too small.
 /// </summary>
 public class Gs1FuzzTest
 {
@@ -96,6 +100,75 @@ public class Gs1FuzzTest
         Gs1ElementString.TryRead(text, Fnc1Mode.FirstPosition, out _, out _);
         Gs1ElementString.TryRead(text, default, out _, out _);
         Gs1ElementString.TryGetReadLength(text, default, out _, out _);
+
+        ExerciseEntryPoints(text);
+    }
+
+    /// <summary>
+    /// The generator entry points on one text, against the data layer's own verdicts: the element string of (AI)
+    /// text or the text itself, and that element string's URI.
+    /// </summary>
+    private static void ExerciseEntryPoints(string text)
+    {
+        var isAiText = text.Length > 0 && text[0] == '(';
+        string elementString;
+        Gs1Error dataError;
+        var taken = isAiText ? Gs1ElementString.TryFromHri(text, out elementString, out dataError) : Gs1ElementString.TryValidate(elementString = text, out dataError);
+        var linkError = dataError;
+        var linked = taken && Gs1ElementString.TryToDigitalLink(elementString, out _, out linkError);
+
+        // Standard QR: content that does not fit version 40 is an InvalidOperationException.
+        var sized = QRCodeGenerator.TryGetRequiredBufferSizeGs1(text, QREccLevel.M, out var size);
+        var thrown = Run(() => QRCodeGenerator.CreateGs1(text, QREccLevel.M).Size, typeof(InvalidOperationException), out var written);
+        Check("QRCodeGenerator.CreateGs1", text, taken, dataError, exactPlace: true, sized, size.Size, thrown, written);
+
+        sized = QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text, QREccLevel.M, out size);
+        thrown = Run(() => QRCodeGenerator.CreateGs1DigitalLink(text, QREccLevel.M).Size, typeof(InvalidOperationException), out written);
+        Check("QRCodeGenerator.CreateGs1DigitalLink", text, linked, linkError, exactPlace: !taken, sized, size.Size, thrown, written);
+
+        // rMQR: content that does not fit any symbol is an ArgumentException.
+        sized = RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(text, RmQREccLevel.M, out var rmqrSize);
+        thrown = Run(() => RmQRCodeGenerator.CreateGs1(text, RmQREccLevel.M).Width, typeof(ArgumentException), out written);
+        Check("RmQRCodeGenerator.CreateGs1", text, taken, dataError, exactPlace: true, sized, rmqrSize.Width, thrown, written);
+
+        sized = RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text, RmQREccLevel.M, out rmqrSize);
+        thrown = Run(() => RmQRCodeGenerator.CreateGs1DigitalLink(text, RmQREccLevel.M).Width, typeof(ArgumentException), out written);
+        Check("RmQRCodeGenerator.CreateGs1DigitalLink", text, linked, linkError, exactPlace: !taken, sized, rmqrSize.Width, thrown, written);
+    }
+
+    /// <summary>Runs a <c>Create</c> form. An exception other than the data's and the one named for content that does not fit goes through, and fails the test.</summary>
+    private static Exception? Run(Func<int> create, Type doesNotFit, out int written)
+    {
+        written = 0;
+        try
+        {
+            written = create();
+            return null;
+        }
+        catch (Exception e) when (e is Gs1FormatException || e.GetType() == doesNotFit)
+        {
+            return e;
+        }
+    }
+
+    private static void Check(string name, string text, bool taken, Gs1Error dataError, bool exactPlace, bool sized, int size, Exception? thrown, int written)
+    {
+        if (!taken)
+        {
+            // Data the data layer refuses: its error, at its place in the text where the data layer reports one for this text.
+            if (thrown is not Gs1FormatException refused || refused.Error.Kind != dataError.Kind || (exactPlace && refused.Error != dataError))
+                throw new InvalidOperationException($"{name}: refused data is not reported as {dataError}: \"{text}\" ({thrown?.GetType().Name ?? "no exception"} {(thrown as Gs1FormatException)?.Error})");
+            if (refused.Error.Offset < 0 || refused.Error.Offset + refused.Error.Length > Math.Max(text.Length, 1))
+                throw new InvalidOperationException($"{name}: an error outside its text: \"{text}\" ({refused.Error})");
+            if (sized)
+                throw new InvalidOperationException($"{name}: refused data was sized: \"{text}\"");
+            return;
+        }
+
+        if (thrown is Gs1FormatException unexpected)
+            throw new InvalidOperationException($"{name}: data the data layer takes was refused: \"{text}\" ({unexpected.Error})");
+        if (sized != (thrown is null) || (sized && size != written))
+            throw new InvalidOperationException($"{name}: the size form and the Create form disagree: \"{text}\" (sized {sized} as {size}, {thrown?.GetType().Name ?? "created"} as {written})");
     }
 
     private static string Mutate(string input, Random random)

@@ -346,7 +346,7 @@ internal static class Gs1Hri
     /// are walked again with the same separator rule to find the one whose element holds the error's offset, and
     /// the whole pair, parentheses included, is the place. The error stays as it is when no pair holds it.
     /// </summary>
-    private static Gs1Error MapElement(ReadOnlySpan<char> hri, Gs1Error error)
+    public static Gs1Error MapElement(ReadOnlySpan<char> hri, Gs1Error error)
     {
         var position = 0;
         var written = 0;
