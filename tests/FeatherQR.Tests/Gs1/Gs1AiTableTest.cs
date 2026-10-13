@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The generated GS1 AI table (<see cref="Gs1AiTable"/>) read back through its lookup: the pinned release, the
-/// AIs the plan's equivalence classes name (2-, 3- and 4-digit AIs, a range, predefined and variable lengths,
+/// AIs the corpus's equivalence classes name (2-, 3- and 4-digit AIs, a range, predefined and variable lengths,
 /// optional and multi-component specifications), the pairing rules, the Digital Link keys and qualifier
 /// sequences, and the two tables of the General Specifications that are frozen by its own statement (7-5, AI
 /// length by the first two digits, and 7-6, the predefined lengths). Every expectation is read from the committed

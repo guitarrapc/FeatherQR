@@ -230,4 +230,79 @@ public class LensDistortionDecodeTest
 
         await Assert.That(named).IsEqualTo(d);
     }
+    /// <summary>
+    /// On a render no lens bends, the finders' frame reads both copies as the drawn dimension's codeword and as no neighbouring one. That is where the outlines are not measured for a dimension the estimate already has.
+    /// </summary>
+    [Test]
+    public async Task StatesDimension_OnACleanRender_IsTheDrawnDimensionAlone()
+    {
+        var wrong = new List<string>();
+        for (var version = 7; version <= 40; version++)
+        {
+            var qr = QRCodeGenerator.Create("FQR", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 0 });
+            var photograph = CameraRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, 4, new CameraRenderer.Shot(4f, TiltDegrees: 15f, TiltAxisDegrees: 30f, RollDegrees: 17f * version, BlurSigma: 0.5f));
+            foreach (var versionsOff in new[] { -1, 0, 1 })
+            {
+                if (version + versionsOff is < 7 or > 40)
+                    continue;
+                if (States(photograph, _ => qr.Size + 4 * versionsOff, out _) != (versionsOff == 0))
+                    wrong.Add($"v{version} asked for v{version + versionsOff}");
+            }
+        }
+
+        await Assert.That(wrong).IsEmpty();
+    }
+
+    /// <summary>
+    /// Through a lens the estimate lands versions high and the symbol does not state it, so the outlines are still read.
+    /// </summary>
+    [Test]
+    [Arguments(7, 4.5f, 0f, 0f, 20f, -0.08f)]
+    [Arguments(13, 4f, 10f, 45f, 300f, -0.07f)]
+    [Arguments(20, 6f, 25f, 90f, 250f, -0.06f)]
+    [Arguments(32, 5f, 5f, 60f, 160f, -0.08f)]
+    public async Task StatesDimension_ThroughALens_IsNotTheEstimate(int version, float pixelsPerModule, float tiltDegrees, float tiltAxisDegrees, float rollDegrees, float distortion)
+    {
+        var (photograph, qr, _) = Render(version, pixelsPerModule, tiltDegrees, tiltAxisDegrees, rollDegrees, distortion, destroyData: false);
+        var states = States(photograph, static estimate => 17 + 4 * (int)MathF.Round((estimate - 17f) / 4f), out var snapped);
+
+        // The premise: the estimate snaps to a dimension that is a version or more above the drawn one and still a version's
+        await Assert.That(snapped).IsGreaterThan(qr.Size);
+        await Assert.That(snapped).IsLessThanOrEqualTo(177);
+
+        await Assert.That(states).IsFalse();
+    }
+
+    /// <summary>Both copies are asked. With either painted over the symbol no longer states its dimension, and the outlines are read as before.</summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task StatesDimension_WithOneCopyPaintedOver_IsFalse(bool besideTopRight)
+    {
+        var qr = QRCodeGenerator.Create("FQR", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(25), QuietZoneSize = 0 });
+        var d = qr.Size;
+        bool IsPainted(int row, int column)
+        {
+            var (along, across) = besideTopRight ? (row, column) : (column, row);
+            return along < 6 && across >= d - 11 && across < d - 8;
+        }
+        var shot = new CameraRenderer.Shot(4f, TiltDegrees: 15f, TiltAxisDegrees: 30f, RollDegrees: 40f, BlurSigma: 0.5f);
+
+        // The premise: the same render with both copies as drawn states the dimension
+        foreach (var painted in new[] { false, true })
+        {
+            var photograph = CameraRenderer.Render((row, column) => (painted && IsPainted(row, column)) || qr[row, column], d, d, 4, shot);
+
+            await Assert.That(States(photograph, _ => d, out _)).IsEqualTo(!painted);
+        }
+    }
+
+    /// <summary>Whether the photograph states a dimension through its finders' frame, as the decoder measures the frame at the global threshold. The dimension is chosen from the unsnapped estimate.</summary>
+    private static bool States(CameraRenderer.Photograph photograph, Func<float, int> dimensionFromEstimate, out int dimension)
+    {
+        var (frame, sizes) = FinderOutlineFitDecodeTest.Measure(photograph.Luminance, photograph.Width, photograph.Height, out var threshold, out var grey);
+        dimension = dimensionFromEstimate(QRImageDecoder.EstimateModules(frame.TopLeft, frame.TopRight, frame.BottomLeft, sizes, frame));
+        return dimension is >= 45 and <= 177
+            && QRImageDecoder.StatesDimension(new ImageView(photograph.Luminance, photograph.Width, photograph.Height, threshold, grey), frame, dimension);
+    }
 }

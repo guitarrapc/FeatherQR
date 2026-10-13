@@ -3,7 +3,7 @@ using FeatherQR.Gs1;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// No <c>Try</c> form throws for any input text (gs1-support-plan.md, "What has to stay true"): mutations of
+/// No <c>Try</c> form throws for any input text (qrcode-symbologies.md, "GS1 data"): mutations of
 /// every corpus input (characters inserted, deleted and replaced, separators and non-ASCII among them) and
 /// random strings go through <see cref="Gs1ElementString.TryValidate"/>, <see cref="Gs1ElementString.EnumerateElements"/>
 /// the (AI) text and Digital Link conversions in both directions and <see cref="Gs1ElementString.TryRead"/>

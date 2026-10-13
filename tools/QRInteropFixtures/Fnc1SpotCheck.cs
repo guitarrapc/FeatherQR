@@ -14,7 +14,7 @@ namespace QRInteropFixtures;
 /// second position. ZXing.Net must read first position with <c>]Q3</c> and the text. The cases are the FNC1 fixture
 /// corpus's data (the GS1 examples, each data mode under FNC1, a literal <c>%</c>, the two separator pairs, FNC1
 /// beside an ECI header, each indicator form), the two examples of ISO/IEC 18004 6.4.8, and adversarial <c>%</c>
-/// and separator sequences. Findings go to the fixture spec and the FNC1 plan.
+/// and separator sequences. Findings go to the fixture spec.
 /// </summary>
 public static class Fnc1SpotCheck
 {

@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The piecewise mesh sampler's fast tiers (<see cref="QRImageDecoder.SampleGridPiecewiseColumnTable"/>,
-/// the portable one, <c>SampleGridPiecewiseAvx2</c>, <c>SampleGridPiecewiseAdvSimd</c> and <c>SampleGridPiecewiseVector128</c>) and the dispatcher
+/// the portable one, <c>SampleGridPiecewiseAvx2</c> and <c>SampleGridPiecewiseVector128</c>) and the dispatcher
 /// (<see cref="QRImageDecoder.SampleGridPiecewise"/>) against the per-module loop
 /// (<see cref="QRImageDecoder.SampleGridPiecewiseScalar"/>), module for module.
 /// </summary>
@@ -39,8 +39,6 @@ public class SampleGridPiecewiseParityTest
 #if NET8_0_OR_GREATER
         if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
             yield return ("AVX2", QRImageDecoder.SampleGridPiecewiseAvx2);
-        if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
-            yield return ("AdvSimd", QRImageDecoder.SampleGridPiecewiseAdvSimd);
         if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
             yield return ("Vector128", QRImageDecoder.SampleGridPiecewiseVector128);
 #endif

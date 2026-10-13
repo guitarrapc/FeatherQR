@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using FeatherQR.Internals.ImageDecoders;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
@@ -33,11 +32,7 @@ internal static partial class QRImageDecoder
             SampleGridPiecewiseAvx2(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
             return;
         }
-        if (AdvSimd.Arm64.IsSupported)
-        {
-            SampleGridPiecewiseAdvSimd(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
-            return;
-        }
+        // ARM64 takes the 128-bit tier: the same steps written with its own intrinsics ran no faster there
         if (Vector128.IsHardwareAccelerated)
         {
             SampleGridPiecewiseVector128(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);

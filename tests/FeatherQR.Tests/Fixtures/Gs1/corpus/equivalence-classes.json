@@ -17,12 +17,12 @@
       "dictionary": "hand-maintained table citing 2025-12-08"
     }
   },
-  "source": "gs1-support-plan.md equivalence classes",
+  "source": "qrcode-test-fixtures.md equivalence classes",
   "cases": [
     {
       "id": "eq-ai-2-digit",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(17)251231",
       "syntaxEngine": {
@@ -56,7 +56,7 @@
     {
       "id": "eq-ai-3-digit",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(253)9526064000028000001(10)ABC",
       "note": "GDTI with its optional serial component and a batch, where (10) requires a key (01) that is absent",
@@ -83,7 +83,7 @@
     {
       "id": "eq-ai-3-digit-serial-component",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(253)9526064000028000001",
       "note": "GDTI with the optional X..17 serial component present",
@@ -117,7 +117,7 @@
     {
       "id": "eq-ai-4-digit",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(8200)http://example.com/",
       "syntaxEngine": {
@@ -151,7 +151,7 @@
     {
       "id": "eq-ai-range-decimal-digit",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(3103)000195",
       "note": "3103: three decimal places",
@@ -186,7 +186,7 @@
     {
       "id": "eq-ai-range-decimal-digit-variable",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(30)5(3923)3000200",
       "note": "392n needs (30) or 31nn-36nn",
@@ -222,7 +222,7 @@
     {
       "id": "eq-ai-predefined-fixed",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(17)251231(10)ABC",
       "note": "no separator after (01) and (17)",
@@ -258,7 +258,7 @@
     {
       "id": "eq-ai-fixed-outside-predefined",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(8005)000365(10)ABC",
       "note": "(8005) is N6 but not in Table 7-6, so a separator follows it",
@@ -294,7 +294,7 @@
     {
       "id": "eq-ai-variable",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)ABC(21)XYZ",
       "syntaxEngine": {
@@ -329,7 +329,7 @@
     {
       "id": "eq-ai-optional-component-absent",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(7007)251231",
       "syntaxEngine": {
@@ -363,7 +363,7 @@
     {
       "id": "eq-ai-optional-component-present",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(7007)251231261231",
       "syntaxEngine": {
@@ -397,7 +397,7 @@
     {
       "id": "eq-ai-multi-component-8008-minimum",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(8008)25123123",
       "syntaxEngine": {
@@ -431,7 +431,7 @@
     {
       "id": "eq-ai-multi-component-8008-minutes",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(8008)2512312359",
       "syntaxEngine": {
@@ -465,7 +465,7 @@
     {
       "id": "eq-ai-multi-component-8008-seconds",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(8008)251231235959",
       "syntaxEngine": {
@@ -499,7 +499,7 @@
     {
       "id": "eq-ai-multi-component-8008-odd-length",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(8008)251231235",
       "note": "9 digits: a partial component",
@@ -522,7 +522,7 @@
     {
       "id": "eq-ai-multi-component-7040",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(417)9520123456788(7040)1AB-",
       "syntaxEngine": {
@@ -556,7 +556,7 @@
     {
       "id": "eq-sep-after-variable-not-last",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "010952012345678810ABC\u001D17251231",
       "syntaxEngine": {
@@ -588,7 +588,7 @@
     {
       "id": "eq-sep-after-fixed-outside-predefined",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "01095201234567888005000365\u001D10ABC",
       "syntaxEngine": {
@@ -620,7 +620,7 @@
     {
       "id": "eq-sep-none-after-predefined",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "01095201234567881725123110ABC",
       "syntaxEngine": {
@@ -652,7 +652,7 @@
     {
       "id": "eq-sep-none-after-last-variable",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "010952012345678810ABC",
       "syntaxEngine": {
@@ -683,7 +683,7 @@
     {
       "id": "eq-sep-redundant-after-predefined",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "0109520123456788\u001D17251231",
       "note": "7.8.6.3: a processing routine shall tolerate a single separator after any element",
@@ -714,7 +714,7 @@
     {
       "id": "eq-sep-trailing",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "010952012345678810ABC\u001D",
       "note": "a trailing separator after the last element",
@@ -745,7 +745,7 @@
     {
       "id": "eq-sep-two-in-a-row",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "010952012345678810ABC\u001D\u001D17251231",
       "note": "an empty field",
@@ -769,7 +769,7 @@
     {
       "id": "eq-sep-missing-after-variable",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "010952012345678810ABC17251231",
       "note": "the missing separator makes the batch ABC17251231: no error, a different meaning",
@@ -801,7 +801,7 @@
     {
       "id": "eq-sep-missing-makes-too-long",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "010952012345678810ABCDEFGHIJKLMN17251231",
       "note": "the missing separator makes the batch 22 characters, past X..20",
@@ -825,7 +825,7 @@
     {
       "id": "eq-sep-leading",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "\u001D0109520123456788",
       "note": "a separator before the first element",
@@ -849,7 +849,7 @@
     {
       "id": "eq-cset82-boundary",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)!\"%&'*+,-./:;<=>?_Az",
       "note": "CSET 82 characters that need no escape",
@@ -884,7 +884,7 @@
     {
       "id": "eq-cset82-escaped-parenthesis",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)A\\(1)B",
       "note": "a literal parenthesis escaped as \\( in bracketed input",
@@ -919,7 +919,7 @@
     {
       "id": "eq-cset82-parenthesis-element-string",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "010952012345678810A(1)B",
       "syntaxEngine": {
@@ -950,7 +950,7 @@
     {
       "id": "eq-cset82-space",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)A B",
       "note": "space is outside CSET 82",
@@ -978,7 +978,7 @@
     {
       "id": "eq-cset82-hash",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)A#B",
       "note": "# is outside CSET 82",
@@ -1006,7 +1006,7 @@
     {
       "id": "eq-cset82-non-ascii",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)é",
       "note": "a non-ASCII character",
@@ -1034,7 +1034,7 @@
     {
       "id": "eq-cset82-non-ascii-element-string",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "010952012345678810é",
       "syntaxEngine": {
@@ -1058,7 +1058,7 @@
     {
       "id": "eq-cset82-control-character",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)A\tB",
       "note": "a control character",
@@ -1081,7 +1081,7 @@
     {
       "id": "eq-cset39-boundary",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(8010)0628165987ABC-#/",
       "note": "CSET 39: digits, upper case, #, - and /",
@@ -1115,7 +1115,7 @@
     {
       "id": "eq-cset39-lower-case",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(8010)0628165987abc",
       "note": "lower case is outside CSET 39",
@@ -1143,7 +1143,7 @@
     {
       "id": "eq-cset64-boundary",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(21)ABC(8030)QUJDREVGRw==",
       "note": "base64url with = padding",
@@ -1179,7 +1179,7 @@
     {
       "id": "eq-cset64-no-padding",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(21)ABC(8030)QUJDREVGRw",
       "note": "base64url without padding",
@@ -1215,7 +1215,7 @@
     {
       "id": "eq-cset64-invalid-character",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(21)ABC(8030)ABC:123",
       "syntaxEngine": {
@@ -1242,7 +1242,7 @@
     {
       "id": "eq-cset64-invalid-padding",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(21)ABC(8030)123=",
       "syntaxEngine": {
@@ -1270,7 +1270,7 @@
     {
       "id": "eq-numeric-with-letter",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)0952012345678A",
       "syntaxEngine": {
@@ -1298,7 +1298,7 @@
     {
       "id": "eq-numeric-with-space",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)0952012345678 ",
       "syntaxEngine": {
@@ -1326,7 +1326,7 @@
     {
       "id": "eq-length-fixed-short",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)0952012345678",
       "syntaxEngine": {
@@ -1348,7 +1348,7 @@
     {
       "id": "eq-length-fixed-long",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)095201234567881",
       "syntaxEngine": {
@@ -1369,7 +1369,7 @@
     {
       "id": "eq-length-variable-max",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)ABCDEFGHIJKLMNOPQRST",
       "note": "20 characters",
@@ -1404,7 +1404,7 @@
     {
       "id": "eq-length-variable-over",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)ABCDEFGHIJKLMNOPQRSTU",
       "note": "21 characters",
@@ -1426,7 +1426,7 @@
     {
       "id": "eq-length-variable-empty",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)",
       "note": "an empty value",
@@ -1448,7 +1448,7 @@
     {
       "id": "eq-length-variable-empty-not-last",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)(17)251231",
       "syntaxEngine": {
@@ -1469,7 +1469,7 @@
     {
       "id": "eq-csum-gtin-valid",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788",
       "syntaxEngine": {
@@ -1502,7 +1502,7 @@
     {
       "id": "eq-csum-gtin-invalid",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456789",
       "syntaxEngine": {
@@ -1529,7 +1529,7 @@
     {
       "id": "eq-csum-sscc-valid",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(00)195201234567891232",
       "syntaxEngine": {
@@ -1562,7 +1562,7 @@
     {
       "id": "eq-csum-sscc-invalid",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(00)195201234567891233",
       "syntaxEngine": {
@@ -1589,7 +1589,7 @@
     {
       "id": "eq-csum-grai",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(8003)09520123456788ABC",
       "note": "GRAI: the check digit is over the N13 after the leading 0",
@@ -1623,7 +1623,7 @@
     {
       "id": "eq-csumalpha-gmn-valid",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(8013)1987654Ad4X4bL5ttr2310c2K",
       "syntaxEngine": {
@@ -1656,7 +1656,7 @@
     {
       "id": "eq-csumalpha-gmn-invalid",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(8013)1987654Ad4X4bL5ttr2310c2L",
       "syntaxEngine": {
@@ -1683,7 +1683,7 @@
     {
       "id": "eq-date-day-00-allowed",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(17)251200",
       "note": "yymmd0: day 00 means end of month",
@@ -1718,7 +1718,7 @@
     {
       "id": "eq-date-day-00-refused",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(7006)251200",
       "note": "yymmdd on (7006): a real day is required",
@@ -1746,7 +1746,7 @@
     {
       "id": "eq-date-leap-day-2024",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(17)240229",
       "syntaxEngine": {
@@ -1780,7 +1780,7 @@
     {
       "id": "eq-date-leap-day-2025",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(17)250229",
       "syntaxEngine": {
@@ -1807,7 +1807,7 @@
     {
       "id": "eq-date-leap-day-2000",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(17)000229",
       "note": "year 00 reads as 2000 while 2000 is inside the -49/+50 window, until 2050",
@@ -1842,7 +1842,7 @@
     {
       "id": "eq-date-month-00",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(17)250031",
       "syntaxEngine": {
@@ -1869,7 +1869,7 @@
     {
       "id": "eq-date-month-13",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(17)251331",
       "syntaxEngine": {
@@ -1896,7 +1896,7 @@
     {
       "id": "eq-date-day-32",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(17)251232",
       "syntaxEngine": {
@@ -1923,7 +1923,7 @@
     {
       "id": "eq-date-yyyymmdd",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(8018)795260646688514634(7250)20251231",
       "syntaxEngine": {
@@ -1957,7 +1957,7 @@
     {
       "id": "eq-date-yyyymmdd-invalid",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(8018)795260646688514634(7250)20251301",
       "syntaxEngine": {
@@ -1984,7 +1984,7 @@
     {
       "id": "eq-req-missing",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(10)ABC",
       "note": "(10) requires 01, 02, 03, 8006 or 8026",
@@ -2011,7 +2011,7 @@
     {
       "id": "eq-req-satisfied",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)ABC",
       "syntaxEngine": {
@@ -2045,7 +2045,7 @@
     {
       "id": "eq-req-satisfied-by-alternative",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(8006)095201234567880102(10)ABC",
       "note": "(10) satisfied by (8006)",
@@ -2080,7 +2080,7 @@
     {
       "id": "eq-req-compound-missing-both",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(8040)123456789012345",
       "note": "(8040) requires 01 with 21",
@@ -2107,7 +2107,7 @@
     {
       "id": "eq-req-compound-missing-one",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(8040)123456789012345",
       "syntaxEngine": {
@@ -2133,7 +2133,7 @@
     {
       "id": "eq-req-compound-satisfied",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(21)ABC(8040)123456789012345",
       "syntaxEngine": {
@@ -2168,7 +2168,7 @@
     {
       "id": "eq-ex-serial-and-tpx",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(21)ABC(235)XYZ",
       "note": "(21) excludes (235)",
@@ -2195,7 +2195,7 @@
     {
       "id": "eq-ex-gtin-and-content",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(02)09520123456788(37)5",
       "note": "(02) excludes (01)",
@@ -2224,7 +2224,7 @@
     {
       "id": "eq-ex-pattern",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(3103)000195(3104)000195",
       "note": "310n excludes 310n",
@@ -2251,7 +2251,7 @@
     {
       "id": "eq-repeat-equal",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)ABC(10)ABC",
       "syntaxEngine": {
@@ -2286,7 +2286,7 @@
     {
       "id": "eq-repeat-unequal",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)ABC(10)DEF",
       "syntaxEngine": {
@@ -2313,7 +2313,7 @@
     {
       "id": "eq-unknown-ai-2-digit",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(89)ABC",
       "syntaxEngine": {
@@ -2334,7 +2334,7 @@
     {
       "id": "eq-unknown-ai-4-digit",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(4000)ABC",
       "syntaxEngine": {
@@ -2355,7 +2355,7 @@
     {
       "id": "eq-unknown-ai-element-string-last",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "01095201234567884000ABC",
       "syntaxEngine": {
@@ -2386,7 +2386,7 @@
     {
       "id": "eq-unknown-ai-element-string-separated",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "01095201234567884000ABC\u001D10DEF",
       "note": "an unknown AI read as variable length up to the separator",
@@ -2419,7 +2419,7 @@
     {
       "id": "eq-text-unbalanced-open",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(0109520123456788",
       "syntaxEngine": {
@@ -2440,7 +2440,7 @@
     {
       "id": "eq-text-unbalanced-close",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "01)09520123456788",
       "syntaxEngine": {
@@ -2463,7 +2463,7 @@
     {
       "id": "eq-text-non-digit-ai",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(0A)09520123456788",
       "syntaxEngine": {
@@ -2484,7 +2484,7 @@
     {
       "id": "eq-text-space-after-ai",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01) 09520123456788",
       "syntaxEngine": {
@@ -2507,7 +2507,7 @@
     {
       "id": "eq-text-leading-space",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": " (01)09520123456788",
       "syntaxEngine": {
@@ -2528,7 +2528,7 @@
     {
       "id": "eq-text-trailing-space",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788 ",
       "syntaxEngine": {
@@ -2549,7 +2549,7 @@
     {
       "id": "eq-text-square-brackets",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "[01]09520123456788",
       "note": "libzint's bracket convention",
@@ -2576,7 +2576,7 @@
     {
       "id": "eq-text-element-string-given-as-bracketed",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "010952012345678810ABC",
       "note": "no brackets at all",
@@ -2599,7 +2599,7 @@
     {
       "id": "eq-text-empty",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "",
       "syntaxEngine": {
@@ -2620,7 +2620,7 @@
     {
       "id": "eq-element-string-empty",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "",
       "syntaxEngine": {
@@ -2637,7 +2637,7 @@
     {
       "id": "eq-element-string-fnc1-caret",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ElementString",
       "input": "^0109520123456788",
       "note": "the Syntax Engine's ^ is not a separator in an element string",
@@ -2661,7 +2661,7 @@
     {
       "id": "eq-text-ai-only",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)",
       "syntaxEngine": {
@@ -2682,7 +2682,7 @@
     {
       "id": "eq-text-ai-with-leading-zero",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(010)9520123456788",
       "syntaxEngine": {
@@ -2708,7 +2708,7 @@
     {
       "id": "eq-dl-key-00",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/00/195201234567891232",
       "syntaxEngine": {
@@ -2732,7 +2732,7 @@
     {
       "id": "eq-dl-key-01",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788",
       "syntaxEngine": {
@@ -2756,7 +2756,7 @@
     {
       "id": "eq-dl-key-253",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/253/9526064000028000001",
       "syntaxEngine": {
@@ -2780,7 +2780,7 @@
     {
       "id": "eq-dl-key-255",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/255/95201234567881234",
       "syntaxEngine": {
@@ -2804,7 +2804,7 @@
     {
       "id": "eq-dl-key-401",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/401/9521234ABC",
       "syntaxEngine": {
@@ -2828,7 +2828,7 @@
     {
       "id": "eq-dl-key-402",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/402/95212345678901234",
       "syntaxEngine": {
@@ -2846,7 +2846,7 @@
     {
       "id": "eq-dl-key-414",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/414/9520123456788",
       "syntaxEngine": {
@@ -2870,7 +2870,7 @@
     {
       "id": "eq-dl-key-415",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/415/9520123456788/8020/INV123",
       "syntaxEngine": {
@@ -2895,7 +2895,7 @@
     {
       "id": "eq-dl-key-417",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/417/9520123456788",
       "syntaxEngine": {
@@ -2919,7 +2919,7 @@
     {
       "id": "eq-dl-key-8003",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/8003/09520123456788ABC",
       "syntaxEngine": {
@@ -2943,7 +2943,7 @@
     {
       "id": "eq-dl-key-8004",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/8004/9520614141234567",
       "syntaxEngine": {
@@ -2967,7 +2967,7 @@
     {
       "id": "eq-dl-key-8006",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/8006/095201234567880102/21/ABC",
       "syntaxEngine": {
@@ -2992,7 +2992,7 @@
     {
       "id": "eq-dl-key-8010",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/8010/0628165987ABC/8011/123",
       "syntaxEngine": {
@@ -3017,7 +3017,7 @@
     {
       "id": "eq-dl-key-8013",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/8013/1987654Ad4X4bL5ttr2310c2K",
       "syntaxEngine": {
@@ -3041,7 +3041,7 @@
     {
       "id": "eq-dl-key-8017",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/8017/795260646688514634/8019/1",
       "syntaxEngine": {
@@ -3066,7 +3066,7 @@
     {
       "id": "eq-dl-key-8018",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/8018/795260646688514634",
       "syntaxEngine": {
@@ -3090,7 +3090,7 @@
     {
       "id": "eq-dl-qualifiers-in-order",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/22/2A/10/ABC/21/123",
       "syntaxEngine": {
@@ -3117,7 +3117,7 @@
     {
       "id": "eq-dl-qualifiers-out-of-order",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/10/ABC/22/2A",
       "syntaxEngine": {
@@ -3134,7 +3134,7 @@
     {
       "id": "eq-dl-qualifier-alternative-235",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/235/XYZ",
       "syntaxEngine": {
@@ -3159,7 +3159,7 @@
     {
       "id": "eq-dl-qualifiers-mixed-alternatives",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/22/2A/235/XYZ",
       "syntaxEngine": {
@@ -3177,7 +3177,7 @@
     {
       "id": "eq-dl-query-attributes",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?17=251231&3103=000195",
       "syntaxEngine": {
@@ -3203,7 +3203,7 @@
     {
       "id": "eq-dl-query-8200",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?8200=http%3A%2F%2Fexample.com",
       "note": "(8200) cannot be a Digital Link attribute",
@@ -3221,7 +3221,7 @@
     {
       "id": "eq-dl-query-03",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?03=09520123456788",
       "note": "(03) is not permitted in a Digital Link URI",
@@ -3239,7 +3239,7 @@
     {
       "id": "eq-dl-query-8014",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?8014=1987654Ad4X4bL5ttr2310c2K",
       "note": "(8014) is not permitted in a Digital Link URI",
@@ -3257,7 +3257,7 @@
     {
       "id": "eq-dl-query-8040",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/21/ABC?8040=123456789012345",
       "note": "a data attribute URI Syntax 1.7.0 added for GenSpecs 26.0, not flagged ? in dictionary 2026-01-27",
@@ -3275,7 +3275,7 @@
     {
       "id": "eq-dl-percent-encoded-reserved",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/10/A%2FB",
       "syntaxEngine": {
@@ -3300,7 +3300,7 @@
     {
       "id": "eq-dl-percent-encoded-unreserved",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/10/%41%42",
       "syntaxEngine": {
@@ -3325,7 +3325,7 @@
     {
       "id": "eq-dl-percent-malformed",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/10/A%2",
       "syntaxEngine": {
@@ -3349,7 +3349,7 @@
     {
       "id": "eq-dl-stem-with-path",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://brand.example.com/some-extra/pathinfo/01/09520123456788",
       "syntaxEngine": {
@@ -3373,7 +3373,7 @@
     {
       "id": "eq-dl-http",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "http://example.com/01/09520123456788",
       "syntaxEngine": {
@@ -3397,7 +3397,7 @@
     {
       "id": "eq-dl-uppercase-scheme",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "HTTPS://id.gs1.org/01/09520123456788",
       "syntaxEngine": {
@@ -3421,7 +3421,7 @@
     {
       "id": "eq-dl-uppercase-host",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://ID.GS1.ORG/01/09520123456788",
       "syntaxEngine": {
@@ -3445,7 +3445,7 @@
     {
       "id": "eq-dl-trailing-slash",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/",
       "syntaxEngine": {
@@ -3462,7 +3462,7 @@
     {
       "id": "eq-dl-no-scheme",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "id.gs1.org/01/09520123456788",
       "syntaxEngine": {
@@ -3480,7 +3480,7 @@
     {
       "id": "eq-dl-unknown-numeric-key",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?4000=ABC",
       "syntaxEngine": {
@@ -3497,7 +3497,7 @@
     {
       "id": "eq-dl-extension-key",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?foo=bar",
       "syntaxEngine": {
@@ -3521,7 +3521,7 @@
     {
       "id": "eq-dl-extension-linktype",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?linkType=gs1:pip",
       "syntaxEngine": {
@@ -3545,7 +3545,7 @@
     {
       "id": "eq-dl-repeated-key",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?17=251231&17=261231",
       "note": "a repeated key, which the engine refuses even with equal values",
@@ -3563,7 +3563,7 @@
     {
       "id": "eq-dl-compressed",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/DBHKVAdpQgqrAg",
       "note": "a compressed URI (legacy compression, frozen at 1.1.4)",
@@ -3581,7 +3581,7 @@
     {
       "id": "eq-dl-no-primary-key",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/10/ABC",
       "syntaxEngine": {
@@ -3598,7 +3598,7 @@
     {
       "id": "eq-dl-qualifier-without-key",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/21/ABC",
       "syntaxEngine": {
@@ -3615,7 +3615,7 @@
     {
       "id": "eq-dl-gtin-short",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/9520123456788",
       "note": "a 13-digit GTIN: removed in 1.3.0 (4.1)",
@@ -3633,7 +3633,7 @@
     {
       "id": "eq-dl-gtin-bad-check-digit",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456789",
       "syntaxEngine": {
@@ -3651,7 +3651,7 @@
     {
       "id": "eq-dl-fragment",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788#section",
       "syntaxEngine": {
@@ -3675,7 +3675,7 @@
     {
       "id": "eq-dl-empty-query-value",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788?17=",
       "syntaxEngine": {
@@ -3692,7 +3692,7 @@
     {
       "id": "eq-dl-pairing-ex",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "DigitalLink",
       "input": "https://id.gs1.org/01/09520123456788/21/ABC?235=XYZ",
       "note": "(21) excludes (235)",
@@ -3710,7 +3710,7 @@
     {
       "id": "eq-dl-build-two-primary-keys",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(00)195201234567891232",
       "note": "an element string with two primary keys: which one leads the URI",
@@ -3745,7 +3745,7 @@
     {
       "id": "eq-dl-build-no-primary-key",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(10)ABC",
       "note": "no primary key, and (10) requires one",
@@ -3772,7 +3772,7 @@
     {
       "id": "eq-dl-build-key-and-qualifiers",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(21)123(10)ABC(22)2A",
       "note": "qualifiers given out of path order",
@@ -3809,7 +3809,7 @@
     {
       "id": "eq-dl-build-attribute-only-ai",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(8200)http://example.com/x",
       "note": "(8200) cannot go into a URI",
@@ -3844,7 +3844,7 @@
     {
       "id": "eq-dl-build-reserved-characters",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)A/B?C#D%E&F=G+H",
       "note": "every reserved character of CSET 82 in a path element",
@@ -3872,7 +3872,7 @@
     {
       "id": "eq-dl-build-qualifier-as-attribute",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(00)195201234567891232(02)09520123456788(37)5(10)ABC",
       "note": "(10) is an attribute of SSCC, a qualifier of GTIN",
@@ -3909,7 +3909,7 @@
     {
       "id": "eq-scan-q3",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ScanData",
       "input": "]Q3010952012345678810ABC\u001D17251231",
       "syntaxEngine": {
@@ -3928,7 +3928,7 @@
     {
       "id": "eq-scan-q3-trailing-separator",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ScanData",
       "input": "]Q3010952012345678810ABC\u001D",
       "syntaxEngine": {
@@ -3946,7 +3946,7 @@
     {
       "id": "eq-scan-q1-plain",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ScanData",
       "input": "]Q1Hello",
       "syntaxEngine": {
@@ -3958,7 +3958,7 @@
     {
       "id": "eq-scan-q1-digital-link",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ScanData",
       "input": "]Q1https://id.gs1.org/01/09520123456788",
       "syntaxEngine": {
@@ -3975,7 +3975,7 @@
     {
       "id": "eq-scan-q1-element-string",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ScanData",
       "input": "]Q10109520123456788",
       "note": "GS1 data without FNC1 is plain text",
@@ -3988,7 +3988,7 @@
     {
       "id": "eq-scan-q4-eci",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ScanData",
       "input": "]Q40109520123456788",
       "note": "first position under the ECI protocol: not a GS1 transmission",
@@ -4000,7 +4000,7 @@
     {
       "id": "eq-scan-q5-second-position",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ScanData",
       "input": "]Q5370109520123456788",
       "note": "second position with indicator 37",
@@ -4012,7 +4012,7 @@
     {
       "id": "eq-scan-d2-datamatrix",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ScanData",
       "input": "]d20109520123456788",
       "syntaxEngine": {
@@ -4029,7 +4029,7 @@
     {
       "id": "eq-scan-no-identifier",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "ScanData",
       "input": "0109520123456788",
       "syntaxEngine": {
@@ -4040,7 +4040,7 @@
     {
       "id": "eq-length-one-element",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788",
       "syntaxEngine": {
@@ -4073,7 +4073,7 @@
     {
       "id": "eq-length-long",
       "group": "corpus/equivalence-classes",
-      "source": "gs1-support-plan.md equivalence classes",
+      "source": "qrcode-test-fixtures.md equivalence classes",
       "inputKind": "Bracketed",
       "input": "(01)09520123456788(10)ABCDEFGHIJKLMNOPQRST(21)ABCDEFGHIJKLMNOPQRST(240)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123(241)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123(250)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123(251)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123(4300)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789(4301)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789(8200)http://example.com/ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
       "note": "more than most symbols hold",

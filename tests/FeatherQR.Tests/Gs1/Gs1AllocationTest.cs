@@ -3,7 +3,7 @@ using FeatherQR.Gs1;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The GS1 data layer allocates nothing on its span paths (gs1-support-plan.md, "What has to stay true"):
+/// The GS1 data layer allocates nothing on its span paths (qrcode-symbologies.md, "GS1 data"):
 /// <see cref="Gs1ElementString.TryValidate"/> on an accepted and on a refused element string, a
 /// <c>foreach</c> over <see cref="Gs1ElementString.EnumerateElements"/>, and the span forms and length twins
 /// of the (AI) text conversions. Release only, as

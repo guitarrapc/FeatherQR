@@ -42,7 +42,7 @@ public class SimdTiersTest
         ["QRAlphanumericWriter"] = ["StandardQR/QRBinaryEncoder.cs#WriteAlphanumericData"],
         ["QRNumericWriter"] = ["StandardQR/QRBinaryEncoder.cs#WriteNumericData"],
         ["AlignmentRowMask"] = ["StandardQR/AlignmentPatternFinder.cs", "StandardQR/AlignmentPatternFinder.Simd.cs"],
-        ["QRSampleGridPiecewise"] = ["StandardQR/QRImageDecoder.PiecewiseSampling.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.X86.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.Arm64.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.Vector128.cs", "ImageDecoders/VectorCast.Simd.cs"],
+        ["QRSampleGridPiecewise"] = ["StandardQR/QRImageDecoder.PiecewiseSampling.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.X86.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.Vector128.cs", "ImageDecoders/VectorCast.Simd.cs"],
         ["StructuredAppendLanes"] = ["StandardQR/StructuredAppendPlanner.Lanes.cs", "StandardQR/StructuredAppendPlanner.Lanes.Arm64.cs", "StandardQR/StructuredAppendPlanner.Lanes.Simd.cs", "StandardQR/StructuredAppendPlanner.Lanes.Vector256.cs"],
         ["StructuredAppendParity"] = ["StandardQR/StructuredAppendPlanner.Parity.cs"],
         ["StructuredAppendScanner"] = ["StandardQR/StructuredAppendScanner.cs"],

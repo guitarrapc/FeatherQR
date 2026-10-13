@@ -33,8 +33,73 @@ public class FinderRingShapeTest
         var runs = new int[5];
         await Assert.That(FinderPatternFinder.MeasureRuns(luminance, side, side, 128, (int)centre, (int)centre, 1, 0, FinderPatternFinder.NoRunCap, runs, out _)).IsTrue();
         await Assert.That(FinderPatternFinder.IsFinderRatio(runs)).IsFalse();
+        // It still holds five runs of the finder's length, which is what makes it a hole in the ring
+        await Assert.That(FinderPatternFinder.MeasureRunsBounded(luminance, side, side, 128, (int)centre, (int)centre, 1, 0, 7 * pixelsPerModule, runs, out _)).IsTrue();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(runs.Sum(), 7 * pixelsPerModule, acrossAxes: false)).IsTrue();
 
         await Assert.That(NearestCandidate(luminance, side, centre)).IsLessThan(pixelsPerModule);
+    }
+
+    /// <summary>
+    /// A centre row that lost its five runs or their length is not a hole in the ring, and the finder is not a candidate though a row a quarter of the centre square above and below reads and both diagonals do.
+    /// The ring open across its whole width runs the light on into the quiet zone. Both light rings filled joins the centre to the rings. A dark pixel in each light ring ends the row a pixel past the centre.
+    /// </summary>
+    [Test]
+    [Arguments(CentreRowDamage.RingOpenAcrossItsWidth)]
+    [Arguments(CentreRowDamage.LightRingsFilled)]
+    [Arguments(CentreRowDamage.DarkPixelInEachLightRing)]
+    public async Task FinderWhoseCentreRowLostItsRuns_IsNoCandidate(CentreRowDamage damage)
+    {
+        const int PixelsPerModule = 6;
+        var qr = Symbol(2);
+        var (luminance, side) = Draw((row, column) => qr[row, column], qr.Size, PixelsPerModule);
+        var centre = (int)Centre(3.5f, PixelsPerModule);
+
+        // The centre row and the rows next to it, as the speck is drawn
+        for (var y = centre - 1; y <= centre + 1; y++)
+        {
+            var row = luminance.AsSpan(y * side, side);
+            switch (damage)
+            {
+                case CentreRowDamage.RingOpenAcrossItsWidth:
+                    row.Slice(QuietZone * PixelsPerModule, PixelsPerModule).Fill(255);
+                    break;
+                case CentreRowDamage.LightRingsFilled:
+                    row.Slice((QuietZone + 1) * PixelsPerModule, PixelsPerModule).Clear();
+                    row.Slice((QuietZone + 5) * PixelsPerModule, PixelsPerModule).Clear();
+                    break;
+                default:
+                    row[(QuietZone + 2) * PixelsPerModule - 2] = 0;
+                    row[(QuietZone + 5) * PixelsPerModule + 1] = 0;
+                    break;
+            }
+        }
+
+        // The premise: the walk of the centre row ends early, or measures five runs far shorter than the finder
+        var runs = new int[5];
+        var measured = FinderPatternFinder.MeasureRunsBounded(luminance, side, side, 128, centre, centre, 1, 0, 7 * PixelsPerModule, runs, out _);
+        if (damage == CentreRowDamage.DarkPixelInEachLightRing)
+        {
+            await Assert.That(measured).IsTrue();
+            await Assert.That(FinderPatternFinder.IsTotalInWindow(runs.Sum(), 7 * PixelsPerModule, acrossAxes: false)).IsFalse();
+        }
+        else
+        {
+            await Assert.That(measured).IsFalse();
+        }
+
+        // The premise: nothing else refuses the finder. The rows a quarter of the centre square away and both diagonals read.
+        foreach (var (y, stepX, stepY) in new[] { (centre - 4, 1, 0), (centre + 4, 1, 0), (centre, 1, 1), (centre, 1, -1) })
+            await Assert.That(FinderPatternFinder.MeasureRuns(luminance, side, side, 128, centre, y, stepX, stepY, FinderPatternFinder.NoRunCap, runs, out _) && FinderPatternFinder.IsFinderRatio(runs)).IsTrue();
+
+        await Assert.That(NearestCandidate(luminance, side, centre)).IsGreaterThan(2f * PixelsPerModule);
+    }
+
+    public enum CentreRowDamage
+    {
+        RingOpenAcrossItsWidth,
+        LightRingsFilled,
+        DarkPixelInEachLightRing,
     }
 
     /// <summary>A hole through the whole centre square's height is no speck: the ring is open, and the finder is not a candidate.</summary>

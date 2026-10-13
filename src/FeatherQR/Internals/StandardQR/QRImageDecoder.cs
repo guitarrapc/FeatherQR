@@ -424,9 +424,10 @@ internal static partial class QRImageDecoder
         var result = NewResult();
 
         // What the symbol states comes before what the finders measure: a lens puts the estimate versions high, and the timing count and the timing match run along lines it bends.
-        // Tried ahead of the main path, the estimate's grid, which it does not replace unless it settles
+        // Tried ahead of the main path, the estimate's grid, which it does not replace unless it settles.
+        // Not where the symbol already states the estimate's dimension. The outlines would name it again, and every symbol the estimate reads would pay for them.
         var namedDimension = 0;
-        if (moduleSize >= 1f && (!estimated || dimension >= VersionInformationFromDimension))
+        if (moduleSize >= 1f && (!estimated || (dimension >= VersionInformationFromDimension && !StatesDimension(image, frame, dimension))))
         {
             namedDimension = ReadVersionAtFinders(image, topLeft, topRight, bottomLeft, moduleSizes);
             if (namedDimension == dimension)
