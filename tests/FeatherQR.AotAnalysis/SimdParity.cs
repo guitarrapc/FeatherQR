@@ -39,6 +39,7 @@ internal static class SimdParity
         failures += Report("TextAnalyzer", TextAnalyzerMismatches);
         failures += Report("Binarizer histogram", HistogramMismatches);
         failures += Report("LuminanceHalver", HalverMismatches);
+        failures += Report("LocalBinarizer", LocalBinarizerMismatches);
         failures += Report("LuminanceConverter", LuminanceMismatches);
         failures += Report("QRImageDecoder.SampleGridPiecewise", PiecewiseMismatches);
         failures += Report("ModulePlacer.MaskCode", MaskCodeMismatches);
@@ -544,12 +545,66 @@ internal static class SimdParity
         return mismatches;
     }
 
+    /// <summary>
+    /// The regional binarization in each vector form the build runs against the scalar form: the pixels written, the dark count and whether any pixel left its global class.
+    /// Both polarities from one scratch, so the second is binarized from the statistics the first left there. The sizes put the last block row and column over the ones before, and end the vector steps on every remainder.
+    /// </summary>
+    private static List<string> LocalBinarizerMismatches()
+    {
+        var mismatches = new List<string>();
+        var random = new Random(20261014);
+        var kernels = new List<LocalBinarizer.Kernel> { LocalBinarizer.Kernel.Auto, LocalBinarizer.Kernel.Vector128 };
+        if (Vector256.IsHardwareAccelerated)
+            kernels.Add(LocalBinarizer.Kernel.Vector256);
+        foreach (var (width, height) in new[] { (33, 33), (40, 40), (41, 43), (47, 40), (63, 65), (64, 64), (79, 47), (97, 49), (129, 131), (300, 44), (740, 740), (1001, 77), (4200, 41) })
+        {
+            for (var kind = 0; kind < 4; kind++)
+            {
+                var luminance = new byte[width * height];
+                for (var i = 0; i < luminance.Length; i++)
+                {
+                    int x = i % width, y = i / width;
+                    luminance[i] = kind switch
+                    {
+                        0 => (byte)random.Next(256),
+                        // Flat blocks beside textured ones, so the flat rule reads its neighbours
+                        1 => ((x / 8) + (y / 8)) % 3 == 0 ? (byte)(90 + random.Next(20)) : (byte)random.Next(256),
+                        // A symbol under a shadow: both levels darker on one side
+                        2 => (byte)((((x / 3) ^ (y / 3)) & 1) == 0 ? (x < width / 2 ? 220 : 60) : (x < width / 2 ? 30 : 8)),
+                        _ => (byte)(20 + 200 * x / width),
+                    };
+                }
+
+                var expected = new byte[luminance.Length];
+                var actual = new byte[luminance.Length];
+                var scalarScratch = new int[LocalBinarizer.ScratchLength(width, height)];
+                var scratch = new int[scalarScratch.Length];
+                foreach (var kernel in kernels)
+                {
+                    var measured = false;
+                    foreach (var negative in new[] { false, true })
+                    {
+                        foreach (var globalThreshold in new byte[] { 0, 128 })
+                        {
+                            var expectedDiffers = LocalBinarizer.TryBinarizeScalar(luminance, width, height, negative, globalThreshold, expected, scalarScratch, out var expectedDark);
+                            var differs = LocalBinarizer.TryBinarizeWith(kernel, luminance, width, height, negative, globalThreshold, actual, scratch, ref measured, out var dark);
+                            if (differs != expectedDiffers || dark != expectedDark || !actual.AsSpan().SequenceEqual(expected))
+                                mismatches.Add($"{kernel} {width}x{height}, kind {kind}, negative {negative}, global threshold {globalThreshold}");
+                        }
+                    }
+                }
+            }
+        }
+        return mismatches;
+    }
+
     private static List<string> HistogramMismatches()
     {
         var mismatches = new List<string>();
         var random = new Random(23);
         var histogram = new int[Binarizer.HistogramBins];
-        foreach (var length in new[] { 0, 1, 31, 32, 33, 63, 64, 65, 1023, 1024, 1056, 4097, 70_000 })
+        // The last lengths are where the 256-bit tier counts its dense blocks into sub-histograms
+        foreach (var length in new[] { 0, 1, 31, 32, 33, 63, 64, 65, 1023, 1024, 1056, 4097, 65_535, 65_536, 70_000, 131_077 })
         {
             for (var kind = 0; kind < 4; kind++)
             {

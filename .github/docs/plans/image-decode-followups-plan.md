@@ -11,10 +11,11 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 - Each decoder returns one symbol a call. 168 of the 536 photographs hold more than one code: 42 hold two, 116 three, 3 four and 7 sixty, which is 864 of the set's 1,232 codes. zxing-cpp reads 720 of the 864. This library reads one code on 150 of the 168 photographs. On the 368 photographs with one code it reads 306 and zxing-cpp 257.
 - Phase 0 of Work 2 (2026-10-14): called again with each read symbol painted over, the one-symbol call reads 765 of the 864 and 1,071 of the 1,232, against zxing-cpp's 720 and 977. No text is unconfirmed and no symbol is read twice.
 - Phase 1 of Work 2 (2026-10-14): an internal entry, `QRImageDecoder.DecodeSymbols`, returns the same 1,071 in one call at 2.5 times the one-symbol call's time over the set. The one-symbol call compiles to the code it had. What is left is Phase 2, the maintainer's decisions.
+- The entry's time (2026-10-14): measured by pass and by stage, then the two kernels that took most of it were made faster. The entry takes 0.60 of its time over the set and the one-symbol call 0.67, with every read as it was. The entry is 2.2 times the one-symbol call, where it was 2.5.
 
 ## Order
 
-Work 1 came first and is done (2026-10-13, [Progress log](#progress-log)). It changed no behaviour, and closed a hole in what was measured of code that already ships. Work 2 started with a measurement that needs no change to `src`, Phase 0, and went on to the internal entry, Phase 1. Both are done (2026-10-14, [Progress log](#progress-log)). It now stops at Phase 2, a decision that is the maintainer's.
+Work 1 came first and is done (2026-10-13, [Progress log](#progress-log)). It changed no behaviour, and closed a hole in what was measured of code that already ships. Work 2 started with a measurement that needs no change to `src`, Phase 0, and went on to the internal entry, Phase 1. Both are done (2026-10-14, [Progress log](#progress-log)), and so is Phase 1b, which made the entry and the one-symbol call faster. It now stops at Phase 2, a decision that is the maintainer's.
 
 ## Work 1: the photograph stages on WebAssembly
 
@@ -65,6 +66,7 @@ It is the largest difference left against the readers this library was measured 
 |---|---|---|
 | 0 | The ceiling, with no change to `src`. A probe in the test project reads a photograph, paints the read symbol's quadrilateral with the image's light level, and reads again until nothing is found. The `boofcv` command gains a column for this library's codes, scored as zxing-cpp's are: located inside a labelled outline, text agreed. go-qr's lines are scored the same way if they carry more than one text a photograph | Codes read of the 1,232 by category, texts no one confirms, the time a photograph, and for each code zxing-cpp reads and the loop does not, where it stopped (no triple, a triple across two symbols, the grid) |
 | 1 | An internal entry for Standard QR that returns every symbol in one call, designed from where Phase 0's loop stopped. The expected shape: inside a pass, after a read, the candidates inside the read symbol's outline are dropped and the selection runs again, so no row is scanned twice, and the results of different passes are merged by outline. Tests first: renders of two, three and four symbols and a grid, every symbol's corners asserted. The negatives are a symbol returned twice, a symbol built from two neighbours' finders, and a second result on a one-symbol image | Codes against Phase 0's loop and zxing-cpp's 977, the time of the new call on the 368 one-code photographs against the one-symbol call, and the one-symbol call's instructions on the report shapes |
+| 1b | Added on 2026-10-14, when the maintainer asked for the entry's time to be measured and brought down before any decision: the entry's time by pass and by stage on the photographs, then every kernel the measurement names made faster, vector tiers among them. No read may move, and the one-symbol call may not slow down on a report shape | Where the time goes, the time of both calls before and after on each build class, and what was measured and left |
 | 2 | The decisions below. Nothing public is written before them | The maintainer's ruling |
 | 3 | Only on a yes: the public call, the SkiaSharp overloads, the Playground, the API page and `docs/` | The feature |
 
@@ -190,3 +192,69 @@ For the maintainer, beside M1 to M4:
 - The room the caller lends ends the search, so a caller who knows how many codes to expect pays for no more. A caller who wants all of them pays the failing passes once the last is read: 2.5 times the one-symbol call on a photograph of one code.
 - A symbol drawn inside another is not returned once the outer one is read. `qrcode-2/16` of the committed real images gives one symbol where zxing-cpp gives both. It is the only committed image of more than one symbol.
 - A symbol whose content gives a verdict is left out of the results. The one-symbol call reports the verdict.
+
+### Work 2, Phase 1b: the entry's time (2026-10-14)
+
+Done. No read moved: the entry's 536 result lines are the same, text for text and centre for centre, on the build with AVX2 and on the one without. The one-symbol call's code changed where it shares the two kernels, and it is faster too.
+
+What was done:
+
+- The entry was timed by pass and by stage over BoofCV's 536 photographs, with counters in a scratch worktree, and profiled by sampling on the unchanged build. Each kernel was then timed alone on the same photographs.
+- `LocalBinarizer`, the regional binarization, was rewritten. It read the image three times a polarity. Now a block's sum, minimum and maximum are read once and serve both polarities, a block row's thresholds come from five column sums where they came from 25 black points, and each row is written once against one threshold a pixel and counted as it is written. It has a 256-bit tier, and the 128-bit tier took the same shape. `RegionalRetry` and the entry keep the statistics between the two polarities.
+- `Binarizer.FillHistogramVector256` counts its dense blocks into four sub-histograms, as the ARM64 tier does, from the first stretch of an image of 65,536 pixels or more. A rendered symbol has no stretch and rents nothing.
+- Tests: `LocalBinarizerParityTest` holds every form the machine runs to the reference written there (4,673 cases a target framework), with the statistics kept between polarities, a proof that kept statistics are not read again, and every form at a page end. `OtsuHistogramParityTest` has inputs long enough for the sub-histograms. The build-class check (`--parity`) has a `LocalBinarizer` entry. 34 faults were planted in the two kernels. Three survived and one was caught only by a decode test, each for an input the tests did not have: a counter running over needs one column light in every step of a row, a minimum passed over needs it in one pixel of a flat block, and the extremes counted before a stretch need a two-valued start. With those inputs all 34 are caught.
+- The record: the Performance lessons and the lighting lesson of [standardqr-decoder.md](../specs/standardqr-decoder.md), the Decisions row "Several symbols of one image", the `Binarizer` and `LocalBinarizer` entries and the scope row on builds not timed in [qrcode-symbologies.md](../specs/qrcode-symbologies.md), the kernel table of [qrcode-simd-tiers.md](../specs/qrcode-simd-tiers.md), and the entry's times in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md).
+
+Where the time went before, on x64 with AVX2:
+
+| | Share of the entry's time |
+|---|---|
+| The two regional binarizations, every scale | 45 % |
+| The histograms | 17 % |
+| The rows a strided scan skipped | 20 % |
+| The strided scans | 4 % |
+| Every decode stage | 7 % |
+| The inverted images and the halvings | 3 % |
+
+- Three methods held 80 % of the samples: `LocalBinarizer.TryBinarizeCore` 46 %, `Binarizer.FillHistogramVector256` 17 % and `FinderPatternFinder.ScanRowEdges` 17 %.
+- The negative passes took 35 % and read none of the 1,071 codes. The set holds no light-on-dark symbol, so they stay.
+- A photograph of one code costs the entry what its failing passes cost: each reading scans every row once it has no triple left.
+
+The time of both calls over the 536 photographs, the fastest of three calls a photograph, the two builds in turn:
+
+| Build | One-symbol call, ms | The entry, ms | The entry over the one-symbol call |
+|---|---|---|---|
+| x64, .NET 10 JIT with AVX2, before | 2,463 to 2,507 | 5,988 to 6,256 | 2.43 to 2.50 |
+| The same, after | 1,640 to 1,659 | 3,641 to 3,697 | 2.22 to 2.25 |
+| x64, the JIT without AVX, before | 2,612 to 2,745 | 6,551 to 6,788 | 2.47 to 2.51 |
+| The same, after | 2,100 to 2,114 | 4,789 to 4,809 | 2.28 |
+
+- With AVX2 the one-symbol call takes 0.67 of its time and the entry 0.60. Without AVX they take 0.79 and 0.72.
+- The 368 photographs of one code: the entry 3,353 to 3,600 ms before and 2,054 to 2,082 after, which is 2.10 to 2.13 times the one-symbol call where it was 2.38 to 2.45.
+- A photograph of 60 codes: 44 to 123 ms before and 33 to 100 after, in this harness. zxing-cpp took 40 to 43 ms on those seven in Phase 0.
+- The regional binarization alone, a pixel: 0.40 to 0.46 ns before and 0.09 to 0.13 after with AVX2, 0.40 and 0.17 without. The second polarity from kept statistics saves the 0.04 the statistics take.
+- The histogram alone with AVX2: 0.36 to 0.37 ns a pixel against 0.41 to 0.44, which is 0.81 to 0.91 over three runs.
+- The report shapes, after over before. On the JIT with AVX2 the reading shapes are at 0.97 to 1.02, the noise image 0.93 and the gradient 0.50. On default NativeAOT the reading shapes are at 0.99 to 1.01, noise 0.96 and the gradient 0.68. Three processes a side read two of the reading shapes at 1.02 and 1.03, and nine read them at 1.00 and 0.99. On WebAssembly AOT-compiled they are at 0.98 to 1.02, 0.97 and 0.76, and interpreted at 0.96 to 1.04, 0.96 and 0.66. The regional binarization alone takes 0.23 on the JIT, 0.40 on NativeAOT, 0.79 to 0.83 on WebAssembly AOT and 0.53 interpreted.
+- The suite: 65,682 tests, none failing. The NativeAOT gate and both WebAssembly reports pass `--parity`.
+
+Where the time goes now, by the same profile: the row scan 38 % with its candidate checks, the histograms 27 %, the regional binarizations about 15 % and the decode stages about 13 %.
+
+What it taught:
+
+- The time was not in the entry's own logic. Two thirds of it was three kernels the one-symbol call runs too, on its failing passes, so making them faster moved both calls. The entry's ratio to the one-symbol call fell less than its time did.
+- A kernel that already has a vector tier can still be four times its floor. The regional binarization's phases were timed one by one before any line was changed: the block statistics 0.087 ns a pixel, the flat rule 0.036, the thresholds 0.160, the block writes 0.163 and the count 0.049. The thresholds, a scalar sum of 25 black points a block, took as much as writing every pixel. After: the statistics 0.040, the black points 0.031, the thresholds 0.013 and the rows 0.037.
+- The sub-histograms the 256-bit tier was refused four times pay on photographs. The refusals were made on rendered noise, a gradient and photo-like renders. In the ARM64 tier's form, a reference a lane, a photograph counts in 0.81 to 0.91 of the time, and the report's shapes read 0.94 soft, 0.98 to 1.00 on noise and 0.64 on the gradient, so the earlier loss does not show in this form.
+- The same lanes do not transfer to the 128-bit tier. On default NativeAOT they took a soft render to 0.90 and a gradient to 0.63 but a two-valued render to 1.07, with the walk shared between the two forms. On WebAssembly AOT-compiled they took noise to 1.09. The 128-bit tier is as it was.
+- A scalar loop that reads worse can be the faster one. The flat rule written without branches took 0.041 ns a pixel against 0.031: its chain through the block before is longer than the mispredictions it removes. Eight blocks a step with the flat blocks visited by mask took 0.034 to 0.035.
+
+Measured and left:
+
+- The comparison against the global threshold dropped from the row loop once one pixel has differed: the rows take 0.032 ns a pixel against 0.037. It needs each loop twice.
+- The row scan is 38 % of the entry now. The rows a strided scan skipped take 0.08 ns a pixel on a photograph and 0.10 on its regional image, four to five times what inverting the image takes. An extraction that writes eight positions at a time was refused when the kernel was written, and was not tried again.
+- The histogram's scalar increment is five instructions a pixel on x64 whatever the lanes. Counting in registers needs the values of a block to stay in a narrow window: 37 % of 32-pixel blocks span 8 values or fewer and 66 % span 16 or fewer, and a window of 16 kept across blocks holds for 3.6 blocks before it moves. No vector count was built.
+- The row kernel does not take rows of 4,096 pixels or more. No photograph of the set is that wide.
+
+For the maintainer:
+
+- ARM64 was not timed. Its regional binarization is the 128-bit tier, which changed shape, so the scope row on builds not timed names it. Its histogram tier is untouched.
+- The 128-bit histogram tier could take the sub-histograms on x64 alone, as a tier of its own, if a default NativeAOT publish reading photographs is worth one: on the JIT without AVX the photographs' histogram took 0.82 of its time with them.

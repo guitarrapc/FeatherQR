@@ -54,11 +54,13 @@ internal static class RegionalRetry
         var rentedScratch = ArrayPool<int>.Shared.Rent(scratchLength);
         try
         {
-            var status = DecodePolarity(ref attempt, luminance, negative: false, positiveThreshold, binarized, rentedScratch, histogram, width, height, destination, out charsWritten, out info);
+            // The negative is binarized from the block statistics the positive left in the scratch
+            var measured = false;
+            var status = DecodePolarity(ref attempt, luminance, negative: false, positiveThreshold, binarized, rentedScratch, ref measured, histogram, width, height, destination, out charsWritten, out info);
             // A verdict is final like a read: the negative of one symbol can only read another
             if (AttemptStatus.IsSettled(status))
                 return status;
-            return DecodePolarity(ref attempt, luminance, negative: true, negativeThreshold, binarized, rentedScratch, histogram, width, height, destination, out charsWritten, out info);
+            return DecodePolarity(ref attempt, luminance, negative: true, negativeThreshold, binarized, rentedScratch, ref measured, histogram, width, height, destination, out charsWritten, out info);
         }
         finally
         {
@@ -66,10 +68,10 @@ internal static class RegionalRetry
         }
     }
 
-    private static DecodeStatus DecodePolarity<TAttempt, TInfo>(ref TAttempt attempt, ReadOnlySpan<byte> luminance, bool negative, byte globalThreshold, Span<byte> binarized, Span<int> scratch, Span<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info)
+    private static DecodeStatus DecodePolarity<TAttempt, TInfo>(ref TAttempt attempt, ReadOnlySpan<byte> luminance, bool negative, byte globalThreshold, Span<byte> binarized, Span<int> scratch, ref bool measured, Span<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info)
         where TAttempt : struct, ILuminanceAttempt<TInfo>
     {
-        if (!LocalBinarizer.TryBinarize(luminance, width, height, negative, globalThreshold, binarized, scratch, out var darkCount))
+        if (!LocalBinarizer.TryBinarize(luminance, width, height, negative, globalThreshold, binarized, scratch, ref measured, out var darkCount))
         {
             charsWritten = 0;
             info = default!;

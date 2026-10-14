@@ -183,6 +183,29 @@ internal static partial class Binarizer
         Unsafe.Add(ref h, (byte)(v >> 56))++;
     }
 
+    /// <summary>
+    /// <see cref="CountGroup"/> over four sub-histograms: pixel i into lane i % 4, a uniform group into lane 0.
+    /// Each lane through its own reference: an offset from one base makes the JIT sign-extend the sum on the way to every load.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CountGroupLaned(ref int l0, ref int l1, ref int l2, ref int l3, ulong v)
+    {
+        if (v == ((v >> 8) | (v << 56)))
+        {
+            Unsafe.Add(ref l0, (byte)v) += 8;
+            return;
+        }
+
+        Unsafe.Add(ref l0, (byte)v)++;
+        Unsafe.Add(ref l1, (byte)(v >> 8))++;
+        Unsafe.Add(ref l2, (byte)(v >> 16))++;
+        Unsafe.Add(ref l3, (byte)(v >> 24))++;
+        Unsafe.Add(ref l0, (byte)(v >> 32))++;
+        Unsafe.Add(ref l1, (byte)(v >> 40))++;
+        Unsafe.Add(ref l2, (byte)(v >> 48))++;
+        Unsafe.Add(ref l3, (byte)(v >> 56))++;
+    }
+
     /// <summary>The bins are indexed by a byte through an unchecked reference, which 256 of them make safe. The slice is what refuses fewer.</summary>
     private static ref int ClearedBins(Span<int> histogram)
     {

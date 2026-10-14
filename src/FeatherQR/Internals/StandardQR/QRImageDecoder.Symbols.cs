@@ -182,10 +182,12 @@ internal static partial class QRImageDecoder
         var rentedScratch = ArrayPool<int>.Shared.Rent(scratchLength);
         try
         {
+            // The negative is binarized from the block statistics the positive left in the scratch
+            var measured = false;
             for (var polarity = 0; polarity < 2 && !search.IsFull; polarity++)
             {
                 var negative = polarity == 1;
-                if (!LocalBinarizer.TryBinarize(luminance, width, height, negative, negative ? negativeThreshold : positiveThreshold, inverted, rentedScratch, out var darkCount))
+                if (!LocalBinarizer.TryBinarize(luminance, width, height, negative, negative ? negativeThreshold : positiveThreshold, inverted, rentedScratch, ref measured, out var darkCount))
                     continue;
                 histogram.Clear();
                 histogram[LocalBinarizer.Dark] = darkCount;
