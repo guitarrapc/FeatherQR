@@ -20,8 +20,10 @@ public class Gs1DataLayer
     private string _hri = default!;
     private string _uri = default!;
     private char[] _hriBuffer = default!;
-    private char[] _elementStringBuffer = default!;
+    private char[] _fromHriBuffer = default!;
     private char[] _uriBuffer = default!;
+    private char[] _fromUriBuffer = default!;
+    private char[] _readBuffer = default!;
 
     [ParamsSource(nameof(Shapes))]
     public string Shape { get; set; } = default!;
@@ -47,9 +49,34 @@ public class Gs1DataLayer
         if (!Gs1Validator.Validate(_hri).IsValid)
             throw new InvalidOperationException($"CodeGlyphX refuses shape {Shape}");
 
-        _hriBuffer = new char[_hri.Length];
-        _elementStringBuffer = new char[_elementString.Length];
-        _uriBuffer = new char[_uri.Length];
+        // Each call has its own buffer, of the length its twin gives. The length of the text a call starts from
+        // does not serve: the element string read back from a URI has its elements in the URI's order, and for
+        // the retail label that takes a separator the original has no need of.
+        _hriBuffer = Sized(Gs1ElementString.TryGetToHriLength(_elementString, out var length, out _), length, "TryGetToHriLength");
+        _fromHriBuffer = Sized(Gs1ElementString.TryGetFromHriLength(_hri, out length, out _), length, "TryGetFromHriLength");
+        _uriBuffer = Sized(Gs1ElementString.TryGetToDigitalLinkLength(_elementString, out length, out _), length, "TryGetToDigitalLinkLength");
+        _fromUriBuffer = Sized(Gs1ElementString.TryGetFromDigitalLinkLength(_uri, out length, out _), length, "TryGetFromDigitalLinkLength");
+        _readBuffer = Sized(Gs1ElementString.TryGetReadLength(_uri, default, out length, out _), length, "TryGetReadLength");
+
+        // A call that answers false would have its refusal timed, so each row's call is made once here.
+        Require(Validate(), "TryValidate");
+        Require(ToHri() >= 0, "TryToHri");
+        Require(FromHri() >= 0, "TryFromHri");
+        Require(ToDigitalLink() >= 0, "TryToDigitalLink");
+        Require(FromDigitalLink() >= 0, "TryFromDigitalLink");
+        Require(ReadUri() >= 0, "TryRead of the URI");
+    }
+
+    private char[] Sized(bool answered, int length, string twin)
+    {
+        Require(answered, twin);
+        return new char[length];
+    }
+
+    private void Require(bool succeeded, string call)
+    {
+        if (!succeeded)
+            throw new InvalidOperationException($"{call} fails on shape {Shape}");
     }
 
     [Benchmark(Description = "TryValidate")]
@@ -62,14 +89,14 @@ public class Gs1DataLayer
     public int ToHri() => Gs1ElementString.TryToHri(_elementString.AsSpan(), _hriBuffer, out var written, out _) ? written : -1;
 
     [Benchmark(Description = "TryFromHri (span)")]
-    public int FromHri() => Gs1ElementString.TryFromHri(_hri.AsSpan(), _elementStringBuffer, out var written, out _) ? written : -1;
+    public int FromHri() => Gs1ElementString.TryFromHri(_hri.AsSpan(), _fromHriBuffer, out var written, out _) ? written : -1;
 
     [Benchmark(Description = "TryToDigitalLink (span)")]
     public int ToDigitalLink() => Gs1ElementString.TryToDigitalLink(_elementString.AsSpan(), _uriBuffer, out var written, out _) ? written : -1;
 
     [Benchmark(Description = "TryFromDigitalLink (span)")]
-    public int FromDigitalLink() => Gs1ElementString.TryFromDigitalLink(_uri.AsSpan(), _elementStringBuffer, out var written, out _) ? written : -1;
+    public int FromDigitalLink() => Gs1ElementString.TryFromDigitalLink(_uri.AsSpan(), _fromUriBuffer, out var written, out _) ? written : -1;
 
     [Benchmark(Description = "TryRead of the URI (span)")]
-    public int ReadUri() => Gs1ElementString.TryRead(_uri.AsSpan(), default, _hriBuffer, out var written, out _) ? written : -1;
+    public int ReadUri() => Gs1ElementString.TryRead(_uri.AsSpan(), default, _readBuffer, out var written, out _) ? written : -1;
 }
