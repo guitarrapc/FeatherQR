@@ -4,7 +4,7 @@
 
 The photograph plan of 2026-10 is complete and folded into the specs ([README](../README.md)). This plan holds the two pieces of work its measurements still argue for. The other leads left open then are not here. Each stays in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions) (Image decode leads left open) with what would reopen it, and none of those conditions has been met.
 
-## Where it stands (2026-10-13)
+## Where it stands (2026-10-15)
 
 - BoofCV's 536 photographs: this library reads 456, zxing-cpp 392 and go-qr 412. Seven are read by one of the others and not here, and 23 here alone.
 - The photograph stages were timed on x64 (.NET 10 JIT) and on an Apple M2. On WebAssembly only the halving kernel was, until Work 1 timed the whole chain there on 2026-10-13 and found no fault. The halving's timing had found one no other build has: AOT-compiled, the portable 16-bit shift ran 16 times slower than `PackedSimd`'s, which left the kernel 4.2 times slower than the scalar loop it replaced.
@@ -13,10 +13,11 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 - Phase 1 of Work 2 (2026-10-14): an internal entry, `QRImageDecoder.DecodeSymbols`, returns the same 1,071 in one call at 2.5 times the one-symbol call's time over the set. The one-symbol call compiles to the code it had. What is left is Phase 2, the maintainer's decisions.
 - The entry's time (2026-10-14): measured by pass and by stage, then the two kernels that took most of it were made faster. The entry takes 0.60 of its time over the set and the one-symbol call 0.67, with every read as it was. The entry is 2.2 times the one-symbol call, where it was 2.5.
 - Phase 1b continued (2026-10-15): the row scan and the sheets of 60 codes were measured, and nothing was shipped. The entry is 67 ms behind zxing-cpp over those seven, 59 of them on one photograph whose time goes to stages that run after a failure.
+- Phase 2 (2026-10-15): the maintainer ruled. The call ships for Standard QR, in an array form and a span form, in 2.0.0, and the Phase 7 freeze waits for it. Phase 3 is next.
 
 ## Order
 
-Work 1 came first and is done (2026-10-13, [Progress log](#progress-log)). It changed no behaviour, and closed a hole in what was measured of code that already ships. Work 2 started with a measurement that needs no change to `src`, Phase 0, and went on to the internal entry, Phase 1. Both are done (2026-10-14, [Progress log](#progress-log)), and so is Phase 1b, which made the entry and the one-symbol call faster. It now stops at Phase 2, a decision that is the maintainer's.
+Work 1 came first and is done (2026-10-13, [Progress log](#progress-log)). It changed no behaviour, and closed a hole in what was measured of code that already ships. Work 2 started with a measurement that needs no change to `src`, Phase 0, and went on to the internal entry, Phase 1. Both are done (2026-10-14, [Progress log](#progress-log)), and so is Phase 1b, which made the entry and the one-symbol call faster. The maintainer ruled on Phase 2 on 2026-10-15, so Phase 3 is next, and it lands before the 2.0.0 freeze.
 
 ## Work 1: the photograph stages on WebAssembly
 
@@ -58,7 +59,7 @@ It is the largest difference left against the readers this library was measured 
 - The one-symbol calls run the instructions they run now on the report shapes, and allocate nothing.
 - No text is returned that neither a labelled outline nor another reader confirms. The failure to watch is a symbol assembled from the finders of two neighbours, which the crowded-list stage already meets.
 - No symbol is returned twice.
-- No public API before the maintainer rules on it. Until then the entry is internal.
+- No public API beyond what Phase 2 ruled.
 - No switch in `src` that only a test or a measurement uses.
 
 ### Phases
@@ -68,17 +69,17 @@ It is the largest difference left against the readers this library was measured 
 | 0 | The ceiling, with no change to `src`. A probe in the test project reads a photograph, paints the read symbol's quadrilateral with the image's light level, and reads again until nothing is found. The `boofcv` command gains a column for this library's codes, scored as zxing-cpp's are: located inside a labelled outline, text agreed. go-qr's lines are scored the same way if they carry more than one text a photograph | Codes read of the 1,232 by category, texts no one confirms, the time a photograph, and for each code zxing-cpp reads and the loop does not, where it stopped (no triple, a triple across two symbols, the grid) |
 | 1 | An internal entry for Standard QR that returns every symbol in one call, designed from where Phase 0's loop stopped. The expected shape: inside a pass, after a read, the candidates inside the read symbol's outline are dropped and the selection runs again, so no row is scanned twice, and the results of different passes are merged by outline. Tests first: renders of two, three and four symbols and a grid, every symbol's corners asserted. The negatives are a symbol returned twice, a symbol built from two neighbours' finders, and a second result on a one-symbol image | Codes against Phase 0's loop and zxing-cpp's 977, the time of the new call on the 368 one-code photographs against the one-symbol call, and the one-symbol call's instructions on the report shapes |
 | 1b | Added on 2026-10-14, when the maintainer asked for the entry's time to be measured and brought down before any decision: the entry's time by pass and by stage on the photographs, then every kernel the measurement names made faster, vector tiers among them. No read may move, and the one-symbol call may not slow down on a report shape | Where the time goes, the time of both calls before and after on each build class, and what was measured and left |
-| 2 | The decisions below. Nothing public is written before them | The maintainer's ruling |
-| 3 | Only on a yes: the public call, the SkiaSharp overloads, the Playground, the API page and `docs/` | The feature |
+| 2 | The decisions below. Done 2026-10-15 | The maintainer's ruling |
+| 3 | The public call for Standard QR in M2's shape, an array form and a span form, the SkiaSharp overload, the Playground, the API page and `docs/`. Before the 2.0.0 freeze (M4) | The feature |
 
-### Open decisions (the maintainer's)
+### Decisions (the maintainer's, ruled 2026-10-15)
 
-| | Decision | Recommendation |
-|---|---|---|
-| M1 | Whether reading several symbols ships | Decide on Phase 0's number. Under half of zxing-cpp's 720 on the multi-code photographs, the causes come before any API. The number is 765, and Phase 1's entry returns the same 765 in one call |
-| M2 | The call's shape | A span the caller lends for the results and a count handed back, so that nothing but the texts is allocated. Phase 1's entry has this shape and allocates the texts alone |
-| M3 | Micro QR and rMQR | Out at first. The photographs counted above are all Standard QR |
-| M4 | The release | After 2.0.0. The call is an addition, so it does not hold the release |
+| | Decision | Recommendation | Ruling |
+|---|---|---|---|
+| M1 | Whether reading several symbols ships | Decide on Phase 0's number. Under half of zxing-cpp's 720 on the multi-code photographs, the causes come before any API. The number is 765, and Phase 1's entry returns the same 765 in one call | It ships |
+| M2 | The call's shape | A span the caller lends for the results and a count handed back, so that nothing but the texts is allocated. Phase 1's entry has this shape and allocates the texts alone | An array form beside the span form, as the one-symbol call has a `string` form beside its `Span<char>` form. The SkiaSharp package has the array form only. The names are settled in Phase 3 |
+| M3 | Micro QR and rMQR | Out at first. The photographs counted above are all Standard QR | Out at first |
+| M4 | The release | After 2.0.0. The call is an addition, so it does not hold the release | In 2.0.0. The Phase 7 freeze waits for Phase 3 |
 
 ## Documents to change
 
@@ -312,3 +313,21 @@ What is left:
 
 - The time on a dense sheet is spread over stages that run because something failed: the second round, the inferred and crowded stages, the triples' second grids. Closing the gap there means reading more symbols in the first round, which changes what is read.
 - No test pins the inferred centre search's result: a fault that changed four photographs' reads passed them all.
+
+### Work 2, Phase 2: the decisions (2026-10-15)
+
+Done. Nothing in `src` changed.
+
+The rulings:
+
+- M1: the call ships. It was decided on these numbers: 1,071 of BoofCV's 1,232 codes against zxing-cpp's 977, and 765 of the 864 on photographs of more than one code against 720. No text is unconfirmed and no symbol is returned twice. The entry takes 2.2 times the one-symbol call over the set, and 354 ms on the seven sheets of 60 codes against zxing-cpp's 287.
+- M2: an array form and a span form. The recommendation was the span form alone, and writing the shape out changed it. A result holds its text, so a caller cannot `stackalloc` the room and keeps an array anyway. A caller who wants every symbol cannot size the room, since a full room does not say whether more were left. The array form returns every symbol. The span form keeps what the room gives: the search ends when the room is full, so a caller who knows how many symbols to expect pays for no more, and with room for one pays the one-symbol call's time.
+- M2's contract stays the entry's: a symbol whose content gives a verdict is left out, and a symbol drawn inside another is not returned once the outer one is read.
+- M3: Standard QR only. Micro QR and rMQR wait for a request or a set of photographs that holds several of them.
+- M4: in 2.0.0. The call is additive and could ship in 2.1.0, and the maintainer chose 2.0.0 as for the other features. The Phase 7 freeze waits for Phase 3, which [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md) lists as Phase 6d.
+
+For Phase 3:
+
+- The entry ends its search when the room is full, so the array form needs a room that grows. Calling the entry again with a larger room would read the image twice.
+- The draft names, `QRCodeDecodeResult` for the result and `DecodeImageSymbols` and `DecodeSymbols` for the calls, follow the naming rule and are not settled.
+- The SkiaSharp package gets the array form only, as its one-symbol decoder has the `string` form only.
