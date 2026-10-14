@@ -12,6 +12,7 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 - Phase 0 of Work 2 (2026-10-14): called again with each read symbol painted over, the one-symbol call reads 765 of the 864 and 1,071 of the 1,232, against zxing-cpp's 720 and 977. No text is unconfirmed and no symbol is read twice.
 - Phase 1 of Work 2 (2026-10-14): an internal entry, `QRImageDecoder.DecodeSymbols`, returns the same 1,071 in one call at 2.5 times the one-symbol call's time over the set. The one-symbol call compiles to the code it had. What is left is Phase 2, the maintainer's decisions.
 - The entry's time (2026-10-14): measured by pass and by stage, then the two kernels that took most of it were made faster. The entry takes 0.60 of its time over the set and the one-symbol call 0.67, with every read as it was. The entry is 2.2 times the one-symbol call, where it was 2.5.
+- Phase 1b continued (2026-10-15): the row scan and the sheets of 60 codes were measured, and nothing was shipped. The entry is 67 ms behind zxing-cpp over those seven, 59 of them on one photograph whose time goes to stages that run after a failure.
 
 ## Order
 
@@ -258,3 +259,56 @@ For the maintainer:
 
 - ARM64 was not timed. Its regional binarization is the 128-bit tier, which changed shape, so the scope row on builds not timed names it. Its histogram tier is untouched.
 - The 128-bit histogram tier could take the sub-histograms on x64 alone, as a tier of its own, if a default NativeAOT publish reading photographs is worth one: on the JIT without AVX the photographs' histogram took 0.82 of its time with them.
+
+### Work 2, Phase 1b, continued: the row scan and the sheets of 60 codes (2026-10-15)
+
+Measured, and nothing shipped. Every change tried either read the same and took the same time, or took less time and read fewer codes. The source is as Phase 1b left it.
+
+Where the 60-code photographs stand, the entry against zxing-cpp's time in Phase 0, the same machine on one thread:
+
+| Photograph | The entry, ms | zxing-cpp, ms |
+|---|---|---|
+| `lots/image001` | 42.3 | 39.9 |
+| `lots/image002` | 33.8 | 39.6 |
+| `lots/image003` | 51.8 | 40.7 |
+| `lots/image004` | 35.2 | 40.1 |
+| `lots/image005` | 43.4 | 43.1 |
+| `lots/image006` | 46.9 | 42.2 |
+| `lots/image007` | 101.0 | 41.6 |
+| All seven | 354 | 287 |
+
+- `lots/image007` is 59 ms of the 67 behind. By stage, timed with counters: the second round 27.8 ms, the inferred stage 26.1, the rows between strided rows 23.9 over 46 scans, the triples' decodes 15.7, the crowded stage 10.1, and the pixel passes 16.6.
+- The other six spend their time on the rows between (13 to 14 ms each), the triples' decodes (6 to 20 ms) and the pixel passes (9 ms).
+
+The row scan. On a photograph 4,032 pixels tall the strided scan takes one row in 17, so the scan of the rows between reads the other sixteen, in each of the four readings at every scale.
+
+- Its time on the photographs, split by stopping the kernel early: the dark masks about 35 %, the edges taken out of them about 30 %, the windows classified about 10 % and the cross-checks of the windows flagged about 25 %. No stage is most of it.
+- 70 % of the 64-pixel words hold no edge, and a row holds 21.6 dark runs on average.
+- Writing the first four edges of each kind a word without a branch took the rows between from 0.081 to 0.105 ns a pixel: it pays four writes on the words that have none.
+- Leaving a word with no edge at one test measured inside the noise.
+- Scanning every third row between, not every row, read 1,048 codes of 1,071, and the one-symbol call 454 photographs of 456.
+
+Four rules for the entry alone were measured. Once a symbol is read, a reading left with few candidates outside the read symbols scans fewer rows between:
+
+| Rule | The entry's time | The seven sheets | Codes |
+|---|---|---|---|
+| None, as shipped | 1.00 | 354 ms | 1,071 |
+| Under two left: no rows between | 0.75 | 276 ms | 1,069 |
+| None left: no rows between | 0.79 | 287 ms | 1,070 |
+| None left: every third row between | about 0.86 | 304 ms | 1,070 |
+| None left: every second row between | about 0.92 | 370 ms | 1,071 |
+
+- The build before took 354 to 384 ms on the sheets in these runs, and the last two rows are timed against the run before them, so their times are rough.
+- The code the third rule loses is `bright_spots/image017`'s second, a version 1 symbol at 9 pixels a module that glare keeps out of the strided rows. So the rows between find hard symbols beside a read one, not only small ones.
+- None of the four was taken: each trades codes the set has, or keeps them on this set alone.
+
+`lots/image007`:
+
+- A second round that takes again only the readings a read took given-up candidates from read the same 1,071 codes and took `image007` from 102 to 97 to 99 ms: most of its readings had such candidates. Holding each reading to a triple's worth left, as the round rule does for all of them, lost `noncompliant/image001`'s second code, which a reading reads from two finders. Not taken: it is not the same rule as the round's, and it saves little.
+- The inferred stage's centre search spends 90 % of its time sampling the timing patterns, and the frame and its transform about 6 %. Stopping a position's count once its share passed the best so far read the same codes in the same time, since a hypothesis's positions all read about half their modules wrong.
+- Stopping the count at the decode bar, a share of an eighth, on both searches changed four photographs' reads and lost `nominal/image001`'s, because the wide search's best seeds the fine one whatever its share. On the fine search alone it read the same and took `image007` from 102.6 to 93.3 ms, with the set level. Not taken: two faults planted in it, the bar on the wide search too and the fine search held to the bar alone, pass every test that reads an inferred finder, so nothing would hold it.
+
+What is left:
+
+- The time on a dense sheet is spread over stages that run because something failed: the second round, the inferred and crowded stages, the triples' second grids. Closing the gap there means reading more symbols in the first round, which changes what is read.
+- No test pins the inferred centre search's result: a fault that changed four photographs' reads passed them all.
