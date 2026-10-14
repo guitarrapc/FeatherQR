@@ -14,6 +14,7 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 - The entry's time (2026-10-14): measured by pass and by stage, then the two kernels that took most of it were made faster. The entry takes 0.60 of its time over the set and the one-symbol call 0.67, with every read as it was. The entry is 2.2 times the one-symbol call, where it was 2.5.
 - Phase 1b continued (2026-10-15): the row scan and the sheets of 60 codes were measured, and nothing was shipped. The entry is 67 ms behind zxing-cpp over those seven, 59 of them on one photograph whose time goes to stages that run after a failure.
 - Phase 2 (2026-10-15): the maintainer ruled. The call ships for Standard QR, in an array form and a span form, in 2.0.0, and the Phase 7 freeze waits for it. Phase 3 is next.
+- ARM64 (2026-10-15): Phases 1 and 1b were measured on an Apple M2. No read moves, and the one-symbol call compiles to the code it had before the entry, on NativeAOT and on the JIT. Phase 1b takes the entry to 0.83 of its time over the set and the one-symbol call to 0.89, where x64 took them to 0.60 and 0.67, and the entry is 2.3 times the one-symbol call.
 
 ## Order
 
@@ -178,7 +179,7 @@ The numbers this phase was to give:
 
 - Code for code the entry and the loop differ by two: the entry reads `bright_spots/image021`'s first code and not `brightness/image026`'s third. Every read is agreed and inside a labelled outline, and none is a second read of a code.
 - Time, in one process, the fastest of three calls: 2.46 times the one-symbol call on the 368 one-code photographs, 2.50 over the set, 59 to 150 ms on a 60-code photograph. The loop takes 2.8 times on the one-code photographs, 11.9 s against the one-symbol call's 2.6 over the set, and 400 to 820 ms on those seven, where zxing-cpp takes 40 to 43 ms. With room for one symbol the entry takes 1.00 of the one-symbol call.
-- The one-symbol call's instructions on the report shapes: on the .NET 10 JIT for x64 the 446 library methods compiled while the image and matrix shapes decode are the same instruction for instruction, and on a default NativeAOT publish for x64 all 9,171 methods of the build before are byte for byte the same. The publish is 21 KB larger. ARM64 and WebAssembly were not compared, and the WebAssembly report and the NativeAOT gate pass.
+- The one-symbol call's instructions on the report shapes: on the .NET 10 JIT for x64 the 446 library methods compiled while the image and matrix shapes decode are the same instruction for instruction, and on a default NativeAOT publish for x64 all 9,171 methods of the build before are byte for byte the same. The publish is 21 KB larger. ARM64 and WebAssembly were not compared, and the WebAssembly report and the NativeAOT gate pass. ARM64 was compared on 2026-10-15 ([below](#work-2-phases-1-and-1b-on-arm64-2026-10-15)).
 - Allocation: the texts and nothing else, on a grid of nine and on one symbol, and nothing on an image with no symbol.
 - The suite: 58,068 tests, none failing.
 
@@ -258,7 +259,7 @@ Measured and left:
 
 For the maintainer:
 
-- ARM64 was not timed. Its regional binarization is the 128-bit tier, which changed shape, so the scope row on builds not timed names it. Its histogram tier is untouched.
+- ARM64 was not timed. Its regional binarization is the 128-bit tier, which changed shape, so the scope row on builds not timed names it. Its histogram tier is untouched. It was timed on 2026-10-15 ([below](#work-2-phases-1-and-1b-on-arm64-2026-10-15)).
 - The 128-bit histogram tier could take the sub-histograms on x64 alone, as a tier of its own, if a default NativeAOT publish reading photographs is worth one: on the JIT without AVX the photographs' histogram took 0.82 of its time with them.
 
 ### Work 2, Phase 1b, continued: the row scan and the sheets of 60 codes (2026-10-15)
@@ -331,3 +332,89 @@ For Phase 3:
 - The entry ends its search when the room is full, so the array form needs a room that grows. Calling the entry again with a larger room would read the image twice.
 - The draft names, `QRCodeDecodeResult` for the result and `DecodeImageSymbols` and `DecodeSymbols` for the calls, follow the naming rule and are not settled.
 - The SkiaSharp package gets the array form only, as its one-symbol decoder has the `string` form only.
+
+### Work 2, Phases 1 and 1b on ARM64 (2026-10-15)
+
+Measured, and nothing changed. Phase 1 compared the one-symbol call's code on x64 alone, and Phase 1b timed nothing on ARM64, whose regional binarization is the 128-bit tier that changed shape. On an Apple M2 no read moves, the one-symbol call compiles to the code it had before the entry, and the regional binarization runs in 0.47 of its cycles. The calls gain less than on x64: over the set the entry takes 0.83 of its time and the one-symbol call 0.89.
+
+What was done:
+
+- Three builds, each a `git archive` in a scratch tree: 928f40e2 (before the entry), 0dc123f1 (the entry) and 381db167 (Phase 1b, whose `src` is the head's). Apple M2, osx-arm64, SDK 10.0.401 with .NET 10.0.12 and ILCompiler 10.0.12, and .NET 8.0.31 for the suite's other target.
+- The suite at the head, in Release and in Debug. `tests/FeatherQR.AotAnalysis` published as default NativeAOT at the three commits, and the head's run with `--simd-class Arm64 --parity`.
+- The code: each publish's object file disassembled and compared method by method, bytes and relocations, with the padding between methods left out. On the .NET 10 JIT, with tiering off, every method compiled while the image and matrix shapes decode, at the first two commits.
+- The report shapes: instructions and cycles a call from the process's counters, a short loop taken from a long one (1 s and 4 s on NativeAOT, 4 s and 10 s on the JIT), and time on NativeAOT, seven processes a build in turn.
+- The photographs: a probe in a scratch project, deleted after, read BoofCV's 536 photographs as grey images written once the way the sweep tool hands them to the readers. It wrote every result of both calls, which `boofcv --lines` scored, and timed both calls on one thread, the fastest of three calls a photograph, four processes a build in turn. Published as NativeAOT, it looped the regional binarization alone and the entry for the process's counters and for a sampling profile (`sample`).
+
+The reads and the suite:
+
+- Before and after Phase 1b both calls return the same results on all 536 photographs, text, version and corners. The one-symbol call reads 456 photographs and the entry returns 1,071 symbols.
+- Scored, every count is x64's. The entry reads 1,071 of the 1,232 codes and 765 of the 864 on photographs of more than one, all agreed and inside a labelled outline, none twice. Phase 0's loop reads 1,071 and zxing-cpp 977, and the entry and the loop differ by the same two codes as on x64.
+- The suite: 65,682 tests in Release (32,888 on net10.0, 32,794 on net8.0) and 65,446 in Debug, none failing. The head's publish passes `--simd-class Arm64 --parity`: the regional binarization runs its 128-bit tier there, and its `LocalBinarizer` entry matches.
+
+The code, on default NativeAOT for osx-arm64:
+
+- Phase 1: all 12,036 code symbols of 928f40e2's publish, 3,280 of them the library's, are byte for byte the same at 0dc123f1, which adds 64 (40 of them the library's) and is 33 KB larger. On the JIT the 443 library methods compiled while the image and matrix shapes decode are the same instruction for instruction.
+- Phase 1b: 3,297 of 3,320 library symbols are the same. What changed is the regional binarization, `RegionalRetry`'s three instantiations, which keep the statistics between polarities, the entry's pass after the positive reading, the tier table, and the 256-bit histogram tier, which ARM64 does not run. The ARM64 histogram tier and `CountGroupLaned`, which moved to `Binarizer.cs`, compile to the bytes they had.
+
+The report shapes, after over before:
+
+| Measure | The 12 reading shapes | Noise | Gradient | Regional binarization alone | Histogram alone |
+|---|---|---|---|---|---|
+| NativeAOT, instructions | 0.999 to 1.001 | 0.946 | 0.713 | 0.517 | 1.000 |
+| NativeAOT, cycles | 0.955 to 1.037 | 0.951 | 0.663 | 0.426 | 1.004 |
+| NativeAOT, time | 0.94 to 1.07 | 0.95 | 0.67 | 0.41 | 1.00 |
+| .NET 10 JIT, instructions | 0.993 to 1.005 | 0.958 | 0.736 | 0.546 | 1.000 |
+| .NET 10 JIT, cycles | 0.925 to 1.072 | 0.963 | 0.725 | 0.466 | 1.003 |
+
+- The reading shapes do not reach the regional binarization, and on NativeAOT every method they run is the same bytes. Their cycles and times spread as this machine does: seven processes of one build read the version 40 shape at 136.7 to 160.0 µs. The time row is the fastest of seven processes.
+- x64 had the noise image at 0.93 and 0.96 and the gradient at 0.50 and 0.68, on the JIT with AVX2 and on default NativeAOT. ARM64's 0.95 and 0.67 to 0.74 sit with default NativeAOT's, which runs the same 128-bit tier.
+- The scalar form, which ARM64 does not run, takes 0.67 of its instructions on NativeAOT and 0.72 on the JIT.
+
+The photographs, on the .NET 10 JIT, the fastest of three calls a photograph, four processes a build:
+
+| Build | One-symbol call, ms | The entry, ms | The entry over the one-symbol call |
+|---|---|---|---|
+| ARM64, .NET 10 JIT, before | 2,725 to 3,103 | 6,823 to 7,821 | 2.44 to 2.52 |
+| The same, after | 2,366 to 2,441 | 5,513 to 5,741 | 2.33 to 2.35 |
+
+- Each photograph's fastest over the four processes: the one-symbol call 2,569 ms before and 2,276 after (0.89), the entry 6,439 and 5,323 (0.83), and the entry 2.51 and 2.34 times the one-symbol call. On x64 with AVX2 the same calls went to 0.67 and 0.60, and the entry to 2.22 to 2.25 times.
+- The fourth process before is the slowest on both calls, 3,103 and 7,821 ms, and ran the cycles the other three did. A whole process, whose loading and warm-up are the same for both builds, ran 452 to 454 billion instructions before and 361 to 365 after (0.80), and 100.4 to 101.2 billion cycles before and 81.9 to 83.8 after (0.82).
+- The 368 photographs of one code: the entry 3,677 ms before and 3,054 after, 2.48 and 2.28 times the one-symbol call.
+- The seven sheets of 60 codes: 486 ms before and 466 after, of which `lots/image007` 137 and 127.
+- Photograph by photograph the entry takes 0.49 to 1.05 of its time. The one-symbol call reaches 1.16 on three photographs of `close`, reads of 5 to 7 ms whose four processes overlap between the builds.
+
+The regional binarization alone on default NativeAOT, one polarity with its statistics read, every twelfth photograph (45) in a loop:
+
+| | Instructions a pixel | Cycles a pixel | ns a pixel |
+|---|---|---|---|
+| Before | 7.03 | 1.40 to 1.44 | 0.43 to 0.49 |
+| After | 3.73 | 0.67 to 0.68 | 0.23 to 0.24 |
+
+- 0.53 of the instructions and 0.47 of the cycles. The report's 742-pixel render takes 7.02 and 3.63 instructions a pixel, and 0.52 cycles after, so a photograph costs a pixel what a render does. x64 runs the photographs at 0.09 to 0.13 ns a pixel with AVX2 and 0.17 without AVX.
+- Where it goes after, by samples. On the photographs: the block statistics 35 %, the rows 28 %, the thresholds 17 %, the black points 16 % and the spreading of the thresholds 4 %. On the render: 30, 33, 21, 11 and 5 %.
+
+Where the entry's time goes, by samples on default NativeAOT over the 536 photographs:
+
+| | Before | After |
+|---|---|---|
+| The regional binarizations, every scale | 37 % | 20 % |
+| The row scans, strided and between | 24 % | 31 % |
+| The histograms | 20 % | 25 % |
+| The candidate checks | 9 % | 12 % |
+| Every decode stage and the rest | 7 % | 9 % |
+| The inversions and the halvings | 3 % | 3 % |
+
+- Everything but the regional binarizations runs the bytes it ran. Held at the time it took, the shares put the regional binarizations at 0.43 of their time and the entry at 0.79 of its, against the 0.83 the entry measured on the JIT.
+
+What it taught:
+
+- ARM64 gains less because it had less to gain. On x64 the regional binarization was 45 % of the entry and fell to about a quarter of its time with AVX2, and the 256-bit histogram took the sub-histograms the ARM64 tier already had. On ARM64 the regional binarization was 37 % and fell to 0.43 to 0.47, as the 128-bit tier did on x64 without AVX (0.40 to 0.17 ns a pixel), and the histogram did not change.
+- Time on this machine moves tens of percent between processes. A first timing of the regional binarization photograph by photograph, the fastest of three calls beside the histogram, put it at 0.58 to 0.69 of its time before, while the untouched histogram moved 0.96 to 1.14 between processes. The loop's ns a pixel moved 0.43 to 0.61 between processes of one build. The process's counters over a short and a long loop gave 0.53 of the instructions, repeating to four digits, and 0.47 of the cycles, repeating within 3 %. A ratio of times here needs a control beside it, and the verdict comes from the counters.
+
+Measured and left:
+
+- The thresholds run scalar on ARM64: only the 256-bit tier has a vector form of them. They take 17 % of the regional binarization on the photographs, where the 256-bit form takes 11 % on x64. A 128-bit form that halved them would save about 8 % of the kernel and under 2 % of the entry, under the 3 % bar.
+
+What is left:
+
+- The specs still give ARM64 as not timed: the scope row "Image decode changes of 2026-10 on builds not timed" in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions), and the Performance lessons of [standardqr-decoder.md](../specs/standardqr-decoder.md), which carry x64's figures alone. These numbers go there with the record.
