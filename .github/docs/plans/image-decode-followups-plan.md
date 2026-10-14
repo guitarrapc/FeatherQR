@@ -415,6 +415,4 @@ Measured and left:
 
 - The thresholds run scalar on ARM64: only the 256-bit tier has a vector form of them. They take 17 % of the regional binarization on the photographs, where the 256-bit form takes 11 % on x64. A 128-bit form that halved them would save about 8 % of the kernel and under 2 % of the entry, under the 3 % bar.
 
-What is left:
-
-- The specs still give ARM64 as not timed: the scope row "Image decode changes of 2026-10 on builds not timed" in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions), and the Performance lessons of [standardqr-decoder.md](../specs/standardqr-decoder.md), which carry x64's figures alone. These numbers go there with the record.
+The record: the scope row "Image decode changes of 2026-10 on builds not timed" in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions), which no longer leaves the regional binarization untimed on ARM64. In [standardqr-decoder.md](../specs/standardqr-decoder.md), the Decisions row "Several symbols of one image" and the Performance lessons: the photographs' time, the regional binarization, the comparison of listings and the lesson on timing. The entry's paragraph in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md).
