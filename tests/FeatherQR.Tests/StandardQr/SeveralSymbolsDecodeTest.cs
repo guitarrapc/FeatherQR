@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The entry that returns every symbol of an image in one call (<see cref="QRImageDecoder.DecodeSymbols"/>): each drawn symbol once, with its own corners, whichever pass reads it, and nothing that is not drawn.
-/// Its first result is what the one-symbol call reads of the same image.
+/// Its first result is what the one-symbol call reads of the same image, unless a pass of that call ends on a verdict or on candidates it gives up on.
 /// </summary>
 public class SeveralSymbolsDecodeTest
 {
@@ -129,7 +129,7 @@ public class SeveralSymbolsDecodeTest
         {
             var symbol = row / size * Across + column / size;
             int r = row % size, c = column % size;
-            // Version 1's data lies past the finders, the timing patterns and the format information: modules 9 to 20 of each axis, behind a 2-module quiet zone
+            // Modules 9 to 20 of both axes, behind a 2-module quiet zone, hold 144 of version 1's 208 data modules: drawn at random they leave more errors than the symbol corrects
             if (symbol < Unreadable && r >= 11 && c >= 11 && r < size - 2 && c < size - 2)
                 return noise[(symbol * size + r) * size + c];
             return symbols[symbol][r, c];
@@ -150,6 +150,55 @@ public class SeveralSymbolsDecodeTest
         var findersThatDoNotRead = 3 * Unreadable;
         await Assert.That(findersThatDoNotRead).IsGreaterThan(FinderPatternFinder.MaxFinderCandidates);
         await Assert.That(QRCodeDecoder.TryDecodeImage(luminance, width, height, out _, out _)).IsFalse().Because("a premise: the one-symbol call does not get past the symbols that do not read");
+
+        var read = Read(luminance, width, height);
+
+        await AssertReadsEach(read, drawn);
+    }
+
+    /// <summary>
+    /// Grids turned, the last also under keystone, whose first symbols do not read, their data drawn at random: every symbol that reads is read once, with its corners, and nothing else.
+    /// Each grid reads whole only with one step of the search, and reads less without it.
+    /// The first two need a second round. The third needs the candidates of symbols an earlier pass read to leave a reading's list before it selects.
+    /// The fourth and fifth need those the rows between bring back to leave it, and the sixth needs the triple selected again once they have.
+    /// </summary>
+    [Test]
+    [Arguments(7, 6, 2, 2.72f, 43.7f, 0f, 9, 4014)]
+    [Arguments(7, 7, 3, 2.78f, 1.8f, 0f, 6, 2005)]
+    [Arguments(5, 5, 1, 3.24f, 23.9f, 0f, 4, 12185)]
+    [Arguments(5, 4, 3, 4.91f, 33f, 0f, 7, 13171)]
+    [Arguments(5, 7, 3, 4.52f, 29.6f, 0f, 16, 14153)]
+    [Arguments(4, 5, 3, 4.01f, 25.4f, 0.041f, 6, 18064)]
+    public async Task GridsThatReadWholeOnlyWithEachStep_EverySymbolThatReadsIsRead(int across, int down, int quietZone, float pixelsPerModule, float degrees, float keystone, int unreadable, int seed)
+    {
+        var symbols = Enumerable.Range(0, across * down).Select(i => Symbol($"FQR GRID {i}", 1, quietZone)).ToArray();
+        var size = symbols[0].Size;
+        var random = new Random(seed);
+        var noise = new bool[across * down * size * size];
+        for (var i = 0; i < noise.Length; i++)
+            noise[i] = random.Next(2) == 0;
+        bool IsDark(int row, int column)
+        {
+            var symbol = row / size * across + column / size;
+            int r = row % size, c = column % size;
+            // Modules 9 to 20 of both axes, behind the quiet zone, hold 144 of version 1's 208 data modules: drawn at random they leave more errors than the symbol corrects
+            if (symbol < unreadable && r >= quietZone + 9 && c >= quietZone + 9 && r < size - quietZone && c < size - quietZone)
+                return noise[(symbol * size + r) * size + c];
+            return symbols[symbol][r, c];
+        }
+        var (luminance, width, height) = SupersampledRenderer.Render(IsDark, across * size, down * size, pixelsPerModule, degrees, keystone);
+        var truth = SupersampledGeometry.GridToPixel(across * size, down * size, pixelsPerModule, degrees, keystone);
+        var drawn = new List<Drawn>();
+        for (var s = unreadable; s < across * down; s++)
+        {
+            float left = s % across * size + quietZone, top = s / across * size + quietZone, side = size - 2 * quietZone;
+            var corners = new (float X, float Y)[4];
+            truth.Transform(left, top, out corners[0].X, out corners[0].Y);
+            truth.Transform(left + side, top, out corners[1].X, out corners[1].Y);
+            truth.Transform(left + side, top + side, out corners[2].X, out corners[2].Y);
+            truth.Transform(left, top + side, out corners[3].X, out corners[3].Y);
+            drawn.Add(new Drawn($"FQR GRID {s}", corners, pixelsPerModule));
+        }
 
         var read = Read(luminance, width, height);
 
@@ -301,7 +350,7 @@ public class SeveralSymbolsDecodeTest
 
     /// <summary>
     /// An image of one symbol gives one result, the one-symbol call's: read in the first pass, in the negative, under a texture at half scale, through grey edges, a turn and a keystone, and from version 1 to 40.
-    /// The passes after the one that reads it find its finders again and do not read it again.
+    /// The passes after the one that reads it find its finders again, and it is returned once.
     /// </summary>
     [Test]
     [Arguments(1, 4f, 0f, 0f)]
@@ -522,6 +571,31 @@ public class SeveralSymbolsDecodeTest
     }
 
     /// <summary>
+    /// A symbol whose content does not decode, one that reads beside it, and a light-on-dark one: the one-symbol call's first pass ends at the verdict, and its negative pass reads the third.
+    /// This entry goes on in the first pass, so its first result is the symbol beside the verdict, a symbol that call does not read.
+    /// </summary>
+    [Test]
+    public async Task VerdictInTheFirstPass_FirstResultIsTheSymbolBesideIt()
+    {
+        const int Unmapped = 0x8740;
+        var modules = KanjiUnmappedCharacterEndToEndTest.BuildSymbol(Unmapped);
+        const int Size = KanjiUnmappedCharacterEndToEndTest.Size;
+        var (verdictLuminance, verdictSide, _) = SupersampledRenderer.Render((row, column) => modules[row * Size + column] != 0, Size, Size, 6f, 0f, 0f);
+        var readable = Tile("FQR BESIDE A VERDICT", 1, 6f, 0f, 0f);
+        var negative = Negative(Tile("FQR AFTER A VERDICT", 1, 6f, 0f, 0f));
+        var (luminance, width, height, drawn) = Compose((verdictLuminance, verdictSide, verdictSide, new Drawn("", [], 6f)), readable, negative);
+
+        // The premise: the one-symbol call reads the light-on-dark symbol
+        await Assert.That(QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out _)).IsTrue();
+        await Assert.That(text).IsEqualTo("FQR AFTER A VERDICT");
+
+        var read = Read(luminance, width, height);
+
+        await AssertReadsEach(read, [drawn[1], drawn[2]]);
+        await Assert.That(read[0].Text).IsEqualTo("FQR BESIDE A VERDICT");
+    }
+
+    /// <summary>
     /// A grid of symbols, one of them a symbol whose content does not decode, at each place in turn: whichever stage reaches its verdict, its finders leave the list, and every symbol that reads is read.
     /// </summary>
     [Test]
@@ -576,11 +650,14 @@ public class SeveralSymbolsDecodeTest
 
     /// <summary>
     /// Two symbols side by side that read only through a finder inferred from two: the one whose content does not decode has its bottom-left finder blanked, the other its top-left.
-    /// Their four finders make a triple across the two that does not read. At a quarter of the image's size the strided scan undersamples the finders, so the rows between are scanned and the stages go on to the inferred one, which reaches the verdict first.
+    /// Their four finders make a triple across the two that does not read, and the stage that infers a finder reaches the verdict first.
+    /// On the short image that is the stage after the strided triple. On the tall one the strided scan undersamples the finders, so it is the last stage, after the rows between are scanned.
     /// The finders that verdict was reached from leave the list, and the other symbol is read.
     /// </summary>
     [Test]
-    public async Task ContentVerdictOfAnInferredFinder_LeavesTheSymbolBesideIt()
+    [Arguments(6, 0, false)]
+    [Arguments(4, 2000, true)]
+    public async Task ContentVerdictOfAnInferredFinder_LeavesTheSymbolBesideIt(int pixels, int minimumHeight, bool undersampled)
     {
         const int Unmapped = 0x8740;
         var verdict = KanjiUnmappedCharacterEndToEndTest.BuildSymbol(Unmapped);
@@ -588,8 +665,7 @@ public class SeveralSymbolsDecodeTest
         const string Text = "FQR INFERRED B";
         var readable = Symbol(Text, 1);
         const int Gap = 5;
-        const float Pixels = 6f;
-        int columns = 2 * Size + 3 * Gap, rows = Size + 2 * Gap;
+        int columns = 2 * Size + 3 * Gap, rows = Math.Max(Size + 2 * Gap, minimumHeight / pixels);
         bool IsDark(int row, int column) => IsDarkOf(row, column, withVerdict: true);
         bool IsDarkOf(int row, int column, bool withVerdict)
         {
@@ -601,26 +677,77 @@ public class SeveralSymbolsDecodeTest
                 return !(r < 8 && c < 8) && readable[r, c];
             return false;
         }
-        var (luminance, width, height) = SupersampledRenderer.Render(IsDark, columns, rows, Pixels, 0f, 0f);
-        var truth = SupersampledGeometry.GridToPixel(columns, rows, Pixels, 0f, 0f);
-        float left = 2 * Gap + Size, top = Gap;
-        var corners = new (float X, float Y)[4];
-        truth.Transform(left, top, out corners[0].X, out corners[0].Y);
-        truth.Transform(left + Size, top, out corners[1].X, out corners[1].Y);
-        truth.Transform(left + Size, top + Size, out corners[2].X, out corners[2].Y);
-        truth.Transform(left, top + Size, out corners[3].X, out corners[3].Y);
+        var (luminance, width, height) = NearestNeighbourRenderer.Render(IsDark, columns, rows, pixels, 0f, 0f);
+        float left = (2 * Gap + Size) * pixels, top = Gap * pixels, side = Size * pixels;
+        var drawn = new Drawn(Text, [(left, top), (left + side, top), (left + side, top + side), (left, top + side)], pixels);
 
-        // The premises: alone, the symbol that reads is read, and the other gives its verdict through the inferred stage
-        var (aloneLuminance, aloneWidth, aloneHeight) = SupersampledRenderer.Render((row, column) => IsDarkOf(row, column, withVerdict: false), columns, rows, Pixels, 0f, 0f);
-        await AssertReadsEach(Read(aloneLuminance, aloneWidth, aloneHeight), [new Drawn(Text, corners, Pixels)]);
-        var (verdictLuminance, verdictSide, _) = SupersampledRenderer.Render((row, column) => !(row >= Size - 8 && column < 8) && verdict[row * Size + column] != 0, Size, Size, Pixels, 0f, 0f);
-        var (verdictAlone, verdictWidth, verdictHeight, _) = Compose((verdictLuminance, verdictSide, verdictSide, new Drawn("", [], Pixels)));
+        // The premises: whole pixels hold only two levels, so the global passes are the only ones and no other pass reads the symbol another way.
+        // The strided scan's triple is undersampled on the tall image only, and alone, the symbol that reads is read and the other gives its verdict.
+        var (extremes, found, everyRowScanned, stridedUndersampled) = Premises(luminance, width, height);
+        await Assert.That(extremes).IsTrue();
+        await Assert.That(found && !everyRowScanned).IsTrue();
+        await Assert.That(stridedUndersampled).IsEqualTo(undersampled);
+        var (aloneLuminance, aloneWidth, aloneHeight) = NearestNeighbourRenderer.Render((row, column) => IsDarkOf(row, column, withVerdict: false), columns, rows, pixels, 0f, 0f);
+        await AssertReadsEach(Read(aloneLuminance, aloneWidth, aloneHeight), [drawn]);
+        var (verdictAlone, verdictWidth, verdictHeight) = NearestNeighbourRenderer.Render((row, column) => column < 2 * Gap + Size && IsDark(row, column), columns, rows, pixels, 0f, 0f);
         await Assert.That(QRCodeDecoder.TryDecodeImage(verdictAlone, verdictWidth, verdictHeight, out _, out var verdictInfo)).IsFalse();
         await Assert.That(verdictInfo.Status).IsEqualTo(DecodeStatus.UnmappedCharacter);
 
         var read = Read(luminance, width, height);
 
-        await AssertReadsEach(read, [new Drawn(Text, corners, Pixels)]);
+        await AssertReadsEach(read, [drawn]);
+
+        static (bool Extremes, bool Found, bool EveryRowScanned, bool Undersampled) Premises(byte[] luminance, int width, int height)
+        {
+            Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
+            Binarizer.FillHistogram(luminance, histogram);
+            var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
+            var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+            var count = FinderPatternFinder.FindCandidatesStrided(luminance, width, height, threshold, candidates, grey);
+            var everyRowScanned = false;
+            Span<FinderPattern> patterns = stackalloc FinderPattern[3];
+            var found = FinderPatternFinder.TrySelectFromList(luminance, width, height, threshold, grey, candidates, ref count, ref everyRowScanned, patterns);
+            return (RegionalRetry.HoldsOnlyExtremes(histogram), found, everyRowScanned, found && FinderPatternFinder.IsUndersampled(patterns, height));
+        }
+    }
+
+    /// <summary>
+    /// A triple the strided scan selected that stands once the rows between are scanned, as the stages decode it (<see cref="FinderKeptListParityTest"/> draws these renders).
+    /// The rows between were averaged into its candidates, so the list no longer holds them by value, and a verdict on the triple still takes its three finders out of the list.
+    /// </summary>
+    [Test]
+    [Arguments("FQR40080", QREccLevel.L, 25, 5.8564177f, 343.29602f, 0.13052568f)]
+    [Arguments("FQR96565", QREccLevel.Q, 21, 4.240097f, 308.87686f, 0.15028752f)]
+    public async Task TripleSelectedBeforeTheRowsBetween_LeavesTheList(string content, QREccLevel level, int version, float pixelsPerModule, float degrees, float keystone)
+    {
+        var qr = QRCodeGenerator.Create(content, level, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var (luminance, side) = SupersampledRenderer.Render(qr, pixelsPerModule, degrees, keystone);
+
+        var (found, everyRowScanned, byValue, removed) = SelectAndRemove(luminance, side);
+
+        // The premises: the rows between were scanned, and the list holds the triple's candidates no longer by value
+        await Assert.That(found && everyRowScanned).IsTrue();
+        await Assert.That(byValue).IsLessThan(3);
+        await Assert.That(removed).IsEqualTo(3);
+
+        static (bool Found, bool EveryRowScanned, int ByValue, int Removed) SelectAndRemove(byte[] luminance, int side)
+        {
+            Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
+            Binarizer.FillHistogram(luminance, histogram);
+            var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
+            var candidates = new FinderPattern[256];
+            var count = FinderPatternFinder.FindCandidatesStrided(luminance, side, side, threshold, candidates, grey);
+            var everyRowScanned = false;
+            Span<FinderPattern> patterns = stackalloc FinderPattern[3];
+            var found = FinderPatternFinder.TrySelectFromList(luminance, side, side, threshold, grey, candidates, ref count, ref everyRowScanned, patterns);
+            var held = candidates.AsSpan(0, Math.Min(count, FinderPatternFinder.MaxFinderCandidates));
+            var byValue = 0;
+            foreach (var pattern in patterns)
+                byValue += FinderPatternFinder.ContainsCandidate(held, pattern) ? 1 : 0;
+            var before = count;
+            QRImageDecoder.RemoveCandidates(candidates, ref count, new QRImageDecoder.SelectedTriple(patterns[0], patterns[1], patterns[2]));
+            return (found, everyRowScanned, byValue, before - count);
+        }
     }
 
     /// <summary>
@@ -751,6 +878,31 @@ public class SeveralSymbolsDecodeTest
         await Assert.That(QRImageDecoder.IsWorthAnotherRound([.. outside, .. inside], leftOut: false, read)).IsTrue();
         await Assert.That(QRImageDecoder.IsWorthAnotherRound([.. inside, outside[0], outside[1]], leftOut: false, read)).IsFalse();
         await Assert.That(QRImageDecoder.IsWorthAnotherRound([], leftOut: true, read)).IsTrue();
+    }
+
+    /// <summary>
+    /// The finders the readings of a round give up on are kept once each: one given up again by another reading, or by a reading at half scale a pixel off, is the one kept, and one a finder's width away is another.
+    /// A finder that finds no room says so, so that the round knows more were given up on than are kept.
+    /// </summary>
+    [Test]
+    public async Task FindersGivenUpOn_AreKeptOnceEach()
+    {
+        FinderPattern[] symbol = [Candidate(114f, 114f), Candidate(170f, 114f), Candidate(114f, 170f)];
+        FinderPattern[] halved = [.. symbol.Select(static c => new FinderPattern { X = c.X / 2 + 0.5f, Y = c.Y / 2 - 0.5f, ModuleSize = c.ModuleSize / 2, Count = 2 })];
+        var left = new FinderPattern[4];
+        var count = 0;
+
+        await Assert.That(QRImageDecoder.KeepAsLeft(left, ref count, symbol, scale: 1)).IsTrue();
+        await Assert.That(QRImageDecoder.KeepAsLeft(left, ref count, symbol, scale: 1)).IsTrue();
+        await Assert.That(QRImageDecoder.KeepAsLeft(left, ref count, halved, scale: 2)).IsTrue();
+        await Assert.That(count).IsEqualTo(3);
+        await Assert.That(QRImageDecoder.KeepAsLeft(left, ref count, [Candidate(142f, 114f)], scale: 1)).IsTrue();
+        await Assert.That(count).IsEqualTo(4);
+        await Assert.That(QRImageDecoder.KeepAsLeft(left, ref count, [Candidate(400f, 400f)], scale: 1)).IsFalse();
+        await Assert.That(count).IsEqualTo(4);
+        // A full list still holds the finders it kept, so giving them up again needs no room
+        await Assert.That(QRImageDecoder.KeepAsLeft(left, ref count, symbol, scale: 1)).IsTrue();
+        await Assert.That(count).IsEqualTo(4);
     }
 
     /// <summary>Nothing to read gives no result: an image with no symbol, and one whose size does not hold together.</summary>

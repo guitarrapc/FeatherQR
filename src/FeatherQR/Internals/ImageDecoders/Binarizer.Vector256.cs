@@ -9,7 +9,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 
 internal static partial class Binarizer
 {
-    /// <summary>The pixels from which the vector tier may count its dense blocks into four sub-histograms. Under it the rental, the clearing and the merge cost more than the lanes save.</summary>
+    /// <summary>The pixels from which the vector tier may count its dense blocks into four sub-histograms. It is not where the lanes start to pay: photograph crops a quarter of its size count faster with them too. A lower floor is not measured on the other image shapes.</summary>
     internal const int LanedPixels = 1 << 16;
 
     /// <summary>

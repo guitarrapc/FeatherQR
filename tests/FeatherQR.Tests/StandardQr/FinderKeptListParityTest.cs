@@ -25,7 +25,7 @@ public class FinderKeptListParityTest
             };
         }
 
-        // Many symbols: more finders than the search's list holds, and selections that span symbols
+        // Many symbols, where a selection can span symbols, the two larger grids with more finders than the search's list holds
         foreach (var (across, down, keystone) in new[] { (2, 2, 0f), (3, 3, 0.12f), (4, 4, 0f), (6, 10, 0f) })
         {
             yield return () =>

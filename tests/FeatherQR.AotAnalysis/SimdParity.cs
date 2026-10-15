@@ -547,7 +547,7 @@ internal static class SimdParity
 
     /// <summary>
     /// The regional binarization in each vector form the build runs against the scalar form: the pixels written, the dark count and whether any pixel left its global class.
-    /// Both polarities from one scratch, so the second is binarized from the statistics the first left there. The sizes put the last block row and column over the ones before, and end the vector steps on every remainder.
+    /// Both polarities from one scratch, so the second is binarized from the statistics the first left there. The sizes put the last block row and column over the ones before, and end the pixel steps on a step, a pixel past one and a pixel short of one, among other remainders.
     /// </summary>
     private static List<string> LocalBinarizerMismatches()
     {

@@ -99,11 +99,12 @@ internal static class BoofCv
             }
         }
         bool Agreed(Read read) => observations.GetValueOrDefault(read.Text) >= 2;
+        bool Seen(string text) => observations.ContainsKey(text);
 
         Directory.CreateDirectory(outDir);
         WriteCsv(Path.Combine(outDir, "boofcv.csv"), photos, Agreed, lines);
-        WriteCodesCsv(Path.Combine(outDir, "boofcv-codes.csv"), photos, Agreed, text => observations.ContainsKey(text), lines);
-        return finish(Path.Combine(outDir, "boofcv.md"), Markdown(photos, Agreed, timed) + AgainMarkdown(photos, Agreed) + LinesMarkdown(photos, Agreed, lines));
+        WriteCodesCsv(Path.Combine(outDir, "boofcv-codes.csv"), photos, Agreed, Seen, lines);
+        return finish(Path.Combine(outDir, "boofcv.md"), Markdown(photos, Agreed, timed) + AgainMarkdown(photos, Agreed, Seen) + LinesMarkdown(photos, Agreed, lines));
     }
 
     private static Photo Measure(string category, string path, ReaderLines lines)
@@ -394,7 +395,7 @@ internal static class BoofCv
     /// <summary>
     /// What reading again adds to the one-symbol call: codes by how many a photograph holds, the reads no outline or an outline twice holds, and, for each code zxing-cpp reads and reading again does not, what the code reads cut out on its own.
     /// </summary>
-    private static string AgainMarkdown(Photo[] photos, Func<Read, bool> agreed)
+    private static string AgainMarkdown(Photo[] photos, Func<Read, bool> agreed, Func<string, bool> seen)
     {
         int Codes(Photo p, IEnumerable<Read> reads) => reads.Where(agreed).Select(r => LabelOf(p, r)).Where(static l => l >= 0).Distinct().Count();
 
@@ -428,22 +429,22 @@ internal static class BoofCv
         var missed = photos.SelectMany(p => Enumerable.Range(0, p.Labels.Count).Where(label => ReadsCode(p, p.Reads[1], label, agreed) && !ReadsCode(p, p.Again, label, agreed)).Select(label => (Photo: p, Label: label))).ToList();
         string Class((Photo Photo, int Label) code)
         {
-            // Null where a read lies in the outline and is not agreed
+            // Null where a read lies in the outline. A missed code counts no agreed read, so an agreed one there is counted for an earlier outline
             var cut = code.Photo.Alone[code.Label];
             if (cut is null)
-                return "Read, not agreed";
+                return code.Photo.Again.Any(r => agreed(r) && Inside(code.Photo.Labels[code.Label], r.X, r.Y)) ? "Read for an earlier outline" : "Read, not agreed";
             if (cut.Text is null)
                 return cut.Status;
-            return code.Photo.Reads[1].Any(r => LabelOf(code.Photo, r) == code.Label && r.Text == cut.Text) ? "Reads alone" : "Reads alone, another text";
+            return CutStatus(code.Photo, code.Label, cut.Text, seen) == "Success" ? "Reads alone" : "Reads alone, another text";
         }
         var classes = missed.Select(Class).GroupBy(static c => c).OrderByDescending(static g => g.Count()).Select(static g => g.Key).ToList();
         sb.AppendLine(CultureInfo.InvariantCulture, $"## Codes zxing-cpp reads and reading again does not, by what the code reads cut out on its own ({missed.Count:N0})");
         sb.AppendLine();
-        sb.Append("| Category | Codes | ").AppendJoin(" | ", classes).AppendLine(" |");
+        sb.Append("| Category | Codes |").AppendJoin("", classes.Select(static c => $" {c} |")).AppendLine();
         sb.Append("|---|---|").AppendJoin("", classes.Select(static _ => "---|")).AppendLine();
         List<(string Name, List<(Photo Photo, int Label)> Codes)> byCategory = [.. missed.GroupBy(static c => c.Photo.Category).OrderBy(static g => g.Key, StringComparer.Ordinal).Select(static g => (g.Key, g.ToList())), ("**All**", missed)];
         foreach (var group in byCategory)
-            sb.Append(CultureInfo.InvariantCulture, $"| {group.Name} | {group.Codes.Count:N0} | ").AppendJoin(" | ", classes.Select(c => group.Codes.Count(code => Class(code) == c).ToString("N0", CultureInfo.InvariantCulture))).AppendLine(" |");
+            sb.Append(CultureInfo.InvariantCulture, $"| {group.Name} | {group.Codes.Count:N0} |").AppendJoin("", classes.Select(c => string.Create(CultureInfo.InvariantCulture, $" {group.Codes.Count(code => Class(code) == c):N0} |"))).AppendLine();
         sb.AppendLine();
         var reverse = photos.Sum(p => Enumerable.Range(0, p.Labels.Count).Count(label => ReadsCode(p, p.Again, label, agreed) && !ReadsCode(p, p.Reads[1], label, agreed)));
         sb.AppendLine(CultureInfo.InvariantCulture, $"Codes reading again reads and zxing-cpp does not: {reverse:N0}.");
@@ -453,6 +454,17 @@ internal static class BoofCv
 
     /// <summary>Whether an agreed read of <paramref name="reads"/> lies inside the photograph's <paramref name="label"/>.</summary>
     private static bool ReadsCode(Photo photo, IEnumerable<Read> reads, int label, Func<Read, bool> agreed) => reads.Any(r => agreed(r) && LabelOf(photo, r) == label);
+
+    /// <summary>
+    /// What a code cut out and read alone read, against zxing-cpp's reads inside the same outline: its text, or another text. Where zxing-cpp has none there, a text some reader read, or one no reader read.
+    /// </summary>
+    private static string CutStatus(Photo photo, int label, string text, Func<string, bool> seen)
+    {
+        var there = photo.Reads[1].Where(r => LabelOf(photo, r) == label).ToList();
+        if (there.Count > 0)
+            return there.Any(r => r.Text == text) ? "Success" : "SuccessAnotherText";
+        return seen(text) ? "Success" : "SuccessNotSeen";
+    }
 
     /// <summary>A table and the photographs by name for each reader that came from result lines: what it reads, the gap (it has an agreed read, FeatherQR none) and the reverse.</summary>
     private static string LinesMarkdown(Photo[] photos, Func<Read, bool> agreed, ReaderLines lines)
@@ -585,7 +597,7 @@ internal static class BoofCv
                     area += outline[j].X * outline[i].Y - outline[i].X * outline[j].Y;
                 var call = Array.FindIndex(p.Again, r => agreed(r) && LabelOf(p, r) == label);
                 var cut = p.Alone[label];
-                var alone = cut is null ? "" : cut.Text is null ? cut.Status : p.Reads[1].Any(r => LabelOf(p, r) == label && r.Text == cut.Text) || seen(cut.Text) ? "Success" : "SuccessNotSeen";
+                var alone = cut is null ? "" : cut.Text is null ? cut.Status : CutStatus(p, label, cut.Text, seen);
                 writer.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{p.Category},{p.File},{p.Labels.Count},{label},{outline.Average(static q => q.X):F1},{outline.Average(static q => q.Y):F1},{Math.Sqrt(Math.Abs(area) / 2):F1},{(ReadsCode(p, p.Reads[0], label, agreed) ? 1 : 0)},{(call >= 0 ? 1 : 0)},{(call >= 0 ? call + 1 : 0)},{(ReadsCode(p, p.Reads[1], label, agreed) ? 1 : 0)},{(ReadsCode(p, p.Reads[2], label, agreed) ? 1 : 0)},{alone}") + string.Concat(located.Select(r => ReadsCode(p, p.Reads[FirstLineReader + r], label, agreed) ? ",1" : ",0")));
             }
         }

@@ -36,7 +36,7 @@ internal static partial class QRImageDecoder
         /// <summary>The text buffer every decode writes into.</summary>
         public Span<char> Chars;
 
-        /// <summary>The candidates the passes of this round gave up on, in the pixels of the image: the first that fit, and <see cref="LeftOut"/> when there were more.</summary>
+        /// <summary>The finders the passes of this round gave up on, in the pixels of the image, each once: the first that fit, and <see cref="LeftOut"/> when there were more.</summary>
         public Span<FinderPattern> Left;
 
         public int LeftCount;
@@ -50,13 +50,13 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Whether the passes could read more if they were run again: a pass gave up on candidates, a read after it took some of them, and at least a triple's worth is left. Or the passes gave up on more candidates than were kept.
+    /// Whether the passes could read more if they were run again: a pass gave up on candidates, a read after it took some of them, and at least a triple's worth is left. Or the passes gave up on more finders than were kept.
     /// </summary>
     /// <remarks>
     /// A pass gives up where its best triples do not decode, and they can be the finders of a symbol only a later pass reads. With that symbol read its finders are gone from the list, and the pass selects from the others.
     /// A pass whose list no later read touched would give up the same way again.
     /// </remarks>
-    /// <param name="left">The candidates the round's passes gave up on, in the pixels of the image. Those inside a symbol of <paramref name="read"/> are taken out.</param>
+    /// <param name="left">The finders the round's passes gave up on, each once, in the pixels of the image. Those inside a symbol of <paramref name="read"/> are taken out.</param>
     /// <param name="leftOut">Whether the passes gave up on more than <paramref name="left"/> holds.</param>
     /// <param name="read">The symbols read so far.</param>
     internal static bool IsWorthAnotherRound(Span<FinderPattern> left, bool leftOut, ReadOnlySpan<DecodedSymbol> read)
@@ -74,10 +74,14 @@ internal static partial class QRImageDecoder
     /// <remarks>
     /// <para>
     /// The image is read in the passes of <see cref="DecodeLuminance"/>, in their order. A read does not end them: each pass gives every symbol its candidate list holds, and the passes go on until the room is filled.
-    /// So the first symbol is the one <see cref="DecodeLuminance"/> reads, and an image of one symbol costs what that call's failing passes cost on top of the read, unless there is room for one only.
+    /// So an image of one symbol costs what that call's failing passes cost on top of the read, and a second round when one runs, unless there is room for one only.
     /// </para>
     /// <para>
-    /// The passes are run a second time when the first round read a symbol whose finders an earlier pass of it had given up on (<see cref="IsWorthAnotherRound"/>).
+    /// The first symbol is the one <see cref="DecodeLuminance"/> reads, unless a pass of that call ends on a symbol whose content gives a verdict, or on candidates its stages give up on with more of the list behind them.
+    /// This entry goes on in that pass, so its first symbol can be one that call reads in a later pass or not at all.
+    /// </para>
+    /// <para>
+    /// The passes are run a second time when the first round read a symbol whose finders an earlier pass of it had given up on, or gave up on more finders than it keeps (<see cref="IsWorthAnotherRound"/>).
     /// </para>
     /// <para>
     /// Nothing but the texts is allocated.
@@ -266,8 +270,8 @@ internal static partial class QRImageDecoder
 
                     // The stages gave up on the head of the list
                     var head = Math.Min(candidateCount, FinderPatternFinder.MaxFinderCandidates);
-                    if (head >= 3)
-                        KeepAsLeft(ref search, candidates.Slice(0, head), scale);
+                    if (head >= 3 && !KeepAsLeft(search.Left, ref search.LeftCount, candidates.Slice(0, head), scale))
+                        search.LeftOut = true;
                     if (candidateCount == head)
                         break;
                     candidates.Slice(head, candidateCount - head).CopyTo(candidates);
@@ -285,21 +289,43 @@ internal static partial class QRImageDecoder
         }
     }
 
-    /// <summary>Keeps the candidates a pass gave up on for the round's end, in the pixels of the image, as many as there is room for.</summary>
-    private static void KeepAsLeft(ref SymbolSearch search, scoped ReadOnlySpan<FinderPattern> candidates, int scale)
+    /// <summary>
+    /// Keeps the candidates a pass gave up on for the round's end, in the pixels of the image, as many as there is room for.
+    /// The readings of a round scan the same finders, so a finder another reading gave up on is kept once.
+    /// </summary>
+    /// <returns>False when a finder found no room.</returns>
+    internal static bool KeepAsLeft(Span<FinderPattern> left, ref int leftCount, scoped ReadOnlySpan<FinderPattern> candidates, int scale)
     {
         foreach (var candidate in candidates)
         {
-            if (search.LeftCount == search.Left.Length)
-            {
-                search.LeftOut = true;
-                return;
-            }
             var kept = candidate;
             kept.X *= scale;
             kept.Y *= scale;
-            search.Left[search.LeftCount++] = kept;
+            kept.ModuleSize *= scale;
+            if (ContainsFinder(left.Slice(0, leftCount), kept))
+                continue;
+            if (leftCount == left.Length)
+                return false;
+            left[leftCount++] = kept;
         }
+        return true;
+    }
+
+    /// <summary>
+    /// Whether one of <paramref name="finders"/> is the finder <paramref name="candidate"/> is: its centre within half a finder's width of the candidate's.
+    /// Two finders are a finder's width apart at least, and the same finder moves by less between readings, between scales and when the rows between are averaged in.
+    /// </summary>
+    private static bool ContainsFinder(scoped ReadOnlySpan<FinderPattern> finders, in FinderPattern candidate)
+    {
+        var near = 3.5f * candidate.ModuleSize;
+        near *= near;
+        foreach (var finder in finders)
+        {
+            float dx = finder.X - candidate.X, dy = finder.Y - candidate.Y;
+            if (dx * dx + dy * dy <= near)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -415,7 +441,7 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>The three finders of a triple, by value.</summary>
-    private readonly struct SelectedTriple(FinderPattern first, FinderPattern second, FinderPattern third)
+    internal readonly struct SelectedTriple(FinderPattern first, FinderPattern second, FinderPattern third)
     {
         public readonly FinderPattern First = first;
         public readonly FinderPattern Second = second;
@@ -467,8 +493,9 @@ internal static partial class QRImageDecoder
         candidateCount = kept;
     }
 
-    /// <summary>Takes a tried triple's finders out of the list. False when there is no triple or none of its finders is in the list as it was selected.</summary>
-    private static bool RemoveCandidates(Span<FinderPattern> candidates, ref int candidateCount, in SelectedTriple triple)
+    /// <summary>Takes a tried triple's finders out of the list. False when there is no triple or none of its finders is in the list.</summary>
+    /// <remarks>A triple is matched by <see cref="ContainsFinder"/>, not by value: the stages can decode a triple selected before the rows between were averaged into its candidates.</remarks>
+    internal static bool RemoveCandidates(Span<FinderPattern> candidates, ref int candidateCount, in SelectedTriple triple)
     {
         if (!triple.HasValue)
             return false;
@@ -479,7 +506,7 @@ internal static partial class QRImageDecoder
         var kept = 0;
         for (var i = 0; i < candidateCount; i++)
         {
-            if (!FinderPatternFinder.ContainsCandidate(patterns, candidates[i]))
+            if (!ContainsFinder(patterns, candidates[i]))
                 candidates[kept++] = candidates[i];
         }
         var removed = kept != candidateCount;
