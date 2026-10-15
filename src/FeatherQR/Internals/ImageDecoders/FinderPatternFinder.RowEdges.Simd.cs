@@ -15,9 +15,10 @@ internal static partial class FinderPatternFinder
     /// <returns>The number of dark runs.</returns>
     /// <remarks>
     /// Ends are exclusive: run k is ends[k] - starts[k] pixels long, and the light gap after it is starts[k + 1] - ends[k].
-    /// Both spans need room for (length + 1) / 2 + 1 runs, and the row has to be shorter than <see cref="EdgeListWidthLimit"/>: positions are stored in sixteen bits.
+    /// Both spans need room for <see cref="EdgeRunCapacity"/> runs, and the row has to be shorter than <see cref="EdgeListWidthLimit"/>: positions are stored in sixteen bits.
     /// </remarks>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    // Not inlined: written into the row kernel it gave back most of what it saves
+    [MethodImpl(MethodImplOptions.NoInlining)]
     internal static int ExtractRowEdges(ReadOnlySpan<byte> row, byte threshold, Span<short> starts, Span<short> ends)
     {
         // Edges come from a word of 64 dark bits and the same word one pixel later. The word is used at once and never stored,
@@ -35,6 +36,11 @@ internal static partial class FinderPatternFinder
         // windows. Taking every edge from one set (word ^ previous) and dealing them out to the two arrays is no faster,
         // because every edge then pays for working out where it goes.
         //
+        // Most words of a photograph hold no edge, and the rest a few. A loop that takes one edge a turn
+        // mispredicts its exit on nearly every word that has one, so a word with an edge has its first four of each kind written
+        // without a branch, and only a fifth loops. A position written for an edge the word does not have is past the count,
+        // and the next word writes over it. The two kinds are two chains of bit clears, which overlap.
+        //
         // A run that reaches the end of the row still needs its end. In a last word that is not full the bits past the row are 0,
         // so the end falls out as the falling edge at the row's length. When the length is a multiple of 64 no word holds that bit,
         // and the carry left after the loop says the run is still open.
@@ -42,15 +48,14 @@ internal static partial class FinderPatternFinder
         // The worst case for the two arrays is a row that alternates every pixel: (length + 1) / 2 runs.
 
         var width = row.Length;
-        var capacity = (width + 1) / 2 + 1;
-        if (width >= EdgeListWidthLimit || starts.Length < capacity || ends.Length < capacity)
-            throw new ArgumentException($"A row of {width} needs {capacity} starts and ends and has to be shorter than {EdgeListWidthLimit}");
+        if (width >= EdgeListWidthLimit || starts.Length < EdgeRunCapacity(width) || ends.Length < EdgeRunCapacity(width))
+            throw new ArgumentException($"A row of {width} needs {EdgeRunCapacity(width)} starts and ends and has to be shorter than {EdgeListWidthLimit}");
 
         ref var pixels = ref MemoryMarshal.GetReference(row);
         ref var start = ref MemoryMarshal.GetReference(starts);
         ref var end = ref MemoryMarshal.GetReference(ends);
-        var startCount = 0;
-        var endCount = 0;
+        nint startCount = 0;
+        nint endCount = 0;
         var carry = 0ul;
 
         for (var x = 0; x < width; x += 64)
@@ -61,26 +66,49 @@ internal static partial class FinderPatternFinder
             carry = word >> 63;
             var rising = word & ~previous;
             var falling = ~word & previous;
+            if ((rising | falling) == 0)
+                continue;
 
-            // Lowest set bit first, so positions come out in row order. Within a word the two alternate, so one loop takes one of
-            // each and the odd one out follows: on ARM64 the two bit-clear chains overlap, and on x64 the loop branches half as often
-            while (rising != 0 && falling != 0)
+            // Lowest set bit first, so positions come out in row order
+            var risingCount = BitOperations.PopCount(rising);
+            var fallingCount = BitOperations.PopCount(falling);
+            Unsafe.Add(ref start, startCount) = (short)(x + BitOperations.TrailingZeroCount(rising));
+            Unsafe.Add(ref end, endCount) = (short)(x + BitOperations.TrailingZeroCount(falling));
+            rising &= rising - 1;
+            falling &= falling - 1;
+            Unsafe.Add(ref start, startCount + 1) = (short)(x + BitOperations.TrailingZeroCount(rising));
+            Unsafe.Add(ref end, endCount + 1) = (short)(x + BitOperations.TrailingZeroCount(falling));
+            rising &= rising - 1;
+            falling &= falling - 1;
+            Unsafe.Add(ref start, startCount + 2) = (short)(x + BitOperations.TrailingZeroCount(rising));
+            Unsafe.Add(ref end, endCount + 2) = (short)(x + BitOperations.TrailingZeroCount(falling));
+            rising &= rising - 1;
+            falling &= falling - 1;
+            Unsafe.Add(ref start, startCount + 3) = (short)(x + BitOperations.TrailingZeroCount(rising));
+            Unsafe.Add(ref end, endCount + 3) = (short)(x + BitOperations.TrailingZeroCount(falling));
+            rising &= rising - 1;
+            falling &= falling - 1;
+            for (var next = startCount + 4; rising != 0; next++)
             {
-                Unsafe.Add(ref start, startCount++) = (short)(x + BitOperations.TrailingZeroCount(rising));
-                Unsafe.Add(ref end, endCount++) = (short)(x + BitOperations.TrailingZeroCount(falling));
+                Unsafe.Add(ref start, next) = (short)(x + BitOperations.TrailingZeroCount(rising));
                 rising &= rising - 1;
+            }
+            for (var next = endCount + 4; falling != 0; next++)
+            {
+                Unsafe.Add(ref end, next) = (short)(x + BitOperations.TrailingZeroCount(falling));
                 falling &= falling - 1;
             }
-            if (rising != 0)
-                Unsafe.Add(ref start, startCount++) = (short)(x + BitOperations.TrailingZeroCount(rising));
-            if (falling != 0)
-                Unsafe.Add(ref end, endCount++) = (short)(x + BitOperations.TrailingZeroCount(falling));
+            startCount += risingCount;
+            endCount += fallingCount;
         }
         if (carry != 0)
             Unsafe.Add(ref end, endCount++) = (short)width;
 
-        return endCount;
+        return (int)endCount;
     }
+
+    /// <summary>The runs <see cref="ExtractRowEdges"/> may write to its starts and to its ends: (length + 1) / 2, the most a row holds, and the three positions past them a word's writes without a branch reach.</summary>
+    internal static int EdgeRunCapacity(int width) => (width + 1) / 2 + 3;
 
     /// <summary>Bit i set where pixel x + i is dark, for the 64 pixels at <paramref name="x"/>. Bits past the row stay 0.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -128,7 +128,14 @@ internal static partial class QRImageDecoder
             if (!everyRowScanned)
             {
                 if (!FinderPatternFinder.IsUndersampled(patterns, height) && !IsCrowded(candidates.Slice(0, candidateCount)))
-                    return status;
+                {
+                    // A triple whose timing patterns read from none of its corners can be the finders of two symbols that each lack one. The stride confirmed them, so the inferred stage takes the list as it is.
+                    if (TryCornerByTimingPatterns(ref corners, image, patterns, out _, out _, out _))
+                        return status;
+                    var strideInferredStatus = DecodeInferred(image, candidates.Slice(0, candidateCount), ref modules, destination, out var strideInferredCharsWritten, out var strideInferredInfo);
+                    result.Other(strideInferredStatus, strideInferredCharsWritten, strideInferredInfo);
+                    return result.Report(out charsWritten, out info);
+                }
                 Span<FinderPattern> swept = stackalloc FinderPattern[3];
                 var sweptFound = FinderPatternFinder.TryFindSkippedRows(luminance, width, height, threshold, grey, candidates, ref candidateCount, swept);
                 if (sweptFound && !SameTriple(swept, patterns))

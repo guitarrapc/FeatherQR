@@ -80,6 +80,34 @@ public class OtsuHistogramParityTest
         await Assert.That(histogram).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// The 256-bit tier rents its sub-histograms from the first stretch of an image of <see cref="Binarizer.LanedPixels"/> or more, and a rental can come back holding the counts of the call before.
+    /// The second image is photograph-like too, so that it rents: its bins are its own pixels only.
+    /// </summary>
+    [Test]
+    public async Task Vector256Tier_AfterAnotherImage_CountsOnlyThisOne()
+    {
+        if (!Vector256.IsHardwareAccelerated)
+            Skip.Test("Vector256 not accelerated on this machine");
+
+        var noise = new byte[512 * 512];
+        new Random(3).NextBytes(noise);
+        var histogram = new int[256];
+        Binarizer.FillHistogramVector256(noise, histogram);
+
+        // Two values a group of eight, neither of them 0 or 255: every block is dense, and no group is uniform
+        var second = new byte[300 * 300];
+        for (var i = 0; i < second.Length; i++)
+            second[i] = i % 2 == 0 ? (byte)77 : (byte)78;
+        await Assert.That(second.Length).IsGreaterThanOrEqualTo(Binarizer.LanedPixels);
+        Binarizer.FillHistogramVector256(second, histogram);
+
+        var expected = new int[256];
+        expected[77] = second.Length / 2;
+        expected[78] = second.Length / 2;
+        await Assert.That(histogram).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
     /// <summary>The tiers store through unchecked references, so a histogram that cannot hold 256 bins is refused rather than overrun.</summary>
     [Test]
     public async Task ShortHistogram_IsRefused()
@@ -198,6 +226,35 @@ public class OtsuHistogramParityTest
                 mixed[i] = i < lead || i >= mixed.Length - 90 ? (byte)(1 + rng.Next(254)) : (i / 5 % 2 == 0 ? (byte)0 : (byte)255);
             yield return ($"photo-like {lead} then two-valued", mixed);
         }
+
+        // Long enough for the 256-bit tier to count its dense blocks into four sub-histograms: each kind of block again, and the lengths around where the lanes may start
+        foreach (var length in new[] { Binarizer.LanedPixels - 1, Binarizer.LanedPixels, Binarizer.LanedPixels + 1, 300 * 300 })
+        {
+            var photo = new byte[length];
+            for (var i = 0; i < length; i++)
+                photo[i] = (byte)(100 + (i / 512 % 60) + rng.Next(6));
+            yield return ($"smooth with noise {length}", photo);
+        }
+        foreach (var k in new[] { 12, 13, 20, 32 })
+        {
+            var block = new byte[Binarizer.LanedPixels + 32 * 9 + 5];
+            for (var i = 0; i < block.Length; i++)
+                block[i] = i % 32 < k ? (byte)(1 + i * 37 % 254) : (i % 3 == 0 ? (byte)0 : (byte)255);
+            yield return ($"{k} others a block, long", block);
+        }
+        var longPlateaus = new byte[Binarizer.LanedPixels + 4096];
+        for (var i = 0; i < longPlateaus.Length; i++)
+            longPlateaus[i] = (byte)(64 + i / 24 % 100);
+        yield return ("plateaus, long", longPlateaus);
+        var longMixed = new byte[Binarizer.LanedPixels + 3000];
+        for (var i = 0; i < longMixed.Length; i++)
+            longMixed[i] = i / 4000 % 2 == 0 ? (byte)(1 + rng.Next(254)) : (i / 5 % 2 == 0 ? (byte)0 : (byte)255);
+        yield return ("photo-like and two-valued in turn, long", longMixed);
+        // Zeros and 255s counted in registers before the first stretch, which the lanes' walk has to hand over
+        var longLate = new byte[Binarizer.LanedPixels + 3000];
+        for (var i = 0; i < longLate.Length; i++)
+            longLate[i] = i < 3000 ? (i / 5 % 2 == 0 ? (byte)0 : (byte)255) : (byte)(1 + rng.Next(254));
+        yield return ("two-valued then photo-like, long", longLate);
 
         // every length around every block width, random and two-valued
         for (var length = 0; length <= 100; length++)

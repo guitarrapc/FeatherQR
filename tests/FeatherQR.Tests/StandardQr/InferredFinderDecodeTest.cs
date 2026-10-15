@@ -1,4 +1,5 @@
 using FeatherQR.Internals.ImageDecoders;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
@@ -80,6 +81,96 @@ public class InferredFinderDecodeTest
         var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out _, out var info);
 
         await Assert.That(success).IsFalse().Because(info.Status.ToString());
+    }
+
+    /// <summary>
+    /// Two symbols side by side, each with a finder blanked: their four finders make a triple across the two, which the strided scan selects without the rows between and which does not read.
+    /// No corner of that triple has timing patterns, so it is not one symbol's, and the stages go on to the finder inferred from two: one of the symbols reads.
+    /// </summary>
+    [Test]
+    [Arguments(Finder.BottomLeft, Finder.BottomLeft, 0)]
+    [Arguments(Finder.TopLeft, Finder.TopRight, 6)]
+    [Arguments(Finder.TopRight, Finder.BottomLeft, 12)]
+    [Arguments(Finder.BottomLeft, Finder.TopLeft, 0)]
+    public async Task TwoSymbolsEachWithAFinderBlanked_TheTripleAcrossThemIsPassedOver(Finder blankedLeft, Finder blankedRight, int offsetModules)
+    {
+        var (luminance, width, height, truth, size) = RenderPair(blankedLeft, blankedRight, offsetModules);
+
+        // The premises: the strided scan selects a triple, returned without the rows between, and none of its corners has timing patterns
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+        var patterns = new FinderPattern[3];
+        var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+        await Assert.That(FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns, grey, candidates, out _, out var everyRowScanned)).IsTrue();
+        await Assert.That(everyRowScanned).IsFalse();
+        await Assert.That(QRImageDecoder.TryCornerByTimingPatterns(luminance, width, height, threshold, grey, patterns, out _, out _, out _)).IsFalse();
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        var right = text == PairRight;
+        if (!right)
+            await Assert.That(text).IsEqualTo(PairLeft);
+        var blanked = right ? blankedRight : blankedLeft;
+        var (left, top) = PairOrigin(right, size, offsetModules);
+        var module = ModulePixels(truth, size);
+        float near = QuietZone, far = size - QuietZone;
+        await AssertNear(truth, info.Corners.TopLeft, left + near, top + near, module, blanked == Finder.TopLeft ? 1f : 0.5f);
+        await AssertNear(truth, info.Corners.TopRight, left + far, top + near, module, blanked == Finder.TopRight ? 1f : 0.5f);
+        await AssertNear(truth, info.Corners.BottomRight, left + far, top + far, module, 0.5f);
+        await AssertNear(truth, info.Corners.BottomLeft, left + near, top + far, module, blanked == Finder.BottomLeft ? 1f : 0.5f);
+    }
+
+    /// <summary>The negative the passed-over triple must not admit: the same two symbols with their data destroyed read nothing.</summary>
+    [Test]
+    [Arguments(Finder.BottomLeft, Finder.BottomLeft, 0)]
+    [Arguments(Finder.TopRight, Finder.BottomLeft, 12)]
+    public async Task TwoSymbolsEachWithAFinderBlankedAndDestroyedData_ReadNothing(Finder blankedLeft, Finder blankedRight, int offsetModules)
+    {
+        var (luminance, width, height, _, _) = RenderPair(blankedLeft, blankedRight, offsetModules, destroyData: true);
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out _, out var info);
+
+        await Assert.That(success).IsFalse().Because(info.Status.ToString());
+    }
+
+    internal const string PairLeft = "FQR PAIR LEFT";
+
+    internal const string PairRight = "FQR PAIR RIGHT";
+
+    /// <summary>Where a symbol of <see cref="RenderPair"/> starts in the grid of the pair, its quiet zone included: the right one beside the left, <paramref name="offsetModules"/> lower.</summary>
+    internal static (int Left, int Top) PairOrigin(bool right, int size, int offsetModules) => right ? (size, offsetModules) : (0, 0);
+
+    /// <summary>
+    /// Two version 1 symbols at 6 px/module, side by side with their quiet zones between them, the right one <paramref name="offsetModules"/> lower, each with a finder and its separator blanked to the ground.
+    /// With <paramref name="destroyData"/>, every module of each past the finders' rows and columns is drawn at random.
+    /// </summary>
+    internal static (byte[] Luminance, int Width, int Height, PerspectiveTransform Truth, int Size) RenderPair(Finder blankedLeft, Finder blankedRight, int offsetModules, bool destroyData = false)
+    {
+        var options = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(1) };
+        var left = QRCodeGenerator.Create(PairLeft, QREccLevel.M, options);
+        var right = QRCodeGenerator.Create(PairRight, QREccLevel.M, options);
+        var size = left.Size;
+        var random = new Random((int)blankedLeft * 31 + (int)blankedRight * 7 + offsetModules);
+        var destroyed = new bool[2 * size * size];
+        for (var i = 0; i < destroyed.Length; i++)
+            destroyed[i] = random.Next(2) == 0;
+        bool IsDark(int row, int column)
+        {
+            var isRight = column >= size;
+            var (originLeft, originTop) = PairOrigin(isRight, size, offsetModules);
+            int r = row - originTop, c = column - originLeft;
+            if (r < 0 || r >= size)
+                return false;
+            if (InFinder(isRight ? blankedRight : blankedLeft, r, c, size))
+                return false;
+            if (destroyData && r >= QuietZone + 9 && c >= QuietZone + 9 && r < size - QuietZone && c < size - QuietZone)
+                return destroyed[((isRight ? 1 : 0) * size + r) * size + c];
+            return (isRight ? right : left)[r, c];
+        }
+        var columns = 2 * size;
+        var rows = size + offsetModules;
+        var (luminance, width, height) = SupersampledRenderer.Render(IsDark, columns, rows, 6f, 0f, 0f);
+        return (luminance, width, height, SupersampledGeometry.GridToPixel(columns, rows, 6f, 0f, 0f), size);
     }
 
     private static async Task AssertPremises(byte[] luminance, int width, int height, PerspectiveTransform truth, int size, Finder blanked)

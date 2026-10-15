@@ -33,7 +33,7 @@ public class SimdTiersTest
         ["LuminanceInverter"] = ["ImageDecoders/LuminanceInverter.cs"],
         ["LuminanceHalver"] = ["ImageDecoders/LuminanceHalver.cs"],
         ["Binarizer"] = ["ImageDecoders/Binarizer.cs", "ImageDecoders/Binarizer.Vector128.cs"],
-        ["LocalBinarizer"] = ["ImageDecoders/LocalBinarizer.Vector128.cs"],
+        ["LocalBinarizer"] = ["ImageDecoders/LocalBinarizer.cs"],
         ["FinderRowMask"] = ["ImageDecoders/FinderPatternFinder.cs", "ImageDecoders/FinderPatternFinder.Simd.cs"],
         ["FinderRowEdges"] = ["ImageDecoders/FinderPatternFinder.RowEdges.cs", "ImageDecoders/FinderPatternFinder.RowEdges.Simd.cs"],
         ["PerspectiveGridSampler"] = ["ImageDecoders/PerspectiveGridSampler.cs", "ImageDecoders/VectorCast.Simd.cs"],
