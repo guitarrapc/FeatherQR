@@ -166,6 +166,70 @@ public class Gs1AiTableTest
         await Assert.That(gtin.Exclusion(1).Matches("370")).IsFalse();
     }
 
+    /// <summary>The first and last keys a pattern matches: a wildcard digit counts as 0 in the first and as 9 in the last, wherever it stands.</summary>
+    [Test]
+    [Arguments(20001, 0b0000, 20001, 20001)]
+    [Arguments(30250, 0b0000, 30250, 30250)]
+    [Arguments(43940, 0b1000, 43940, 43949)]
+    [Arguments(43100, 0b1100, 43100, 43199)]
+    [Arguments(43010, 0b1010, 43010, 43919)]
+    [Arguments(40000, 0b1111, 40000, 49999)]
+    [Arguments(30200, 0b0100, 30200, 30209)]
+    public async Task Pattern_KeyRange(int key, int wildcards, int first, int last)
+    {
+        var pattern = new Gs1AiTable.Gs1AiPattern((ushort)key, (byte)wildcards);
+        await Assert.That(pattern.FirstKey).IsEqualTo(first);
+        await Assert.That(pattern.LastKey).IsEqualTo(last);
+    }
+
+    /// <summary>
+    /// Every pairing pattern of the table matches every key from its first to its last, which is what lets the
+    /// validator ask its set of AIs for a pattern by that range. A wildcard before a fixed digit, as in
+    /// <c>3n1n</c>, would leave keys in the range that the pattern does not match.
+    /// </summary>
+    [Test]
+    public async Task Patterns_MatchEveryKeyFromTheFirstToTheLast()
+    {
+        var patterns = new List<Gs1AiTable.Gs1AiPattern>();
+        for (var i = 0; i < Gs1AiTable.EntryCount; i++)
+        {
+            var entry = Gs1AiTable.EntryAt(i);
+            for (var x = 0; x < entry.ExclusionCount; x++)
+                patterns.Add(entry.Exclusion(x));
+            for (var g = 0; g < entry.RequisiteGroupCount; g++)
+            {
+                var group = entry.RequisiteGroup(g);
+                for (var a = 0; a < group.AlternativeCount; a++)
+                {
+                    var alternative = group.Alternative(a);
+                    for (var m = 0; m < alternative.MemberCount; m++)
+                        patterns.Add(alternative.Member(m));
+                }
+            }
+        }
+
+        var failures = new List<string>();
+        var withWildcards = 0;
+        foreach (var pattern in patterns)
+        {
+            var text = pattern.ToString();
+            if (text.Contains('n'))
+                withWildcards++;
+            if (pattern.FirstKey != text.Length * 10000 + int.Parse(text.Replace('n', '0')) || pattern.LastKey != text.Length * 10000 + int.Parse(text.Replace('n', '9')))
+                failures.Add($"{text}: keys {pattern.FirstKey} to {pattern.LastKey}");
+            for (var key = pattern.FirstKey; key <= pattern.LastKey; key++)
+            {
+                var ai = (key % 10000).ToString().PadLeft(text.Length, '0');
+                if (!pattern.Matches(ai))
+                    failures.Add($"{text} does not match {ai}");
+            }
+        }
+
+        await Assert.That(failures).IsEmpty();
+        await Assert.That(patterns.Count).IsGreaterThan(400);
+        await Assert.That(withWildcards).IsGreaterThan(70);
+    }
+
     [Test]
     public async Task DigitalLink_KeysAndQualifierSequences()
     {

@@ -282,7 +282,7 @@
   <header class="bar">
     <a class="back" href="../">&#8592; Playground</a>
     <h1>FeatherQR API</h1>
-    <span class="meta">2.0.0.0 &middot; <span id="count">67 types</span></span>
+    <span class="meta">2.0.0.0 &middot; <span id="count">70 types</span></span>
   </header>
 
   <div class="layout">
@@ -334,6 +334,9 @@
         <a class="toc-item" href="#FeatherQR.Gs1.Gs1ElementString" data-for="FeatherQR.Gs1.Gs1ElementString">Gs1ElementString</a>
         <a class="toc-item" href="#FeatherQR.Gs1.Gs1Error" data-for="FeatherQR.Gs1.Gs1Error">Gs1Error</a>
         <a class="toc-item" href="#FeatherQR.Gs1.Gs1ErrorKind" data-for="FeatherQR.Gs1.Gs1ErrorKind">Gs1ErrorKind</a>
+        <a class="toc-item" href="#FeatherQR.Gs1.Gs1FormatException" data-for="FeatherQR.Gs1.Gs1FormatException">Gs1FormatException</a>
+        <a class="toc-item" href="#FeatherQR.Gs1.Gs1QRCodeGenerator" data-for="FeatherQR.Gs1.Gs1QRCodeGenerator">Gs1QRCodeGenerator</a>
+        <a class="toc-item" href="#FeatherQR.Gs1.Gs1RmQRCodeGenerator" data-for="FeatherQR.Gs1.Gs1RmQRCodeGenerator">Gs1RmQRCodeGenerator</a>
         <p class="toc-ns">FeatherQR.SkiaSharp</p>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.CircleFinderPatternShape" data-for="FeatherQR.SkiaSharp.CircleFinderPatternShape">CircleFinderPatternShape</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.CircleModuleShape" data-for="FeatherQR.SkiaSharp.CircleModuleShape">CircleModuleShape</a>
@@ -2217,10 +2220,10 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.Gs1.Gs1Error" data-name="featherqr.gs1.gs1error" data-text="featherqr.gs1.gs1error public readonly struct gs1error : iequatable&lt;gs1error&gt; why a conversion or check refused its input: the kind , and where in the input ( offset and length , both 0 when the kind names no place). the default is none . tostring is the message the generator entry points put in their gs1formatexception.  constructor public gs1error(gs1errorkind kind, int offset, int length); creates an error. offset and length are positions in the input the error is about, 0 where the kind names no place.  property public gs1errorkind kind { get; } what was wrong.  property public int length { get; } how many characters of the input it covers. 0 when the kind names no place or a missing thing.  property public int offset { get; } where it starts in the input, in characters. 0 when the kind names no place.  method public override string tostring(); the kind, the place and a sentence, such as invalidcheckdigit at 15 (1 character): the check digit is wrong. ">
+        <article class="type" id="FeatherQR.Gs1.Gs1Error" data-name="featherqr.gs1.gs1error" data-text="featherqr.gs1.gs1error public readonly struct gs1error : iequatable&lt;gs1error&gt; why a conversion or check refused its input: the kind , and where in the input ( offset and length , both 0 when the kind names no place). the default is none . tostring is the message the generator entry points put in their gs1formatexception .  constructor public gs1error(gs1errorkind kind, int offset, int length); creates an error. offset and length are positions in the input the error is about, 0 where the kind names no place.  property public gs1errorkind kind { get; } what was wrong.  property public int length { get; } how many characters of the input it covers. 0 when the kind names no place or a missing thing.  property public int offset { get; } where it starts in the input, in characters. 0 when the kind names no place.  method public override string tostring(); the kind, the place and a sentence, such as invalidcheckdigit at 15 (1 character): the check digit is wrong. ">
           <h3><a class="anchor" href="#FeatherQR.Gs1.Gs1Error" aria-label="Link to FeatherQR.Gs1.Gs1Error">#</a><span class="kind">struct</span> <span class="name">Gs1Error</span></h3>
           <pre class="sig"><code>public readonly struct Gs1Error : IEquatable&lt;Gs1Error&gt;</code></pre>
-          <p class="doc">Why a conversion or check refused its input: the Kind , and where in the input ( Offset and Length , both 0 when the kind names no place). The default is None . ToString is the message the generator entry points put in their Gs1FormatException.</p>
+          <p class="doc">Why a conversion or check refused its input: the Kind , and where in the input ( Offset and Length , both 0 when the kind names no place). The default is None . ToString is the message the generator entry points put in their Gs1FormatException .</p>
           <div class="members">
             <div class="member" data-text="constructor public gs1error(gs1errorkind kind, int offset, int length); creates an error. offset and length are positions in the input the error is about, 0 where the kind names no place. ">
               <h4><span class="kind">constructor</span> <span class="name">Gs1Error</span></h4>
@@ -2337,6 +2340,105 @@
             <div class="member" data-text="value repeatedai = 20, the same ai twice with different values in an element string, or twice at all in a digital link uri. ">
               <pre class="sig"><code>RepeatedAi = 20,</code></pre>
               <p class="doc">The same AI twice with different values in an element string, or twice at all in a Digital Link URI.</p>
+            </div>
+          </div>
+        </article>
+        <article class="type" id="FeatherQR.Gs1.Gs1FormatException" data-name="featherqr.gs1.gs1formatexception" data-text="featherqr.gs1.gs1formatexception public sealed class gs1formatexception : formatexception thrown by the generator entry points (creategs1, creategs1digitallink) when the data is not valid gs1 data, or is data a digital link uri cannot carry. nothing on gs1elementstring throws for its input. a formatexception , as uriformatexception is, so an existing catch (formatexception) still catches it. error gives the kind and the place in the text the caller passed, and message is that error's tostring . data that is valid and too long for the symbol is not this exception: create's own is thrown for it. the type is not serializable, so on .net framework it does not cross an application domain boundary. constructor public gs1formatexception(gs1error error); creates the exception for an error of the data.  property public gs1error error { get; } what was wrong, and where in the text the caller passed. ">
+          <h3><a class="anchor" href="#FeatherQR.Gs1.Gs1FormatException" aria-label="Link to FeatherQR.Gs1.Gs1FormatException">#</a><span class="kind">class</span> <span class="name">Gs1FormatException</span></h3>
+          <pre class="sig"><code>public sealed class Gs1FormatException : FormatException</code></pre>
+          <p class="doc">Thrown by the generator entry points (CreateGs1, CreateGs1DigitalLink) when the data is not valid GS1 data, or is data a Digital Link URI cannot carry. Nothing on Gs1ElementString throws for its input.</p>
+          <details class="notes" data-text="a formatexception , as uriformatexception is, so an existing catch (formatexception) still catches it. error gives the kind and the place in the text the caller passed, and message is that error's tostring . data that is valid and too long for the symbol is not this exception: create's own is thrown for it. the type is not serializable, so on .net framework it does not cross an application domain boundary.">
+            <summary>Notes</summary>
+            <p class="doc remarks">A FormatException , as UriFormatException is, so an existing catch (FormatException) still catches it. Error gives the kind and the place in the text the caller passed, and Message is that error's ToString . Data that is valid and too long for the symbol is not this exception: Create's own is thrown for it. The type is not serializable, so on .NET Framework it does not cross an application domain boundary.</p>
+          </details>
+          <div class="members">
+            <div class="member" data-text="constructor public gs1formatexception(gs1error error); creates the exception for an error of the data. ">
+              <h4><span class="kind">constructor</span> <span class="name">Gs1FormatException</span></h4>
+              <pre class="sig"><code>public Gs1FormatException(Gs1Error error);</code></pre>
+              <p class="doc">Creates the exception for an error of the data.</p>
+            </div>
+            <div class="member" data-text="property public gs1error error { get; } what was wrong, and where in the text the caller passed. ">
+              <h4><span class="kind">property</span> <span class="name">Error</span></h4>
+              <pre class="sig"><code>public Gs1Error Error { get; }</code></pre>
+              <p class="doc">What was wrong, and where in the text the caller passed.</p>
+            </div>
+          </div>
+        </article>
+        <article class="type" id="FeatherQR.Gs1.Gs1QRCodeGenerator" data-name="featherqr.gs1.gs1qrcodegenerator" data-text="featherqr.gs1.gs1qrcodegenerator public static class gs1qrcodegenerator gs1 entry points on qrcodegenerator : creategs1 writes a gs1 qr code, the data under fnc1 in first position, and creategs1digitallink a plain qr code holding the data's gs1 digital link uri. with c# 14 they are reachable as qrcodegenerator.creategs1(...). on older language versions call them on this class. the text is (ai) text such as (01)09506000134352(17)201225(10)abc123 or an element string, told apart by the first character: (ai) text starts with ( and an element string with a digit. text that starts with anything else, such as a blank or a symbology identifier, is read as an element string and refused. every check of tryvalidate runs, pairings included, and data that fails is a gs1formatexception whose error names the place in the text passed. (ai) text gets its separators written where the general specifications require one. an element string is written as given. use creategs1digitallink for retail, where a phone opens the uri and a point of sale reads the gtin out of it, and creategs1 elsewhere (healthcare, logistics), where a scanner expects gs1 data under fnc1. leave ecimode at its default: gs1 data is ascii and a gs1 qr code carries no eci header. a wrong option is reported as create reports it, and before the data. method public static qrcodedata creategs1(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, in qrcodegeneratoroptions options = null);  method public static qrcodedata creategs1digitallink(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, in qrcodegeneratoroptions options = null, string? stem = null);  method public static qrcodedata creategs1digitallink(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, in qrcodegeneratoroptions options);  method public static bool trygetrequiredbuffersizegs1(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, out qrcodecalculatedsize size, in qrcodegeneratoroptions options = null);  method public static bool trygetrequiredbuffersizegs1digitallink(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, out qrcodecalculatedsize size, in qrcodegeneratoroptions options = null, string? stem = null);  method public static int creategs1(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, span&lt;byte&gt; destination, in qrcodegeneratoroptions options = null);  method public static int creategs1digitallink(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, span&lt;byte&gt; destination, in qrcodegeneratoroptions options = null, string? stem = null); ">
+          <h3><a class="anchor" href="#FeatherQR.Gs1.Gs1QRCodeGenerator" aria-label="Link to FeatherQR.Gs1.Gs1QRCodeGenerator">#</a><span class="kind">class</span> <span class="name">Gs1QRCodeGenerator</span></h3>
+          <pre class="sig"><code>public static class Gs1QRCodeGenerator</code></pre>
+          <p class="doc">GS1 entry points on QRCodeGenerator : CreateGs1 writes a GS1 QR Code, the data under FNC1 in first position, and CreateGs1DigitalLink a plain QR Code holding the data's GS1 Digital Link URI. With C# 14 they are reachable as QRCodeGenerator.CreateGs1(...). On older language versions call them on this class.</p>
+          <details class="notes" data-text="the text is (ai) text such as (01)09506000134352(17)201225(10)abc123 or an element string, told apart by the first character: (ai) text starts with ( and an element string with a digit. text that starts with anything else, such as a blank or a symbology identifier, is read as an element string and refused. every check of tryvalidate runs, pairings included, and data that fails is a gs1formatexception whose error names the place in the text passed. (ai) text gets its separators written where the general specifications require one. an element string is written as given. use creategs1digitallink for retail, where a phone opens the uri and a point of sale reads the gtin out of it, and creategs1 elsewhere (healthcare, logistics), where a scanner expects gs1 data under fnc1. leave ecimode at its default: gs1 data is ascii and a gs1 qr code carries no eci header. a wrong option is reported as create reports it, and before the data.">
+            <summary>Notes</summary>
+            <p class="doc remarks">The text is (AI) text such as (01)09506000134352(17)201225(10)ABC123 or an element string, told apart by the first character: (AI) text starts with ( and an element string with a digit. Text that starts with anything else, such as a blank or a symbology identifier, is read as an element string and refused. Every check of TryValidate runs, pairings included, and data that fails is a Gs1FormatException whose Error names the place in the text passed. (AI) text gets its separators written where the General Specifications require one. An element string is written as given. Use CreateGs1DigitalLink for retail, where a phone opens the URI and a point of sale reads the GTIN out of it, and CreateGs1 elsewhere (healthcare, logistics), where a scanner expects GS1 data under FNC1. Leave EciMode at its default: GS1 data is ASCII and a GS1 QR Code carries no ECI header. A wrong option is reported as Create reports it, and before the data.</p>
+          </details>
+          <div class="members">
+            <div class="member" data-text="method public static qrcodedata creategs1(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, in qrcodegeneratoroptions options = null); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1</span></h4>
+              <pre class="sig"><code>public static QRCodeData CreateGs1(ReadOnlySpan&lt;char&gt; text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static qrcodedata creategs1digitallink(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, in qrcodegeneratoroptions options = null, string? stem = null); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1DigitalLink</span></h4>
+              <pre class="sig"><code>public static QRCodeData CreateGs1DigitalLink(ReadOnlySpan&lt;char&gt; text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null, string? stem = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static qrcodedata creategs1digitallink(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, in qrcodegeneratoroptions options); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1DigitalLink</span></h4>
+              <pre class="sig"><code>public static QRCodeData CreateGs1DigitalLink(ReadOnlySpan&lt;char&gt; text, QREccLevel eccLevel, in QRCodeGeneratorOptions options);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trygetrequiredbuffersizegs1(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, out qrcodecalculatedsize size, in qrcodegeneratoroptions options = null); ">
+              <h4><span class="kind">method</span> <span class="name">TryGetRequiredBufferSizeGs1</span></h4>
+              <pre class="sig"><code>public static bool TryGetRequiredBufferSizeGs1(ReadOnlySpan&lt;char&gt; text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trygetrequiredbuffersizegs1digitallink(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, out qrcodecalculatedsize size, in qrcodegeneratoroptions options = null, string? stem = null); ">
+              <h4><span class="kind">method</span> <span class="name">TryGetRequiredBufferSizeGs1DigitalLink</span></h4>
+              <pre class="sig"><code>public static bool TryGetRequiredBufferSizeGs1DigitalLink(ReadOnlySpan&lt;char&gt; text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null, string? stem = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static int creategs1(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, span&lt;byte&gt; destination, in qrcodegeneratoroptions options = null); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1</span></h4>
+              <pre class="sig"><code>public static int CreateGs1(ReadOnlySpan&lt;char&gt; text, QREccLevel eccLevel, Span&lt;byte&gt; destination, in QRCodeGeneratorOptions options = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static int creategs1digitallink(readonlyspan&lt;char&gt; text, qrecclevel ecclevel, span&lt;byte&gt; destination, in qrcodegeneratoroptions options = null, string? stem = null); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1DigitalLink</span></h4>
+              <pre class="sig"><code>public static int CreateGs1DigitalLink(ReadOnlySpan&lt;char&gt; text, QREccLevel eccLevel, Span&lt;byte&gt; destination, in QRCodeGeneratorOptions options = null, string? stem = null);</code></pre>
+            </div>
+          </div>
+        </article>
+        <article class="type" id="FeatherQR.Gs1.Gs1RmQRCodeGenerator" data-name="featherqr.gs1.gs1rmqrcodegenerator" data-text="featherqr.gs1.gs1rmqrcodegenerator public static class gs1rmqrcodegenerator gs1 entry points on rmqrcodegenerator : creategs1 writes the data under fnc1 in first position into an rmqr code, and creategs1digitallink the data's gs1 digital link uri as plain text. with c# 14 they are reachable as rmqrcodegenerator.creategs1(...). on older language versions call them on this class. the text is (ai) text such as (01)09506000134352(17)201225(10)abc123 or an element string, told apart by the first character: (ai) text starts with ( and an element string with a digit. text that starts with anything else, such as a blank or a symbology identifier, is read as an element string and refused. every check of tryvalidate runs, pairings included, and data that fails is a gs1formatexception whose error names the place in the text passed. (ai) text gets its separators written where the general specifications require one. an element string is written as given. gs1 does not list rmqr among its carriers (general specifications release 26.0), so a scanner set up for gs1 symbols may not accept one. readers that read rmqr report this data as they report a gs1 qr code's. leave ecimode at its default: gs1 data is ascii and needs no eci header. a wrong option is reported as create reports it, and before the data. method public static rmqrcodedata creategs1(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, in rmqrcodegeneratoroptions options = null);  method public static rmqrcodedata creategs1digitallink(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, in rmqrcodegeneratoroptions options = null, string? stem = null);  method public static rmqrcodedata creategs1digitallink(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, in rmqrcodegeneratoroptions options);  method public static bool trygetrequiredbuffersizegs1(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, out rmqrcodecalculatedsize size, in rmqrcodegeneratoroptions options = null);  method public static bool trygetrequiredbuffersizegs1digitallink(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, out rmqrcodecalculatedsize size, in rmqrcodegeneratoroptions options = null, string? stem = null);  method public static int creategs1(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, span&lt;byte&gt; destination, in rmqrcodegeneratoroptions options = null);  method public static int creategs1digitallink(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, span&lt;byte&gt; destination, in rmqrcodegeneratoroptions options = null, string? stem = null); ">
+          <h3><a class="anchor" href="#FeatherQR.Gs1.Gs1RmQRCodeGenerator" aria-label="Link to FeatherQR.Gs1.Gs1RmQRCodeGenerator">#</a><span class="kind">class</span> <span class="name">Gs1RmQRCodeGenerator</span></h3>
+          <pre class="sig"><code>public static class Gs1RmQRCodeGenerator</code></pre>
+          <p class="doc">GS1 entry points on RmQRCodeGenerator : CreateGs1 writes the data under FNC1 in first position into an rMQR code, and CreateGs1DigitalLink the data's GS1 Digital Link URI as plain text. With C# 14 they are reachable as RmQRCodeGenerator.CreateGs1(...). On older language versions call them on this class.</p>
+          <details class="notes" data-text="the text is (ai) text such as (01)09506000134352(17)201225(10)abc123 or an element string, told apart by the first character: (ai) text starts with ( and an element string with a digit. text that starts with anything else, such as a blank or a symbology identifier, is read as an element string and refused. every check of tryvalidate runs, pairings included, and data that fails is a gs1formatexception whose error names the place in the text passed. (ai) text gets its separators written where the general specifications require one. an element string is written as given. gs1 does not list rmqr among its carriers (general specifications release 26.0), so a scanner set up for gs1 symbols may not accept one. readers that read rmqr report this data as they report a gs1 qr code's. leave ecimode at its default: gs1 data is ascii and needs no eci header. a wrong option is reported as create reports it, and before the data.">
+            <summary>Notes</summary>
+            <p class="doc remarks">The text is (AI) text such as (01)09506000134352(17)201225(10)ABC123 or an element string, told apart by the first character: (AI) text starts with ( and an element string with a digit. Text that starts with anything else, such as a blank or a symbology identifier, is read as an element string and refused. Every check of TryValidate runs, pairings included, and data that fails is a Gs1FormatException whose Error names the place in the text passed. (AI) text gets its separators written where the General Specifications require one. An element string is written as given. GS1 does not list rMQR among its carriers (General Specifications Release 26.0), so a scanner set up for GS1 symbols may not accept one. Readers that read rMQR report this data as they report a GS1 QR Code's. Leave EciMode at its default: GS1 data is ASCII and needs no ECI header. A wrong option is reported as Create reports it, and before the data.</p>
+          </details>
+          <div class="members">
+            <div class="member" data-text="method public static rmqrcodedata creategs1(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, in rmqrcodegeneratoroptions options = null); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1</span></h4>
+              <pre class="sig"><code>public static RmQRCodeData CreateGs1(ReadOnlySpan&lt;char&gt; text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static rmqrcodedata creategs1digitallink(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, in rmqrcodegeneratoroptions options = null, string? stem = null); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1DigitalLink</span></h4>
+              <pre class="sig"><code>public static RmQRCodeData CreateGs1DigitalLink(ReadOnlySpan&lt;char&gt; text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = null, string? stem = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static rmqrcodedata creategs1digitallink(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, in rmqrcodegeneratoroptions options); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1DigitalLink</span></h4>
+              <pre class="sig"><code>public static RmQRCodeData CreateGs1DigitalLink(ReadOnlySpan&lt;char&gt; text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trygetrequiredbuffersizegs1(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, out rmqrcodecalculatedsize size, in rmqrcodegeneratoroptions options = null); ">
+              <h4><span class="kind">method</span> <span class="name">TryGetRequiredBufferSizeGs1</span></h4>
+              <pre class="sig"><code>public static bool TryGetRequiredBufferSizeGs1(ReadOnlySpan&lt;char&gt; text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trygetrequiredbuffersizegs1digitallink(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, out rmqrcodecalculatedsize size, in rmqrcodegeneratoroptions options = null, string? stem = null); ">
+              <h4><span class="kind">method</span> <span class="name">TryGetRequiredBufferSizeGs1DigitalLink</span></h4>
+              <pre class="sig"><code>public static bool TryGetRequiredBufferSizeGs1DigitalLink(ReadOnlySpan&lt;char&gt; text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = null, string? stem = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static int creategs1(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, span&lt;byte&gt; destination, in rmqrcodegeneratoroptions options = null); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1</span></h4>
+              <pre class="sig"><code>public static int CreateGs1(ReadOnlySpan&lt;char&gt; text, RmQREccLevel eccLevel, Span&lt;byte&gt; destination, in RmQRCodeGeneratorOptions options = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static int creategs1digitallink(readonlyspan&lt;char&gt; text, rmqrecclevel ecclevel, span&lt;byte&gt; destination, in rmqrcodegeneratoroptions options = null, string? stem = null); ">
+              <h4><span class="kind">method</span> <span class="name">CreateGs1DigitalLink</span></h4>
+              <pre class="sig"><code>public static int CreateGs1DigitalLink(ReadOnlySpan&lt;char&gt; text, RmQREccLevel eccLevel, Span&lt;byte&gt; destination, in RmQRCodeGeneratorOptions options = null, string? stem = null);</code></pre>
             </div>
           </div>
         </article>

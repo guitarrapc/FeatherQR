@@ -287,6 +287,29 @@ internal static partial class Gs1AiTable
         /// <summary>The number of digits, 2 to 4.</summary>
         public int Length => _key / 10000;
 
+        /// <summary>The smallest key the pattern matches, which is its own: a wildcard digit is stored as 0.</summary>
+        public int FirstKey => _key;
+
+        /// <summary>
+        /// The largest key the pattern matches, with 9 for each wildcard digit. Where the wildcards are the last
+        /// digits, the keys the pattern matches are every key from <see cref="FirstKey"/> to this one.
+        /// </summary>
+        public int LastKey
+        {
+            get
+            {
+                var last = (int)_key;
+                var unit = 1;
+                for (var position = Length - 1; position >= 0; position--)
+                {
+                    if ((_wildcards & (1 << position)) != 0)
+                        last += 9 * unit;
+                    unit *= 10;
+                }
+                return last;
+            }
+        }
+
         /// <summary>The digit at a position, or <c>'n'</c> where the pattern takes any digit.</summary>
         public char this[int position]
         {

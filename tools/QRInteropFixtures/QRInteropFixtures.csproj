@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
+    <ProjectReference Include="..\..\src\FeatherQR.Gs1\FeatherQR.Gs1.csproj" />
   </ItemGroup>
 
 </Project>

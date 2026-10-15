@@ -124,10 +124,13 @@ internal static class Gs1DigitalLink
     }
 
     public static bool TryToDigitalLink(ReadOnlySpan<char> elementString, int year, string? stem, Span<char> destination, out int charsWritten, out Gs1Error error)
+        => TryBuild(elementString, year, ValidateStem(stem), destination, out charsWritten, out error);
+
+    /// <summary>The span form under a stem <see cref="ValidateStem"/> already returned, for a caller that sized its destination from that stem.</summary>
+    public static bool TryBuild(ReadOnlySpan<char> elementString, int year, ReadOnlySpan<char> validatedStem, Span<char> destination, out int charsWritten, out Gs1Error error)
     {
-        var stemText = ValidateStem(stem);
         charsWritten = 0;
-        if (!Build(elementString, year, stemText, destination, out var length, out error))
+        if (!Build(elementString, year, validatedStem, destination, out var length, out error))
             return false;
         if (length > destination.Length)
         {

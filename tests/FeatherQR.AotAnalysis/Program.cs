@@ -1,4 +1,5 @@
 using FeatherQR;
+using FeatherQR.Gs1;
 using System.Text;
 
 // The gate is the publish itself (see the csproj): TrimmerRootAssembly roots the whole library,
@@ -56,6 +57,31 @@ foreach (var (pattern, charset) in new[]
         }
 }
 Console.WriteLine($"Structured Append FNV64: {digest:X16}");
+
+// The GS1 layer after native compilation: (AI) text into a GS1 QR Code and an rMQR code and back, the Digital Link
+// URI of the same data as plain text and back, and refused data as the exception that carries the data layer's error.
+const string gs1Text = "(01)09506000134352(10)ABC123(17)201225";
+var gs1Symbol = QRCodeGenerator.CreateGs1(gs1Text, QREccLevel.M);
+if (!QRCodeDecoder.TryDecode(gs1Symbol, out var gs1Data, out var gs1Info) || gs1Info.Fnc1 != Fnc1Mode.FirstPosition
+    || !Gs1ElementString.TryRead(gs1Data, gs1Info.Fnc1, out var gs1Read, out _) || gs1Read != gs1Text)
+    throw new InvalidOperationException("GS1 QR Code round-trip failed.");
+var gs1RmQr = RmQRCodeGenerator.CreateGs1(gs1Text, RmQREccLevel.M);
+if (!RmQRCodeDecoder.TryDecode(gs1RmQr, out var gs1RmQrData, out var gs1RmQrInfo) || gs1RmQrInfo.Fnc1 != Fnc1Mode.FirstPosition || gs1RmQrData != gs1Data)
+    throw new InvalidOperationException("GS1 rMQR round-trip failed.");
+var gs1Link = QRCodeGenerator.CreateGs1DigitalLink(gs1Text, QREccLevel.M);
+if (!QRCodeDecoder.TryDecode(gs1Link, out var gs1Uri, out var gs1LinkInfo) || gs1LinkInfo.Fnc1 != Fnc1Mode.None
+    || gs1Uri != "https://id.gs1.org/01/09506000134352/10/ABC123?17=201225"
+    || !Gs1ElementString.TryRead(gs1Uri, gs1LinkInfo.Fnc1, out var gs1LinkRead, out _) || gs1LinkRead != gs1Text)
+    throw new InvalidOperationException("GS1 Digital Link round-trip failed.");
+try
+{
+    QRCodeGenerator.CreateGs1("(01)09506000134353", QREccLevel.M);
+    throw new InvalidOperationException("GS1 data with a wrong check digit was taken.");
+}
+catch (Gs1FormatException ex) when (ex.Error.Kind == Gs1ErrorKind.InvalidCheckDigit)
+{
+}
+Console.WriteLine($"GS1: version {gs1Symbol.Version}, {gs1RmQr.Version}, Digital Link version {gs1Link.Version}.");
 
 // Which SIMD tier each kernel runs in this native build, held to the table for --simd-class. With --parity, the vector tiers
 // held to their scalar forms on the code ILC emitted.
