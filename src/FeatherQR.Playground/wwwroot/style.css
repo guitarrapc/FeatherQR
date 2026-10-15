@@ -234,6 +234,11 @@ details.panel[open] summary {
   cursor: pointer;
 }
 
+/* The checkboxes share one grid cell, so a box shown for one symbology alone moves no other field. */
+.field--checks {
+  gap: 8px;
+}
+
 .field--disabled {
   opacity: 0.45;
 }
