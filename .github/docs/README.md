@@ -38,7 +38,6 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 |---|---|
 | [async-api-plan.md](plans/async-api-plan.md) | The 2.0.0 async API, decided on 2026-10-15: where generation and reading block a caller's thread, by setting and measured, whether async helps in each, true async against a pipe, and the questions the design answers after GS1 / FNC1 |
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
-| [fnc1-support-plan.md](plans/fnc1-support-plan.md) | The 2.0.0 GS1 / FNC1 phase at the bit-stream level: both FNC1 modes read and written in Standard QR and rMQR, the rMQR indicators the records got wrong, the `%` separator rule and the pairs no Alphanumeric segment can carry, the API shape, oracle fixtures, phases. Its research is in [plans/references/fnc1-support-research.md](plans/references/fnc1-support-research.md) |
 | [image-decode-followups-plan.md](plans/image-decode-followups-plan.md) | What the folded photograph plan's measurements still argue for: reading several symbols in one image, measured before any API. Its first work, timing the photograph stages on WebAssembly, is done and found no fault (2026-10-13). The second has its ceiling measured and an internal entry that reaches it in one call (2026-10-14), and its public call was ruled for 2.0.0 (2026-10-15) |
 
 The 2.0.0 core split plan (`FeatherQR` core, `FeatherQR.SkiaSharp` renderer, `SkiaSharp.QrCode` metapackage, repository rename) completed on 2026-09-06 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (package architecture, seam, graph, the "why three packages" record, scope decisions, lessons) and [DESIGN.md](DESIGN.md).
@@ -100,3 +99,11 @@ The GS1 plan (the `FeatherQR.Gs1` package: an AI table generated from the GS1 Ba
 - The header of `tools/get_gs1_syntax_engine.cs` (the update steps), the README's GS1 section and the [authoring guidelines](docs_authoring_guidelines.md) (the record's exception to the one home of shared content).
 
 It left out per-phase and per-review narration, test and planted-fault counts, the approved API listing, which each `PublicAPI.approved.txt` holds, the benchmark tables, and the research's survey of other .NET packages and of the symbol specification tables.
+
+The FNC1 plan (both FNC1 modes read and written in Standard QR and rMQR: the rMQR indicators the records had called reserved, the `%` rule and the separator pairs no Alphanumeric segment can carry, the `Fnc1Mode` shape, the oracle fixtures, the interop sweep and the Playground's selector) completed on 2026-10-16 and was folded into:
+
+- [standardqr-decoder.md](specs/standardqr-decoder.md) and [rmqr-decoder.md](specs/rmqr-decoder.md): the `Fnc1Mode` shape and why, the `%` reading, the placement rule, the rMQR indicator rows with their sources, and lessons on standards and test vectors.
+- [standardqr-encoder.md](specs/standardqr-encoder.md) and [rmqr-encoder.md](specs/rmqr-encoder.md): the header order, FNC1 beside ECI and Structured Append, the separator pairs under `Single` and `Optimal`, the route without FNC1, and lessons on the fork and its fallback.
+- The two spec maps (the editions of the standards read) and [qrcode-symbologies.md](specs/qrcode-symbologies.md) (a lesson on benchmark jobs). [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md), `docs/migration.md`, `docs/data-capacity.md` and the README already had their FNC1 parts.
+
+It left out per-phase and per-review narration, test counts, the probe tables, the code inventory and the equivalence classes, which the tests hold. ISO/IEC 23941's mode table is still unread, so rMQR's `101` and `110` rest on the implementations' mode tables and writers.
