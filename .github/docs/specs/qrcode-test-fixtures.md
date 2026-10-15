@@ -195,7 +195,7 @@ The flipped module is the first codeword module in placement order: the bottom-r
 
 ### Corpus contents (GS1 data, 1,248 cases and 5,656 linter vectors)
 
-The GS1 corpus under `Fixtures/Gs1/` holds no symbols. It is the oracle for the GS1 layer of [gs1-support-plan.md](../plans/gs1-support-plan.md) (the AI table, the checks, `(AI)` text and Digital Link URIs), which works on text, so each case is an input and the verdict of every pinned oracle on it. It was built in that plan's Phase 0 (2026-10-12), before any GS1 code, so no case was shaped by this library's behaviour. `Gs1FixtureTest` pins its shape and its agreement with the oracles' own sources, and the tests of the later phases compare the library against the verdicts.
+The GS1 corpus under `Fixtures/Gs1/` holds no symbols. It is the oracle for the GS1 data layer ([qrcode-gs1-data.md](qrcode-gs1-data.md): the AI table, the checks, `(AI)` text and Digital Link URIs), which works on text, so each case is an input and the verdict of every pinned oracle on it. It was built on 2026-10-12, before any GS1 code, so no case was shaped by this library's behaviour. `Gs1FixtureTest` pins its shape and its agreement with the oracles' own sources, and the other GS1 tests compare the library against the verdicts.
 
 Each case file (`corpus/*.json`, `syntax-engine/*.json`) is `{ oracles, source, cases }`, where `oracles` names each oracle's version and the dictionary release its verdicts come from. A case has:
 

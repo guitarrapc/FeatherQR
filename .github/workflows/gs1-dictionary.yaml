@@ -1,7 +1,7 @@
 name: GS1 dictionary release
 
 # Notices a GS1 Barcode Syntax Dictionary release other than the one FeatherQR.Gs1 ships and opens an issue for it,
-# as the "GS1 data" section of .github/docs/specs/qrcode-symbologies.md describes. One issue a release: a release
+# as .github/docs/specs/qrcode-gs1-data.md (The dictionary and its updates) describes. One issue a release: a release
 # that has an issue already, open or closed, gets no second one.
 
 on:

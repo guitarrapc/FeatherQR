@@ -19,7 +19,7 @@ These rules keep links maintainable when documents split:
 
 - `README.md` in this directory is the only document that lists every document. GitHub renders it when the `.github/docs` folder is opened, so one link to the folder shows the index.
 - The repository root `README.md` links freely to user documentation (`docs/`) but into `.github/docs` only via the index, plus at most one design-record deep link per feature section where that section discusses scope or limitations the design record explains.
-- Documents inside `.github/docs` cross-link with relative links as needed. Shared content lives only in `specs/qrcode-symbologies.md`, except the SIMD tier tables rendered into `specs/qrcode-simd-tiers.md`.
+- Documents inside `.github/docs` cross-link with relative links as needed. Shared content lives only in `specs/qrcode-symbologies.md`, except the SIMD tier tables rendered into `specs/qrcode-simd-tiers.md` and the GS1 data layer, whose design record is `specs/qrcode-gs1-data.md` since it is a package of its own over Standard QR and rMQR.
 - When you rename or add a document, update the index, then grep the repository for the old file name and fix every inbound link (README, skills and memory files too) in the same change.
 
 ## What belongs in a document
@@ -101,7 +101,7 @@ A decoder's design record shows its decode figures under What, following these r
 
 ## Cross-document consistency rules
 
-- Shared knowledge appears once, in `qrcode-symbologies.md` (the SIMD tier tables in `qrcode-simd-tiers.md`). Per-symbology documents link to it.
+- Shared knowledge appears once, in `qrcode-symbologies.md` (the SIMD tier tables in `qrcode-simd-tiers.md`, the GS1 data layer in `qrcode-gs1-data.md`). Per-symbology documents link to it.
 - When code moves or is added, update the affected spec-map links in the same change.
 - After implementing, add the decisions and lessons learned that were not captured upfront to the design record.
 - Keep the [documentation index](README.md) in sync when adding or renaming documents.

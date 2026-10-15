@@ -26,7 +26,7 @@ using System.Security.Cryptography;
 // build, so on other systems it is fetched and checked but not started.
 //
 // Moving to a new dictionary release, one pull request a release (the cadence, what a release can
-// change and how the packages ship it are in the "GS1 data" section of qrcode-symbologies.md, and
+// change and how the packages ship it are in qrcode-gs1-data.md, "The dictionary and its updates", and
 // .github/workflows/gs1-dictionary.yaml opens an issue for each release):
 //
 //  1. Set the release and its commit here and in Gs1FixtureGenerator (DictionaryRelease and
@@ -44,7 +44,7 @@ using System.Security.Cryptography;
 //     request. The console app loads the new dictionary through --syndict, but a release that adds
 //     a linter needs the engine release that implements it.
 //  4. Update the counts the tests pin (Gs1AiTableTest: entries and AIs, Gs1FixtureTest: per-AI cases
-//     and linters), THIRD-PARTY-NOTICES.md and the release qrcode-symbologies.md names, and run the
+//     and linters), THIRD-PARTY-NOTICES.md and the release qrcode-gs1-data.md names, and run the
 //     full suite on both frameworks.
 //  5. The pull request lists the release's GSCNs, the AIs, flags, linters and code lists that
 //     changed, and the fixtures that moved.

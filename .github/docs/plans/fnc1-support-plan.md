@@ -4,7 +4,7 @@
 
 This plan details Phase 6c of the [2.0.0 plan](featherqr-2.0.0-plan.md) (GS1 / FNC1, D9-D12): reading and writing both FNC1 modes in Standard QR and rMQR. It settles the rMQR indicator question, corrects two premises of D10, adds what the investigation found about the `%` rule, and orders the work so each step is checked against an outside reader. Decode ships on its own, in 2.0.0. Encode ships in the same release as the GS1 layer (D12, decided 2026-10-10).
 
-The layer above the bit stream (the GS1 AI table, check digits, `(AI)` text, Digital Link) is in [gs1-support-plan.md](gs1-support-plan.md). This plan gives that layer an encoder that takes an element string with U+001D separators and a decoder that returns one with the mode beside it. The research behind the plan (standard clauses, the oracle probe, the code inventory) is in [references/fnc1-support-research.md](references/fnc1-support-research.md).
+The layer above the bit stream (the GS1 AI table, check digits, `(AI)` text, Digital Link) is the `FeatherQR.Gs1` package ([qrcode-gs1-data.md](../specs/qrcode-gs1-data.md)). This plan gives that layer an encoder that takes an element string with U+001D separators and a decoder that returns one with the mode beside it. The research behind the plan (standard clauses, the oracle probe, the code inventory) is in [references/fnc1-support-research.md](references/fnc1-support-research.md).
 
 ## What FNC1 is
 
@@ -31,7 +31,7 @@ ISO/IEC 18004 (read in its 2006 edition) defines two modes that change how the w
 
 ### rMQR defines both modes
 
-zxing-cpp's and qrcode2's rMQR tables read `101` as first position and `110` as second position. libzint and CodeGlyphX write first position as `101` and do not write second position. Wikipedia's rMQR table, citing ISO/IEC 23941 §7.4.1, agrees. In the probe, zxing-cpp read libzint's and CodeGlyphX's rMQR GS1 symbols as GS1. The rMQR records are wrong. ISO/IEC 23941 itself was not read. The GS1 General Specifications do not list rMQR as a GS1 carrier ([gs1-support-plan.md](gs1-support-plan.md)), which does not change what the symbology defines.
+zxing-cpp's and qrcode2's rMQR tables read `101` as first position and `110` as second position. libzint and CodeGlyphX write first position as `101` and do not write second position. Wikipedia's rMQR table, citing ISO/IEC 23941 §7.4.1, agrees. In the probe, zxing-cpp read libzint's and CodeGlyphX's rMQR GS1 symbols as GS1. The rMQR records are wrong. ISO/IEC 23941 itself was not read. The GS1 General Specifications do not list rMQR as a GS1 carrier ([qrcode-gs1-data.md](../specs/qrcode-gs1-data.md)), which does not change what the symbology defines.
 
 ### A separator before a separator or a literal `%` cannot share an Alphanumeric segment
 
@@ -67,7 +67,7 @@ D9's premise has a precedent. It says an indicator without second position throw
 
 | In | Out |
 |---|---|
-| Decode both modes, Standard QR and rMQR. The image decoders inherit it | GS1 syntax, the AI table, check digits, `(AI)` text and Digital Link ([gs1-support-plan.md](gs1-support-plan.md)) |
+| Decode both modes, Standard QR and rMQR. The image decoders inherit it | GS1 syntax, the AI table, check digits, `(AI)` text and Digital Link ([qrcode-gs1-data.md](../specs/qrcode-gs1-data.md)) |
 | Encode both modes, Standard QR and rMQR, `Single` and `Optimal`, and sizing | An AIM symbology identifier member (D10) |
 | The rMQR records corrected | FNC1 in an encoded Structured Append set (D11) |
 | FNC1 fixtures from libzint, ZXing.Net and CodeGlyphX, checked by zxing-cpp | Micro QR, which has no FNC1 mode |
@@ -132,9 +132,9 @@ Encode:
 
 Phase 0 comes first and Phase 1 next. Phases 2 and 3 depend on 1, Phase 4 on 2 and 3, and Phase 5 on 3 and 4.
 
-The two halves ship separately (D12, decided 2026-10-10). Decode (Phases 0-2) ships in 2.0.0: before them every GS1 QR Code read as `UnsupportedContent`, and reading one needs no GS1 layer. Encode (Phases 3-6) ships in the same release as the builders of [gs1-support-plan.md](gs1-support-plan.md), because an encoder that takes any element string lets a missing separator write a wrong symbol with no error. That release is 2.0.0 if both land before the Phase 7 freeze. Otherwise the encode phases wait on a branch and merge after 2.0.0 is released. All of it is additive and changes no default output.
+The two halves ship separately (D12, decided 2026-10-10). Decode (Phases 0-2) ships in 2.0.0: before them every GS1 QR Code read as `UnsupportedContent`, and reading one needs no GS1 layer. Encode (Phases 3-6) ships in the same release as the GS1 builders ([qrcode-gs1-data.md](../specs/qrcode-gs1-data.md)), because an encoder that takes any element string lets a missing separator write a wrong symbol with no error. That release is 2.0.0 if both land before the Phase 7 freeze. Otherwise the encode phases wait on a branch and merge after 2.0.0 is released. All of it is additive and changes no default output.
 
-[gs1-support-plan.md](gs1-support-plan.md) builds on this plan. Its end-to-end phase follows Phases 3 and 4 (built), its Playground work Phase 5, its API sketch uses the shape of decision 1, and its invariant (a GS1 element string written with default options has no ECI header and no Kanji segment) relies on decisions 8 and 9. A change to any of those decisions updates that plan in the same change.
+The GS1 data layer builds on this plan, and its record is [qrcode-gs1-data.md](../specs/qrcode-gs1-data.md) since the GS1 plan was folded (2026-10-16). Its end-to-end tests follow Phases 3 and 4, its Playground work Phase 5, its API uses the shape of decision 1, and its invariant (a GS1 element string written with default options has no ECI header and no Kanji segment) relies on decisions 8 and 9. A change to any of those decisions updates that record in the same change.
 
 ## Documents to change
 
@@ -162,7 +162,7 @@ Lessons:
 
 ### Release order (2026-10-10)
 
-Done: the maintainer split the release. Decode ships in 2.0.0 on its own, and encode ships in the same release as the GS1 layer. Phase 2 now carries the decode half of the documents, the API listing and the Playground's decode panel. Phase 5 keeps the encode selector. [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md) (scope row, D12, Phase 6c) and [gs1-support-plan.md](gs1-support-plan.md) (G1) were updated in the same change. No code changed.
+Done: the maintainer split the release. Decode ships in 2.0.0 on its own, and encode ships in the same release as the GS1 layer. Phase 2 now carries the decode half of the documents, the API listing and the Playground's decode panel. Phase 5 keeps the encode selector. [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md) (scope row, D12, Phase 6c) and the GS1 plan (G1, since folded into [qrcode-gs1-data.md](../specs/qrcode-gs1-data.md)) were updated in the same change. No code changed.
 
 Lesson: an encoder option that writes whatever data it is given is only half a feature without the layer that builds the data correctly. Reading needs no such layer, so the two halves need not ship together.
 
@@ -316,6 +316,6 @@ Benchmarks: none. Only the Playground changed.
 
 ### The Playground's encode selector joined to GS1 data (2026-10-16)
 
-Done: the maintainer asked for GS1 and FNC1 as one control, and the GS1 plan's Phase 7 had added a GS1 data field beside the FNC1 mode. They are now one "Data format" field ([gs1-support-plan.md](gs1-support-plan.md), the entry of 2026-10-16). First position is written as a GS1 QR Code through `CreateGs1`, which checks the data, and second position as an AIM format with its application indicator. The page no longer writes text under first position without the checks. Both modes are still written on encode, as this plan's scope row asks.
+Done: the maintainer asked for GS1 and FNC1 as one control, and the GS1 plan's Phase 7 had added a GS1 data field beside the FNC1 mode. They are now one "Data format" field (the GS1 plan's entry of 2026-10-16, since folded into [qrcode-gs1-data.md](../specs/qrcode-gs1-data.md)). First position is written as a GS1 QR Code through `CreateGs1`, which checks the data, and second position as an AIM format with its application indicator. The page no longer writes text under first position without the checks. Both modes are still written on encode, as this plan's scope row asks.
 
 Benchmarks: none. Only the Playground changed.
