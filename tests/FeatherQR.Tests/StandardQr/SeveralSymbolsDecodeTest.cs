@@ -624,6 +624,47 @@ public class SeveralSymbolsDecodeTest
     }
 
     /// <summary>
+    /// Two symbols side by side, each with a finder blanked, whose four finders make a triple across the two that does not read: each is read through a finder inferred from two, with its corners.
+    /// </summary>
+    [Test]
+    [Arguments(InferredFinderDecodeTest.Finder.BottomLeft, InferredFinderDecodeTest.Finder.BottomLeft, 0)]
+    [Arguments(InferredFinderDecodeTest.Finder.TopRight, InferredFinderDecodeTest.Finder.BottomLeft, 12)]
+    [Arguments(InferredFinderDecodeTest.Finder.TopLeft, InferredFinderDecodeTest.Finder.TopRight, 6)]
+    public async Task TwoSymbolsEachWithAFinderBlanked_BothAreRead(InferredFinderDecodeTest.Finder blankedLeft, InferredFinderDecodeTest.Finder blankedRight, int offsetModules)
+    {
+        const int QuietZone = 4;
+        var (luminance, width, height, truth, size) = InferredFinderDecodeTest.RenderPair(blankedLeft, blankedRight, offsetModules);
+        var drawn = new List<Drawn>();
+        foreach (var right in new[] { false, true })
+        {
+            var (left, top) = InferredFinderDecodeTest.PairOrigin(right, size, offsetModules);
+            float near = QuietZone, far = size - QuietZone;
+            var corners = new (float X, float Y)[4];
+            truth.Transform(left + near, top + near, out corners[0].X, out corners[0].Y);
+            truth.Transform(left + far, top + near, out corners[1].X, out corners[1].Y);
+            truth.Transform(left + far, top + far, out corners[2].X, out corners[2].Y);
+            truth.Transform(left + near, top + far, out corners[3].X, out corners[3].Y);
+            drawn.Add(new Drawn(right ? InferredFinderDecodeTest.PairRight : InferredFinderDecodeTest.PairLeft, corners, 6f));
+        }
+
+        var read = Read(luminance, width, height);
+
+        await AssertReadsEach(read, drawn);
+        await AssertFirstIsTheOneSymbolRead(read, luminance, width, height);
+    }
+
+    /// <summary>The negative: the same two symbols with their data destroyed give no result.</summary>
+    [Test]
+    public async Task TwoSymbolsEachWithAFinderBlankedAndDestroyedData_GiveNoResult()
+    {
+        var (luminance, width, height, _, _) = InferredFinderDecodeTest.RenderPair(InferredFinderDecodeTest.Finder.BottomLeft, InferredFinderDecodeTest.Finder.TopLeft, 0, destroyData: true);
+
+        var read = Read(luminance, width, height);
+
+        await Assert.That(read.Length).IsEqualTo(0).Because($"read {string.Join(", ", read.Select(static r => r.Text))}");
+    }
+
+    /// <summary>
     /// The committed real images, as given and turned a quarter: on each the first result is the one-symbol call's read, and an image that call reads nothing of gives no result.
     /// </summary>
     [Test]

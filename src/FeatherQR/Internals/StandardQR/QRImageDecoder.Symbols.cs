@@ -375,7 +375,14 @@ internal static partial class QRImageDecoder
         if (!everyRowScanned)
         {
             if (!FinderPatternFinder.IsUndersampled(patterns, image.Height) && !IsCrowded(held))
-                return status;
+            {
+                if (TryCornerByTimingPatterns(ref corners, image, patterns, out _, out _, out _))
+                    return status;
+                var strideInferredStatus = DecodeInferred(image, held, ref modules, destination, out var strideInferredCharsWritten, out var strideInferredInfo, out var strideSettled);
+                if (result.Other(strideInferredStatus, strideInferredCharsWritten, strideInferredInfo))
+                    inferred = strideSettled;
+                return result.Report(out charsWritten, out info);
+            }
             FinderPatternFinder.FindCandidatesInSkippedRows(image.Luminance, image.Width, image.Height, image.Threshold, candidates, ref candidateCount, image.Grey);
             everyRowScanned = true;
             RemoveCandidatesOfSymbols(candidates, ref candidateCount, read, scale);

@@ -16,6 +16,7 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 - Phase 2 (2026-10-15): the maintainer ruled. The call ships for Standard QR, in an array form and a span form, in 2.0.0, and the Phase 7 freeze waits for it. Phase 3 is next.
 - ARM64 (2026-10-15): Phases 1 and 1b were measured on an Apple M2. No read moves, and the one-symbol call compiles to the code it had before the entry, on NativeAOT and on the JIT. Phase 1b takes the entry to 0.83 of its time over the set and the one-symbol call to 0.89, where x64 took them to 0.60 and 0.67, and the entry is 2.3 times the one-symbol call.
 - The row scan (2026-10-15): a word's edges are taken out without a branch. On x64 the rows between strided rows take 0.84 to 0.91 of their time, the entry 0.95 of its time over the set and the one-symbol call 0.97, every read as it was. On an Apple M2 (2026-10-15) the same: the rows between take 0.80 to 0.88 of their cycles, the entry 0.94 of its time and the one-symbol call 0.97, so the form stands there.
+- A triple across two symbols (2026-10-15): a failed strided triple with no timing patterns goes to the inferred stage. BoofCV 456 to 457 photographs, reading again 1,071 to 1,074 codes, the entry 1,071 to 1,073, every read agreed, at 1.08 of the time on the photographs that fail.
 
 ## Order
 
@@ -575,3 +576,31 @@ What was done:
 What it taught:
 
 - A verdict through the inferred stage needed a scene where every pass gives up before it but one. Two symbols that each lack a finder leave four candidates, and the selection takes a triple across the two. When that triple does not read the stages stop there, unless the strided scan undersampled the finders or the list is crowded. In the case kept, that happens at a quarter of the image's size. That stop is how the one-symbol call works too, and was left as it is.
+
+### Work 2, Phase 1: a triple across two symbols passed over (2026-10-15)
+
+Done. When the strided scan's triple failed and was neither undersampled nor in a crowded list, both calls returned at once. Two symbols that each lack a finder leave four candidates, the selection takes a triple across the two, and neither symbol was read, though each reads alone through a finder inferred from two. The fix was asked for after the review of the branch found the case.
+
+What was done:
+
+- A third case after a failed strided triple: when its timing patterns read from none of its corners, it is not one symbol's, and the inferred stage is asked on the strided list instead of returning. The stride confirmed the finders, which is what the stage needs. A triple whose timing patterns read is a symbol whose read failed, and returns as before. The one-symbol call and the entry take the same rule.
+- Tests: `TwoSymbolsEachWithAFinderBlanked_TheTripleAcrossThemIsPassedOver` (the one-symbol call, four placements, each with its premises: a triple selected without the rows between, and no corner of it with timing patterns), `TwoSymbolsEachWithAFinderBlanked_BothAreRead` (the entry, three placements, both symbols with their corners) and two negatives with the data destroyed, which read nothing. Without the change the seven positive cases fail. Before the change 27 placements of the two symbols read nothing in either call, and after it every one reads one symbol in the one-symbol call and both in the entry.
+- The suite: 65,724 tests, none failing.
+
+The numbers, against the build before:
+
+| | Before | After |
+|---|---|---|
+| BoofCV's photographs, the one-symbol call | 456 | 457 |
+| Codes read again | 1,071 | 1,074 |
+| Codes, the entry | 1,071 | 1,073 |
+| Codes zxing-cpp reads and reading again does not | 10 | 9 |
+
+- Every read is agreed and inside a labelled outline. The gains are `damaged/image027`, read by no other reader, and the first codes of `bright_spots/image021` and `image022`, the latter one of the ten. The sweep reads one more barrel-distorted render, the corpus is unchanged, and no misread is added.
+- Time, each photograph's fastest of three processes a build: the 456 that read 0.99 of their time, the 80 that fail 1.08 (median 1.00, 90th percentile 1.36, worst 2.0 on a 4.5 ms `damaged` photograph), the set 1.01. With the timing check kept and the stage not asked, the photographs that fail take 1.00, so the cost is the inferred stage. The report's shapes read 0.98 to 1.03, noise and the ramp 1.01.
+
+What it taught:
+
+- The first form scanned the rows between before the inferred stage, as the other two cases do. It read `high_version/image030` too, the photograph zxing-cpp and go-qr read and this library did not, and 28 more anti-aliased renders under 1.25 px/module, and took the photographs that fail to 1.12 (90th percentile 1.45, worst 2.17). The stride's list is taken because the stride confirmed the finders, so the rows between buy only that one photograph.
+
+The record: the image detection paragraph and the Decisions row "Selection among many" of [standardqr-decoder.md](../specs/standardqr-decoder.md), its photograph counts, the BoofCV tables of [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md), and the scope row "Several symbols in one image" of [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions).
