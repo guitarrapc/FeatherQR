@@ -1,6 +1,6 @@
 # BlazorWasm sample
 
-Blazor WebAssembly sample for FeatherQR (the SkiaSharp.QrCode package). The UI mirrors [FeatherQR.Playground](../../src/FeatherQR.Playground) (the pure-WASM [GitHub Pages playground](https://guitarrapc.github.io/FeatherQR/)), but demonstrates the Blazor-specific integration:
+Blazor WebAssembly sample for FeatherQR, using the `FeatherQR.SkiaSharp` package. The UI mirrors [FeatherQR.Playground](../../src/FeatherQR.Playground) (the pure-WASM [GitHub Pages playground](https://guitarrapc.github.io/FeatherQR/)), but demonstrates the Blazor-specific integration:
 
 - **Live preview** renders directly onto a [SkiaSharp.Views.Blazor](https://www.nuget.org/packages/SkiaSharp.Views.Blazor) `SKCanvasView` with `SymbolRenderer`, every control change repaints the surface.
 - **Download PNG / SVG** exports through the symbology's image builder at the selected export size (`QRCodeImageBuilder` for Standard QR, `MicroQRCodeImageBuilder` for Micro QR).
@@ -16,7 +16,7 @@ Like the Playground, the **Symbology** control switches between Standard QR (ver
 
 **Micro QR** uses `MicroQRCodeGenerator` / `MicroQRCodeImageBuilder` under the hood. The page hides **Finder pattern** and **Logo** panels (no ECC headroom for overlays — same as the Playground). Module shape, colors, and gradients remain available.
 
-Capacity and version/ECC constraints are documented in the main README [Micro QR FAQ](../../README.md#does-it-support-micro-qr-or-rmqr).
+Capacity and version/ECC constraints are documented in [Data Capacity](../../docs/data-capacity.md#micro-qr-code-m1-m4).
 
 ## Run
 
