@@ -60,9 +60,14 @@ internal static partial class QRImageDecoder
     /// The lines through the inferred finder are taken flat, since its end cannot be measured: a line's foreshortening is lost, which bounds the keystone the read holds under and leaves the corner reported at the inferred finder where that flat line extrapolates it.
     /// </remarks>
     private static DecodeStatus DecodeInferred(in ImageView image, ReadOnlySpan<FinderPattern> candidates, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+        => DecodeInferred(image, candidates, ref modules, destination, out charsWritten, out info, out _);
+
+    /// <summary><see cref="DecodeInferred(in ImageView, ReadOnlySpan{FinderPattern}, ref ModuleWorkspace, Span{char}, out int, out QRCodeDecodeInfo)"/>, with the hypothesis whose decode settled in <paramref name="settled"/>: its two finders from the list and the inferred one.</summary>
+    private static DecodeStatus DecodeInferred(in ImageView image, ReadOnlySpan<FinderPattern> candidates, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out SelectedTriple settled)
     {
         charsWritten = 0;
         info = NotDetectedInfo;
+        settled = default;
 
         Span<FinderPattern> strong = stackalloc FinderPattern[MaxInferenceFinders];
         var strongCount = SelectStrong(candidates, strong);
@@ -99,7 +104,10 @@ internal static partial class QRImageDecoder
 
             var status = DecodeInferredCorners(image, hypothesis, ref modules, destination, out var attemptCharsWritten, out var attemptInfo);
             if (decoded == 1 ? result.Main(status, attemptCharsWritten, attemptInfo) : result.Other(status, attemptCharsWritten, attemptInfo))
+            {
+                settled = new SelectedTriple(hypothesis.TopLeft, hypothesis.TopRight, hypothesis.BottomLeft);
                 break;
+            }
         }
         return result.Report(out charsWritten, out info);
     }

@@ -553,3 +553,25 @@ For the maintainer:
 - Only WebAssembly loses, by up to 8 % on the small renders interpreted and 3 % AOT-compiled, as above.
 
 The record: the ARM64 bullet of the Performance lesson on the row scan's edges and the lesson on a called kernel's tier in [standardqr-decoder.md](../specs/standardqr-decoder.md), and the scope row on builds not timed in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions).
+
+### Work 2, Phase 1: a verdict reached by a later stage (2026-10-15)
+
+Fixed after a review of the branch. When the stages after the selected triple reached a verdict on a symbol's content, the entry gave up the head of its list instead of taking that symbol's finders out, and a symbol that reads could be lost with it.
+
+What was wrong:
+
+- `DecodeNextSymbol` handed back the triple a verdict came from only for the selected triple and the triple selected again after the rows between. A verdict from another triple, the crowded list or an inferred finder left it empty, and the caller then gave up the first 32 candidates of the list, the finders of symbols not read yet among them.
+- A grid of version 1 symbols with one of them a Kanji cell outside the table showed it. Under keystone, with that symbol top-left in a 2 by 2 grid or in the centre of a 3 by 3, a symbol that reads was not returned. With it at any of the eight other places tried, the triple the verdict came from was handed back and every symbol was read.
+
+What was done:
+
+- The entry's stages take their corner steps through a struct of their own, which keeps the triple a decode gave a verdict for. The stages stop at a verdict, so the triple kept is the one reported. The selected triple, another triple and the crowded list all decode through it.
+- The inferred stage hands back the hypothesis its reported result came from. Its two finders are copies of list entries and leave the list, and the inferred one is not a list entry.
+- The one-symbol call keeps its corner steps. It calls the inferred stage through the form it had, which discards the hypothesis.
+- Tests: `ContentVerdictInAGrid_LeavesEverySymbolThatReads`, the verdict symbol at each place of 2 by 2 and 3 by 1 grids and in the centre of a 3 by 3, flat and under keystone, and `ContentVerdictOfAnInferredFinder_LeavesTheSymbolBesideIt`, two symbols each with a finder blanked. Before the fix three of the eleven cases failed. Without the struct grid cases fail, and so does the earlier verdict test, and without the hypothesis handed back the inferred case fails.
+- BoofCV's 536 photographs: both calls return what they returned, the entry's 1,071 symbols. The one-symbol call reports a verdict on none of them.
+- The suite: 65,704 tests, none failing.
+
+What it taught:
+
+- A verdict through the inferred stage needed a scene where every pass gives up before it but one. Two symbols that each lack a finder leave four candidates, and the selection takes a triple across the two. When that triple does not read the stages stop there, unless the strided scan undersampled the finders or the list is crowded. In the case kept, that happens at a quarter of the image's size. That stop is how the one-symbol call works too, and was left as it is.

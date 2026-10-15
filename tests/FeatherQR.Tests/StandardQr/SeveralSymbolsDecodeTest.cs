@@ -522,6 +522,108 @@ public class SeveralSymbolsDecodeTest
     }
 
     /// <summary>
+    /// A grid of symbols, one of them a symbol whose content does not decode, at each place in turn: whichever stage reaches its verdict, its finders leave the list, and every symbol that reads is read.
+    /// </summary>
+    [Test]
+    [Arguments(2, 2, 0, 0f)]
+    [Arguments(2, 2, 1, 0f)]
+    [Arguments(2, 2, 2, 0f)]
+    [Arguments(2, 2, 3, 0f)]
+    [Arguments(2, 2, 0, 0.1f)]
+    [Arguments(2, 2, 3, 0.1f)]
+    [Arguments(3, 1, 0, 0f)]
+    [Arguments(3, 1, 1, 0f)]
+    [Arguments(3, 1, 2, 0f)]
+    [Arguments(3, 3, 4, 0.12f)]
+    public async Task ContentVerdictInAGrid_LeavesEverySymbolThatReads(int across, int down, int verdictAt, float keystone)
+    {
+        const int Unmapped = 0x8740;
+        var verdict = KanjiUnmappedCharacterEndToEndTest.BuildSymbol(Unmapped);
+        const int VerdictSize = KanjiUnmappedCharacterEndToEndTest.Size;
+        const int QuietZone = 2;
+        var symbols = Enumerable.Range(0, across * down).Select(static i => Symbol($"FQR GRID {i}", 1, QuietZone)).ToArray();
+        var size = symbols[0].Size;
+        bool IsDark(int row, int column)
+        {
+            var symbol = row / size * across + column / size;
+            int r = row % size, c = column % size;
+            if (symbol != verdictAt)
+                return symbols[symbol][r, c];
+            r -= QuietZone;
+            c -= QuietZone;
+            return r >= 0 && c >= 0 && r < VerdictSize && c < VerdictSize && verdict[r * VerdictSize + c] != 0;
+        }
+        var (luminance, width, height) = SupersampledRenderer.Render(IsDark, across * size, down * size, 4f, 0f, keystone);
+        var truth = SupersampledGeometry.GridToPixel(across * size, down * size, 4f, 0f, keystone);
+        var drawn = new List<Drawn>();
+        for (var s = 0; s < across * down; s++)
+        {
+            if (s == verdictAt)
+                continue;
+            float left = s % across * size + QuietZone, top = s / across * size + QuietZone, side = size - 2 * QuietZone;
+            var corners = new (float X, float Y)[4];
+            truth.Transform(left, top, out corners[0].X, out corners[0].Y);
+            truth.Transform(left + side, top, out corners[1].X, out corners[1].Y);
+            truth.Transform(left + side, top + side, out corners[2].X, out corners[2].Y);
+            truth.Transform(left, top + side, out corners[3].X, out corners[3].Y);
+            drawn.Add(new Drawn($"FQR GRID {s}", corners, 4f));
+        }
+
+        var read = Read(luminance, width, height);
+
+        await AssertReadsEach(read, drawn);
+    }
+
+    /// <summary>
+    /// Two symbols side by side that read only through a finder inferred from two: the one whose content does not decode has its bottom-left finder blanked, the other its top-left.
+    /// Their four finders make a triple across the two that does not read. At a quarter of the image's size the strided scan undersamples the finders, so the rows between are scanned and the stages go on to the inferred one, which reaches the verdict first.
+    /// The finders that verdict was reached from leave the list, and the other symbol is read.
+    /// </summary>
+    [Test]
+    public async Task ContentVerdictOfAnInferredFinder_LeavesTheSymbolBesideIt()
+    {
+        const int Unmapped = 0x8740;
+        var verdict = KanjiUnmappedCharacterEndToEndTest.BuildSymbol(Unmapped);
+        const int Size = KanjiUnmappedCharacterEndToEndTest.Size;
+        const string Text = "FQR INFERRED B";
+        var readable = Symbol(Text, 1);
+        const int Gap = 5;
+        const float Pixels = 6f;
+        int columns = 2 * Size + 3 * Gap, rows = Size + 2 * Gap;
+        bool IsDark(int row, int column) => IsDarkOf(row, column, withVerdict: true);
+        bool IsDarkOf(int row, int column, bool withVerdict)
+        {
+            int r = row - Gap, c = column - Gap;
+            if (r >= 0 && c >= 0 && r < Size && c < Size)
+                return withVerdict && !(r >= Size - 8 && c < 8) && verdict[r * Size + c] != 0;
+            c -= Size + Gap;
+            if (r >= 0 && c >= 0 && r < Size && c < Size)
+                return !(r < 8 && c < 8) && readable[r, c];
+            return false;
+        }
+        var (luminance, width, height) = SupersampledRenderer.Render(IsDark, columns, rows, Pixels, 0f, 0f);
+        var truth = SupersampledGeometry.GridToPixel(columns, rows, Pixels, 0f, 0f);
+        float left = 2 * Gap + Size, top = Gap;
+        var corners = new (float X, float Y)[4];
+        truth.Transform(left, top, out corners[0].X, out corners[0].Y);
+        truth.Transform(left + Size, top, out corners[1].X, out corners[1].Y);
+        truth.Transform(left + Size, top + Size, out corners[2].X, out corners[2].Y);
+        truth.Transform(left, top + Size, out corners[3].X, out corners[3].Y);
+
+        // The premises: alone, the symbol that reads is read, and the other gives its verdict through the inferred stage
+        var (aloneLuminance, aloneWidth, aloneHeight) = SupersampledRenderer.Render((row, column) => IsDarkOf(row, column, withVerdict: false), columns, rows, Pixels, 0f, 0f);
+        await AssertReadsEach(Read(aloneLuminance, aloneWidth, aloneHeight), [new Drawn(Text, corners, Pixels)]);
+        var (verdictLuminance, verdictSide, _) = SupersampledRenderer.Render((row, column) => !(row >= Size - 8 && column < 8) && verdict[row * Size + column] != 0, Size, Size, Pixels, 0f, 0f);
+        var (verdictAlone, verdictWidth, verdictHeight, _) = Compose((verdictLuminance, verdictSide, verdictSide, new Drawn("", [], Pixels)));
+        await Assert.That(QRCodeDecoder.TryDecodeImage(verdictAlone, verdictWidth, verdictHeight, out _, out var verdictInfo)).IsFalse();
+        await Assert.That(verdictInfo.Status).IsEqualTo(DecodeStatus.UnmappedCharacter);
+
+        var read = Read(luminance, width, height);
+
+        await AssertReadsEach(read, [new Drawn(Text, corners, Pixels)]);
+    }
+
+    /// <summary>
     /// The committed real images, as given and turned a quarter: on each the first result is the one-symbol call's read, and an image that call reads nothing of gives no result.
     /// </summary>
     [Test]

@@ -306,14 +306,43 @@ internal static partial class QRImageDecoder
     /// The next symbol of a candidate list: the stages of <see cref="DecodeLuminanceCore(ReadOnlySpan{byte}, ReadOnlySpan{byte}, bool, ReadOnlySpan{int}, int, int, Span{char}, out int, out QRCodeDecodeInfo)"/> in their order, on the first <see cref="FinderPatternFinder.MaxFinderCandidates"/> of a list kept between symbols, where that method scans one for itself.
     /// </summary>
     /// <remarks>
-    /// The two are kept apart so that the one-symbol call runs the instructions it ran before this entry was written. A stage added to one is added to the other, and <c>SeveralSymbolsDecodeTest</c> holds the first symbol of this one to that call's read.
+    /// The two are kept apart so that the one-symbol call carries nothing this entry keeps between symbols. A stage added to one is added to the other, and <c>SeveralSymbolsDecodeTest</c> holds the first symbol of this one to that call's read.
     /// Rows the strided scan skipped are scanned once a reading, into the whole list, and the candidates they add inside a symbol already read leave it at once.
-    /// <paramref name="tried"/> is the selected triple when its own decode gave the result, for a caller that takes its finders out of the list, and empty otherwise.
+    /// <paramref name="tried"/> is the triple whose decode gave a verdict on its content, at whichever stage, for a caller that takes its finders out of the list, and empty otherwise.
     /// </remarks>
     private static DecodeStatus DecodeNextSymbol(in ImageView image, Span<FinderPattern> candidates, ref int candidateCount, ref bool everyRowScanned, ReadOnlySpan<DecodedSymbol> read, int scale, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out SelectedTriple tried)
     {
+        var corners = new VerdictCorners();
+        var status = DecodeNextSymbolStages(ref corners, image, candidates, ref candidateCount, ref everyRowScanned, read, scale, ref modules, destination, out charsWritten, out info, out var inferred);
+        tried = !IsContentVerdict(status) ? default : corners.Verdict.HasValue ? corners.Verdict : inferred;
+        return status;
+    }
+
+    /// <summary>
+    /// The corner steps on the image, as <see cref="ImageCorners"/> takes them, keeping the triple a decode gave a verdict on its content for.
+    /// The stages stop at a verdict, so the one kept is the one reported.
+    /// </summary>
+    private struct VerdictCorners : ICornerAttempt
+    {
+        public SelectedTriple Verdict;
+
+        public readonly bool ReadsTimingPatterns(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
+            => TimingPatternsRead(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, topLeft, topRight, bottomLeft);
+
+        public DecodeStatus Decode(in ImageView image, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+        {
+            var status = DecodeCorners(image, topLeft, topRight, bottomLeft, ref modules, destination, out charsWritten, out info);
+            if (IsContentVerdict(status))
+                Verdict = new SelectedTriple(topLeft, topRight, bottomLeft);
+            return status;
+        }
+    }
+
+    /// <summary>The stages of <see cref="DecodeNextSymbol"/>. <paramref name="inferred"/> is the triple the inferred stage settled on, when that stage reported.</summary>
+    private static DecodeStatus DecodeNextSymbolStages(ref VerdictCorners corners, in ImageView image, Span<FinderPattern> candidates, ref int candidateCount, ref bool everyRowScanned, ReadOnlySpan<DecodedSymbol> read, int scale, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out SelectedTriple inferred)
+    {
         charsWritten = 0;
-        tried = default;
+        inferred = default;
 
         Span<FinderPattern> patterns = stackalloc FinderPattern[3];
         var swept = everyRowScanned;
@@ -328,15 +357,11 @@ internal static partial class QRImageDecoder
             return DecodeStatus.NotDetected;
         }
         if (!found)
-            return DecodeInferred(image, held, ref modules, destination, out charsWritten, out info);
+            return DecodeInferred(image, held, ref modules, destination, out charsWritten, out info, out inferred);
 
-        var corners = new ImageCorners();
         var status = DecodeTriple(ref corners, image, patterns, ref modules, destination, out charsWritten, out info);
         if (IsSettled(status))
-        {
-            tried = new SelectedTriple(patterns);
             return status;
-        }
         if (held.Length > 3)
         {
             status = DecodeAlternativeTriples(ref corners, image, held, patterns, ref modules, destination, status, ref charsWritten, ref info);
@@ -361,10 +386,7 @@ internal static partial class QRImageDecoder
             {
                 var sweptStatus = DecodeTriple(ref corners, image, sweptPatterns, ref modules, destination, out var sweptCharsWritten, out var sweptInfo);
                 if (result.Other(sweptStatus, sweptCharsWritten, sweptInfo))
-                {
-                    tried = new SelectedTriple(sweptPatterns);
                     return result.Report(out charsWritten, out info);
-                }
                 if (held.Length > 3)
                 {
                     sweptStatus = DecodeAlternativeTriples(ref corners, image, held, sweptPatterns, ref modules, destination, sweptStatus, ref sweptCharsWritten, ref sweptInfo);
@@ -379,17 +401,18 @@ internal static partial class QRImageDecoder
         if (result.Other(crowdedStatus, crowdedCharsWritten, crowdedInfo))
             return result.Report(out charsWritten, out info);
 
-        var inferredStatus = DecodeInferred(image, held, ref modules, destination, out var inferredCharsWritten, out var inferredInfo);
-        result.Other(inferredStatus, inferredCharsWritten, inferredInfo);
+        var inferredStatus = DecodeInferred(image, held, ref modules, destination, out var inferredCharsWritten, out var inferredInfo, out var settled);
+        if (result.Other(inferredStatus, inferredCharsWritten, inferredInfo))
+            inferred = settled;
         return result.Report(out charsWritten, out info);
     }
 
-    /// <summary>The three finders of a selected triple, by value.</summary>
-    private readonly struct SelectedTriple(ReadOnlySpan<FinderPattern> patterns)
+    /// <summary>The three finders of a triple, by value.</summary>
+    private readonly struct SelectedTriple(FinderPattern first, FinderPattern second, FinderPattern third)
     {
-        public readonly FinderPattern First = patterns[0];
-        public readonly FinderPattern Second = patterns[1];
-        public readonly FinderPattern Third = patterns[2];
+        public readonly FinderPattern First = first;
+        public readonly FinderPattern Second = second;
+        public readonly FinderPattern Third = third;
         public readonly bool HasValue = true;
     }
 
