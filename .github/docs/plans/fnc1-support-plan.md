@@ -313,3 +313,9 @@ Lessons:
 - A request follows the controls the page shows, not the value a hidden control still holds. Switching to Micro QR leaves the selector on its last mode, so the page sends none for Micro QR, and the interop refuses a mode there rather than drop it in silence.
 
 Benchmarks: none. Only the Playground changed.
+
+### The Playground's encode selector joined to GS1 data (2026-10-16)
+
+Done: the maintainer asked for GS1 and FNC1 as one control, and the GS1 plan's Phase 7 had added a GS1 data field beside the FNC1 mode. They are now one "Data format" field ([gs1-support-plan.md](gs1-support-plan.md), the entry of 2026-10-16). First position is written as a GS1 QR Code through `CreateGs1`, which checks the data, and second position as an AIM format with its application indicator. The page no longer writes text under first position without the checks. Both modes are still written on encode, as this plan's scope row asks.
+
+Benchmarks: none. Only the Playground changed.

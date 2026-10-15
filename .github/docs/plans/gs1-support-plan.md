@@ -822,3 +822,11 @@ Lessons:
 Left for Phase 7: the documents, the update procedure moved to the fetch script, the monthly workflow, and folding this plan.
 
 Benchmarks: none. Only the Playground changed.
+
+### The Playground's data format (2026-10-16)
+
+Done: the maintainer asked for GS1 and FNC1 as one control. The Playground's "GS1 data" field and the FNC1 mode the FNC1 plan's Phase 5 put among the QR parameters are now one "Data format" field beside the content: plain text, GS1 QR Code, GS1 Digital Link, or an AIM format, which is FNC1 in second position with the application indicator beside it. First position is written only as a GS1 QR Code, through `CreateGs1`, so a symbol the page marks as GS1 data has passed the checks. The separate FNC1 field let any text be written under first position with no check. A share link holds the format as one value.
+
+Verified by hand on the Release build CI publishes (no AOT, trimmed): each format on Standard QR, GS1 QR Code on rMQR, Micro QR with the field hidden and a GS1 format left selected, which writes plain text, the stem and the indicator shown for their own format alone, and a share link that restores an AIM format with its indicator and a separator in the content. The console stayed clear.
+
+Benchmarks: none. Only the Playground changed.

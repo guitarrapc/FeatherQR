@@ -137,14 +137,12 @@ const eccSelect = document.getElementById('ecc-select');
 const eccBoostRow = document.getElementById('ecc-boost-row');
 const eccBoostCheck = document.getElementById('ecc-boost-check');
 const allowKanjiCheck = document.getElementById('allow-kanji-check');
-const fnc1Row = document.getElementById('fnc1-row');
-const fnc1Select = document.getElementById('fnc1-select');
 const appIndicatorRow = document.getElementById('app-indicator-row');
 const appIndicatorInput = document.getElementById('app-indicator-input');
 const separatorRow = document.getElementById('separator-row');
 const insertSeparatorBtn = document.getElementById('insert-separator-btn');
-const gs1Row = document.getElementById('gs1-row');
-const gs1Select = document.getElementById('gs1-select');
+const formatRow = document.getElementById('format-row');
+const formatSelect = document.getElementById('format-select');
 const gs1StemRow = document.getElementById('gs1-stem-row');
 const gs1StemInput = document.getElementById('gs1-stem-input');
 const gs1ExampleBtn = document.getElementById('gs1-example-btn');
@@ -274,17 +272,21 @@ function displayText(text) {
   return text.replace(/\u001d/g, '␝');
 }
 
+const DATA_FORMATS = ['text', 'gs1', 'link', 'aim'];
+
 /**
- * The WASM request for a playground state. Under FNC1 or GS1 data each ␝ of the content, the stand-in
- * the page shows for the separator, is sent as U+001D, the separator a reader returns. Micro QR has
- * neither, so its request carries none whatever the hidden controls hold. GS1 data sets the mode itself,
- * so its request carries no FNC1 mode of its own.
+ * The WASM request for a playground state. The data format names the route: a GS1 format goes through
+ * the GS1 entry points, which check the data and set the mode, and an AIM format is plain text under
+ * FNC1 in second position. First position is written through the GS1 entry point alone, so a symbol
+ * that claims GS1 data has passed the checks. In every format but plain text each ␝ of the content, the
+ * stand-in the page shows for the separator, is sent as U+001D, the separator a reader returns. Micro QR
+ * has neither FNC1 nor a GS1 carrier, so its request is plain text whatever the hidden control holds.
  */
 function requestFor(state) {
-  const micro = state.symbology === 'microqr';
-  const gs1 = micro ? 'none' : state.gs1;
-  const fnc1 = micro || gs1 !== 'none' ? 'none' : state.fnc1;
-  const content = fnc1 === 'none' && gs1 === 'none' ? state.content : state.content.replace(/␝/g, '\u001d');
+  const format = state.symbology === 'microqr' ? 'text' : state.dataFormat;
+  const gs1 = format === 'gs1' ? 'qr' : format === 'link' ? 'link' : 'none';
+  const fnc1 = format === 'aim' ? 'second' : 'none';
+  const content = format === 'text' ? state.content : state.content.replace(/␝/g, '\u001d');
   return { ...state, gs1, fnc1, content };
 }
 
@@ -496,9 +498,8 @@ function collectState() {
     ecc: eccSelect.value,
     eccBoost: eccBoostCheck.checked,
     allowKanji: allowKanjiCheck.checked,
-    fnc1: fnc1Select.value,
+    dataFormat: formatSelect.value,
     applicationIndicator: appIndicatorInput.value,
-    gs1: gs1Select.value,
     gs1Stem: gs1StemInput.value,
     size: Number(sizeRange.value),
     quietZone: Number(quietRange.value),
@@ -538,9 +539,8 @@ function applyStateToControls(state) {
     if (state.ecc) eccSelect.value = state.ecc;
     if (typeof state.eccBoost === 'boolean') eccBoostCheck.checked = state.eccBoost;
     if (typeof state.allowKanji === 'boolean') allowKanjiCheck.checked = state.allowKanji;
-    if (state.fnc1 === 'none' || state.fnc1 === 'first' || state.fnc1 === 'second') fnc1Select.value = state.fnc1;
+    if (DATA_FORMATS.includes(state.dataFormat)) formatSelect.value = state.dataFormat;
     if (typeof state.applicationIndicator === 'string') appIndicatorInput.value = state.applicationIndicator.slice(0, 2);
-    if (state.gs1 === 'none' || state.gs1 === 'qr' || state.gs1 === 'link') gs1Select.value = state.gs1;
     if (typeof state.gs1Stem === 'string') gs1StemInput.value = state.gs1Stem;
     if (state.fitStrategy === 'area' || state.fitStrategy === 'height' || state.fitStrategy === 'width') rmqrFitSelect.value = state.fitStrategy;
     if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
@@ -618,15 +618,14 @@ function syncDerivedControls() {
   eccBoostRow.hidden = isMicroSymbology() || isRmqrSymbology();
   finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
   logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();
-  // Micro QR has neither FNC1 nor GS1 data. GS1 data sets the mode itself, so the FNC1 controls give
-  // way to the stem a Digital Link takes. The indicator belongs to second position alone.
-  const gs1 = !isMicroSymbology() && gs1Select.value !== 'none';
-  gs1Row.hidden = isMicroSymbology();
-  gs1StemRow.hidden = !gs1 || gs1Select.value !== 'link';
-  gs1ExampleBtn.hidden = !gs1;
-  fnc1Row.hidden = isMicroSymbology() || gs1;
-  appIndicatorRow.hidden = fnc1Row.hidden || fnc1Select.value !== 'second';
-  separatorRow.hidden = isMicroSymbology() || (!gs1 && fnc1Select.value === 'none');
+  // Micro QR has neither FNC1 nor a GS1 carrier. The stem belongs to a Digital Link and the indicator
+  // to an AIM format alone.
+  const format = isMicroSymbology() ? 'text' : formatSelect.value;
+  formatRow.hidden = isMicroSymbology();
+  gs1StemRow.hidden = format !== 'link';
+  appIndicatorRow.hidden = format !== 'aim';
+  gs1ExampleBtn.hidden = format !== 'gs1' && format !== 'link';
+  separatorRow.hidden = format === 'text';
   // rMQR fit options apply only to automatic version selection.
   rmqrFitRow.hidden = !isRmqrSymbology();
   rmqrHeightRow.hidden = !isRmqrSymbology();
@@ -1212,7 +1211,7 @@ function markCustomPreset() {
 }
 
 for (const el of [
-  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, fnc1Select, appIndicatorInput, gs1Select, gs1StemInput,
+  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, formatSelect, appIndicatorInput, gs1StemInput,
   versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
