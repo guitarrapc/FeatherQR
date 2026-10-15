@@ -808,3 +808,17 @@ Done: a review of the third round's fixes (two reviewers, over the code and the 
 ### G12 decided (2026-10-15)
 
 Done: the maintainer decided G12. A monthly scheduled workflow notices a new dictionary release and opens an issue, and the packages stay in lockstep, so a dictionary update releases all four at a minor bump. The G12 row, the update procedure's last line and the Phase 7 row say so. The workflow itself is Phase 7's. No code changed.
+
+### Phase 7, first part: the Playground (2026-10-15)
+
+Done: the Playground writes and reads GS1 data, on top of the FNC1 selector of the FNC1 plan's Phase 5. A "GS1 data" field beside the content chooses plain text, a GS1 QR Code or a GS1 Digital Link, and the content is then (AI) text or an element string, given to `CreateGs1` or `CreateGs1DigitalLink` on Standard QR or rMQR. A Digital Link takes an optional stem. The page shows the text the symbol holds, the element string or the URI, and the self-check reads the symbol back to that text and mode. Data the checks refuse is reported with the characters at fault, from the place `Gs1FormatException` carries. Both benchmark modes run the GS1 entry points, the span forms for encode, on the same text every iteration, since a suffix would make the data invalid. Micro QR has neither FNC1 nor a GS1 carrier, so the page hides the field and the interop refuses it there. The decode panel reads GS1 data from a symbol, an element string under FNC1 in first position or a Digital Link URI, as (AI) text with a row for each element, and shows the checks' verdict on the element string. Text in first position that does not read as GS1 data reports why. The page's About section links the third-party notice (G8). The package adds 60 KB to the published bundle, 24 KB with Brotli.
+
+Verified by hand on a published Debug build and on the Release build CI publishes (no AOT, trimmed): the retail example as (AI) text and as an element string in a GS1 QR Code, and GS1 data in rMQR, which read back as GS1. The same data as a Digital Link under the canonical stem and under another domain with a path. A stem with another scheme refused, (8200) refused for a URI with its place, and a wrong check digit and a date that does not exist refused with the characters at fault. The decode panel on each carrier, on an element string with a wrong check digit, which reads with the checks' error, and on text in first position that is not GS1 data. Both benchmark modes under each carrier, a share link that restores the carrier and the stem, Micro QR with the field hidden, and the FNC1 modes beside it unchanged. The console stayed clear.
+
+Lessons:
+
+- Reading is not checking. `TryRead` gives (AI) text for an element string whose check digit is wrong, as a reader that shows what a symbol says should, so a view that presents the data as GS1 runs `TryValidate` beside it.
+
+Left for Phase 7: the documents, the update procedure moved to the fetch script, the monthly workflow, and folding this plan.
+
+Benchmarks: none. Only the Playground changed.

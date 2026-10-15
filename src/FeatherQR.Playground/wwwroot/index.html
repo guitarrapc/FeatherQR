@@ -78,7 +78,25 @@
           <div class="separator-row" id="separator-row" hidden>
             <button type="button" id="insert-separator-btn" class="small-btn"
               title="Insert the separator at the cursor. It shows as ␝ and is written as U+001D, the GS character a reader returns.">Insert separator ␝</button>
-            <span class="field__hint">Under FNC1 each ␝ is written as the separator U+001D.</span>
+            <button type="button" id="gs1-example-btn" class="small-btn"
+              title="Put a retail label's (AI) text in the content: a GTIN, an expiry date and a batch.">Retail example</button>
+            <span class="field__hint">Each ␝ is written as the separator U+001D.</span>
+          </div>
+          <div class="panel__grid gs1-fields">
+            <label class="field" id="gs1-row">
+              <span class="field__label">GS1 data</span>
+              <select id="gs1-select"
+                title="Write the content as GS1 data, given as (AI) text such as (01)09520123456788(17)251231 or as an element string. GS1 QR Code writes the element string under FNC1 in first position, the carrier for healthcare, logistics and assets. GS1 Digital Link writes the data's URI in a plain symbol, the retail carrier. The data is checked first. GS1 does not list rMQR as a carrier, so a GS1 scanner may not accept one.">
+                <option value="none">Off (plain text)</option>
+                <option value="qr">GS1 QR Code</option>
+                <option value="link">GS1 Digital Link</option>
+              </select>
+            </label>
+            <label class="field" id="gs1-stem-row">
+              <span class="field__label">Digital Link stem</span>
+              <input type="text" id="gs1-stem-input" placeholder="https://id.gs1.org" spellcheck="false" autocomplete="off"
+                title="The URI's scheme and domain, with an optional path, such as a brand's own domain. Blank writes GS1's canonical stem." />
+            </label>
           </div>
           <label class="field">
             <span class="field__label">Style preset</span>
@@ -282,6 +300,7 @@
               <span class="field__label" title="Draws the four corners the decoder reported over the image">Show detected corners</span>
             </label>
             <div id="decode-result" class="qr-stats" aria-live="polite"></div>
+            <div id="decode-gs1" class="decode-gs1" hidden></div>
             <figure id="decode-preview" class="decode-preview" hidden>
               <canvas id="decode-canvas"></canvas>
               <figcaption id="decode-preview-caption" class="field__hint"></figcaption>
@@ -337,6 +356,8 @@
           </div>
           <div id="generate-error" class="generate-error" hidden></div>
           <div id="qr-stats" class="qr-stats"></div>
+          <div id="gs1-encoded" class="qr-stats gs1-encoded" hidden
+            title="The text written into the symbol for the GS1 data: the element string, or the Digital Link URI"></div>
           <div id="decode-verify" class="qr-stats" aria-live="polite"
             title="The generated image is decoded back with the library's own decoder as a self-check"></div>
           <div class="preview-actions">
@@ -368,6 +389,10 @@
         <li>Decorated codes (gradients, shapes, logos) trade error margin for looks, always test-scan before printing.</li>
         <li>Every generated code is <strong>decoded back in-browser</strong> by the library's own decoder as a
           self-check, and the <em>Decode an image</em> panel reads QR codes from your image files the same way.</li>
+        <li>GS1 data is checked and converted by the FeatherQR.Gs1 package, whose application identifier table is
+          generated from the GS1 Syntax Dictionary under the Apache License 2.0. See the
+          <a href="https://github.com/guitarrapc/FeatherQR/blob/main/THIRD-PARTY-NOTICES.md" target="_blank"
+            rel="noopener noreferrer">third-party notices</a>.</li>
       </ul>
       <p>
         The source code is available on <a href="https://github.com/guitarrapc/FeatherQR" target="_blank"

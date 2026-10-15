@@ -143,6 +143,13 @@ const appIndicatorRow = document.getElementById('app-indicator-row');
 const appIndicatorInput = document.getElementById('app-indicator-input');
 const separatorRow = document.getElementById('separator-row');
 const insertSeparatorBtn = document.getElementById('insert-separator-btn');
+const gs1Row = document.getElementById('gs1-row');
+const gs1Select = document.getElementById('gs1-select');
+const gs1StemRow = document.getElementById('gs1-stem-row');
+const gs1StemInput = document.getElementById('gs1-stem-input');
+const gs1ExampleBtn = document.getElementById('gs1-example-btn');
+const gs1EncodedEl = document.getElementById('gs1-encoded');
+const decodeGs1El = document.getElementById('decode-gs1');
 const versionSelect = document.getElementById('version-select');
 const rmqrFitRow = document.getElementById('rmqr-fit-row');
 const rmqrFitSelect = document.getElementById('rmqr-fit-select');
@@ -268,14 +275,67 @@ function displayText(text) {
 }
 
 /**
- * The WASM request for a playground state. Under FNC1 each ␝ of the content, the stand-in the page
- * shows for the separator, is sent as U+001D, so the request's content is the text a reader returns.
- * Micro QR has no FNC1 mode, and its request carries none whatever the hidden control holds.
+ * The WASM request for a playground state. Under FNC1 or GS1 data each ␝ of the content, the stand-in
+ * the page shows for the separator, is sent as U+001D, the separator a reader returns. Micro QR has
+ * neither, so its request carries none whatever the hidden controls hold. GS1 data sets the mode itself,
+ * so its request carries no FNC1 mode of its own.
  */
 function requestFor(state) {
-  const fnc1 = state.symbology === 'microqr' ? 'none' : state.fnc1;
-  const content = fnc1 === 'none' ? state.content : state.content.replace(/␝/g, '\u001d');
-  return { ...state, fnc1, content };
+  const micro = state.symbology === 'microqr';
+  const gs1 = micro ? 'none' : state.gs1;
+  const fnc1 = micro || gs1 !== 'none' ? 'none' : state.fnc1;
+  const content = fnc1 === 'none' && gs1 === 'none' ? state.content : state.content.replace(/␝/g, '\u001d');
+  return { ...state, gs1, fnc1, content };
+}
+
+/**
+ * What the self-check expects a generated symbol to decode to: for GS1 data, the text the generator
+ * wrote (the element string under FNC1 in first position, or the Digital Link URI with no mode), and
+ * otherwise the content under the request's own mode.
+ */
+function expectedDecode(request, encoded) {
+  if (request.gs1 === 'none' || !encoded) return request;
+  return { ...request, content: encoded, fnc1: request.gs1 === 'qr' ? 'first' : 'none' };
+}
+
+/**
+ * The GS1 view of a decoded symbol: its data as (AI) text with a row for each element, or, for a symbol
+ * under FNC1 in first position whose data fails the checks, why. Hidden for a symbol with no GS1 data.
+ */
+function renderDecodedGs1(result) {
+  decodeGs1El.replaceChildren();
+  decodeGs1El.hidden = !(result?.gs1Hri || result?.gs1Error);
+  if (decodeGs1El.hidden) return;
+  const heading = document.createElement('div');
+  if (result.gs1Error) {
+    heading.textContent = `⚠ FNC1 in first position, but the text does not read as GS1 data: ${result.gs1Error}`;
+    decodeGs1El.appendChild(heading);
+    return;
+  }
+  const carrier = result.fnc1 === 'first' ? 'GS1 element string' : 'GS1 Digital Link URI';
+  heading.textContent = `${carrier}, as (AI) text: ${result.gs1Hri}`;
+  decodeGs1El.appendChild(heading);
+  // Reading takes data the checks refuse, such as a wrong check digit, so the verdict is shown apart.
+  const check = document.createElement('div');
+  check.textContent = result.gs1Check
+    ? `⚠ The element string fails the GS1 checks: ${result.gs1Check}`
+    : '✓ Passes the GS1 checks.';
+  decodeGs1El.appendChild(check);
+  if (!result.gs1Elements?.length) return;
+  const table = document.createElement('table');
+  const head = table.createTHead().insertRow();
+  for (const label of ['AI', 'Value']) {
+    const th = document.createElement('th');
+    th.textContent = label;
+    head.appendChild(th);
+  }
+  const body = table.createTBody();
+  for (const { ai, value } of result.gs1Elements) {
+    const row = body.insertRow();
+    row.insertCell().textContent = `(${ai})`;
+    row.insertCell().textContent = value;
+  }
+  decodeGs1El.appendChild(table);
 }
 
 /**
@@ -438,6 +498,8 @@ function collectState() {
     allowKanji: allowKanjiCheck.checked,
     fnc1: fnc1Select.value,
     applicationIndicator: appIndicatorInput.value,
+    gs1: gs1Select.value,
+    gs1Stem: gs1StemInput.value,
     size: Number(sizeRange.value),
     quietZone: Number(quietRange.value),
     version: Number(versionSelect.value),
@@ -478,6 +540,8 @@ function applyStateToControls(state) {
     if (typeof state.allowKanji === 'boolean') allowKanjiCheck.checked = state.allowKanji;
     if (state.fnc1 === 'none' || state.fnc1 === 'first' || state.fnc1 === 'second') fnc1Select.value = state.fnc1;
     if (typeof state.applicationIndicator === 'string') appIndicatorInput.value = state.applicationIndicator.slice(0, 2);
+    if (state.gs1 === 'none' || state.gs1 === 'qr' || state.gs1 === 'link') gs1Select.value = state.gs1;
+    if (typeof state.gs1Stem === 'string') gs1StemInput.value = state.gs1Stem;
     if (state.fitStrategy === 'area' || state.fitStrategy === 'height' || state.fitStrategy === 'width') rmqrFitSelect.value = state.fitStrategy;
     if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
     if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
@@ -554,10 +618,15 @@ function syncDerivedControls() {
   eccBoostRow.hidden = isMicroSymbology() || isRmqrSymbology();
   finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
   logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();
-  // Micro QR has no FNC1 mode. The indicator belongs to second position alone.
-  fnc1Row.hidden = isMicroSymbology();
-  appIndicatorRow.hidden = isMicroSymbology() || fnc1Select.value !== 'second';
-  separatorRow.hidden = isMicroSymbology() || fnc1Select.value === 'none';
+  // Micro QR has neither FNC1 nor GS1 data. GS1 data sets the mode itself, so the FNC1 controls give
+  // way to the stem a Digital Link takes. The indicator belongs to second position alone.
+  const gs1 = !isMicroSymbology() && gs1Select.value !== 'none';
+  gs1Row.hidden = isMicroSymbology();
+  gs1StemRow.hidden = !gs1 || gs1Select.value !== 'link';
+  gs1ExampleBtn.hidden = !gs1;
+  fnc1Row.hidden = isMicroSymbology() || gs1;
+  appIndicatorRow.hidden = fnc1Row.hidden || fnc1Select.value !== 'second';
+  separatorRow.hidden = isMicroSymbology() || (!gs1 && fnc1Select.value === 'none');
   // rMQR fit options apply only to automatic version selection.
   rmqrFitRow.hidden = !isRmqrSymbology();
   rmqrHeightRow.hidden = !isRmqrSymbology();
@@ -734,7 +803,13 @@ function generate() {
   if (bytes.length === 0 || bytes[0] === 0x7b) {
     let message = 'QR generation failed.';
     try {
-      message = JSON.parse(utf8Decoder.decode(bytes)).error ?? message;
+      const envelope = JSON.parse(utf8Decoder.decode(bytes));
+      message = envelope.error ?? message;
+      // Data the GS1 checks refuse names its place in the content, so the characters can be quoted.
+      if (Number.isInteger(envelope.offset)) {
+        const fault = request.content.slice(envelope.offset, envelope.offset + envelope.length);
+        if (fault) message += ` Characters at fault: “${displayText(fault)}”.`;
+      }
     } catch {
       /* keep generic message */
     }
@@ -754,6 +829,7 @@ function generate() {
   downloadSvgBtn.disabled = false;
   copyImageBtn.disabled = false;
 
+  let encoded = null;
   try {
     const meta = JSON.parse(exports.FeatherQR.Playground.QrInterop.GetLastMeta());
     const versionLabel = symbolLabel(meta.symbology, meta.qrVersion);
@@ -761,11 +837,16 @@ function generate() {
     statsEl.textContent =
       `${versionLabel} · ${matrixLabel} modules · `
       + `${meta.totalMs} ms in WASM (${interopMs.toFixed(1)} ms total) · ${formatBytes(meta.bytes)}`;
+    encoded = meta.encoded ?? null;
   } catch {
     statsEl.textContent = '';
   }
+  gs1EncodedEl.hidden = encoded === null;
+  gs1EncodedEl.textContent = encoded === null
+    ? ''
+    : `${request.gs1 === 'link' ? 'Digital Link URI' : 'Element string, under FNC1 in first position'}: ${displayText(encoded)}`;
 
-  scheduleVerifyDecode(bytes, request);
+  scheduleVerifyDecode(bytes, expectedDecode(request, encoded));
 }
 
 /* ─── Decode (self-verify + image upload) ─── */
@@ -776,7 +857,7 @@ const VERIFY_DEBOUNCE_MS = 250;
 let verifyTimer = null;
 let pendingVerify = null;
 
-/** @param {object} request the WASM request the image was generated from (content and FNC1 mode as sent) */
+/** @param {object} request what the image should decode to: the content and the FNC1 mode (see expectedDecode) */
 function scheduleVerifyDecode(pngBytes, request) {
   // Clear immediately so the line never describes a previous image
   if (decodeVerifyEl) decodeVerifyEl.textContent = '';
@@ -974,6 +1055,7 @@ async function decodeImageFile(file) {
   const superseded = () => generation !== decodeGeneration;
 
   decodePreviewEl.hidden = true;
+  renderDecodedGs1(null);
   lastDecodeImage?.close();
   lastDecodeImage = null;
   lastDecodeResult = null;
@@ -1019,6 +1101,7 @@ async function decodeImageFile(file) {
     decodeResultEl.textContent =
       `“${displayText(result.text)}” · ${decodedLabel}${fnc1Label(result)} · ECC ${result.ecc}${maskLabel}`
       + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
+    renderDecodedGs1(result);
   }
 
   let bitmap;
@@ -1129,7 +1212,8 @@ function markCustomPreset() {
 }
 
 for (const el of [
-  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, fnc1Select, appIndicatorInput, versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
+  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, fnc1Select, appIndicatorInput, gs1Select, gs1StemInput,
+  versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
   gradientToggle, gradientDirection,
@@ -1159,6 +1243,12 @@ insertSeparatorBtn.addEventListener('click', () => {
   const end = contentEl.selectionEnd ?? start;
   contentEl.setRangeText('␝', start, end, 'end');
   contentEl.focus();
+  contentEl.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
+// The retail label the GS1 benchmarks use: a GTIN, an expiry date and a batch.
+gs1ExampleBtn.addEventListener('click', () => {
+  contentEl.value = '(01)09520123456788(17)251231(10)ABC123';
   contentEl.dispatchEvent(new Event('input', { bubbles: true }));
 });
 

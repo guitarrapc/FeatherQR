@@ -399,6 +399,39 @@ output {
   min-height: 1.2em;
 }
 
+/* GS1 data: the carrier fields, the text written into the symbol, and a decoded symbol's elements. */
+.gs1-fields {
+  margin-bottom: 10px;
+}
+
+.gs1-encoded {
+  overflow-wrap: anywhere;
+}
+
+.decode-gs1 {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.decode-gs1 table {
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+.decode-gs1 th,
+.decode-gs1 td {
+  text-align: left;
+  vertical-align: top;
+  padding: 1px 12px 1px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.decode-gs1 td {
+  color: var(--text);
+}
+
 /* Drop target for the decode panel. Scoped to the panel rather than the page because the logo
    field takes dropped images too, and a page-wide target would swallow those. */
 .decode-drop {
