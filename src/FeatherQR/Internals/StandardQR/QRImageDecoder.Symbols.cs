@@ -16,10 +16,7 @@ internal readonly struct DecodedSymbol(string text, QRCodeDecodeInfo info)
 
 internal static partial class QRImageDecoder
 {
-    /// <summary>The candidates a pass's list starts with room for: 85 symbols' finders.</summary>
-    private const int SymbolCandidates = 256;
-
-    /// <summary>The longest list a pass grows to when its scan fills one.</summary>
+    /// <summary>The candidates a reading's list has room for, every row scanned: 1,365 symbols' finders.</summary>
     private const int MaxSymbolCandidates = 4096;
 
     /// <summary>How many times the passes are run over one image at most.</summary>
@@ -224,23 +221,13 @@ internal static partial class QRImageDecoder
     {
         var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
 
-        // The list is rented as bytes: a pool of candidates would be one more pool in every build, and the pools the one-symbol call rents from would be laid out around it
-        var capacity = SymbolCandidates;
-        var rented = ArrayPool<byte>.Shared.Rent(capacity * Unsafe.SizeOf<FinderPattern>());
+        // The list is rented as bytes: a pool of candidates would be one more pool in every build, and the pools the one-symbol call rents from would be laid out around it.
+        // It has its whole room from the start, since the rows between can bring more finders than the strided scan found, and a full list drops them
+        var rented = ArrayPool<byte>.Shared.Rent(MaxSymbolCandidates * Unsafe.SizeOf<FinderPattern>());
         try
         {
-            // A scan that fills its list may have left finders out, so it is run again with twice the room
-            var candidates = MemoryMarshal.Cast<byte, FinderPattern>(rented.AsSpan()).Slice(0, capacity);
+            var candidates = MemoryMarshal.Cast<byte, FinderPattern>(rented.AsSpan()).Slice(0, MaxSymbolCandidates);
             var candidateCount = FinderPatternFinder.FindCandidatesStrided(luminance, width, height, threshold, candidates, grey);
-            while (candidateCount == capacity && capacity < MaxSymbolCandidates)
-            {
-                capacity *= 2;
-                var larger = ArrayPool<byte>.Shared.Rent(capacity * Unsafe.SizeOf<FinderPattern>());
-                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-                rented = larger;
-                candidates = MemoryMarshal.Cast<byte, FinderPattern>(rented.AsSpan()).Slice(0, capacity);
-                candidateCount = FinderPatternFinder.FindCandidatesStrided(luminance, width, height, threshold, candidates, grey);
-            }
             RemoveCandidatesOfSymbols(candidates, ref candidateCount, search.Read, scale);
 
             var image = new ImageView(luminance, source, negative, width, height, threshold, grey);

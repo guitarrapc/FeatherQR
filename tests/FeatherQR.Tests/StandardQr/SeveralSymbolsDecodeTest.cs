@@ -157,6 +157,52 @@ public class SeveralSymbolsDecodeTest
     }
 
     /// <summary>
+    /// A tall sheet of 110 version 1 symbols at 2 px a module, in rows far apart, so that the stride is 9 rows and misses many of their finders, which only the rows between find.
+    /// Every symbol is read once, with its corners.
+    /// </summary>
+    [Test]
+    public async Task TallSheetWhoseFindersTheRowsBetweenFind_EverySymbolIsRead()
+    {
+        const int Across = 10, Down = 11, QuietZone = 2, Gap = 81, Pixels = 2;
+        var symbols = Enumerable.Range(0, Across * Down).Select(static i => Symbol($"FQR TALL {i}", 1, QuietZone)).ToArray();
+        var size = symbols[0].Size;
+        int columns = Across * size, rows = Down * (size + Gap);
+        bool IsDark(int row, int column)
+        {
+            int band = row / (size + Gap), r = row % (size + Gap);
+            return r < size && symbols[band * Across + column / size][r, column % size];
+        }
+        var (luminance, width, height) = NearestNeighbourRenderer.Render(IsDark, columns, rows, Pixels, 0f, 0f);
+        var drawn = new List<Drawn>();
+        for (var s = 0; s < Across * Down; s++)
+        {
+            float left = (s % Across * size + QuietZone) * Pixels, top = (s / Across * (size + Gap) + QuietZone) * Pixels, side = (size - 2 * QuietZone) * Pixels;
+            drawn.Add(new Drawn($"FQR TALL {s}", [(left, top), (left + side, top), (left + side, top + side), (left, top + side)], Pixels));
+        }
+
+        // The premises: the strided scan finds fewer than 256 candidates and the rows between bring them past it, so a list sized by the strided scan alone has no room for the rest
+        var (strided, full) = Counts(luminance, width, height);
+        await Assert.That(strided).IsLessThan(256);
+        await Assert.That(full).IsGreaterThan(256);
+
+        var read = Read(luminance, width, height, room: 256);
+
+        await AssertReadsEach(read, drawn);
+
+        static (int Strided, int Full) Counts(byte[] luminance, int width, int height)
+        {
+            Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
+            Binarizer.FillHistogram(luminance, histogram);
+            var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
+            var candidates = new FinderPattern[4096];
+            var strided = FinderPatternFinder.FindCandidatesStrided(luminance, width, height, threshold, candidates, grey);
+            var full = strided;
+            FinderPatternFinder.FindCandidatesInSkippedRows(luminance, width, height, threshold, candidates, ref full, grey);
+            return (strided, full);
+        }
+    }
+
+    /// <summary>
     /// Grids turned, the last also under keystone, whose first symbols do not read, their data drawn at random: every symbol that reads is read once, with its corners, and nothing else.
     /// Each grid reads whole only with one step of the search, and reads less without it.
     /// The first two need a second round. The third needs the candidates of symbols an earlier pass read to leave a reading's list before it selects.

@@ -655,3 +655,14 @@ What it taught:
 - The lanes pay where neighbouring pixels fall in one bin, so that an increment waits on the one before it. Small noise and a gradient over a few hundred pixels step to another bin almost every pixel, and the lanes have no wait to save, while on the 740 px noise and gradient of the report they read 0.98 to 1.00 and 0.64.
 - A probe that times shapes one after another has to run every path warm first. The first reading put photographs of 9,216 pixels level: they were the first images timed, still on code the JIT had not optimized. Run six times over before timing, crops of 8,100 and 10,000 pixels read 0.83.
 - The floor stays, since lifting it slows noise and gradients and gives a whole decode nothing beyond the runs' spread. Its comment says why, and [standardqr-decoder.md](../specs/standardqr-decoder.md) has the figures under "Performance", in "The lanes start at the first stretch".
+
+### Work 2, Phase 1: a list the rows between filled (2026-10-15)
+
+Fixed after a review of the pull request. A reading's candidate list started with room for 256 and was doubled, up to 4,096, only when the strided scan filled it. The rows between are scanned into the same list later, and a candidate that finds the list full is dropped, so a reading whose strided scan fit and whose rows between did not lost the finders after. With every row scanned the reading does not scan again.
+
+What was done:
+
+- The list has its whole room, 4,096 candidates, from the start, and the scan that ran again with twice the room is gone. Adding and removing candidates walks the candidates held, not the room, so the room costs only the larger rental.
+- `TallSheetWhoseFindersTheRowsBetweenFind_EverySymbolIsRead`: 110 version 1 symbols at 2 px a module in rows far apart, 502 by 2,334 px, so that the stride is 9 rows. The strided scan finds 242 candidates and every row 332. The build before read 80 of the 110, and this one reads all of them with their corners.
+- Tall scenes of that kind drawn at random, 30 of them, read before and after with the list at 4,096 from the start: seven read more, from 1 to 81 symbols more, all with a strided scan under 256 and every row over it, and none read less.
+- BoofCV's 536 photographs: the entry's result lines are the same, text and corner. Time, each photograph's fastest of three processes a build, in turn: the entry 3,494 to 3,479 ms over the set (0.996, median 0.997 a photograph), and the one-symbol call, whose code did not change, 0.991.
