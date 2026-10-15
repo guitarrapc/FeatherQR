@@ -15,7 +15,7 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 - Phase 1b continued (2026-10-15): the row scan and the sheets of 60 codes were measured, and nothing was shipped. The entry is 67 ms behind zxing-cpp over those seven, 59 of them on one photograph whose time goes to stages that run after a failure.
 - Phase 2 (2026-10-15): the maintainer ruled. The call ships for Standard QR, in an array form and a span form, in 2.0.0, and the Phase 7 freeze waits for it. Phase 3 is next.
 - ARM64 (2026-10-15): Phases 1 and 1b were measured on an Apple M2. No read moves, and the one-symbol call compiles to the code it had before the entry, on NativeAOT and on the JIT. Phase 1b takes the entry to 0.83 of its time over the set and the one-symbol call to 0.89, where x64 took them to 0.60 and 0.67, and the entry is 2.3 times the one-symbol call.
-- The row scan (2026-10-15): a word's edges are taken out without a branch. On x64 the rows between strided rows take 0.84 to 0.91 of their time, the entry 0.95 of its time over the set and the one-symbol call 0.97, every read as it was. ARM64 was not timed.
+- The row scan (2026-10-15): a word's edges are taken out without a branch. On x64 the rows between strided rows take 0.84 to 0.91 of their time, the entry 0.95 of its time over the set and the one-symbol call 0.97, every read as it was. On an Apple M2 (2026-10-15) the same: the rows between take 0.80 to 0.88 of their cycles, the entry 0.94 of its time and the one-symbol call 0.97, so the form stands there.
 
 ## Order
 
@@ -474,8 +474,82 @@ What it taught:
 
 For the maintainer:
 
-- ARM64 runs the same extraction and was not timed. Its population count and trailing-zero count are sequences there.
+- ARM64 runs the same extraction and was not timed. Its population count and trailing-zero count are sequences there. It was timed on 2026-10-15 ([below](#work-2-phase-1b-continued-the-row-scans-edges-on-arm64-2026-10-15)).
 - WebAssembly loses where x64 gains: up to 8 % on the small renders interpreted, and up to 3 % AOT-compiled. The Playground's Release publish is AOT-compiled. Photographs were not read on WebAssembly.
 - Ruled on 2026-10-15: one form on every build. ARM64 is timed on the M2 next, and the form is looked at again if it loses there.
 
 The record: the Performance lesson on the row scan's edges and the ARM64 kernel's note in [standardqr-decoder.md](../specs/standardqr-decoder.md), and the scope row on builds not timed in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions).
+
+### Work 2, Phase 1b, continued: the row scan's edges on ARM64 (2026-10-15)
+
+Measured, and nothing changed. The ruling asked for ARM64 before the form was taken as final. On an Apple M2 it does not lose: the extraction takes 0.71 to 0.83 of its cycles, the rows between strided rows 0.80 to 0.88, and over the photographs the entry 0.94 of its time and the one-symbol call 0.97, as on x64. No read moves.
+
+What was done:
+
+- Two builds, each a `git archive` in a scratch tree: a2377261, whose `src` is 381db167's, and 8d8526d7. Apple M2, osx-arm64, SDK 10.0.401 with .NET 10.0.12 and ILCompiler 10.0.12.
+- The suite at 8d8526d7, in Release and in Debug. `tests/FeatherQR.AotAnalysis` published as default NativeAOT at both commits, its object files compared method by method, and the head's run with `--simd-class Arm64 --parity`.
+- The extraction alone: the old form, a second copy of it and the new form, each with its own copy of `DarkWord`, in one process, over every row of every twelfth photograph (45) at the global positive reading and at the regional positive reading. Each form's passes are a method of their own, the forms take turns a photograph, and each turn reads the process's instruction and cycle counters before and after.
+- The rows between strided rows: the library's own scan (`FindCandidatesInSkippedRows`) on the same 45 photographs at the same two readings, instructions and cycles a pixel from the process's counters, a 3 s loop taken from a 12 s one, the builds in turn.
+- The photographs: both calls on the .NET 10 JIT, the fastest of three calls a photograph, four processes a build in turn, by the probe of the ARM64 round above. The report's shapes: instructions and cycles a call, as in that round.
+
+The reads, the suite and the code:
+
+- Both calls return the same results on all 536 photographs at both commits, text, version and corners: 456 photographs read by the one-symbol call and 1,071 symbols by the entry.
+- The suite: 65,682 tests in Release and 65,446 in Debug, none failing. The publish passes `--simd-class Arm64 --parity`. The row kernel runs its ARM64 tier, and the edge-list kernel's entry matches.
+- On default NativeAOT 12,142 of the build's 12,145 code symbols are byte for byte the same. The extraction is 377 instructions where it was 321, the row kernel, which inlined it, 554 where it was 846, and `EdgeRunCapacity` is new.
+
+The extraction alone, over the old form in the same process:
+
+| Build | The new form, cycles | Instructions | A second copy of the old form, cycles |
+|---|---|---|---|
+| Default NativeAOT | 0.71 to 0.73 | 1.03 | 1.00 to 1.02 |
+| .NET 10 JIT | 0.82 to 0.83 | 1.22 to 1.24 | 0.98 to 1.01 |
+
+- The two forms agree on every row.
+- The JIT runs 1.22 times the instructions and still gains. The two population counts and the four writes of each kind cost instructions on every word with an edge, and the exits the loop mispredicted cost more than they do. ILC's code runs the old form at 1.12 to 1.13 instructions a pixel, where the JIT's runs 0.86 to 0.88, and the new form at 1.16 where the JIT's runs 1.07, so its gain is larger.
+
+The rows between strided rows, the library's scan on default NativeAOT:
+
+| Reading | Cycles a pixel, before | After | After over before | Instructions |
+|---|---|---|---|---|
+| Global positive | 0.458 to 0.471 | 0.402 to 0.404 | 0.86 to 0.88 | 1.00 |
+| Regional positive | 0.683 to 0.684 | 0.543 to 0.548 | 0.80 | 1.02 |
+
+- Every pass finds the candidates it found: 3.3 a call at the global reading and 4.0 at the regional one. x64 measured 0.84 to 0.91 for the rows between of the four readings, by time.
+
+The photographs, on the .NET 10 JIT:
+
+| Build | One-symbol call, ms | The entry, ms | The entry over the one-symbol call |
+|---|---|---|---|
+| ARM64, .NET 10 JIT, before | 2,341 to 2,390 | 5,499 to 5,592 | 2.34 to 2.37 |
+| The same, after | 2,224 to 2,240 | 5,138 to 5,159 | 2.30 to 2.31 |
+
+- Each photograph's fastest over the four processes: the one-symbol call 2,188 ms before and 2,114 after (0.967), the entry 5,179 and 4,885 (0.943). The 368 photographs of one code: the entry 0.948. The seven sheets of 60 codes: 455 ms and 414 (0.910), `lots/image007` 132 and 124. On x64 the same figures were 0.967, 0.948 and 0.976.
+- A whole process ran 359 to 360 billion instructions after against 362 to 367 before (0.99), and 79.4 to 80.2 billion cycles against 84.5 to 86.2 (0.94).
+- Photograph by photograph the entry takes 0.75 to 1.12 of its time. The three above 1.08, `blurred/image016` and `monitor/image006` and `image007` at 25 to 33 ms, were counted on default NativeAOT: the entry runs 0.94 to 0.96 of its cycles on each, the instructions within 1 %. `lots/image007` runs 0.96.
+
+The report's shapes, after over before, a call:
+
+| Measure | The 8 Standard QR images | Noise | Gradient | Micro QR M4 | rMQR R7x43, R17x139 at 8 px | The row kernel's shapes | Two kernels the change does not reach |
+|---|---|---|---|---|---|---|---|
+| NativeAOT, instructions | 0.977 to 1.001 | 0.990 | 0.996 | 1.043 | 1.013, 1.021 | 0.982, 0.975 | 1.002, 1.000 |
+| NativeAOT, cycles | 0.90 to 1.02 | 1.02 | 1.00 | 1.02 | 0.96, 0.99 | 0.85, 0.98 | 1.00, 1.00 |
+| .NET 10 JIT, instructions | 0.946 to 0.997 | 0.974 | 0.976 | 1.033 | 1.006, 1.020 | 0.970, 0.965 | 0.995, 1.004 |
+| .NET 10 JIT, cycles | 0.89 to 0.99 | 0.99 | 0.98 | 0.97 to 0.98 | 0.97, 0.98 | 0.93, 0.98 | 0.98, 1.00 |
+
+- The row kernel's shapes are the version 40 render at 3 px and the noise image. The two the change does not reach are the mask walk on that render and the regional binarization.
+- The Micro QR and rMQR renders at 8 px run up to 4 % more instructions: a module 8 px wide puts several edges in every word, and each word with one pays the population counts. Their cycles read 0.96 to 1.02.
+- The Micro QR M4's JIT cycles read 0.73 in the first pass. Two more rounds of that shape read 0.97 and 0.98: one process before was slow.
+- The bowed version 40 render's 1.02 and the noise image's 1.02 on NativeAOT are cycles alone. Their instructions are 0.998 and 0.990.
+
+What it taught:
+
+- A kernel that is called and a kernel that is inlined reach their last tier at different times on the JIT. The first in-process timing ran each form's loop once, in one large method: a copy of the old form read 0.84 of the old form, and the new form 1.43 of its instructions. With each form's passes in a method of its own, the called new form was still at its instrumented first tier through the first photographs, since its Tier1 compile came after them. A whole round over the set before the timed one put both at Tier1, and the copy at 0.98 to 1.01.
+- ILC and the JIT disagree by 0.1 on the extraction alone, and agree on what the scan around it gains. The figure a build class gets has to come from that build class.
+
+For the maintainer:
+
+- The form is not looked at again: ARM64 gains in the extraction, the rows between, the entry and the one-symbol call, on both of its build classes. What it costs is 1 to 4 % more instructions on the small renders, which the cycles do not show.
+- Only WebAssembly loses, by up to 8 % on the small renders interpreted and 3 % AOT-compiled, as above.
+
+The record: the ARM64 bullet of the Performance lesson on the row scan's edges and the lesson on a called kernel's tier in [standardqr-decoder.md](../specs/standardqr-decoder.md), and the scope row on builds not timed in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions).
