@@ -246,6 +246,7 @@ details.panel[open] summary {
 
 textarea,
 select,
+input[type="text"],
 input[type="url"],
 input[type="file"] {
   font: inherit;
@@ -260,6 +261,19 @@ input[type="file"] {
 textarea {
   resize: vertical;
   min-height: 60px;
+}
+
+/* The FNC1 separator button and its note, under the content box. */
+.separator-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 6px 0 10px;
+}
+
+.separator-row .field__hint {
+  margin: 0;
 }
 
 textarea:focus-visible,

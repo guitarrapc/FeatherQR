@@ -75,6 +75,11 @@
             <textarea id="content" rows="3" spellcheck="false"
               placeholder="Text or URL to encode">https://github.com/guitarrapc/FeatherQR</textarea>
           </label>
+          <div class="separator-row" id="separator-row" hidden>
+            <button type="button" id="insert-separator-btn" class="small-btn"
+              title="Insert the separator at the cursor. It shows as ␝ and is written as U+001D, the GS character a reader returns.">Insert separator ␝</button>
+            <span class="field__hint">Under FNC1 each ␝ is written as the separator U+001D.</span>
+          </div>
           <label class="field">
             <span class="field__label">Style preset</span>
             <select id="preset-select">
@@ -112,6 +117,20 @@
             <label class="field field--inline field--checkbox" id="allow-kanji-row">
               <input type="checkbox" id="allow-kanji-check" />
               <span class="field__label" title="Write Japanese text in Kanji mode instead of UTF-8: 13 bits a character, so a smaller symbol. Applies when every character has a Kanji-mode (JIS X 0208) code; other text stays UTF-8. Off by default because Android's own scanners (camera, Google Lens) cannot read Kanji mode; iPhone and dedicated readers can.">Kanji mode for Japanese text</span>
+            </label>
+            <label class="field" id="fnc1-row">
+              <span class="field__label">FNC1 mode</span>
+              <select id="fnc1-select"
+                title="First position marks GS1 data: the content is an element string, application identifiers and their values, with a separator after each variable-length value another follows. Second position marks an industry format registered with AIM, named by the application indicator. Standard QR and rMQR only.">
+                <option value="none">None</option>
+                <option value="first">First (GS1)</option>
+                <option value="second">Second (AIM)</option>
+              </select>
+            </label>
+            <label class="field" id="app-indicator-row">
+              <span class="field__label">Application indicator</span>
+              <input type="text" id="app-indicator-input" value="00" maxlength="2" spellcheck="false" autocomplete="off"
+                title="The industry format in second position: two digits 00-99, or one letter A-Z or a-z." />
             </label>
             <label class="field">
               <span class="field__label">Version</span>

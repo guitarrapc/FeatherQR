@@ -137,6 +137,12 @@ const eccSelect = document.getElementById('ecc-select');
 const eccBoostRow = document.getElementById('ecc-boost-row');
 const eccBoostCheck = document.getElementById('ecc-boost-check');
 const allowKanjiCheck = document.getElementById('allow-kanji-check');
+const fnc1Row = document.getElementById('fnc1-row');
+const fnc1Select = document.getElementById('fnc1-select');
+const appIndicatorRow = document.getElementById('app-indicator-row');
+const appIndicatorInput = document.getElementById('app-indicator-input');
+const separatorRow = document.getElementById('separator-row');
+const insertSeparatorBtn = document.getElementById('insert-separator-btn');
 const versionSelect = document.getElementById('version-select');
 const rmqrFitRow = document.getElementById('rmqr-fit-row');
 const rmqrFitSelect = document.getElementById('rmqr-fit-select');
@@ -259,6 +265,29 @@ function fnc1Label(result) {
 /** Decoded text for display: the GS1 separator (U+001D) is invisible, so it is shown as ␝ (U+241D). */
 function displayText(text) {
   return text.replace(/\u001d/g, '␝');
+}
+
+/**
+ * The WASM request for a playground state. Under FNC1 each ␝ of the content, the stand-in the page
+ * shows for the separator, is sent as U+001D, so the request's content is the text a reader returns.
+ * Micro QR has no FNC1 mode, and its request carries none whatever the hidden control holds.
+ */
+function requestFor(state) {
+  const fnc1 = state.symbology === 'microqr' ? 'none' : state.fnc1;
+  const content = fnc1 === 'none' ? state.content : state.content.replace(/␝/g, '\u001d');
+  return { ...state, fnc1, content };
+}
+
+/**
+ * Whether a decoded symbol carries the mode a request asked for: the position, and in second
+ * position the indicator as the decoder reports it (0-99 as its value, a letter as its code plus 100).
+ */
+function decodedModeMatches(result, request) {
+  if (request.fnc1 === 'none') return !result.fnc1;
+  if (request.fnc1 === 'first') return result.fnc1 === 'first';
+  const indicator = request.applicationIndicator.trim();
+  const expected = /^\d{1,2}$/.test(indicator) ? Number(indicator) : indicator.charCodeAt(0) + 100;
+  return result.fnc1 === 'second' && result.applicationIndicator === expected;
 }
 
 /** Repopulates the ECC select for the symbology, keeping the value when still valid. */
@@ -407,6 +436,8 @@ function collectState() {
     ecc: eccSelect.value,
     eccBoost: eccBoostCheck.checked,
     allowKanji: allowKanjiCheck.checked,
+    fnc1: fnc1Select.value,
+    applicationIndicator: appIndicatorInput.value,
     size: Number(sizeRange.value),
     quietZone: Number(quietRange.value),
     version: Number(versionSelect.value),
@@ -445,6 +476,8 @@ function applyStateToControls(state) {
     if (state.ecc) eccSelect.value = state.ecc;
     if (typeof state.eccBoost === 'boolean') eccBoostCheck.checked = state.eccBoost;
     if (typeof state.allowKanji === 'boolean') allowKanjiCheck.checked = state.allowKanji;
+    if (state.fnc1 === 'none' || state.fnc1 === 'first' || state.fnc1 === 'second') fnc1Select.value = state.fnc1;
+    if (typeof state.applicationIndicator === 'string') appIndicatorInput.value = state.applicationIndicator.slice(0, 2);
     if (state.fitStrategy === 'area' || state.fitStrategy === 'height' || state.fitStrategy === 'width') rmqrFitSelect.value = state.fitStrategy;
     if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
     if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
@@ -521,6 +554,10 @@ function syncDerivedControls() {
   eccBoostRow.hidden = isMicroSymbology() || isRmqrSymbology();
   finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
   logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();
+  // Micro QR has no FNC1 mode. The indicator belongs to second position alone.
+  fnc1Row.hidden = isMicroSymbology();
+  appIndicatorRow.hidden = isMicroSymbology() || fnc1Select.value !== 'second';
+  separatorRow.hidden = isMicroSymbology() || fnc1Select.value === 'none';
   // rMQR fit options apply only to automatic version selection.
   rmqrFitRow.hidden = !isRmqrSymbology();
   rmqrHeightRow.hidden = !isRmqrSymbology();
@@ -677,11 +714,12 @@ function generate() {
     return;
   }
 
+  const request = requestFor(state);
   const logoBytes = state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;
   let bytes;
   const t0 = performance.now();
   try {
-    bytes = exports.FeatherQR.Playground.QrInterop.Generate(JSON.stringify(state), logoBytes);
+    bytes = exports.FeatherQR.Playground.QrInterop.Generate(JSON.stringify(request), logoBytes);
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -727,7 +765,7 @@ function generate() {
     statsEl.textContent = '';
   }
 
-  scheduleVerifyDecode(bytes, state.content);
+  scheduleVerifyDecode(bytes, request);
 }
 
 /* ─── Decode (self-verify + image upload) ─── */
@@ -738,32 +776,37 @@ const VERIFY_DEBOUNCE_MS = 250;
 let verifyTimer = null;
 let pendingVerify = null;
 
-function scheduleVerifyDecode(pngBytes, expectedText) {
+/** @param {object} request the WASM request the image was generated from (content and FNC1 mode as sent) */
+function scheduleVerifyDecode(pngBytes, request) {
   // Clear immediately so the line never describes a previous image
   if (decodeVerifyEl) decodeVerifyEl.textContent = '';
-  pendingVerify = { pngBytes, expectedText };
+  pendingVerify = { pngBytes, request };
   if (verifyTimer !== null) return;
   verifyTimer = window.setTimeout(() => {
     verifyTimer = null;
     const job = pendingVerify;
     pendingVerify = null;
-    if (job) runVerifyDecode(job.pngBytes, job.expectedText);
+    if (job) runVerifyDecode(job.pngBytes, job.request);
   }, VERIFY_DEBOUNCE_MS);
 }
 
-function runVerifyDecode(pngBytes, expectedText) {
+function runVerifyDecode(pngBytes, request) {
   if (!runtimeAlive || !runtimeReady || !exports || !decodeVerifyEl) return;
   const result = callDecode(pngBytes);
   if (!result || result.error) {
     decodeVerifyEl.textContent = '';
     return;
   }
-  if (result.ok && result.text === expectedText) {
+  // The mode changes how the text reads, so a symbol is only right when both come back.
+  if (result.ok && result.text === request.content && decodedModeMatches(result, request)) {
     const corrected = result.errorsCorrected > 0 ? ` · ${result.errorsCorrected} codewords corrected` : '';
     // The decoded ECC is shown rather than the requested one: with "Boost ECC"
     // enabled the two can differ, and this line is where the boost is observable.
     const ecc = result.ecc ? ` · ECC ${result.ecc}` : '';
-    decodeVerifyEl.textContent = `✓ Decodes back to the input (self-check${ecc}${corrected} · ${result.totalMs} ms)`;
+    decodeVerifyEl.textContent = `✓ Decodes back to the input (self-check${ecc}${fnc1Label(result)}${corrected} · ${result.totalMs} ms)`;
+  } else if (result.ok && result.text === request.content) {
+    const mode = fnc1Label(result).replace(/^ · /, '') || 'no FNC1';
+    decodeVerifyEl.textContent = `⚠ Self-check read the text under another mode (${mode}), please test-scan this code.`;
   } else if (result.ok) {
     decodeVerifyEl.textContent = '⚠ Self-check decoded different text, please test-scan this code.';
   } else {
@@ -1086,7 +1129,7 @@ function markCustomPreset() {
 }
 
 for (const el of [
-  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
+  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, fnc1Select, appIndicatorInput, versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
   gradientToggle, gradientDirection,
@@ -1108,6 +1151,15 @@ symbologySelect.addEventListener('input', () => {
   syncDerivedControls();
   markCustomPreset();
   scheduleGenerate();
+});
+
+// A textarea cannot take U+001D from a keyboard, so the button puts its visible stand-in at the cursor.
+insertSeparatorBtn.addEventListener('click', () => {
+  const start = contentEl.selectionStart ?? contentEl.value.length;
+  const end = contentEl.selectionEnd ?? start;
+  contentEl.setRangeText('␝', start, end, 'end');
+  contentEl.focus();
+  contentEl.dispatchEvent(new Event('input', { bubbles: true }));
 });
 
 // Color inputs inside the dynamic gradient list (event delegation).
@@ -1163,7 +1215,7 @@ downloadSvgBtn.addEventListener('click', () => {
   const logoBytes = state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;
   let bytes;
   try {
-    bytes = exports.FeatherQR.Playground.QrInterop.GenerateSvg(JSON.stringify(state), logoBytes);
+    bytes = exports.FeatherQR.Playground.QrInterop.GenerateSvg(JSON.stringify(requestFor(state)), logoBytes);
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -1309,7 +1361,7 @@ async function runBenchmark() {
     return;
   }
   // Snapshot options once so mid-run control edits do not skew results.
-  const optionsJson = JSON.stringify(state);
+  const optionsJson = JSON.stringify(requestFor(state));
   const mode = benchModeSelect.value;
   const total = Number(benchCountSelect.value);
   const logoBytes = mode === 'render' && state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;

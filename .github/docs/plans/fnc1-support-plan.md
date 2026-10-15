@@ -17,7 +17,7 @@ ISO/IEC 18004 (read in its 2006 edition) defines two modes that change how the w
 - A reader signals the mode with the symbology identifier (`]Q3` / `]Q4` first, `]Q5` / `]Q6` second, the even ones under the ECI protocol) and transmits the application indicator before the data.
 - Micro QR has neither mode. rMQR has both, as `101` and `110` (below).
 
-## Where it stands (2026-10-13)
+## Where it stands (2026-10-15)
 
 - Phases 0 to 2 are built: both decoders read both indicators and report `Fnc1Mode` on `QRCodeDecodeInfo.Fnc1` and `RmQRCodeDecodeInfo.Fnc1`, 28 fixtures from three writers are committed, and the rMQR records are corrected. Before Phase 1 the Standard QR decoder returned `UnsupportedContent` for both indicators and the rMQR decoder refused `101` and `110` as reserved.
 - The Micro QR decoder refuses M4 indicators 4-7, which is correct.
@@ -25,7 +25,7 @@ ISO/IEC 18004 (read in its 2006 edition) defines two modes that change how the w
 - The standard's text behind the decode half: ISO/IEC 18004:2006 is on hand (public copy, clauses read and the two examples checked), ISO/IEC 23941:2022 only as a table of contents, so the rMQR mode table rows `101` and `110` still rest on the implementations ([fnc1-support-research.md](references/fnc1-support-research.md), Sources obtained after the merge).
 - The real-image corpus holds one GS1 photograph (`qrcode-2/gs1-figure-4.15.1-2.png`), which the sweep counts in the content column in all four rotations. Its expected text is the element string with raw GS and no identifier, the form this plan returns.
 - `spot-check-fnc1` in QRInteropFixtures reads every FNC1 symbol this library writes with zxing-cpp and ZXing.Net (Phase 3).
-- The first half of Phase 5 is built (2026-10-13): `sweep-fnc1` reads generated content at scale with the same readers, `Fnc1RoundTripSweepTest` holds the round trip in the suite, and `tools/encode_digest.cs` compares what the generators write between two commits. The Playground's encode selector, the second half, is not started.
+- The first half of Phase 5 is built (2026-10-13): `sweep-fnc1` reads generated content at scale with the same readers, `Fnc1RoundTripSweepTest` holds the round trip in the suite, and `tools/encode_digest.cs` compares what the generators write between two commits. The second half is built too (2026-10-15): the Playground writes both modes on Standard QR and rMQR.
 
 ## What the investigation found
 
@@ -301,3 +301,15 @@ Lessons:
 - A switch is a claim. The digest tool first had one that left FNC1 unset "to compare with a commit before the option", and such a commit cannot compile the file. It was removed before it was documented.
 
 Benchmarks: none. No source under `src/` changed.
+
+### Phase 5, second half: the Playground's encode selector (2026-10-15)
+
+Done: the Playground writes both modes. The QR parameters gain an FNC1 mode (none, first position for GS1, second position for an AIM format) and, in second position, the application indicator as a reader transmits it, one or two digits for 00 to 99 or one letter. Both apply to Standard QR and rMQR on every call the page makes to encode: the preview, the SVG, the share link and both benchmark modes. Micro QR has no FNC1 mode, so the page hides the controls and sends none, and `QrInterop` refuses a Micro QR request that carries a mode. A textarea cannot take U+001D from a keyboard, so under FNC1 the page shows the separator as ␝ (U+241D), the stand-in its decode panel already used, gives a button that puts one at the cursor, and sends each as U+001D. The self-check compares the decoded mode as well as the text, and names the mode it read.
+
+Verified by hand, on a published Debug build and on the Release build CI publishes (no AOT): Standard QR and rMQR in first position with the element string (01)(10)(17), which read back as GS1 with the separator in place. Second position with the indicators 37, 5, a, q and Z, a literal `%` among the content, which read back with the indicator. Micro QR with the hidden control left on first position, which writes no mode. The indicators 1A and an empty one, refused with the page's message. The separator button, a share link that restores the mode, the indicator and the content, and both benchmark modes under a mode. The console stayed clear.
+
+Lessons:
+
+- A request follows the controls the page shows, not the value a hidden control still holds. Switching to Micro QR leaves the selector on its last mode, so the page sends none for Micro QR, and the interop refuses a mode there rather than drop it in silence.
+
+Benchmarks: none. Only the Playground changed.

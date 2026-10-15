@@ -318,6 +318,7 @@ public static partial class QrInterop
             QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
             BoostEccLevel = request.EccBoost,
             AllowKanji = request.AllowKanji,
+            Fnc1 = ParseFnc1(request),
         });
     }
 
@@ -330,6 +331,7 @@ public static partial class QrInterop
             Height = ParseRmHeight(request.Height),
             QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
             AllowKanji = request.AllowKanji,
+            Fnc1 = ParseFnc1(request),
         });
     }
 
@@ -379,6 +381,7 @@ public static partial class QrInterop
 
     private static MicroQRCodeData CreateMicroData(QrRequest request)
     {
+        RequireNoFnc1(request);
         return MicroQRCodeGenerator.Create(
             request.Content.AsSpan(),
             ParseMicroEcc(request.Ecc),
@@ -421,6 +424,37 @@ public static partial class QrInterop
         >= 1 and <= 4 => (MicroQRVersion)version,
         _ => throw new ArgumentException($"Unknown Micro QR version '{version}'. Use 1-4 (M1-M4) or -1 for automatic selection."),
     };
+
+    /// <summary>
+    /// The FNC1 mode of a Standard QR or rMQR request. The page sends the separator as U+001D, so the content is already the text the decoder returns.
+    /// </summary>
+    private static Fnc1Mode ParseFnc1(QrRequest request) => (request.Fnc1 ?? "none").ToLowerInvariant() switch
+    {
+        "none" => Fnc1Mode.None,
+        "first" => Fnc1Mode.FirstPosition,
+        "second" => ParseApplicationIndicator(request.ApplicationIndicator),
+        _ => throw new ArgumentException($"Unknown FNC1 mode '{request.Fnc1}'. Use none, first or second."),
+    };
+
+    /// <summary>
+    /// Second position from the indicator as a reader transmits it: one or two digits for 00-99, or one letter.
+    /// </summary>
+    private static Fnc1Mode ParseApplicationIndicator(string? indicator)
+    {
+        var text = (indicator ?? "").Trim();
+        if (text.Length is 1 or 2 && text.All(char.IsAsciiDigit))
+            return Fnc1Mode.SecondPosition(int.Parse(text, CultureInfo.InvariantCulture));
+        if (text.Length == 1 && char.IsAsciiLetter(text[0]))
+            return Fnc1Mode.SecondPosition(text[0]);
+        throw new ArgumentException($"The application indicator must be two digits 00-99 or one letter A-Z or a-z, but was '{text}'.");
+    }
+
+    /// <summary>Micro QR has no FNC1 mode. The page hides the control and sends none, so another value is a malformed request rather than one to ignore.</summary>
+    private static void RequireNoFnc1(QrRequest request)
+    {
+        if (ParseFnc1(request) != Fnc1Mode.None)
+            throw new ArgumentException("Micro QR has no FNC1 mode. Use Standard QR or rMQR for GS1 data.");
+    }
 
     /// <summary>
     /// The request carries -1 for "pick the smallest version that fits", which <see cref="QRVersionRange"/> spells as <see cref="QRVersionRange.Any"/>. It deliberately rejects -1 so a defaulted field cannot pass for automatic.
@@ -513,6 +547,7 @@ public static partial class QrInterop
     {
         var ecc = ParseEcc(request.Ecc);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
+        var fnc1 = ParseFnc1(request);
         var prefixLength = request.Content.Length;
 
         // " #" + int.MaxValue digits
@@ -533,7 +568,7 @@ public static partial class QrInterop
             {
                 (startIndex + i + 1).TryFormat(textBuffer.AsSpan(prefixLength + 2), out var digits);
                 var text = textBuffer.AsSpan(0, prefixLength + 2 + digits);
-                written = QRCodeGenerator.Create(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji });
+                written = QRCodeGenerator.Create(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji, Fnc1 = fnc1 });
                 bytesTotal += written;
             }
             stopwatch.Stop();
@@ -556,6 +591,7 @@ public static partial class QrInterop
     {
         var ecc = ParseEcc(request.Ecc);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
+        var fnc1 = ParseFnc1(request);
 
         long bytesTotal = 0;
         var qrVersion = 0;
@@ -564,7 +600,7 @@ public static partial class QrInterop
         for (var i = 0; i < count; i++)
         {
             var text = string.Create(CultureInfo.InvariantCulture, $"{request.Content} #{startIndex + i + 1}");
-            var data = QRCodeGenerator.Create(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji });
+            var data = QRCodeGenerator.Create(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji, Fnc1 = fnc1 });
             qrVersion = data.Version;
             matrixSize = data.Size;
             bytesTotal += CreateBuilder(request, data, customLogo).ToByteArray().Length;
@@ -582,6 +618,7 @@ public static partial class QrInterop
     /// </summary>
     private static string BenchmarkMicroEncode(QrRequest request, int count)
     {
+        RequireNoFnc1(request);
         var ecc = ParseMicroEcc(request.Ecc);
         var version = ParseMicroVersion(request.Version);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
@@ -624,7 +661,7 @@ public static partial class QrInterop
         var height = ParseRmHeight(request.Height);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
 
-        var rmOptions = new RmQRCodeGeneratorOptions { Version = version, FitStrategy = fit, Height = height, QuietZoneSize = quietZone, AllowKanji = request.AllowKanji };
+        var rmOptions = new RmQRCodeGeneratorOptions { Version = version, FitStrategy = fit, Height = height, QuietZoneSize = quietZone, AllowKanji = request.AllowKanji, Fnc1 = ParseFnc1(request) };
         if (!RmQRCodeGenerator.TryGetRequiredBufferSize(request.Content.AsSpan(), ecc, out var calculated, rmOptions))
             throw new ArgumentException($"Content does not fit any rMQR symbol under the requested constraints ({request.Content.Length} characters, ECC {ecc}, Version {(version is null ? "auto" : version.ToString())}, FitStrategy {fit}, Height {(height is null ? "auto" : height.ToString())}, QuietZone {quietZone}).", nameof(request));
 
@@ -856,6 +893,10 @@ public sealed record QrRequest
     public bool EccBoost { get; init; }
     /// <summary>Write Japanese text in Kanji mode where the library can (<see cref="QRCodeGeneratorOptions.AllowKanji"/> and its Micro QR and rMQR twins). Off by default, as in the library, because Android's own scanners read none of it.</summary>
     public bool AllowKanji { get; init; }
+    /// <summary>FNC1 mode, Standard QR and rMQR only: none, first (GS1 data) or second (an AIM industry format named by <see cref="ApplicationIndicator"/>). The content then holds the separator as U+001D.</summary>
+    public string Fnc1 { get; init; } = "none";
+    /// <summary>The application indicator in second position: one or two digits for 00-99, or one letter A-Z or a-z.</summary>
+    public string ApplicationIndicator { get; init; } = "";
     /// <summary>Output image size in pixels (square for Standard / Micro QR, and the image width for rMQR, height from the symbol aspect ratio).</summary>
     public int Size { get; init; } = 512;
     /// <summary>Quiet zone in modules (0-10).</summary>
