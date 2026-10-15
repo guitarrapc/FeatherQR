@@ -26,7 +26,8 @@ using System.Security.Cryptography;
 // build, so on other systems it is fetched and checked but not started.
 //
 // Moving to a new dictionary release, one pull request a release (the cadence, what a release can
-// change and how the packages ship it are in the "GS1 data" section of qrcode-symbologies.md):
+// change and how the packages ship it are in the "GS1 data" section of qrcode-symbologies.md, and
+// .github/workflows/gs1-dictionary.yaml opens an issue for each release):
 //
 //  1. Set the release and its commit here and in Gs1FixtureGenerator (DictionaryRelease and
 //     DictionaryCommit in both), run this app, then

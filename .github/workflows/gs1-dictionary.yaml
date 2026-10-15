@@ -1,0 +1,74 @@
+name: GS1 dictionary release
+
+# Notices a GS1 Barcode Syntax Dictionary release other than the one FeatherQR.Gs1 ships and opens an issue for it,
+# as the "GS1 data" section of .github/docs/specs/qrcode-symbologies.md describes. One issue a release: a release
+# that has an issue already, open or closed, gets no second one.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 1 * *" # At AM10:00 JST on the 1st of every month
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Compare the shipped release with the newest
+        id: compare
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The generated table holds the release the package ships, and a test holds it to the committed dictionary.
+          shipped=$(grep -oE 'DictionaryRelease = "[0-9]{4}-[0-9]{2}-[0-9]{2}"' src/FeatherQR.Gs1/Internals/Gs1AiTable.Generated.cs | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
+          if [[ -z "$shipped" || "$shipped" == *$'\n'* ]]; then
+            echo "::error::No single DictionaryRelease in src/FeatherQR.Gs1/Internals/Gs1AiTable.Generated.cs"
+            exit 1
+          fi
+          # Releases are date tags, so the newest sorts last. Other tags are not releases.
+          newest=$(gh api --paginate repos/gs1/gs1-syntax-dictionary/tags --jq '.[].name' | { grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' || true; } | sort | tail -n 1)
+          if [[ -z "$newest" ]]; then
+            echo "::error::gs1/gs1-syntax-dictionary has no date tag"
+            exit 1
+          fi
+          echo "shipped=$shipped" >> "$GITHUB_OUTPUT"
+          echo "newest=$newest" >> "$GITHUB_OUTPUT"
+          echo "FeatherQR.Gs1 ships dictionary release $shipped. The newest release is $newest." >> "$GITHUB_STEP_SUMMARY"
+      - name: Open an issue for the newest release
+        if: ${{ steps.compare.outputs.newest != steps.compare.outputs.shipped }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHIPPED: ${{ steps.compare.outputs.shipped }}
+          NEWEST: ${{ steps.compare.outputs.newest }}
+        run: |
+          set -euo pipefail
+          title="GS1 Barcode Syntax Dictionary $NEWEST"
+          # The search matches words, so the exact title is compared after it. The titles are read in full first:
+          # grep -q stopping the pipe early would fail the pipeline and open a second issue.
+          titles=$(gh issue list --repo "$GITHUB_REPOSITORY" --state all --limit 100 --search "\"$title\" in:title" --json title --jq '.[].title')
+          if grep -Fxq "$title" <<< "$titles"; then
+            echo "An issue titled \"$title\" exists already." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          dictionary=https://github.com/gs1/gs1-syntax-dictionary
+          body=$(cat <<EOF
+          The newest release of the GS1 Barcode Syntax Dictionary is [$NEWEST]($dictionary/tree/$NEWEST), and \`FeatherQR.Gs1\` ships [$SHIPPED]($dictionary/tree/$SHIPPED).
+
+          - The release's changes: [CHANGES]($dictionary/blob/$NEWEST/CHANGES) and the [diff]($dictionary/compare/$SHIPPED...$NEWEST).
+          - The steps of an update are in the header of \`tools/get_gs1_syntax_engine.cs\`, one pull request a release.
+          - The update changes \`FeatherQR.Gs1\` alone and ships all four packages at a minor version.
+
+          Opened by \`.github/workflows/gs1-dictionary.yaml\`.
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          echo "Opened an issue titled \"$title\"." >> "$GITHUB_STEP_SUMMARY"

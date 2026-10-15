@@ -851,3 +851,13 @@ Verified: the app against the oracles already fetched, and in an empty tree, whe
 Left for Phase 7: the monthly workflow, with the spec's sentence on noticing, and folding this plan.
 
 Benchmarks: none. No library code changed.
+
+### Phase 7, third part: the monthly workflow (2026-10-16)
+
+Done: `.github/workflows/gs1-dictionary.yaml`, the noticing half of G12. On the 1st of every month and on demand it reads the release the generated table names, the one the package ships, which a test holds to the committed dictionary, and the newest date tag of gs1/gs1-syntax-dictionary. When the two differ it opens an issue titled with the newest release, which links the release's CHANGES file and the diff between the two tags and points to the update steps in the fetch app's header. A release with an issue already, open or closed, gets no second one, so an issue closed without an update is not reopened each month. A pin missing or written twice, or a repository with no date tag, fails the run instead of passing in silence. The "GS1 data" section of the symbologies record says how a release is noticed and that GitHub stops scheduled workflows after 60 days without activity in a public repository, and the fetch app's header points to the workflow.
+
+Verified: actionlint and shellcheck pass. The two scripts, taken from the workflow as bash receives them, ran through each case. On this repository both releases are 2026-01-27 and no issue step runs. A generated file with no pin and one with two fail with an error. An older pin in a CRLF file gives the two releases. With a stand-in for the issue search, no issue and only a similar title each print the issue it would open, and the exact title among others opens none. The real search found an open and a closed issue of this repository by their exact titles. Every link in the body resolves. No issue was opened and the workflow has not run on GitHub, since a schedule runs only from the default branch.
+
+Left for Phase 7: folding this plan.
+
+Benchmarks: none. No library code changed.
