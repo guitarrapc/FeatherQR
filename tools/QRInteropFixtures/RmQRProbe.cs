@@ -90,7 +90,7 @@ public static class RmQRProbe
         var exe = FindQrtool(repoRoot);
         if (exe is null)
         {
-            Console.WriteLine("qrtool not found under tools/QRInteropFixtures/external/qrtool (run get-qrtool.ps1)");
+            Console.WriteLine("qrtool not found under tools/QRInteropFixtures/external/qrtool (run dotnet run tools/get_qrtool.cs)");
             return 0;
         }
 

@@ -30,7 +30,7 @@ public static class KanjiSweepProbe
         var exe = QrtoolRunner.Find(repoRoot);
         if (exe is null)
         {
-            Console.Error.WriteLine("qrtool not found; run tools/QRInteropFixtures/get-qrtool.ps1 first.");
+            Console.Error.WriteLine("qrtool not found; run dotnet run tools/get_qrtool.cs first.");
             return 1;
         }
 

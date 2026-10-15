@@ -3,7 +3,7 @@ using System.Text;
 
 namespace QRImageDecodeSweep;
 
-/// <summary>The pinned qrtool binary the interop fixtures use (<c>tools/QRInteropFixtures/get-qrtool.ps1</c>). Without it the sweep runs with one encoder fewer and says so.</summary>
+/// <summary>The pinned qrtool binary the interop fixtures use (<c>tools/get_qrtool.cs</c>). Without it the sweep runs with one encoder fewer and says so.</summary>
 internal static class Qrtool
 {
     private static string? exePath;

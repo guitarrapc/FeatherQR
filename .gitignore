@@ -404,7 +404,7 @@ FodyWeavers.xsd
 output/
 .references/
 
-# External oracle binaries for fixture generation (pinned; fetch with tools/QRInteropFixtures/get-qrtool.ps1)
+# External oracle binaries for fixture generation (pinned; fetch with tools/get_qrtool.cs and tools/get_gs1_syntax_engine.cs)
 tools/QRInteropFixtures/external/
 
 # Approval-test mismatch dumps (written next to goldens on failure)

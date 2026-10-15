@@ -275,7 +275,7 @@ foreach (var generator in microGenerators)
 {
     if (!generator.IsAvailable)
     {
-        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/QRInteropFixtures/get-qrtool.ps1 for the qrtool binary)");
+        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/get_qrtool.cs for the qrtool binary)");
         continue;
     }
 
@@ -317,7 +317,7 @@ foreach (var (generator, cases) in rmqrGenerators)
 {
     if (!generator.IsAvailable)
     {
-        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/QRInteropFixtures/get-qrtool.ps1 for the qrtool binary)");
+        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/get_qrtool.cs for the qrtool binary)");
         continue;
     }
 
