@@ -183,6 +183,10 @@ public class Gs1ElementStringValidateTest
         Gs1Validator.TryValidate("0109520123456788" + "10ABC\u001D" + "10DEF", Year, out var repeated);
         await Assert.That((repeated.Kind, repeated.Offset, repeated.Length)).IsEqualTo((Gs1ErrorKind.RepeatedAi, 22, 5));
 
+        // The same repeat before another element: whether an AI stands twice is kept over every element, not the last.
+        Gs1Validator.TryValidate("0109520123456788" + "10ABC\u001D" + "10DEF\u001D" + "17251231", Year, out var repeatedBefore);
+        await Assert.That((repeatedBefore.Kind, repeatedBefore.Offset, repeatedBefore.Length)).IsEqualTo((Gs1ErrorKind.RepeatedAi, 22, 5));
+
         Gs1Validator.TryValidate("0109520123456789", Year, out var check);
         await Assert.That((check.Kind, check.Offset, check.Length)).IsEqualTo((Gs1ErrorKind.InvalidCheckDigit, 15, 1));
 
@@ -195,6 +199,13 @@ public class Gs1ElementStringValidateTest
         Gs1Validator.TryValidate("0109520123456788" + "31A3000001", Year, out var aiLetter);
         await Assert.That((aiLetter.Kind, aiLetter.Offset, aiLetter.Length)).IsEqualTo((Gs1ErrorKind.UnknownAi, 16, 4));
 
+        // An AI the table does not know is refused at its digits alone, whether it comes first or between known
+        // elements. The first one's value would pass the checks of (00), which an unknown element's entry falls back to.
+        Gs1Validator.TryValidate(Gs1UnassignedAi.Ai234 + "195201234567891232\u001D" + "0109520123456788", Year, out var unknownFirst);
+        await Assert.That((unknownFirst.Kind, unknownFirst.Offset, unknownFirst.Length)).IsEqualTo((Gs1ErrorKind.UnknownAi, 0, 3));
+        Gs1Validator.TryValidate("0109520123456788" + Gs1UnassignedAi.Ai234 + "ABC\u001D" + "17251231", Year, out var unknownBetween);
+        await Assert.That((unknownBetween.Kind, unknownBetween.Offset, unknownBetween.Length)).IsEqualTo((Gs1ErrorKind.UnknownAi, 16, 3));
+
         // An unknown AI under a predefined-length prefix is read by that length (Table 7-6), so a short one is cut, not unknown.
         Gs1Validator.TryValidate(Gs1UnassignedAi.Ai3106 + "12345", Year, out var unknownCut);
         await Assert.That((unknownCut.Kind, unknownCut.Offset, unknownCut.Length)).IsEqualTo((Gs1ErrorKind.ValueTooShort, 4, 5));
@@ -205,46 +216,75 @@ public class Gs1ElementStringValidateTest
     }
 
     /// <summary>
-    /// Valid data of 40,000 elements and its (AI) text, one shape for each kind of rule an element can carry: an AI
-    /// that repeats its value, a key with exclusions beside an attribute with a requisite, and a measure whose
-    /// requisite names its alternatives by pattern.
+    /// A two-digit year is read in the century the year given puts it in. 29 February of year 00 is a date of 2000,
+    /// a leap year, when the checks run in 2026, and of 2100, which is not one, when they run in 2051. The two
+    /// answers differ, so a check that took its year from the clock, the same for both calls, would get one wrong.
+    /// The date comes second in one text and first in the other, since the first element is checked by a call of its
+    /// own, before the loop over the rest.
     /// </summary>
-    private static (string ElementString, string Hri) ManyElements(string shape)
+    [Test]
+    [Arguments("0109520123456788" + "17000229", 22)]
+    [Arguments("17000229" + "0109520123456788", 6)]
+    public async Task TryValidate_TwoDigitYear_IsReadAgainstTheYearGiven(string text, int dayOffset)
+    {
+        await Assert.That(Gs1Validator.TryValidate(text, 2026, out var accepted)).IsTrue().Because(accepted.ToString());
+        await Assert.That(Gs1Validator.TryValidate(text, 2051, out var error)).IsFalse();
+        await Assert.That((error.Kind, error.Offset, error.Length)).IsEqualTo((Gs1ErrorKind.InvalidDate, dayOffset, 2));
+    }
+
+    /// <summary>
+    /// Valid data and its (AI) text, in five shapes: an AI that repeats its value, a key with exclusions before an
+    /// attribute that requires it, a price whose requisite names the measures by pattern, the attribute again with
+    /// its key only at the very end, all of 40,000 elements, and two AIs that each repeat, the second only after
+    /// 40,000 elements of the first, 80,000 in all.
+    /// </summary>
+    private static (string ElementString, string Hri, int Elements) ManyElements(string shape)
     {
         const string Gtin = "09520123456788";
         return shape switch
         {
             "one AI repeating" => (
                 "01" + Gtin + string.Concat(Enumerable.Repeat("91A\u001D", 39_999)),
-                "(01)" + Gtin + string.Concat(Enumerable.Repeat("(91)A", 39_999))),
+                "(01)" + Gtin + string.Concat(Enumerable.Repeat("(91)A", 39_999)), 40_000),
             "a key and its batch" => (
                 string.Concat(Enumerable.Repeat("01" + Gtin + "10ABC\u001D", 20_000)),
-                string.Concat(Enumerable.Repeat("(01)" + Gtin + "(10)ABC", 20_000))),
+                string.Concat(Enumerable.Repeat("(01)" + Gtin + "(10)ABC", 20_000)), 40_000),
             "a weighed label" => (
                 string.Concat(Enumerable.Repeat("01" + Gtin + "3103000195" + "39220299\u001D" + "17251231", 10_000)),
-                string.Concat(Enumerable.Repeat("(01)" + Gtin + "(3103)000195" + "(3922)0299" + "(17)251231", 10_000))),
+                string.Concat(Enumerable.Repeat("(01)" + Gtin + "(3103)000195" + "(3922)0299" + "(17)251231", 10_000)), 40_000),
+            "the key last" => (
+                string.Concat(Enumerable.Repeat("10ABC\u001D", 39_999)) + "01" + Gtin,
+                string.Concat(Enumerable.Repeat("(10)ABC", 39_999)) + "(01)" + Gtin, 40_000),
+            "one AI after another" => (
+                "01" + Gtin + string.Concat(Enumerable.Repeat("91A\u001D", 40_000)) + string.Concat(Enumerable.Repeat("92B\u001D", 39_999)),
+                "(01)" + Gtin + string.Concat(Enumerable.Repeat("(91)A", 40_000)) + string.Concat(Enumerable.Repeat("(92)B", 39_999)), 80_000),
             _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "unknown shape"),
         };
     }
 
     /// <summary>
     /// The checks take time in proportion to the number of elements, in each form that runs them: the element
-    /// string, the (AI) text, and the element string on its way to a URI. A rule that scans the text again for each
-    /// of 40,000 elements reads 1.6 billion elements, which takes several times the five seconds allowed here, so
-    /// the bound is what shows that no rule does. The test runs alone, since the bound is on the clock.
+    /// string, the (AI) text, and the element string on its way to a URI. A rule that scans the text for each element,
+    /// for an AI it needs or for an earlier value to compare with, reads more than a billion elements in one of these
+    /// shapes at least, which takes several times the five seconds allowed. A scan for a requisite meets the key late
+    /// only when the key comes last, and a scan for a first value meets it late only for the second of two AIs, which
+    /// is why that shape is twice as long. The test runs apart from the other tests of its process, since the bound
+    /// is on the clock.
     /// </summary>
     [Test]
     [NotInParallel]
     [Arguments("one AI repeating")]
     [Arguments("a key and its batch")]
     [Arguments("a weighed label")]
-    public async Task Checks_OnFortyThousandElements_TakeUnderFiveSeconds(string name)
+    [Arguments("the key last")]
+    [Arguments("one AI after another")]
+    public async Task Checks_OnManyElements_TakeUnderFiveSeconds(string name)
     {
         var shape = ManyElements(name);
         var elements = 0;
         foreach (var _ in Gs1ElementString.EnumerateElements(shape.ElementString))
             elements++;
-        await Assert.That(elements).IsEqualTo(40_000);
+        await Assert.That(elements).IsEqualTo(shape.Elements);
 
         var elementString = new char[shape.ElementString.Length];
         var uri = new char[256];

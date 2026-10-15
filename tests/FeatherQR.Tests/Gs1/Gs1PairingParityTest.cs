@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using FeatherQR.Gs1;
 using FeatherQR.Gs1.Internals;
@@ -5,10 +6,11 @@ using FeatherQR.Gs1.Internals;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// <see cref="Gs1Validator.CheckPairings"/> against <see cref="Gs1PairingReference"/>: the same answer for every
-/// text, and for a refusal the same kind at the same place. The rules read the split, the AIs, whether two values
-/// of one AI are equal and how long a key's value is, so the values here are filler of one repeated character:
-/// <c>1</c> everywhere, and <c>2</c> where a value has to differ.
+/// <see cref="Gs1Validator.CheckPairings"/> against <see cref="Gs1PairingReference"/>: on every text that splits, the
+/// same answer, and for a refusal the same kind at the same place. On text that does not split the library gives the
+/// splitter's first error, which the tests take as the expected answer there. The rules read the split, the AIs,
+/// whether two values of one AI are equal and how long a key's value is, so the values here are filler of one
+/// repeated character: <c>1</c> everywhere, and <c>2</c> where a value has to differ.
 /// </summary>
 public class Gs1PairingParityTest
 {
@@ -79,13 +81,34 @@ public class Gs1PairingParityTest
 
     private static string Show(string text) => text.Replace(Gs1TestText.Gs, '|');
 
-    /// <summary><c>null</c> where the library and the reference agree on the text, and what each said where they do not.</summary>
+    /// <summary>The splitter's first error in the text, or <c>null</c> where the whole text splits.</summary>
+    private static Gs1Error? SplitError(string text)
+    {
+        var position = 0;
+        while (position < text.Length)
+        {
+            if (!Gs1Splitter.TryNext(text, ref position, out _, out var error))
+                return error;
+        }
+        return null;
+    }
+
+    /// <summary><c>null</c> where the library gives the expected answer, and what each said where it does not.</summary>
     private static string? Difference(string text) => Difference(text, out _);
 
-    /// <summary>As <see cref="Difference(string)"/>, with the reference's error (<see cref="Gs1ErrorKind.None"/> where it accepts).</summary>
+    /// <summary>As <see cref="Difference(string)"/>, with the expected error (<see cref="Gs1ErrorKind.None"/> where the text is accepted).</summary>
     private static string? Difference(string text, out Gs1Error expectedError)
     {
-        var expected = Gs1PairingReference.CheckPairings(text, out expectedError);
+        bool expected;
+        if (SplitError(text) is { } splitError)
+        {
+            expected = false;
+            expectedError = splitError;
+        }
+        else
+        {
+            expected = Gs1PairingReference.CheckPairings(text, out expectedError);
+        }
         var actual = Gs1Validator.CheckPairings(text, out var actualError);
         if (expected == actual && expectedError.Equals(actualError))
             return null;
@@ -103,8 +126,8 @@ public class Gs1PairingParityTest
     }
 
     /// <summary>
-    /// Every input of the corpus, whatever its kind, and every element string the corpus tests are run on. Text that
-    /// does not split gives the splitter's error from both, and the corpus reaches each pairing rule.
+    /// Every input of the corpus, whatever its kind, and every element string the corpus tests are run on. The
+    /// corpus reaches each pairing rule, and many of its texts do not split, so both answers are held.
     /// </summary>
     [Test]
     public async Task CheckPairings_MatchesReference_OnTheCorpus()
@@ -115,11 +138,14 @@ public class Gs1PairingParityTest
         var differences = new List<string>();
         var kinds = new HashSet<Gs1ErrorKind>();
         var accepted = 0;
+        var unsplit = 0;
         foreach (var text in texts)
         {
             if (Difference(text, out var error) is { } difference)
                 differences.Add(difference);
-            if (error.Kind == Gs1ErrorKind.None)
+            if (SplitError(text) is not null)
+                unsplit++;
+            else if (error.Kind == Gs1ErrorKind.None)
                 accepted++;
             else
                 kinds.Add(error.Kind);
@@ -127,10 +153,34 @@ public class Gs1PairingParityTest
 
         await Assert.That(differences).IsEmpty();
         await Assert.That(texts.Length).IsGreaterThan(900);
+        await Assert.That(unsplit).IsGreaterThan(100);
         await Assert.That(accepted).IsGreaterThan(100);
         await Assert.That(kinds).Contains(Gs1ErrorKind.ExcludedAiPair);
         await Assert.That(kinds).Contains(Gs1ErrorKind.MissingRequiredAi);
         await Assert.That(kinds).Contains(Gs1ErrorKind.RepeatedAi);
+    }
+
+    /// <summary>
+    /// Text that stops splitting after an excluded pair. The reference reports the pair, since it asks each element's
+    /// exclusions before it reads on to the fault. The library reports the fault, since it reads every AI into its
+    /// set first. No library path gives <c>CheckPairings</c> such text: its one caller in the library, the (AI) text
+    /// builder, passes the element string it built, which always splits, and <see cref="Gs1Validator.TryValidate"/>
+    /// refuses the fault itself before any rule between elements.
+    /// </summary>
+    [Test]
+    [Arguments("0109520123456788371\u001D\u001D", Gs1ErrorKind.UnexpectedSeparator, 20, 1)]
+    [Arguments("0109520123456788371\u001D9", Gs1ErrorKind.UnknownAi, 20, 1)]
+    [Arguments("0109520123456788" + "0209520123456788" + "011", Gs1ErrorKind.ValueTooShort, 34, 1)]
+    public async Task CheckPairings_TextThatStopsSplittingAfterAnExcludedPair_GivesTheSplittersError(string text, Gs1ErrorKind kind, int offset, int length)
+    {
+        var splitterError = new Gs1Error(kind, offset, length);
+        await Assert.That(SplitError(text)).IsEqualTo(splitterError);
+        await Assert.That(Gs1Validator.CheckPairings(text, out var error)).IsFalse();
+        await Assert.That(error).IsEqualTo(splitterError);
+        await Assert.That(Gs1Validator.TryValidate(text, 2026, out var validated)).IsFalse();
+        await Assert.That(validated).IsEqualTo(splitterError);
+        await Assert.That(Gs1PairingReference.CheckPairings(text, out var reference)).IsFalse();
+        await Assert.That(reference.Kind).IsEqualTo(Gs1ErrorKind.ExcludedAiPair);
     }
 
     /// <summary>
@@ -219,10 +269,11 @@ public class Gs1PairingParityTest
     }
 
     /// <summary>
-    /// Random element strings of up to 16 elements from four sources: the whole table, the AIs the common rules
-    /// name, the AIs that may follow (00) and (01), and six of those picked for the text. The first two mostly end
-    /// at an exclusion or a requisite. Texts of the last two start with (00) and (01) and so get past both, and six
-    /// AIs in up to 16 elements repeat. Each outcome is counted to show that the run reached it.
+    /// Random element strings of one to sixteen elements drawn from four sources: the whole table, the AIs the
+    /// common rules name, the AIs that may follow (00) and (01), and six of those picked for the text. The first two
+    /// mostly end at an exclusion or a requisite. Texts of the last two start with (00) and (01) before the drawn
+    /// elements and so get past both, and six AIs in up to sixteen drawn elements repeat. Each outcome is counted to
+    /// show that the run reached it.
     /// </summary>
     [Test]
     public async Task CheckPairings_MatchesReference_OnRandomElementStrings()
@@ -281,14 +332,16 @@ public class Gs1PairingParityTest
     }
 
     /// <summary>
-    /// The set the tests of repeats are built from holds more AIs than three passes of the repeat check compare,
-    /// so a text of all of them needs a fourth pass, and the reference takes it whole.
+    /// The set the tests of repeats are built from holds AIs of two, three and four digits. It holds more than 128,
+    /// more than two words of the validator's set can hold, so the ranks that index the table of first values are
+    /// counted across more than two words. The reference takes the set whole.
     /// </summary>
     [Test]
-    public async Task CompatibleAis_AreMoreThanThreePassesCompare()
+    public async Task CompatibleAis_AreManyAndOfEveryLength()
     {
         var compatible = Compatible.Value;
-        await Assert.That(compatible.Length).IsGreaterThan(3 * Gs1Validator.RepeatSlots);
+        await Assert.That(compatible.Length).IsGreaterThan(128);
+        await Assert.That(compatible.Select(ai => ai.Length).Distinct().Order()).IsEquivalentTo(new[] { 2, 3, 4 }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
         await Assert.That(compatible.Distinct().Count()).IsEqualTo(compatible.Length);
         await Assert.That(Gs1PairingReference.CheckPairings(string.Concat(compatible.Select(ai => Element(ai))), out _)).IsTrue();
     }
@@ -309,20 +362,18 @@ public class Gs1PairingParityTest
 
     /// <summary>
     /// One AI of many repeats with another value, after every AI has stood once: the refusal is at that last
-    /// element, whichever pass of the repeat check its AI falls in and whichever slot of the pass. Every third AI
-    /// is tried, and the first and last AI of each pass.
+    /// element, whichever AI it is and so whatever its rank in the set. Every third AI is tried, and the last.
     /// </summary>
     [Test]
     public async Task CheckPairings_OneOfManyAisRepeatsWithAnotherValue_IsRefusedAtThatElement()
     {
         var compatible = Compatible.Value;
-        var slots = Gs1Validator.RepeatSlots;
         var once = string.Concat(compatible.Select(ai => Element(ai)));
         var failures = new List<string>();
         var tried = 0;
         for (var changed = 0; changed < compatible.Length; changed++)
         {
-            if (changed % 3 != 0 && changed % slots != 0 && changed % slots != slots - 1 && changed != compatible.Length - 1)
+            if (changed % 3 != 0 && changed != compatible.Length - 1)
                 continue;
             tried++;
             var repeat = Element(compatible[changed], '2');
@@ -340,16 +391,16 @@ public class Gs1PairingParityTest
     /// <summary>
     /// Two AIs repeat with another value, and the one whose first element comes later is repeated first. The refusal
     /// is at the repeat of the AI that comes first, which a check that stops at the first repeat it meets gets
-    /// wrong. The pairs are taken across the passes of the repeat check: both in one pass, and the first AI in an
-    /// earlier pass than the second.
+    /// wrong. The two AIs are taken from the start, the middle and the end of the first round, both near each other
+    /// and far apart.
     /// </summary>
     [Test]
     public async Task CheckPairings_TwoAisRepeatWithAnotherValue_IsRefusedAtTheAiThatComesFirst()
     {
         var compatible = Compatible.Value;
-        var slots = Gs1Validator.RepeatSlots;
         var once = string.Concat(compatible.Select(ai => Element(ai)));
-        var places = new[] { 0, 1, slots - 1, slots, slots + 1, 2 * slots - 1, 2 * slots, 3 * slots, compatible.Length - 2, compatible.Length - 1 };
+        var n = compatible.Length;
+        var places = new[] { 0, 1, 2, n / 3, n / 3 + 1, n / 2, 2 * n / 3, n - 3, n - 2, n - 1 };
         var failures = new List<string>();
         var pairs = 0;
         foreach (var early in places)
@@ -374,8 +425,9 @@ public class Gs1PairingParityTest
     }
 
     /// <summary>
-    /// The AIs that may stand together in a random order, each once or twice, a value in sixteen differing. Such a
-    /// text holds several repeats with another value, in any order of their first elements.
+    /// The large set of AIs that may stand together in a random order, each once or twice. In three texts of four a
+    /// value in sixteen differs, so such a text holds several repeats with another value, in any order of their first
+    /// elements.
     /// </summary>
     [Test]
     public async Task CheckPairings_MatchesReference_OnShuffledRepeats()
@@ -413,5 +465,28 @@ public class Gs1PairingParityTest
         await Assert.That(differences).IsEmpty();
         await Assert.That(accepted).IsEqualTo(6);
         await Assert.That(refused).IsEqualTo(18);
+    }
+
+    /// <summary>
+    /// The large set of AIs that may stand together, in turn, for close to 160,000 elements, all accepted, so every
+    /// element after the first round repeats an AI. A repeat check that takes more passes over the text as it grows,
+    /// rather than as its AIs grow, reads hundreds of millions of elements here and takes longer than the five seconds
+    /// allowed. The test runs apart from the other tests of its process, since the bound is on the clock.
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    public async Task CheckPairings_OnManyAisInTurn_TakesUnderFiveSeconds()
+    {
+        var round = string.Concat(Compatible.Value.Select(ai => Element(ai)));
+        var rounds = 160_000 / Compatible.Value.Length;
+        var text = new StringBuilder(round.Length * rounds).Insert(0, round, rounds).ToString();
+
+        var clock = Stopwatch.StartNew();
+        var accepted = Gs1Validator.CheckPairings(text, out var error);
+        var elapsed = clock.Elapsed;
+
+        await Assert.That(accepted).IsTrue().Because(error.ToString());
+        await Assert.That(rounds * Compatible.Value.Length).IsGreaterThan(159_000);
+        await Assert.That(elapsed).IsLessThan(TimeSpan.FromSeconds(5)).Because($"{elapsed.TotalMilliseconds:F0} ms");
     }
 }

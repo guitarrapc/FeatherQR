@@ -49,17 +49,17 @@ public class Gs1DataLayer
         if (!Gs1Validator.Validate(_hri).IsValid)
             throw new InvalidOperationException($"CodeGlyphX refuses shape {Shape}");
 
-        // Each call has its own buffer, of the length its twin gives. The length of the text a call starts from
-        // does not serve: the element string read back from a URI has its elements in the URI's order, and for
-        // the retail label that takes a separator the original has no need of.
+        // Each call has its own buffer, of the length its twin gives. The setup's own text of the form a call
+        // writes does not serve: the element string read back from a URI has its elements in the URI's order, and
+        // for the retail label that takes a separator the original element string has no need of.
         _hriBuffer = Sized(Gs1ElementString.TryGetToHriLength(_elementString, out var length, out _), length, "TryGetToHriLength");
         _fromHriBuffer = Sized(Gs1ElementString.TryGetFromHriLength(_hri, out length, out _), length, "TryGetFromHriLength");
         _uriBuffer = Sized(Gs1ElementString.TryGetToDigitalLinkLength(_elementString, out length, out _), length, "TryGetToDigitalLinkLength");
         _fromUriBuffer = Sized(Gs1ElementString.TryGetFromDigitalLinkLength(_uri, out length, out _), length, "TryGetFromDigitalLinkLength");
         _readBuffer = Sized(Gs1ElementString.TryGetReadLength(_uri, default, out length, out _), length, "TryGetReadLength");
 
-        // A call that answers false would have its refusal timed, so each row's call is made once here.
-        Require(Validate(), "TryValidate");
+        // A call that answers false would have its refusal timed, so each call that writes into a buffer is made
+        // once here. TryValidate's row is the call checked above.
         Require(ToHri() >= 0, "TryToHri");
         Require(FromHri() >= 0, "TryFromHri");
         Require(ToDigitalLink() >= 0, "TryToDigitalLink");

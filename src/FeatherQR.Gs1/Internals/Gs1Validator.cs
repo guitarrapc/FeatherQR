@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace FeatherQR.Gs1.Internals;
 
 /// <summary>
@@ -10,13 +12,13 @@ namespace FeatherQR.Gs1.Internals;
 /// </summary>
 internal static class Gs1Validator
 {
-    /// <summary>How many AIs one pass of the repeat check compares.</summary>
-    internal const int RepeatSlots = 32;
-
-    // A set of AIs has one bit for each AI a text can name: 100 of two digits, then 1,000 of three, then 10,000 of four.
+    // A set of AIs has one bit for each number of two, three and four digits, assigned or not: 100, then 1,000, then
+    // 10,000, in 174 words of 64 bits. After them come three words more, with a bit for each of those that holds an
+    // AI, so that counting the AIs below a word reads only the words a text uses.
     private const int ThreeDigitBits = 100;
     private const int FourDigitBits = ThreeDigitBits + 1000;
     private const int AiSetWords = (FourDigitBits + 10000 + 63) / 64;
+    private const int SetWords = AiSetWords + (AiSetWords + 63) / 64;
     private const int DigitalSignatureBit = FourDigitBits + 8030;
 
     /// <summary><paramref name="year"/> resolves two-digit years, so the checks can be run for a fixed year in tests.</summary>
@@ -29,28 +31,36 @@ internal static class Gs1Validator
             return false;
         }
 
-        Span<ulong> present = stackalloc ulong[AiSetWords];
-        var repeats = false;
         var position = 0;
-        while (position < text.Length)
+        if (!TryNextChecked(text, ref position, year, out var element, out error))
+            return false;
+        // The set is cleared only now, so that text refused at its first element does not pay for it.
+        Span<ulong> present = stackalloc ulong[SetWords];
+        var repeats = false;
+        while (true)
         {
-            if (!Gs1Splitter.TryNext(text, ref position, out var element, out error))
-                return false;
-            if (!element.Known)
-            {
-                error = new Gs1Error(Gs1ErrorKind.UnknownAi, element.AiStart, element.AiLength);
-                return false;
-            }
-            if (!CheckValue(text, element, year, out error))
-                return false;
             repeats |= Add(present, AiBit(text, element));
+            if (position >= text.Length)
+                break;
+            if (!TryNextChecked(text, ref position, year, out element, out error))
+                return false;
         }
 
         return CheckPairings(text, present, repeats, out error);
     }
 
-    private static bool CheckValue(ReadOnlySpan<char> text, in Gs1SplitElement element, int year, out Gs1Error error)
-        => CheckValue(text.Slice(element.ValueStart, element.ValueLength), element.ValueStart, element.Entry, year, out error);
+    /// <summary>The next element, refused unless the table knows its AI and its value passes the checks of its entry.</summary>
+    private static bool TryNextChecked(ReadOnlySpan<char> text, ref int position, int year, out Gs1SplitElement element, out Gs1Error error)
+    {
+        if (!Gs1Splitter.TryNext(text, ref position, out element, out error))
+            return false;
+        if (!element.Known)
+        {
+            error = new Gs1Error(Gs1ErrorKind.UnknownAi, element.AiStart, element.AiLength);
+            return false;
+        }
+        return CheckValue(text.Slice(element.ValueStart, element.ValueLength), element.ValueStart, element.Entry, year, out error);
+    }
 
     /// <summary>
     /// One element's value against its entry: component by component, lengths, then character set, then linters.
@@ -134,14 +144,16 @@ internal static class Gs1Validator
     }
 
     /// <summary>
-    /// The rules between elements, over a text that splits, in the order the Syntax Engine runs its validations:
-    /// every exclusion, then every requisite, then a repeated AI with another value, then the digital signature's
-    /// serialised key. Within a rule the elements are asked in the order of the text.
+    /// The rules between elements, in the order the Syntax Engine runs its validations: every exclusion, then every
+    /// requisite, then a repeated AI with another value, then the digital signature's serialised key. Within a rule
+    /// the elements are asked in the order of the text. Given text that does not split it gives the splitter's
+    /// error, since it builds the set of the text's AIs first. Its one caller in the library, the (AI) text builder,
+    /// passes text that splits.
     /// </summary>
     public static bool CheckPairings(ReadOnlySpan<char> text, out Gs1Error error)
     {
         error = default;
-        Span<ulong> present = stackalloc ulong[AiSetWords];
+        Span<ulong> present = stackalloc ulong[SetWords];
         var repeats = false;
         var position = 0;
         while (position < text.Length)
@@ -194,7 +206,7 @@ internal static class Gs1Validator
             return false;
         }
 
-        if (repeats && !CheckRepeats(text, out error))
+        if (repeats && !CheckRepeats(text, present, out error))
             return false;
         return !Contains(present, DigitalSignatureBit) || CheckSerialisedKey(text, out error);
     }
@@ -205,79 +217,60 @@ internal static class Gs1Validator
     /// each element with every later one would stop.
     /// </summary>
     /// <remarks>
-    /// A table of every AI's first element would take one pass and a slot for each AI of the dictionary. This
-    /// takes a pass for each <see cref="RepeatSlots"/> AIs of the text instead, in the order of their first
-    /// elements, and holds one small table: a pass notes the first value of the next AIs it meets, compares every
-    /// later element of those AIs with it, and leaves the AIs beyond its slots to the next pass. No AI of a later
-    /// pass comes before an AI of this one, so the first slot whose AI repeats with another value is the answer.
+    /// One pass, with each AI's first value in a table indexed by the AI's rank in the set: the number of AIs of the
+    /// text below it. A table indexed by the AI itself would need a slot for every number of the set's range, and
+    /// this one has a slot for each AI the text holds.
     /// </remarks>
-    private static bool CheckRepeats(ReadOnlySpan<char> text, out Gs1Error error)
+    private static bool CheckRepeats(ReadOnlySpan<char> text, ReadOnlySpan<ulong> present, out Gs1Error error)
     {
         error = default;
-        Span<ulong> compared = stackalloc ulong[AiSetWords];
-        Span<RepeatSlot> slots = stackalloc RepeatSlot[RepeatSlots];
-        var start = 0;
-        while (true)
+        // The AIs below each word that holds one, so that a rank takes one count within one word. The words are
+        // taken from the set's last three, lowest first, so that a text of few AIs counts few words.
+        Span<ushort> below = stackalloc ushort[AiSetWords];
+        var count = 0;
+        for (var summary = AiSetWords; summary < present.Length; summary++)
         {
-            var used = 0;
-            // Where the first element that got no slot starts. Every element before it is of an AI that is compared by now.
-            var next = -1;
-            var position = start;
-            while (position < text.Length)
+            for (var words = present[summary]; words != 0; words &= words - 1)
             {
-                if (!Gs1Splitter.TryNext(text, ref position, out var element, out error))
-                    return false;
-                var bit = AiBit(text, element);
-                if (Contains(compared, bit))
-                    continue;
-
-                var slot = 0;
-                while (slot < used && slots[slot].Bit != bit)
-                    slot++;
-                if (slot == used)
-                {
-                    if (used == slots.Length)
-                    {
-                        if (next < 0)
-                            next = element.AiStart;
-                        continue;
-                    }
-                    slots[used++] = new RepeatSlot { Bit = bit, ValueStart = element.ValueStart, ValueLength = element.ValueLength };
-                    continue;
-                }
-
-                ref var first = ref slots[slot];
-                if (first.OtherLength == 0 && !text.Slice(element.ValueStart, element.ValueLength).SequenceEqual(text.Slice(first.ValueStart, first.ValueLength)))
-                {
-                    first.OtherStart = element.AiStart;
-                    first.OtherLength = element.End - element.AiStart;
-                }
+                var word = (summary - AiSetWords) * 64 + PopCount((words & (~words + 1)) - 1);
+                below[word] = (ushort)count;
+                count += PopCount(present[word]);
             }
-
-            for (var slot = 0; slot < used; slot++)
-            {
-                if (slots[slot].OtherLength != 0)
-                {
-                    error = new Gs1Error(Gs1ErrorKind.RepeatedAi, slots[slot].OtherStart, slots[slot].OtherLength);
-                    return false;
-                }
-                Add(compared, slots[slot].Bit);
-            }
-            if (next < 0)
-                return true;
-            start = next;
         }
-    }
 
-    /// <summary>One AI of a pass of the repeat check: its first element's value, and its first element with another value.</summary>
-    private struct RepeatSlot
-    {
-        public int Bit;
-        public int ValueStart;
-        public int ValueLength;
-        public int OtherStart;
-        /// <summary>The length of the element with another value, AI and value, and 0 while there is none.</summary>
-        public int OtherLength;
+        // For each AI by rank, where its first value starts, plus one so that 0 is an AI not met yet, and its length.
+        Span<int> firsts = stackalloc int[2 * count];
+        var refusedFirst = int.MaxValue;
+        var refused = default(Gs1SplitElement);
+        var position = 0;
+        while (position < text.Length)
+        {
+            if (!Gs1Splitter.TryNext(text, ref position, out var element, out error))
+                return false;
+            var bit = AiBit(text, element);
+            var slot = 2 * (below[bit >> 6] + PopCount(present[bit >> 6] & ((1UL << (bit & 63)) - 1)));
+            var firstStart = firsts[slot] - 1;
+            if (firstStart < 0)
+            {
+                firsts[slot] = element.ValueStart + 1;
+                firsts[slot + 1] = element.ValueLength;
+                continue;
+            }
+            // An AI whose first element comes after that of the AI found so far cannot be the answer, nor can a
+            // later element of the AI found, so only the first element with another value of each AI is kept.
+            if (firstStart >= refusedFirst)
+                continue;
+            if (!text.Slice(element.ValueStart, element.ValueLength).SequenceEqual(text.Slice(firstStart, firsts[slot + 1])))
+            {
+                refusedFirst = firstStart;
+                refused = element;
+            }
+        }
+
+        if (refusedFirst == int.MaxValue)
+            return true;
+        error = new Gs1Error(Gs1ErrorKind.RepeatedAi, refused.AiStart, refused.End - refused.AiStart);
+        return false;
     }
 
     /// <summary>
@@ -399,15 +392,30 @@ internal static class Gs1Validator
     private static int KeyBit(int key)
         => key < 30000 ? key - 20000 : key < 40000 ? key - 30000 + ThreeDigitBits : key - 40000 + FourDigitBits;
 
-    /// <summary>Adds an AI to a set, and says whether it was there already.</summary>
+    /// <summary>Adds an AI to a set, notes its word among the words that hold an AI, and says whether it was there already.</summary>
+    // Inlined on request: it runs for each element, and the note of the word takes it past the size the JIT inlines
+    // on its own.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool Add(Span<ulong> set, int bit)
     {
-        ref var word = ref set[bit >> 6];
+        var word = bit >> 6;
+        ref var bits = ref set[word];
         var mask = 1UL << (bit & 63);
-        var was = (word & mask) != 0;
-        word |= mask;
+        var was = (bits & mask) != 0;
+        bits |= mask;
+        set[AiSetWords + (word >> 6)] |= 1UL << (word & 63);
         return was;
     }
 
     private static bool Contains(ReadOnlySpan<ulong> set, int bit) => (set[bit >> 6] & (1UL << (bit & 63))) != 0;
+
+    /// <summary>The number of bits set. Counted here, since the runtime's count is missing from the netstandard targets.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int PopCount(ulong value)
+    {
+        value -= (value >> 1) & 0x5555555555555555UL;
+        value = (value & 0x3333333333333333UL) + ((value >> 2) & 0x3333333333333333UL);
+        value = (value + (value >> 4)) & 0x0F0F0F0F0F0F0F0FUL;
+        return (int)((value * 0x0101010101010101UL) >> 56);
+    }
 }

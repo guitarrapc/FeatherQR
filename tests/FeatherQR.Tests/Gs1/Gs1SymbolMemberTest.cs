@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Diagnostics.Tracing;
 using FeatherQR.Gs1;
 using FeatherQR.Gs1.Internals;
 
@@ -391,14 +393,12 @@ public class Gs1SymbolMemberTest
     }
 
     /// <summary>
-    /// A size form answers for text longer than any symbol holds from its length, before any check. The checks
-    /// build the element string of long (AI) text in a pooled buffer as long as the text, so a buffer is what
-    /// shows that they did not run: each of the two (AI) texts measured here needs an array of a size that no
-    /// other test rents, which the pool would have to allocate. A wrong option is still reported first, and the
-    /// longest data that fits is still sized.
+    /// A size form answers <c>false</c> for text longer than any symbol holds, a wrong option is still reported
+    /// first, and the longest data that fits is still sized. That the answer comes from the length, before the
+    /// checks, is the test after this one.
     /// </summary>
     [Test]
-    public async Task TryGetRequiredBufferSizeGs1_TextTooLongForAnySymbol_IsRefusedFromItsLength()
+    public async Task TryGetRequiredBufferSizeGs1_TextTooLongForAnySymbol_IsRefused()
     {
         // (01) and then (91)A 19,996 times: valid data, since an AI may repeat with one value.
         var tooLong = "01" + Gtin + string.Concat(Enumerable.Repeat("91A\u001D", 19_996));
@@ -410,20 +410,6 @@ public class Gs1SymbolMemberTest
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLongAsAiText, QREccLevel.L, out _)).IsFalse();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLong, RmQREccLevel.M, out _)).IsFalse();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLongAsAiText, RmQREccLevel.M, out _)).IsFalse();
-
-        // The pool hands out arrays of 4,194,304 characters for the first text and of 2,097,152 for the second.
-        // The two sizes differ, so an array rented for one call cannot serve the other. Each text is (AI) text by
-        // its first character, which is all the length's answer reads. Neither is built by joining parts, since
-        // that rents arrays of these sizes and returns them to the pool.
-        var threeMillion = "(" + new string('1', 3_000_000);
-        var oneAndAHalfMillion = "(" + new string('1', 1_500_000);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var qrAnswer = QRCodeGenerator.TryGetRequiredBufferSizeGs1(threeMillion, QREccLevel.L, out _);
-        var rmqrAnswer = RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(oneAndAHalfMillion, RmQREccLevel.M, out _);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        await Assert.That(qrAnswer).IsFalse();
-        await Assert.That(rmqrAnswer).IsFalse();
-        await Assert.That(allocated).IsLessThan(1_000_000).Because("the smaller of the two arrays is 4,194,304 bytes");
 
         var second = new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.SecondPosition(1) };
         await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLong, QREccLevel.L, out _, second)).ThrowsExactly<ArgumentException>();
@@ -460,6 +446,66 @@ public class Gs1SymbolMemberTest
         {
             await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(text, RmQREccLevel.M, out var rmqrSize)).IsTrue();
             await Assert.That(rmqrSize.Version).IsEqualTo(RmQRVersion.R17x139);
+        }
+    }
+
+    /// <summary>
+    /// The length answers before any check, each member at its own capacity. (AI) text one character past twice the
+    /// capacity gets its answer without the pooled buffer the checks build its element string in, and (AI) text one
+    /// character shorter takes that buffer, as the checks then run and refuse it. Both are longer than the stack
+    /// buffer, so a rent is what tells the two paths apart. An element string is checked where it is and rents
+    /// nothing, so no test sees whether the length answers for it. The test runs apart from the other tests of its
+    /// process: the pool's events, once a listener asks for them, are raised on every thread.
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    public async Task TryGetRequiredBufferSizeGs1_AiTextPastTwiceTheCapacity_IsAnsweredWithoutTheChecks()
+    {
+        var qrLongest = "(" + new string('1', 2 * Gs1SymbolData.StandardQrCapacity - 1);
+        var rmqrLongest = "(" + new string('1', 2 * Gs1SymbolData.RmQrCapacity - 1);
+        await Assert.That(rmqrLongest.Length).IsGreaterThan(Gs1SymbolData.StackLimit);
+
+        using var rents = new CharPoolRents();
+        var qrChecked = rents.During(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(qrLongest, QREccLevel.L, out _), out var qrCheckedAnswer);
+        var qrPast = rents.During(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(qrLongest + "1", QREccLevel.L, out _), out var qrPastAnswer);
+        var rmqrChecked = rents.During(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(rmqrLongest, RmQREccLevel.M, out _), out var rmqrCheckedAnswer);
+        var rmqrPast = rents.During(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(rmqrLongest + "1", RmQREccLevel.M, out _), out var rmqrPastAnswer);
+
+        await Assert.That(qrCheckedAnswer || qrPastAnswer || rmqrCheckedAnswer || rmqrPastAnswer).IsFalse();
+        await Assert.That(qrChecked).IsGreaterThan(0).Because("the checks build the element string of (AI) text in a pooled buffer");
+        await Assert.That(qrPast).IsEqualTo(0);
+        await Assert.That(rmqrChecked).IsGreaterThan(0).Because("the checks build the element string of (AI) text in a pooled buffer");
+        await Assert.That(rmqrPast).IsEqualTo(0);
+    }
+
+    /// <summary>Counts the arrays the shared pool of characters hands out to the thread that made the listener.</summary>
+    private sealed class CharPoolRents : EventListener
+    {
+        // Set before the base constructor runs, which already reports the event sources that exist.
+        private readonly int _thread = Environment.CurrentManagedThreadId;
+        private readonly int _pool = ArrayPool<char>.Shared.GetHashCode();
+        private int _count;
+
+        /// <summary>The rents a call makes, and its answer.</summary>
+        public int During(Func<bool> call, out bool answer)
+        {
+            Volatile.Write(ref _count, 0);
+            answer = call();
+            return Volatile.Read(ref _count);
+        }
+
+        protected override void OnEventSourceCreated(EventSource eventSource)
+        {
+            if (eventSource.Name == "System.Buffers.ArrayPoolEventSource")
+                EnableEvents(eventSource, EventLevel.Verbose);
+        }
+
+        protected override void OnEventWritten(EventWrittenEventArgs eventData)
+        {
+            // A rent's payload is the array's id, its length, the pool's id and the bucket.
+            if (eventData.EventName == "BufferRented" && Environment.CurrentManagedThreadId == _thread
+                && eventData.Payload is { Count: > 2 } payload && Convert.ToInt32(payload[2]) == _pool)
+                Interlocked.Increment(ref _count);
         }
     }
 
