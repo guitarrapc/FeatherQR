@@ -141,6 +141,8 @@ public static class Gs1ElementString
 /// <summary>Why a conversion or check refused its input: the kind, and where in the input (<see cref="Offset"/>, <see cref="Length"/>, both 0 when the kind names no place). <c>default</c> is <see cref="Gs1ErrorKind.None"/>. <see cref="ToString"/> is the message the generator entry points put in their <see cref="Gs1FormatException"/>.</summary>
 public readonly record struct Gs1Error
 {
+    /// <summary>Creates an error. <paramref name="offset"/> and <paramref name="length"/> are positions in the input the error is about, 0 where the kind names no place. Throws <see cref="ArgumentOutOfRangeException"/> for a negative one.</summary>
+    public Gs1Error(Gs1ErrorKind kind, int offset, int length);
     public Gs1ErrorKind Kind { get; }
     public int Offset { get; }
     public int Length { get; }
@@ -150,10 +152,12 @@ public readonly record struct Gs1Error
 /// <summary>Thrown by the generator entry points (<c>CreateGs1</c>, <c>CreateGs1DigitalLink</c>) when the data is not valid GS1 data. Nothing on <see cref="Gs1ElementString"/> throws for its input. A <see cref="FormatException"/>, as <see cref="UriFormatException"/> is, so an existing <c>catch (FormatException)</c> still catches it, with the <see cref="Error"/> for callers that want the kind and the place.</summary>
 public sealed class Gs1FormatException : FormatException
 {
+    /// <summary>Creates the exception for an error of the data. Its <see cref="Gs1Error.ToString"/> becomes the message.</summary>
+    public Gs1FormatException(Gs1Error error);
     public Gs1Error Error { get; }
 }
 
-/// <summary>The kinds of <see cref="Gs1Error"/>. Later phases may add members at the end.</summary>
+/// <summary>The kinds of <see cref="Gs1Error"/>: why a conversion or check refused its input. Later releases may add members at the end.</summary>
 public enum Gs1ErrorKind
 {
     None,
@@ -294,7 +298,7 @@ What a release can change, with the past releases as the record: new AIs (8040 t
 
 What an update touches:
 
-- The pins: the release and commit in `tools/QRInteropFixtures/get-gs1-syntax-engine.ps1` and `Gs1FixtureGenerator`, `PROVENANCE.md` with each file's SHA-256, `THIRD-PARTY-NOTICES.md`, and the release named in the "GS1 data" section of the symbologies record.
+- The pins: the release and commit in `tools/get_gs1_syntax_engine.cs` and `Gs1FixtureGenerator`, `PROVENANCE.md` with each file's SHA-256, `THIRD-PARTY-NOTICES.md`, and the release named in the "GS1 data" section of the symbologies record.
 - The generated table and code lists, rewritten by `Gs1AiTableGeneratorTest` (it fails in CI on drift and rewrites outside CI), and the dictionary parser `Gs1SyntaxDictionary.cs` when the file's syntax changed.
 - The hand-written parts the generator holds to the file: the `Gs1Linter` enum and `Gs1Linters` (a new or renamed linter makes the generator refuse the release until the code and its imported vectors exist), the frozen Tables 7-5 and 7-6 (cross-checked against the dictionary by `Gs1AiTableTest`), and the counts pinned in `Gs1AiTableTest` (224 entries, 541 AIs) and `Gs1FixtureTest` (541 per-AI cases, 34 linters).
 - The fixtures: `regenerate-gs1` rebuilds the corpus against the oracles, and the per-AI group follows the dictionary. The Syntax Engine console app loads the new dictionary through `--syndict`, so its verdicts follow the release without a new engine, but a release that adds a linter needs the engine release that implements it. CodeGlyphX and libzint stay at their pinned versions and fall behind the dictionary, so their disagreement lists in the fixture spec grow, each case with its cause.
@@ -302,9 +306,9 @@ What an update touches:
 
 The procedure, one pull request per release:
 
-1. Set the new release tag and commit in `get-gs1-syntax-engine.ps1` and `Gs1FixtureGenerator`, run the script, then `import-gs1-syntax-dictionary` (it copies the dictionary, the seven `lint_*.c` files, the license, the linter vectors and writes `PROVENANCE.md`).
+1. Set the new release tag and commit in `tools/get_gs1_syntax_engine.cs` and `Gs1FixtureGenerator`, run the app, then `import-gs1-syntax-dictionary` (it copies the dictionary, the seven `lint_*.c` files and the license, and writes `PROVENANCE.md`).
 2. Run `Gs1AiTableGeneratorTest` outside CI to regenerate the table and code lists. If it refuses a linter, implement it in `Gs1Linters` with its `Gs1Linter` member and hold it to the imported vectors in `Gs1LinterTest`, as Phase 3 did for the 34.
-3. Run `regenerate-gs1` and read the disagreement report by cause. A new disagreement is either the pinned oracle falling behind (recorded in the fixture spec) or a defect (fixed before the pull request).
+3. Run `regenerate-gs1`, which also imports the linter unit tests, and read the disagreement report by cause. A new disagreement is either the pinned oracle falling behind (recorded in the fixture spec) or a defect (fixed before the pull request).
 4. Update the pinned counts, `THIRD-PARTY-NOTICES.md` and the specs, and run the full suite on both frameworks.
 5. The pull request lists the release's GSCNs, the AIs, flags, linters and code lists that changed, and the fixtures that moved.
 
@@ -391,7 +395,7 @@ Phases 0-5 touch no symbol code and can run beside the FNC1 plan. Only Phase 6 w
 - [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md): the GS1 oracles, the Syntax Engine under the toolchain policy, the GS1 fixtures and what each oracle's release explains.
 - [standardqr-encoder.md](../specs/standardqr-encoder.md), [rmqr-encoder.md](../specs/rmqr-encoder.md) and the two decoder records: a link to the GS1 section where they describe FNC1.
 - The third-party notice file (G8) and the XML docs of the new members.
-- The dictionary update procedure, which this plan holds until Phase 7: the steps move into the header of `tools/QRInteropFixtures/get-gs1-syntax-engine.ps1` beside the pins they change, and the cadence, what a release can change and the shipping decision (G12) into the "GS1 data" section of [qrcode-symbologies.md](../specs/qrcode-symbologies.md).
+- The dictionary update procedure, which this plan holds until Phase 7: the steps move into the header of `tools/get_gs1_syntax_engine.cs` beside the pins they change, and the cadence, what a release can change and the shipping decision (G12) into the "GS1 data" section of [qrcode-symbologies.md](../specs/qrcode-symbologies.md).
 
 ## Risks
 
@@ -830,3 +834,20 @@ Done: the maintainer asked for GS1 and FNC1 as one control. The Playground's "GS
 Verified by hand on the Release build CI publishes (no AOT, trimmed): each format on Standard QR, GS1 QR Code on rMQR, Micro QR with the field hidden and a GS1 format left selected, which writes plain text, the stem and the indicator shown for their own format alone, and a share link that restores an AIM format with its indicator and a separator in the content. The console stayed clear.
 
 Benchmarks: none. Only the Playground changed.
+
+### Phase 7, second part: the documents (2026-10-16)
+
+Done: the documents of the list above.
+
+- README: a GS1 section after the decoders. It says which carrier serves where, gives the two methods with `(AI)` text and with a stem, the error a failed check throws, the read after a decode and why `TryRead` is not a check, and the conversions on their own. It asks for `EciMode` at its default, says the default quiet zone is GS1's 4X, that GS1 does not list rMQR and excludes Micro QR, names the classes C# 12 and 13 call, and says what `DictionaryRelease` is for. The API overview and the FNC1 paragraph link it, and the license section names the third-party notice. Every code block was compiled and run as written, and the outputs its comments quote are the ones it printed.
+- [qrcode-symbologies.md](../specs/qrcode-symbologies.md): four packages from three assemblies, the namespaces, "Why four packages" with the license as the fourth package's reason, the cadence and what a release can change, and G12's shipping decision. The noticing goes in with the workflow.
+- The four symbology records link the "GS1 data" section where they describe FNC1, and the decoder records name `TryRead`.
+- [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md): what the corpus checks, with `Gs1SymbolTest`'s figures (998 inputs, 677 taken, 632 URIs, 45 refused for a URI, one difference of form) and `Gs1PairingParityTest`.
+- The approved listing above gained the constructors of `Gs1Error` and `Gs1FormatException` and the summary `Gs1ErrorKind` shipped with.
+- The update procedure moved into the header of the fetch tool. At the maintainer's request the tool is now a C# file-based app, `tools/get_gs1_syntax_engine.cs`, beside the repository's other file-based tools, in place of `get-gs1-syntax-engine.ps1`. It keeps the pins and the checks. It runs where PowerShell is not installed, and there it fetches and checks the Windows console app without starting it. It starts the app in the app's own folder, where the app reads the dictionary file the zip carries instead of warning that the file is missing. Step 1 of the procedure in this plan said the import copies the linter vectors. It does not, `regenerate-gs1` imports them, and the step now says so.
+
+Verified: the app against the oracles already fetched, and in an empty tree, where it downloaded and cloned every part and each file matched the one fetched before (the console app's folder, the dictionary clone and the 471 files of the engine source). A zip with a byte appended was refused and removed, and a wrong commit pin was refused. `import-gs1-syntax-dictionary` rewrote `PROVENANCE.md` with only the line that names the app changed, and `Gs1FixtureTest`, `Gs1AiTableGeneratorTest` and `Gs1LinterTest` pass on both frameworks.
+
+Left for Phase 7: the monthly workflow, with the spec's sentence on noticing, and folding this plan.
+
+Benchmarks: none. No library code changed.

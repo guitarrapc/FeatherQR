@@ -114,7 +114,7 @@ if (command == "probe-fnc1")
 }
 if (command == "import-gs1-syntax-dictionary")
 {
-    // Copies the pinned Syntax Dictionary release and its list linters from the clone get-gs1-syntax-engine.ps1
+    // Copies the pinned Syntax Dictionary release and its list linters from the clone tools/get_gs1_syntax_engine.cs
     // makes into Fixtures/Gs1/syntax-dictionary/, with a provenance note.
     var root = FindRepoRoot();
     return Gs1FixtureGenerator.Import(root, Path.Combine(root, "tests", "FeatherQR.Tests", "Fixtures"));

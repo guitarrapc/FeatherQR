@@ -316,7 +316,7 @@ The refusal also states two reasons the set's size does not show: a run of U+FEF
 
 ### FNC1
 
-ISO/IEC 18004 6.4.8 defines two modes that change how a whole symbol is read: FNC1 in first position (`0101`) marks GS1 data, FNC1 in second position (`1001`, then an 8-bit application indicator) marks data in an industry format registered with AIM. `QRCodeGeneratorOptions.Fnc1` writes either. The content is the text a reader returns: a GS1 element string with U+001D as the separator after each variable-length value another follows, no symbology identifier, no application indicator. Whether it is valid GS1 data is the `FeatherQR.Gs1` package's business, which builds element strings from `(AI)` text and checks them.
+ISO/IEC 18004 6.4.8 defines two modes that change how a whole symbol is read: FNC1 in first position (`0101`) marks GS1 data, FNC1 in second position (`1001`, then an 8-bit application indicator) marks data in an industry format registered with AIM. `QRCodeGeneratorOptions.Fnc1` writes either. The content is the text a reader returns: a GS1 element string with U+001D as the separator after each variable-length value another follows, no symbology identifier, no application indicator. Whether it is valid GS1 data is the `FeatherQR.Gs1` package's business, which builds element strings from `(AI)` text and checks them, and whose `CreateGs1` writes a checked element string through this option ([GS1 data](qrcode-symbologies.md#gs1-data)).
 
 The indicator goes where the standard puts it, after any ECI header and before the first data segment, and a Structured Append set refuses the option, since no reader is known to read FNC1 across a set. A requested byte order mark follows the indicator as data.
 

@@ -4,7 +4,7 @@ The GS1 Barcode Syntax Dictionary, release 2026-01-27, copied unmodified from ht
 
 `gs1-syntax-dictionary.txt` is the AI table this library's GS1 layer is generated from (qrcode-symbologies.md, "GS1 data"). The `lint_*.c` files are the reference linters whose code lists are not in the dictionary file: ISO 3166-1 numeric and alpha-2, ISO 3166-1 numeric or 999, ISO 4217 numeric, ISO/IEC 5218, the AIDC media types of AI (7241) and the package types of AI (7041). The ISO lists and the media types are bit fields indexed by code, the package types a sorted string list, and each file's unit tests enumerate its list. `regenerate-gs1` imports those unit tests into `linters/`. The other linters (check digits, dates, positions) hold rules, not lists, and are not copied.
 
-Fetched by `pwsh tools/QRInteropFixtures/get-gs1-syntax-engine.ps1` and copied by `dotnet run --project tools/QRInteropFixtures -- import-gs1-syntax-dictionary`. The dictionary's own header says: "Entries are maintained in lexical order of their AI." It holds 224 entry lines covering 541 AIs and names 34 linters.
+Fetched by `dotnet run tools/get_gs1_syntax_engine.cs` and copied by `dotnet run --project tools/QRInteropFixtures -- import-gs1-syntax-dictionary`. The dictionary's own header says: "Entries are maintained in lexical order of their AI." It holds 224 entry lines covering 541 AIs and names 34 linters.
 
 | File | Bytes | SHA-256 |
 |---|---|---|

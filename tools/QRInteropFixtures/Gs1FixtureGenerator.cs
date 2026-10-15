@@ -12,7 +12,7 @@ namespace QRInteropFixtures;
 /// unit tests are imported as they are. At the end it prints where the oracles disagree, for the
 /// fixture spec to explain by release or defect.
 /// <c>import-gs1-syntax-dictionary</c> copies the pinned dictionary release and its list linters from
-/// the clone <c>get-gs1-syntax-engine.ps1</c> makes into the fixtures, with a provenance note.
+/// the clone <c>tools/get_gs1_syntax_engine.cs</c> makes into the fixtures, with a provenance note.
 /// </summary>
 public static class Gs1FixtureGenerator
 {
@@ -33,7 +33,7 @@ public static class Gs1FixtureGenerator
         var clone = Path.Combine(ExternalDir(repoRoot), "gs1-syntax-dictionary");
         if (!Directory.Exists(clone))
         {
-            Console.Error.WriteLine($"No dictionary clone at {clone}. Run pwsh tools/QRInteropFixtures/get-gs1-syntax-engine.ps1 first.");
+            Console.Error.WriteLine($"No dictionary clone at {clone}. Run dotnet run tools/get_gs1_syntax_engine.cs first.");
             return 1;
         }
         var target = Path.Combine(Gs1Root(fixturesBase), "syntax-dictionary");
@@ -62,7 +62,7 @@ public static class Gs1FixtureGenerator
 
             `gs1-syntax-dictionary.txt` is the AI table this library's GS1 layer is generated from (qrcode-symbologies.md, "GS1 data"). The `lint_*.c` files are the reference linters whose code lists are not in the dictionary file: ISO 3166-1 numeric and alpha-2, ISO 3166-1 numeric or 999, ISO 4217 numeric, ISO/IEC 5218, the AIDC media types of AI (7241) and the package types of AI (7041). The ISO lists and the media types are bit fields indexed by code, the package types a sorted string list, and each file's unit tests enumerate its list. `regenerate-gs1` imports those unit tests into `linters/`. The other linters (check digits, dates, positions) hold rules, not lists, and are not copied.
 
-            Fetched by `pwsh tools/QRInteropFixtures/get-gs1-syntax-engine.ps1` and copied by `dotnet run --project tools/QRInteropFixtures -- import-gs1-syntax-dictionary`. The dictionary's own header says: "Entries are maintained in lexical order of their AI." It holds {{dictionary.Entries.Count}} entry lines covering {{dictionary.Ais.Count()}} AIs and names {{dictionary.Linters.Count}} linters.
+            Fetched by `dotnet run tools/get_gs1_syntax_engine.cs` and copied by `dotnet run --project tools/QRInteropFixtures -- import-gs1-syntax-dictionary`. The dictionary's own header says: "Entries are maintained in lexical order of their AI." It holds {{dictionary.Entries.Count}} entry lines covering {{dictionary.Ais.Count()}} AIs and names {{dictionary.Linters.Count}} linters.
 
             | File | Bytes | SHA-256 |
             |---|---|---|
@@ -82,7 +82,7 @@ public static class Gs1FixtureGenerator
         var dictionarySource = Path.Combine(ExternalDir(repoRoot), "gs1-syntax-dictionary", "src");
         if (!engine.IsAvailable || !Directory.Exists(engineSource) || !Directory.Exists(dictionarySource))
         {
-            var message = $"GS1 oracles not present (need {engine.ExePath}, {engineSource}, {dictionarySource} and the imported dictionary at {dictionaryPath}). Run pwsh tools/QRInteropFixtures/get-gs1-syntax-engine.ps1 and import-gs1-syntax-dictionary.";
+            var message = $"GS1 oracles not present (need {engine.ExePath}, {engineSource}, {dictionarySource} and the imported dictionary at {dictionaryPath}). Run dotnet run tools/get_gs1_syntax_engine.cs and import-gs1-syntax-dictionary.";
             if (required)
             {
                 Console.Error.WriteLine(message);
