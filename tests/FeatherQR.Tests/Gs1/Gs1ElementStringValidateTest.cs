@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// <see cref="Gs1ElementString.TryValidate"/> against the Syntax Engine's verdicts in the GS1 corpus: every element
 /// string the engine accepts is accepted, every one it refuses is refused with an error of the same class, and the
-/// plan's equivalence classes come out as the API promises (unknown AIs refused, a redundant or trailing separator
+/// corpus's equivalence classes come out as the API promises (unknown AIs refused, a redundant or trailing separator
 /// tolerated, a leading or doubled one refused, the pairings per symbol). Bracketed fixtures are read through the
 /// engine's own element string where it accepted them and through a test-side join where it refused them.
 /// </summary>

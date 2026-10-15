@@ -83,7 +83,7 @@ For each kernel, its tiers in the order its dispatch tries them, and the tier th
 | `LuminanceInverter` | `Vector256`, `Vector128` | `Vector128` | `Vector256` | `Vector128` | `Vector128` |
 | `LuminanceHalver` | `Vector256`, `PackedSimd`, `Vector128` | `Vector128` | `Vector256` | `Vector128` | `PackedSimd` |
 | `Binarizer` | `Vector256`, `AdvSimd`, `Vector128` | `Vector128` | `Vector256` | `AdvSimd` | `Vector128` |
-| `LocalBinarizer` | `Vector128` | `Vector128` | `Vector128` | `Vector128` | `Vector128` |
+| `LocalBinarizer` | `Vector256`, `Vector128` | `Vector128` | `Vector256` | `Vector128` | `Vector128` |
 | `FinderRowMask` | `Vector256`, `AdvSimd`, `Vector128` | `Vector128` | `Vector256` | `AdvSimd` | `Vector128` |
 | `FinderRowEdges` | `Vector256`, `AdvSimd`, `Vector128` | `Vector128` | `Vector256` | `AdvSimd` | `Vector128` |
 | `PerspectiveGridSampler` | `Vector256`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Vector256` | `Vector128` | `PackedSimd` |
@@ -92,7 +92,7 @@ For each kernel, its tiers in the order its dispatch tries them, and the tier th
 | `QRAlphanumericWriter` | `Sse41`, `AdvSimd`, `PackedSimd` | `Sse41` | `Sse41` | `AdvSimd` | `PackedSimd` |
 | `QRNumericWriter` | `Ssse3`, `AdvSimd` | `Ssse3` | `Ssse3` | `AdvSimd` | `Scalar` |
 | `AlignmentRowMask` | `Vector256`, `AdvSimd`, `Vector128` | `Vector128` | `Vector256` | `AdvSimd` | `Vector128` |
-| `QRSampleGridPiecewise` | `Avx2`, `AdvSimd`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Avx2` | `AdvSimd` | `PackedSimd` |
+| `QRSampleGridPiecewise` | `Avx2`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Avx2` | `Vector128` | `PackedSimd` |
 | `StructuredAppendLanes` | `Vector256`, `AdvSimd`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Vector256` | `AdvSimd` | `PackedSimd` |
 | `StructuredAppendParity` | `AdvSimd` | `Scalar` | `Scalar` | `AdvSimd` | `Scalar` |
 | `StructuredAppendScanner` | `AdvSimd` | `Scalar` | `Scalar` | `AdvSimd` | `Scalar` |

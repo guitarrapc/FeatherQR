@@ -26,7 +26,7 @@ if (command == "probe-creator")
 if (command == "spot-check-fnc1")
 {
     // Every FNC1 symbol this library writes (both positions, Single and Optimal, each level) read by zxing-cpp
-    // and, for first position, ZXing.Net. Findings go to the fixture spec and the FNC1 plan.
+    // and, for first position, ZXing.Net. Findings go to the fixture spec.
     return Fnc1SpotCheck.Run();
 }
 if (command == "sweep-fnc1")

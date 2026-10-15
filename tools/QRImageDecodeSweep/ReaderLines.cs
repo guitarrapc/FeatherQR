@@ -4,12 +4,14 @@ namespace QRImageDecodeSweep;
 
 /// <summary>
 /// Readers run elsewhere, in their own harness, and read here from a file of results: one JSON object a line, <c>{"dec": reader, "cat": directory, "img": file, "texts": [...], "ms": milliseconds}</c>, one line a reader and image.
+/// A line may also say where each text's symbol is, <c>"at": [[x, y], ...]</c>, the centre of each in the pixels of the image, one for every text. A reader whose lines do is scored by codes as well as by photographs.
+/// Its lines with a text then all say it: a read with no centre lies in no outline, and would count as a code the reader missed.
 /// An image is matched by its directory and its file name without the extension, so the same lines serve a set whose images were written out again in another format.
 /// </summary>
 internal sealed class ReaderLines
 {
-    /// <summary>What one reader made of one image: every text it returned, and its own clock's time for the call.</summary>
-    public sealed record Line(string[] Texts, double Milliseconds);
+    /// <summary>What one reader made of one image: every text it returned, its own clock's time for the call, and each text's symbol centre when the line gives them.</summary>
+    public sealed record Line(string[] Texts, double Milliseconds, (double X, double Y)[]? Centres);
 
     public static readonly ReaderLines None = new([], []);
 
@@ -37,6 +39,7 @@ internal sealed class ReaderLines
     {
         var readers = new List<string>();
         var lines = new Dictionary<(string Reader, string Directory, string Stem), Line>();
+        var located = new Dictionary<string, bool>();
         foreach (var text in File.ReadLines(path))
         {
             if (string.IsNullOrWhiteSpace(text))
@@ -48,7 +51,18 @@ internal sealed class ReaderLines
                 readers.Add(reader);
             string[] texts = [.. root.GetProperty("texts").EnumerateArray().Select(static t => t.GetString() ?? "")];
             var key = (reader, root.GetProperty("cat").GetString()!, Path.GetFileNameWithoutExtension(root.GetProperty("img").GetString()!));
-            if (!lines.TryAdd(key, new Line(texts, root.GetProperty("ms").GetDouble())))
+            (double X, double Y)[]? centres = null;
+            if (root.TryGetProperty("at", out var at))
+            {
+                if (at.ValueKind != JsonValueKind.Array || at.EnumerateArray().Any(static p => p.ValueKind != JsonValueKind.Array || p.GetArrayLength() != 2 || p[0].ValueKind != JsonValueKind.Number || p[1].ValueKind != JsonValueKind.Number))
+                    throw new InvalidDataException($"{path}: the centres of {key} are not a list of [x, y]");
+                centres = [.. at.EnumerateArray().Select(static p => (p[0].GetDouble(), p[1].GetDouble()))];
+            }
+            if (centres is not null && centres.Length != texts.Length)
+                throw new InvalidDataException($"{path}: {centres.Length} centres for {texts.Length} texts of {key}");
+            if (texts.Length > 0 && !located.TryAdd(reader, centres is not null) && located[reader] != (centres is not null))
+                throw new InvalidDataException($"{path}: {key} {(centres is null ? "has no centres where other lines of its reader have them" : "has centres where other lines of its reader have none")}");
+            if (!lines.TryAdd(key, new Line(texts, root.GetProperty("ms").GetDouble(), centres)))
                 throw new InvalidDataException($"{path}: two lines for {key}");
         }
         return new ReaderLines([.. readers], lines);

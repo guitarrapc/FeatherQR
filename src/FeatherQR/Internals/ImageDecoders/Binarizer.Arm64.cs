@@ -150,28 +150,5 @@ internal static partial class Binarizer
         //   >> 4, low byte     0x11      0x10      0x01      0x00     both, high only, low only, neither
         return AdvSimd.ShiftRightLogicalNarrowingLower((lanes & Vector128.Create((byte)0x11)).AsUInt16(), 4).AsUInt64().ToScalar();
     }
-
-    /// <summary>
-    /// <see cref="CountGroup"/> over four sub-histograms: pixel i into lane i % 4, a uniform group into lane 0.
-    /// Each lane through its own reference: an offset from one base makes the JIT sign-extend the sum on the way to every load.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void CountGroupLaned(ref int l0, ref int l1, ref int l2, ref int l3, ulong v)
-    {
-        if (v == ((v >> 8) | (v << 56)))
-        {
-            Unsafe.Add(ref l0, (byte)v) += 8;
-            return;
-        }
-
-        Unsafe.Add(ref l0, (byte)v)++;
-        Unsafe.Add(ref l1, (byte)(v >> 8))++;
-        Unsafe.Add(ref l2, (byte)(v >> 16))++;
-        Unsafe.Add(ref l3, (byte)(v >> 24))++;
-        Unsafe.Add(ref l0, (byte)(v >> 32))++;
-        Unsafe.Add(ref l1, (byte)(v >> 40))++;
-        Unsafe.Add(ref l2, (byte)(v >> 48))++;
-        Unsafe.Add(ref l3, (byte)(v >> 56))++;
-    }
 }
 #endif

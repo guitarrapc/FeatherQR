@@ -128,7 +128,14 @@ internal static partial class QRImageDecoder
             if (!everyRowScanned)
             {
                 if (!FinderPatternFinder.IsUndersampled(patterns, height) && !IsCrowded(candidates.Slice(0, candidateCount)))
-                    return status;
+                {
+                    // A triple whose timing patterns read from none of its corners can be the finders of two symbols that each lack one. The stride confirmed them, so the inferred stage takes the list as it is.
+                    if (TryCornerByTimingPatterns(ref corners, image, patterns, out _, out _, out _))
+                        return status;
+                    var strideInferredStatus = DecodeInferred(image, candidates.Slice(0, candidateCount), ref modules, destination, out var strideInferredCharsWritten, out var strideInferredInfo);
+                    result.Other(strideInferredStatus, strideInferredCharsWritten, strideInferredInfo);
+                    return result.Report(out charsWritten, out info);
+                }
                 Span<FinderPattern> swept = stackalloc FinderPattern[3];
                 var sweptFound = FinderPatternFinder.TryFindSkippedRows(luminance, width, height, threshold, grey, candidates, ref candidateCount, swept);
                 if (sweptFound && !SameTriple(swept, patterns))
@@ -424,9 +431,10 @@ internal static partial class QRImageDecoder
         var result = NewResult();
 
         // What the symbol states comes before what the finders measure: a lens puts the estimate versions high, and the timing count and the timing match run along lines it bends.
-        // Tried ahead of the main path, the estimate's grid, which it does not replace unless it settles
+        // Tried ahead of the main path, the estimate's grid, which it does not replace unless it settles.
+        // Not where the symbol already states the estimate's dimension. The outlines would name it again, and every symbol the estimate reads would pay for them.
         var namedDimension = 0;
-        if (moduleSize >= 1f && (!estimated || dimension >= VersionInformationFromDimension))
+        if (moduleSize >= 1f && (!estimated || (dimension >= VersionInformationFromDimension && !StatesDimension(image, frame, dimension))))
         {
             namedDimension = ReadVersionAtFinders(image, topLeft, topRight, bottomLeft, moduleSizes);
             if (namedDimension == dimension)

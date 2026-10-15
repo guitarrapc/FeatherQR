@@ -11,7 +11,7 @@ namespace FeatherQR.Tests;
 /// mode is active a lone <c>%</c> in an Alphanumeric segment is the separator (U+001D) and <c>%%</c>
 /// is one <c>%</c>, read left to right within the segment. The same texts without FNC1 stay literal.
 /// Eight streams are zxing-cpp's own unit test vectors (six it reads, one it rejects, one it disabled), of which this
-/// decoder reads five and refuses three (the late first-position one by decision 6, the rejected one and the disabled
+/// decoder reads five and refuses three (the late first-position one as a malformed stream, the rejected one and the disabled
 /// one), so the bit layout is checked against an independent reader, and the two examples of the standard are
 /// assembled from its description and pinned as bytes.
 /// </summary>

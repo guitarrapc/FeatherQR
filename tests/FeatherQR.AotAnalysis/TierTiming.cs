@@ -21,7 +21,8 @@ using FeatherQR.Tests;
 /// benchmark's in kind, not in pixels. Rounds run the shapes interleaved, so drift during a run spreads over all of them.
 /// <c>--loop</c> runs one shape for a fixed time instead, for a sampling profiler. A <c>--shape</c> filter matches names containing it, or
 /// with a trailing <c>$</c> the one name: interpreted WebAssembly times a shape by what ran before it in the process, so a comparison
-/// there runs each shape alone.
+/// there runs each shape alone. Under Node.js an interpreted process also runs at one of two speeds. <c>node --no-liftoff</c> holds it
+/// to the faster one, so both sides of a comparison run with it.
 /// </remarks>
 internal static partial class TierTiming
 {

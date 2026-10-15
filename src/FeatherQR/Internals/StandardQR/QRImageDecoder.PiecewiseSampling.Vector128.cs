@@ -9,12 +9,23 @@ namespace FeatherQR.Internals.StandardQR;
 internal static partial class QRImageDecoder
 {
     /// <summary>
-    /// 128-bit tier: <see cref="SampleGridPiecewiseAdvSimd"/>'s steps on portable vectors, for the targets with neither the AVX2 nor the ARM64
-    /// tier. The same float operations in the reference's order, and each coordinate to its pixel through <see cref="VectorCast.ToPixel"/>,
-    /// which lands where the reference's <see cref="PixelIndex.Clamp(float, int)"/> does for every float.
+    /// 128-bit tier: the AVX2 tier's step on four lanes of portable vectors, two steps a loop body, their eight pixels packed into one word
+    /// for one compare and one store. ARM64, x64 without AVX2 and WebAssembly take it.
     /// </summary>
+    /// <remarks>
+    /// The same float operations in the reference's order, and each coordinate to its pixel through <see cref="VectorCast.ToPixel"/>,
+    /// which lands where the reference's <see cref="PixelIndex.Clamp(float, int)"/> does for every float.
+    /// ARM64 had a tier of its own, these steps with its intrinsics. It ran no faster on an Apple M2, and was removed (standardqr-decoder.md, Performance).
+    /// </remarks>
     internal static void SampleGridPiecewiseVector128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {
+        // A module's position is start + along * (slope + past * curvature) of its run of columns, in x and in y.
+        //
+        //   columns   u   u+1  u+2  u+3 | u+4 ... u+7       two four-lane steps
+        //   indices   i0  i1   i2   i3  | i4  ... i7        eight scattered loads, packed low byte first
+        //   modules   d0  d1   d2   d3    d4  ... d7        LessThan(word, threshold) & 1, one ulong store
+        //
+        // A step that touches three runs of columns, or a mesh past the stack tables, goes to the column-table tier.
         if (!Vector128.IsHardwareAccelerated || width > MaxExactFloatSide || height > MaxExactFloatSide
             || !CheckPiecewiseArguments(luminance, width, height, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules))
         {
@@ -53,6 +64,7 @@ internal static partial class QRImageDecoder
         var widthVector = Vector128.Create(width);
         var limitVector = Vector128.Create(threshold);
         var one = Vector128.Create((byte)1);
+        // Every table is read through one reference from here, with no bounds check. The lengths were checked above, a run's index is below meshSize − 2 ≤ 5, and a step index is below dimension / 4.
         ref var along0 = ref MemoryMarshal.GetReference(alongOf);
         ref var past0 = ref MemoryMarshal.GetReference(pastOf);
         ref var mask0 = ref MemoryMarshal.GetReference(laneMasks);
@@ -90,7 +102,7 @@ internal static partial class QRImageDecoder
                 var dark = Vector128.LessThan(Vector128.CreateScalar(pixels).AsByte(), limitVector) & one;
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, rowBase + u), dark.AsUInt64().ToScalar());
             }
-            // row tail: 1 module for even versions and 5 for odd ones, with the reference's scalar body on the same per-run floats
+            // row tail: 1 module for even versions and 5 for odd ones (17 + 4·version), up to 7 for any other dimension, with the reference's scalar body on the same per-run floats
             for (; u < dimension; u++)
             {
                 var c = firstOf[u];
@@ -101,10 +113,11 @@ internal static partial class QRImageDecoder
         }
     }
 
-    /// <summary>The pixel index of the four modules at column <paramref name="u"/>: the ARM64 step on portable vectors.</summary>
+    /// <summary>The pixel index of the four modules at column <paramref name="u"/>: the AVX2 step's arithmetic on four lanes.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<uint> StepIndexVector128(ref float startX0, ref float slopeX0, ref float curveX0, ref float startY0, ref float slopeY0, ref float curveY0, int a, int b, ref int mask0, ref float along0, ref float past0, int u, Vector128<float> lastX, Vector128<float> lastY, Vector128<int> widthVector)
     {
+        // Where the step's last lane is in the next run, the lanes in it take that run's values through the lane mask. A step never touches a third run: the step table refuses such a lattice.
         var startX = Vector128.Create(Unsafe.Add(ref startX0, a));
         var slopeX = Vector128.Create(Unsafe.Add(ref slopeX0, a));
         var curveX = Vector128.Create(Unsafe.Add(ref curveX0, a));

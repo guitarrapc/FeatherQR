@@ -193,6 +193,24 @@ internal static partial class FinderPatternFinder
         /// <summary>Largest total around a centre run of this length: 3·total &lt; 14·centre. The near-miss form, (7·centre + 10) / 3, is the larger one only below a centre of 2, which is never acceptable.</summary>
         public int TotalCap(int centre)
             => Math.Min(_totalHigh, (14 * centre - 1) / 3);
+
+        /// <summary>
+        /// Whether <see cref="MeasureRunsBounded"/> measures these five runs to the end: the centre inside its bounds, and each side run inside the budget the walk leaves it at its turn.
+        /// The reference walk measures past the bounds, so a caller that reads a refused cross section's total asks this of its runs.
+        /// </summary>
+        public bool Admits(ReadOnlySpan<int> runs)
+        {
+            var centre = runs[2];
+            if (centre < CentreLow || centre > CentreHigh)
+                return false;
+
+            var sideCap = SideCap(centre);
+            var budget = TotalCap(centre) - centre;
+            return runs[1] <= Math.Min(sideCap, budget - 3)
+                && runs[0] <= Math.Min(sideCap, budget - runs[1] - 2)
+                && runs[3] <= Math.Min(sideCap, budget - runs[1] - runs[0] - 1)
+                && runs[4] <= Math.Min(sideCap, budget - runs[1] - runs[0] - runs[3]);
+        }
     }
 
     /// <summary>
@@ -306,6 +324,15 @@ internal static partial class FinderPatternFinder
 
     private static void ThrowCentreOutsideImage(int centerX, int centerY, int width, int height, int length)
         => throw new ArgumentOutOfRangeException(nameof(centerX), $"Centre ({centerX}, {centerY}) is outside the {width} x {height} image, or the image is larger than its {length} pixel buffer");
+
+    /// <summary>
+    /// <see cref="MeasureAxisRunsReference"/> held to the bounds <see cref="MeasureRunsBounded"/> stops at, so that a cross-check refuses the same lines and reports the same total through either walk.
+    /// Not inlined. Written into <see cref="CrossCheck"/> it slowed the calls that take the other walk too.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static bool MeasureAxisRunsReferenceWithinBounds(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, bool vertical, int expectedTotal, Span<int> runs, out int end)
+        => MeasureAxisRunsReference(luminance, width, height, threshold, centerX, centerY, vertical, expectedTotal, runs, out end)
+            && AxisRunBounds.From(expectedTotal, acrossAxes: vertical).Admits(runs);
 
     /// <summary>
     /// The axis walk <see cref="MeasureRuns"/> is held to as its reference: one loop for both axes, the axis chosen per pixel, every pixel a checked index.

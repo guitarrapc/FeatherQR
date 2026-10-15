@@ -677,6 +677,9 @@ internal static partial class FinderPatternFinder
             // A hole on the centre row is not the ring, so a row a quarter of the centre square above or below is read instead. Not under 4 px a module: there that row is the scanned row's neighbour and reads on texture whenever the scanned row did.
             if (columnCentre < 12)
                 return false;
+            // A hole leaves the centre row five runs of the row's length. A row that lost them is what data beside a hit looks like, and walking on for it costs every clean symbol.
+            if (!IsTotalInWindow(refinedTotal, total, acrossAxes: false))
+                return false;
             var offset = columnCentre / 4;
             centerX = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, (int)centerY - offset, vertical: false, total, rowShiftSign, referenceWalk, out refinedTotal, out rowByLikeEdges, out rowCentre, default);
             if (float.IsNaN(centerX))
@@ -840,6 +843,7 @@ internal static partial class FinderPatternFinder
     /// <summary>
     /// Walks outwards from a supposed center along one axis and re-validates the 1:1:3:1:1 ratio, or reads the line by like edges (<see cref="IsLikeEdgeLine"/>) when its total is within the row's own 40 %.
     /// Returns the refined center coordinate on that axis, or NaN, with the line's <paramref name="total"/> and <paramref name="centre"/> run.
+    /// A refused line still reports its total when the walk measured its five runs, and 0 when it did not, the same through either walk.
     /// With <paramref name="nearMissRuns"/> the line only has to read as a small crisp finder's, and its runs are handed back for the whole-pattern check.
     /// </summary>
     internal static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool vertical, int expectedTotal, int rowShiftSign, bool referenceWalk, out int total, out bool byLikeEdges, out int centre, Span<int> nearMissRuns)
@@ -848,11 +852,12 @@ internal static partial class FinderPatternFinder
         byLikeEdges = false;
         centre = 0;
 
-        // The walk gives up where the verdict below is already certain to refuse, in either mode
+        // The walk gives up where the verdict below is already certain to refuse, in either mode.
+        // The reference walk measures past that point, so its runs are held to the same bounds and both refuse with the same total.
         Span<int> runs = stackalloc int[5];
         int end;
         var measured = referenceWalk
-            ? MeasureAxisRunsReference(luminance, width, height, threshold, centerX, centerY, vertical, expectedTotal, runs, out end)
+            ? MeasureAxisRunsReferenceWithinBounds(luminance, width, height, threshold, centerX, centerY, vertical, expectedTotal, runs, out end)
             : MeasureRunsBounded(luminance, width, height, threshold, centerX, centerY, vertical ? 0 : 1, vertical ? 1 : 0, expectedTotal, runs, out end);
         if (!measured)
             return float.NaN;

@@ -60,6 +60,38 @@ internal static partial class QRImageDecoder
         }
     }
 
+    /// <summary>
+    /// Whether the finders' frame at this dimension reads both copies of the version information as the dimension's own codeword, bit for bit.
+    /// </summary>
+    /// <remarks>
+    /// It measures nothing, so it costs 36 pixels. Where it holds, the symbol states the estimate and <see cref="ReadVersionAtFinders"/> would name the same dimension.
+    /// Both copies and every bit are asked because a wrong yes keeps the outlines from being read.
+    /// </remarks>
+    internal static bool StatesDimension(in ImageView image, in FinderFrame frame, int dimension)
+    {
+        // A copy is three modules by six, eleven to nine modules before the far edge. Bit x·3 + y, as the sampled grid's copies are read.
+        var codeword = VersionCodewords[(dimension - 17) / 4 - 7];
+        uint beside = 0;
+        uint below = 0;
+        for (var x = 0; x < 6; x++)
+        {
+            for (var y = 0; y < 3; y++)
+            {
+                var bit = 1u << (x * 3 + y);
+                frame.Map(dimension - 10.5f + y, x + 0.5f, dimension, out var pixelX, out var pixelY);
+                if (IsDarkAt(image, pixelX, pixelY))
+                    beside |= bit;
+                frame.Map(x + 0.5f, dimension - 10.5f + y, dimension, out pixelX, out pixelY);
+                if (IsDarkAt(image, pixelX, pixelY))
+                    below |= bit;
+            }
+        }
+        return beside == codeword && below == codeword;
+
+        static bool IsDarkAt(in ImageView image, float x, float y)
+            => image.Luminance[PixelIndex.Clamp(y, image.Height) * image.Width + PixelIndex.Clamp(x, image.Width)] < image.Threshold;
+    }
+
     /// <summary>The inner outline of a finder, from the directions of the finder lines at the module size measured on the finder itself.</summary>
     private static bool TryMeasureOutline(in ImageView image, in FinderPattern finder, float moduleSize, float uX, float uY, float vX, float vY, out FinderOutline outline)
     {

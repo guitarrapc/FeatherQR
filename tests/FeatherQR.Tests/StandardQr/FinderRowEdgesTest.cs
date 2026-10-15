@@ -8,6 +8,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class FinderRowEdgesTest
 {
+    /// <summary>Slots after each array that have to keep their value: the kernel writes positions past its count without a check.</summary>
+    private const int Guard = 16;
+
     [Test]
     public async Task ExtractRowEdges_MatchesAPixelByPixelScan()
     {
@@ -26,15 +29,16 @@ public class FinderRowEdgesTest
         {
             foreach (var threshold in new byte[] { 0, 1, 128, 255 })
             {
-                foreach (var kind in new[] { "noise", "runs", "dark", "light", "dark ends", "edges at the threshold" })
+                foreach (var kind in new[] { "noise", "runs", "dark", "light", "dark ends", "edges at the threshold", "alternating", "last end alone in a word" })
                 {
                     var row = BuildRow(length, threshold, kind, seed: length * 7 + threshold);
-                    var capacity = (length + 1) / 2 + 1;
-                    var starts = new short[capacity];
-                    var ends = new short[capacity];
+                    // Each array is followed by slots the kernel may not write
+                    var capacity = FinderPatternFinder.EdgeRunCapacity(length);
+                    var starts = new short[capacity + Guard];
+                    var ends = new short[capacity + Guard];
                     Array.Fill(starts, (short)-1);
                     Array.Fill(ends, (short)-1);
-                    var count = FinderPatternFinder.ExtractRowEdges(row, threshold, starts, ends);
+                    var count = FinderPatternFinder.ExtractRowEdges(row, threshold, starts.AsSpan(0, capacity), ends.AsSpan(0, capacity));
 
                     var expectedStarts = new List<int>();
                     var expectedEnds = new List<int>();
@@ -54,7 +58,9 @@ public class FinderRowEdgesTest
                     runsSeen += expectedEnds.Count;
                     if (count != expectedEnds.Count
                         || !starts.AsSpan(0, count).ToArray().Select(v => (int)v).SequenceEqual(expectedStarts)
-                        || !ends.AsSpan(0, count).ToArray().Select(v => (int)v).SequenceEqual(expectedEnds))
+                        || !ends.AsSpan(0, count).ToArray().Select(v => (int)v).SequenceEqual(expectedEnds)
+                        || starts.AsSpan(capacity).ContainsAnyExcept((short)-1)
+                        || ends.AsSpan(capacity).ContainsAnyExcept((short)-1))
                     {
                         first ??= $"length={length}, threshold={threshold}, {kind}: {count} runs, expected {expectedEnds.Count}";
                     }
@@ -208,6 +214,21 @@ public class FinderRowEdgesTest
             case "light":
                 row.AsSpan().Fill(255);
                 break;
+            case "alternating":
+                // Every pixel a run, the most a row holds: dark first, so a row of odd length has (length + 1) / 2
+                for (var x = 0; x < length; x++)
+                    row[x] = (x & 1) == 0 ? (byte)0 : (byte)255;
+                break;
+            case "last end alone in a word":
+                {
+                    // Runs of one pixel up to the last word boundary inside the row, the last of them two pixels, so that the word after it holds its end and nothing else.
+                    // Its unconditional writes then reach furthest past the runs a row this long can hold.
+                    var boundary = (length - 1) / 64 * 64;
+                    for (var x = 0; x < boundary; x++)
+                        row[x] = (x & 1) == 0 || x == boundary - 1 ? (byte)0 : (byte)255;
+                    row.AsSpan(boundary).Fill(255);
+                    break;
+                }
             default:
                 // Runs of 1 to 9 pixels. "dark ends" makes the first and the last run dark, "edges at the threshold" takes its levels from next to it.
                 var dark = kind == "dark ends" || random.Next(2) == 0;

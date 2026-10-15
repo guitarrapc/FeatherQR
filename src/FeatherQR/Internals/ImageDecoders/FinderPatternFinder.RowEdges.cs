@@ -58,7 +58,7 @@ internal static partial class FinderPatternFinder
     }
 
 #if NET8_0_OR_GREATER
-    /// <summary>Slots past the last edge that a sixteen-lane load starting at any window may read.</summary>
+    /// <summary>Slots past the last edge that a sixteen-lane load starting at any window may read. They also take the positions the extraction writes past the count (<see cref="EdgeRunCapacity"/>).</summary>
     private const int EdgeLoadSlack = 32;
 
     /// <summary>Half of the edge buffer, one half for the starts and one for the ends: a row of w pixels has at most (w + 1) / 2 dark runs.</summary>
