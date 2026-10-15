@@ -15,6 +15,7 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 - Phase 1b continued (2026-10-15): the row scan and the sheets of 60 codes were measured, and nothing was shipped. The entry is 67 ms behind zxing-cpp over those seven, 59 of them on one photograph whose time goes to stages that run after a failure.
 - Phase 2 (2026-10-15): the maintainer ruled. The call ships for Standard QR, in an array form and a span form, in 2.0.0, and the Phase 7 freeze waits for it. Phase 3 is next.
 - ARM64 (2026-10-15): Phases 1 and 1b were measured on an Apple M2. No read moves, and the one-symbol call compiles to the code it had before the entry, on NativeAOT and on the JIT. Phase 1b takes the entry to 0.83 of its time over the set and the one-symbol call to 0.89, where x64 took them to 0.60 and 0.67, and the entry is 2.3 times the one-symbol call.
+- The row scan (2026-10-15): a word's edges are taken out without a branch. On x64 the rows between strided rows take 0.84 to 0.91 of their time, the entry 0.95 of its time over the set and the one-symbol call 0.97, every read as it was. ARM64 was not timed.
 
 ## Order
 
@@ -416,3 +417,65 @@ Measured and left:
 - The thresholds run scalar on ARM64: only the 256-bit tier has a vector form of them. They take 17 % of the regional binarization on the photographs, where the 256-bit form takes 11 % on x64. A 128-bit form that halved them would save about 8 % of the kernel and under 2 % of the entry, under the 3 % bar.
 
 The record: the scope row "Image decode changes of 2026-10 on builds not timed" in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions), which no longer leaves the regional binarization untimed on ARM64. In [standardqr-decoder.md](../specs/standardqr-decoder.md), the Decisions row "Several symbols of one image" and the Performance lessons: the photographs' time, the regional binarization, the comparison of listings and the lesson on timing. The entry's paragraph in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md).
+
+### Work 2, Phase 1b, continued: the row scan's edges (2026-10-15)
+
+Done. The row scan takes edges out of a word without a branch, and every read is as it was. It gains on x64 and loses a little on WebAssembly. The maintainer asked again for the row scan, after the round above shipped nothing.
+
+What was done:
+
+- The rows between strided rows were timed reading by reading on BoofCV's 536 photographs: global positive and negative, regional positive and negative, at full size. Their time was split by ending the kernel early in a scratch tree.
+- The edges came out largest, so `ExtractRowEdges` was rewritten. A word with no edge leaves at one test. Any other has its first four rising and four falling edges written without a branch, and a fifth of either kind loops. The method is not inlined.
+- Tests: `FinderRowEdgesTest` checks slots after both arrays, which the extraction writes past its count, and has two rows more, one that alternates every pixel and one whose last end is alone in a word. Ten faults were planted in the extraction and all ten are caught. The first capacity held one position more than any row needs, which a planted fault showed by surviving. It was made exact, and the second row is the one that catches a position too few.
+- The suite: 65,682 tests, none failing. `--parity` passes on the JIT with AVX2, with AVX off, on a default NativeAOT publish and on WebAssembly, interpreted and AOT-compiled.
+
+Where the row scan's time went, the rows between at full size, each stage cut off in turn:
+
+| Reading | Dark words | Edges | Classification | Follow-ups |
+|---|---|---|---|---|
+| Global positive | 21 % | 38 % | 5 % | 36 % |
+| Regional positive | 17 % | 48 % | 8 % | 26 % |
+
+- 70 % of a photograph's words hold no edge, and a row holds 21.6 dark runs, so the loop of the old extraction mispredicted its exit on nearly every word that had an edge. The round above refused four writes of each kind without a branch, which paid them on every word: with the test that passes an empty word they pay.
+- The follow-ups are the cross-checks. `TryAddCandidate` was called 2.49 million times over the entry's run of the set, and 89 % failed. The merge into the list took 7.0 million turns over all of them, 26 for each that passed, so there is nothing to take there.
+- The global negative is the positive's complement on all 536 photographs, so its row scan could take the positive's edges. The regional negative is not. Not built: it saves the dark words and the edges of one reading in four, for edges kept between two readings.
+
+The forms measured, the rows between of the four readings, each kernel a copy of its own in one process against a copy of the old kernel:
+
+| Form | Rows between, over the old kernel |
+|---|---|
+| A second copy of the old kernel | 0.99 to 1.01 |
+| Four of each kind without a branch, out of line (shipped) | 0.84 to 0.91 |
+| The same, inlined into the row kernel | 0.93 to 1.03 |
+| Three of each kind, out of line | 0.88 to 0.93 |
+| Edges dealt to the two arrays by the parity of the edges before them, six or eight a word, out of line | 0.85 to 0.92 |
+| The same, inlined | 0.92 to 0.96 |
+
+- A list of edges in row order, dealt out to the two arrays by a vector step at the end of the row, measured no better on the photographs and cost the small renders that step on every row.
+- Timed in separate processes first, the same build read 192 to 246 ms on one reading's rows between, more than any form moved. Every figure above comes from one process, the forms in turn on each photograph.
+
+Both calls over the set, each photograph's fastest of four processes a build in turn:
+
+| | Before, ms | After, ms | After over before |
+|---|---|---|---|
+| The one-symbol call | 1,613.2 | 1,559.6 | 0.967 |
+| The entry | 3,659.8 | 3,468.4 | 0.948 |
+| The seven sheets of 60 codes, the entry | 353.9 | 345.3 | 0.976 |
+
+- Every result line of both calls is the same, text and centre.
+- The report's shapes, the fastest of six processes a build pinned to two cores, on the JIT with AVX2: the Standard QR images 0.85 to 1.01, noise and the gradient 1.00 and 1.01, the Micro QR M4 1.06, the rMQR R7x43 1.01 and R17x139 at 8 px 1.04. On default NativeAOT every shape read 0.97 to 1.01. The row kernel's own shapes read 0.93 and 0.99 on the JIT, 0.96 and 0.99 on NativeAOT.
+- Two copies of one kernel in one process read up to 5 % apart on the small renders, and 64 different Micro QR M4 symbols read in turn took 1.00 of their time under the new kernel. So the small renders' 1.04 to 1.06 sit inside what placement moves.
+- WebAssembly, the report's shapes, five processes a build in turn. AOT-compiled: the row kernel's shapes 1.01, the images 0.94 to 1.03, the Micro QR M4 1.03 and the rMQR R17x139 at 8 px 1.03. Interpreted, under `node --no-liftoff`: the row kernel's shapes 1.02 and 1.04, the Standard QR images 1.00 to 1.03, noise 1.01, the gradient 1.05, the Micro QR M4 1.08 and the two rMQR at 8 px 1.06 and 1.04. Both pass `--parity`.
+
+What it taught:
+
+- A kernel timed alone in a process beside its own copy is what tells a gain from placement on this machine. Separate processes moved more than the change. A switch between forms inside one method made that method large, and the forms then measured against each other the wrong way round.
+- The same extraction gained 0.84 to 0.91 out of line and nearly nothing inlined.
+
+For the maintainer:
+
+- ARM64 runs the same extraction and was not timed. Its population count and trailing-zero count are sequences there.
+- WebAssembly loses where x64 gains: up to 8 % on the small renders interpreted, and up to 3 % AOT-compiled. The Playground's Release publish is AOT-compiled. Photographs were not read on WebAssembly.
+- Ruled on 2026-10-15: one form on every build. ARM64 is timed on the M2 next, and the form is looked at again if it loses there.
+
+The record: the Performance lesson on the row scan's edges and the ARM64 kernel's note in [standardqr-decoder.md](../specs/standardqr-decoder.md), and the scope row on builds not timed in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions).
