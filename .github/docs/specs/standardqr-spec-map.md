@@ -2,7 +2,7 @@
 
 This document maps each part of the Standard QR specification (ISO/IEC 18004, versions 1-40) to its implementation. Micro QR and rMQR get their own maps as they are implemented. [QR Symbology Architecture](qrcode-symbologies.md) lists the document set and the shared components.
 
-It is a map, not a copy of the spec. Normative details (bit layouts, formulas, edge-case constraints) and the reasons for implementation choices are in code comments next to the implementation, where they stay in sync with the code. Section numbers below follow the citations in those comments, which use both the `7.x` numbering of ISO/IEC 18004:2015 and the `8.x` numbering of the earlier edition.
+It is a map, not a copy of the spec. Normative details (bit layouts, formulas, edge-case constraints) and the reasons for implementation choices are in code comments next to the implementation, where they stay in sync with the code. Section numbers below follow the citations in those comments, which use the `7.x` numbering of ISO/IEC 18004:2015, the `8.x` numbering of an earlier edition and, for FNC1, the 2006 edition's 6.4.8, which is 7.4.8 in 2015.
 
 ## Encoding Pipeline Overview
 
@@ -175,3 +175,4 @@ Reference tests: [SeveralSymbolsDecodeTest](../../../tests/FeatherQR.Tests/Stand
 - Parity tests keep a naive reference implementation of the spec text. They are the executable form of the specification and should stay simple even when the production kernels change.
 - Components marked "shared across symbologies" live outside `Internals/StandardQR`. The shared/per-symbology split is defined in [QR Symbology Architecture](qrcode-symbologies.md).
 - A change that adds, removes or reorders a decode stage or retry also updates this map's decode diagrams, the image decoder's pipeline remarks and the decode figures in the [design record](standardqr-decoder.md#image-decode-figures). For the figures, rerun `dotnet run tools/decode_figures.cs -- .github/docs/images`, then recheck each figure's box states and notes against the code. A change inside a stage, such as a tolerance or a gate, can also flip a box's state, and the tool checks the decodes, not the box states.
+- The FNC1 clauses were read in the 2006 edition of ISO/IEC 18004, whose public copy is the one incorporated by reference into US regulations (law.resource.org). Its 6.4.8 is 7.4.8 in the 2015 edition, which has no public copy, and JIS X 0510:2018, the Japanese adoption of the 2015 edition, can be read in JISC's online viewer. The symbology identifiers come from the 2006 edition's Annex F, since ISO/IEC 15424 was not obtained.

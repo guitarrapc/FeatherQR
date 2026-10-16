@@ -30,7 +30,7 @@ public static class KanjiSweepProbe
         var exe = QrtoolRunner.Find(repoRoot);
         if (exe is null)
         {
-            Console.Error.WriteLine("qrtool not found; run tools/QRInteropFixtures/get-qrtool.ps1 first.");
+            Console.Error.WriteLine("qrtool not found; run dotnet run tools/get_qrtool.cs first.");
             return 1;
         }
 
@@ -242,8 +242,9 @@ public static class QrtoolRunner
     {
         var root = Path.Combine(repoRoot, "tools", "QRInteropFixtures", "external", "qrtool");
         if (!Directory.Exists(root)) return null;
-        return Directory.EnumerateFiles(root, "qrtool.exe", SearchOption.AllDirectories).FirstOrDefault()
-            ?? Directory.EnumerateFiles(root, "qrtool", SearchOption.AllDirectories).FirstOrDefault();
+        // The name is this system's: the folder can also hold another system's build (a checkout shared with WSL),
+        // which this one cannot run.
+        return Directory.EnumerateFiles(root, OperatingSystem.IsWindows() ? "qrtool.exe" : "qrtool", SearchOption.AllDirectories).FirstOrDefault();
     }
 
     public static string Run(string exe, string arguments)

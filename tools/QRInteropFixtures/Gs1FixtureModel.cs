@@ -89,9 +89,10 @@ public sealed record Gs1CodeGlyphXVerdict
 }
 
 /// <summary>
-/// libzint's verdict on bracketed input through its <c>gs1</c> option (it refuses any other form). It refuses an
-/// unknown AI, a wrong length and an empty field, and writes the symbol for every other defect its linters find,
-/// reporting a non-compliance warning where the wrapper passes one on.
+/// libzint's verdict through its <c>gs1</c> option, which the corpus asks for <see cref="Gs1InputKind.Bracketed"/> inputs only. It refuses an
+/// unknown or malformed AI, a wrong length, an empty field and a control character, and writes the symbol for every other
+/// defect its linters find, reporting a non-compliance warning where the wrapper passes one on. An AI typed with a leading
+/// zero gets past some of these checks (the fixture spec's oracle matrix records how).
 /// </summary>
 public sealed record Gs1LibzintVerdict
 {

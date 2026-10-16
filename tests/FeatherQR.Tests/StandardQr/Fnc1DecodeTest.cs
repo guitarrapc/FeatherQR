@@ -255,6 +255,20 @@ public class Fnc1DecodeTest
         await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
+    /// <summary>Each data mode marks the stream as begun on its own, so an Alphanumeric and a Kanji segment each need a stream of their own to show the indicator after them is late.</summary>
+    [Test]
+    [Arguments(ModeAlphanumeric, ModeFnc1First)]
+    [Arguments(ModeAlphanumeric, ModeFnc1Second)]
+    [Arguments(ModeKanji, ModeFnc1First)]
+    [Arguments(ModeKanji, ModeFnc1Second)]
+    public async Task Indicator_AfterAnAlphanumericOrKanjiSegment_IsInvalidBitstream(int dataMode, int mode)
+    {
+        var segment = dataMode == ModeAlphanumeric ? Alphanumeric("A") : Kanji(0x93FA);
+        var status = Decode(Build(segment, Indicator(mode), Numeric("7"), Terminator()), out _, out _);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
+    }
+
     [Test]
     [Arguments(ModeFnc1First, ModeFnc1First)]
     [Arguments(ModeFnc1First, ModeFnc1Second)]
@@ -357,6 +371,52 @@ public class Fnc1DecodeTest
         await Assert.That(fnc1.IsFirstPosition).IsTrue();
     }
 
+    /// <summary>
+    /// Undeclared bytes that are well formed Shift_JIS are read as Shift_JIS unless they hold a C0 control character but tab, CR and LF, which marks
+    /// binary data. Under FNC1 the byte 0x1D is the separator the standard defines, so it is text and leaves the reading as it is.
+    /// 93 FA and 96 7B are 日 and 本, and 0x93 and 0x96 are bytes ISO-8859-1 text does not hold, so only the separator can switch the reading.
+    /// </summary>
+    [Test]
+    [Arguments(ModeFnc1First)]
+    [Arguments(ModeFnc1Second)]
+    public async Task UndeclaredShiftJis_WithTheSeparator_IsReadAsShiftJis(int mode)
+    {
+        var status = Decode(Build(Indicator(mode), Bytes(0x93, 0xFA, 0x1D, 0x96, 0x7B), Terminator()), out var text, out _);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("日" + Gs + "本");
+    }
+
+    /// <summary>Three half-width katakana in a row are what tells this segment apart from ISO-8859-1, and the separator after them changes nothing.</summary>
+    [Test]
+    public async Task UndeclaredHalfWidthKatakana_WithTheSeparator_IsReadAsShiftJis()
+    {
+        var status = Decode(Build(Fnc1First(), Bytes(0xB1, 0xB2, 0xB3, 0x1D, 0xB4), Terminator()), out var text, out _);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("ｱｲｳ" + Gs + "ｴ");
+    }
+
+    /// <summary>Without FNC1 the byte 0x1D is a C0 control character other than tab, CR and LF, which marks binary data, so the segment stays ISO-8859-1.</summary>
+    [Test]
+    public async Task UndeclaredShiftJis_WithByte1DButNoFnc1_IsReadAsIso8859_1()
+    {
+        var status = Decode(Build(Bytes(0x93, 0xFA, 0x1D, 0x96, 0x7B), Terminator()), out var text, out _);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("\u0093ú\u001D\u0096{");
+    }
+
+    /// <summary>Under FNC1 the separator is text beside tab, CR and LF. Any other C0 control character, 0x01 here, still marks binary data.</summary>
+    [Test]
+    public async Task UndeclaredShiftJis_WithAnotherControlCharacterUnderFnc1_IsReadAsIso8859_1()
+    {
+        var status = Decode(Build(Fnc1First(), Bytes(0x93, 0xFA, 0x01, 0x96, 0x7B), Terminator()), out var text, out _);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("\u0093ú\u0001\u0096{");
+    }
+
     [Test]
     public async Task FirstPosition_NumericAndKanjiSegments_AreUnchanged()
     {
@@ -437,6 +497,78 @@ public class Fnc1DecodeTest
         await Assert.That(Decode(data, out var text, out _, destinationLength: 3)).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("AB" + Gs);
     }
+
+    /// <summary>
+    /// A lone % is held back until the next character says it is the separator, and then both are written. A destination that is full
+    /// at that point is too small. The two cases reach it from a pair ("%C") and from the odd last character ("B"), and the decode helper's
+    /// destination is an array of exactly that length, so a write past it would throw rather than pass.
+    /// </summary>
+    [Test]
+    [Arguments("AB%C", 2)]
+    [Arguments("A%B", 1)]
+    public async Task DestinationFullWhenAHeldSeparatorIsWritten_IsDestinationTooSmall(string written, int destinationLength)
+    {
+        var data = Build(Fnc1First(), Alphanumeric(written), Terminator());
+
+        await Assert.That(Decode(data, out _, out _, destinationLength)).IsEqualTo(DecodeStatus.DestinationTooSmall);
+        await Assert.That(Decode(data, out var text, out _, written.Length)).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo(written.Replace("%", Gs));
+    }
+
+    // The Alphanumeric segment's own bounds under FNC1
+
+    /// <summary>
+    /// The segment's bits are counted before any is read. Seven characters take 39 bits, which with the 17 bits before them end the
+    /// 7 bytes exactly, and thirteen take 72, one bit more than the 88-bit stream holds after its 17. The second stream is written to
+    /// end one bit early, so a count that let it through would read past the data.
+    /// </summary>
+    [Test]
+    public async Task AlphanumericSegment_EndingExactlyAtTheData_IsReadAndOneBitShortIsInvalidBitstream()
+    {
+        var exact = Build(Fnc1First(), Alphanumeric("ABCDEFG"));
+        await Assert.That(exact.Length * 8).IsEqualTo(4 + 4 + 9 + 3 * 11 + 6);
+        await Assert.That(Decode(exact, out var text, out _)).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("ABCDEFG");
+
+        var fields = Alphanumeric("ABCDEFGHIJKLM").ToList();
+        fields[^1] = (fields[^1].Value >> 1, 5);
+        var oneBitShort = Build(Fnc1First(), fields);
+        await Assert.That(oneBitShort.Length * 8).IsEqualTo(4 + 4 + 9 + 6 * 11 + 6 - 1);
+        await Assert.That(Decode(oneBitShort, out _, out _)).IsEqualTo(DecodeStatus.InvalidBitstream);
+    }
+
+    /// <summary>
+    /// A pair is 11 bits and holds 45 × 45 values. 2024 is "::", the last, and 2025 is the first no pair can be. A lone last
+    /// character is 6 bits. 44 is ":", the last, and 45 is the first no character can be.
+    /// </summary>
+    [Test]
+    public async Task AlphanumericValue_PastTheLast_IsInvalidBitstream()
+    {
+        await Assert.That(Decode(Build(Fnc1First(), [(ModeAlphanumeric, 4), (2, 9), (2024, 11)], Terminator()), out var text, out _)).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("::");
+        await Assert.That(Decode(Build(Fnc1First(), [(ModeAlphanumeric, 4), (2, 9), (2025, 11)], Terminator()), out _, out _)).IsEqualTo(DecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(Build(Fnc1First(), [(ModeAlphanumeric, 4), (1, 9), (44, 6)], Terminator()), out text, out _)).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo(":");
+        await Assert.That(Decode(Build(Fnc1First(), [(ModeAlphanumeric, 4), (1, 9), (45, 6)], Terminator()), out _, out _)).IsEqualTo(DecodeStatus.InvalidBitstream);
+    }
+
+#if !DEBUG
+    /// <summary>The FNC1 decode allocates nothing once warm: a separator, a literal %% and a trailing separator in Alphanumeric, and 0x1D in a Byte segment (Release only, as the other allocation tests are).</summary>
+    [Test]
+    [NotInParallel]
+    public async Task Fnc1Decode_AllocatesNothing()
+    {
+        var data = Build(Fnc1Second(37), Alphanumeric("A%B%%C%"), Bytes(0x41, 0x1D, 0x42), Terminator());
+        var destination = new char[64];
+        for (var i = 0; i < 3; i++)
+            QRBinaryDecoder.DecodeBitStream(data, Version, destination, out _, out _, out _);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 16; i++)
+            QRBinaryDecoder.DecodeBitStream(data, Version, destination, out _, out _, out _);
+        await Assert.That(GC.GetAllocatedBytesForCurrentThread() - before).IsEqualTo(0);
+    }
+#endif
 
     // The value type
 

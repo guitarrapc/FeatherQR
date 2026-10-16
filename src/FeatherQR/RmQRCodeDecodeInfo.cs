@@ -1,7 +1,7 @@
 namespace FeatherQR;
 
 /// <summary>
-/// Diagnostic information from an rMQR decode attempt (<see cref="RmQRCodeDecoder"/>): status, and when the format information could be read, the version and ECC level plus the number of Reed-Solomon codeword corrections applied, and on a read the FNC1 mode when the symbol carries one. rMQR has a single data mask, so there is no mask pattern to report, and it does not define Structured Append.
+/// Diagnostic information from an rMQR decode attempt (<see cref="RmQRCodeDecoder"/>): status, and when the format information could be read, the version and ECC level plus the number of Reed-Solomon codeword corrections applied, and on success the FNC1 mode when the symbol carries one. rMQR has a single data mask, so there is no mask pattern to report, and it does not define Structured Append.
 /// </summary>
 public readonly record struct RmQRCodeDecodeInfo
 {

@@ -9,7 +9,7 @@ namespace FeatherQR.Internals.RmQR;
 /// those bits, the costs come from the FNC1 program (<see cref="ModeSegmenter.ComputeCostsFnc1"/>), whose Alphanumeric runs count a literal
 /// <c>%</c> twice and never hold a separator pair, and no Kanji plan is priced. The scan keeps the trivial bound and
 /// the memoised cost run of the scan without FNC1 and drops its floor filter, whose run counting reads the other
-/// program's packed table: GS1 strings are tens of characters, and the route is cold.
+/// program's packed table. The route is cold, so the exact cost run can decide alone.
 /// </summary>
 internal static partial class RmQRSegmentPlanner
 {

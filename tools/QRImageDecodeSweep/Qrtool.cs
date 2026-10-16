@@ -3,7 +3,7 @@ using System.Text;
 
 namespace QRImageDecodeSweep;
 
-/// <summary>The pinned qrtool binary the interop fixtures use (<c>tools/QRInteropFixtures/get-qrtool.ps1</c>). Without it the sweep runs with one encoder fewer and says so.</summary>
+/// <summary>The pinned qrtool binary the interop fixtures use (<c>tools/get_qrtool.cs</c>). Without it the sweep runs with one encoder fewer and says so.</summary>
 internal static class Qrtool
 {
     private static string? exePath;
@@ -14,7 +14,11 @@ internal static class Qrtool
     {
         var root = Path.Combine(repoRoot, "tools", "QRInteropFixtures", "external", "qrtool");
         if (Directory.Exists(root))
-            exePath = Directory.EnumerateFiles(root, "qrtool*", SearchOption.AllDirectories).FirstOrDefault(static p => Path.GetFileNameWithoutExtension(p) == "qrtool" && Path.GetExtension(p) is "" or ".exe");
+        {
+            // The name is this system's: the folder can also hold another system's build (a checkout shared with WSL),
+            // which this one cannot run.
+            exePath = Directory.EnumerateFiles(root, OperatingSystem.IsWindows() ? "qrtool.exe" : "qrtool", SearchOption.AllDirectories).FirstOrDefault();
+        }
         Console.WriteLine(exePath is null ? "qrtool: not found, its lineage is skipped" : $"qrtool: {exePath}");
     }
 

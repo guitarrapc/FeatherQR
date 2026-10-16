@@ -8,7 +8,7 @@ namespace QRInteropFixtures;
 /// <c>TextMode.Plain</c>, and the fixture is written only if the reader reports the mode the case
 /// claims (the symbology identifier <c>]Q3</c> or <c>]Q5</c>, GS1 content in first position, the
 /// application indicator before the text in second position, an ECI header exactly where the case
-/// asked for one), the version, ECC and mask of the manifest, and the element string the case
+/// asked for one), the version, ECC and mask of the manifest, and the text the case
 /// expects. The reader supplies the identifier and, for libzint, the mask. Where the writer's input
 /// is not the text the symbol means, the manifest records the input beside the reader's text.
 /// </summary>
@@ -44,7 +44,7 @@ public static class Fnc1SanityGate
                 throw new InvalidOperationException($"sanity gate: fixture {name} carries an ECI header that is not assignment 26 (ECI protocol bytes: {eciProtocol}).");
         }
 
-        // Plain text: the element string with GS as 0x1D. In second position the reader puts the
+        // Plain text: the data with GS as 0x1D. In second position the reader puts the
         // application indicator first, as the standard transmits it, and the fixture's text is the rest.
         var text = result.Text;
         if (caseDefinition.Position == Fnc1Position.Second)

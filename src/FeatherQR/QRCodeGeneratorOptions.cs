@@ -109,12 +109,12 @@ public record struct QRCodeGeneratorOptions
     }
 
     /// <summary>
-    /// The FNC1 mode to write (ISO/IEC 18004 6.4.8): <see cref="Fnc1Mode.FirstPosition"/> for GS1 data, or second position with an application indicator for an industry format registered with AIM.
+    /// The FNC1 mode to write (ISO/IEC 18004:2006 6.4.8): <see cref="Fnc1Mode.FirstPosition"/> for GS1 data, or second position with an application indicator for an industry format registered with AIM.
     /// Defaults to <see cref="Fnc1Mode.None"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The content is the data as a reader returns it: a GS1 element string with U+001D as the separator after each variable-length value another follows, without a symbology identifier or the application indicator.
+    /// The content is the data as a reader returns it, with U+001D as the separator and without a symbology identifier or the application indicator. In first position it is a GS1 element string, with the separator after each variable-length value another follows.
     /// The indicator is written after any ECI header and before the data, and in an Alphanumeric segment the separator is written as <c>%</c> and a literal <c>%</c> as <c>%%</c>, so the content reads back as given.
     /// A separator followed by a separator or a literal <c>%</c> cannot share an Alphanumeric segment, since a reader takes the <c>%%</c> first: such content takes Byte mode under <see cref="QRSegmentation.Single"/>, and <see cref="QRSegmentation.Optimal"/> breaks the run or uses Byte mode, whichever is smaller.
     /// </para>

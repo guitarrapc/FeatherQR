@@ -137,6 +137,17 @@ const eccSelect = document.getElementById('ecc-select');
 const eccBoostRow = document.getElementById('ecc-boost-row');
 const eccBoostCheck = document.getElementById('ecc-boost-check');
 const allowKanjiCheck = document.getElementById('allow-kanji-check');
+const appIndicatorRow = document.getElementById('app-indicator-row');
+const appIndicatorInput = document.getElementById('app-indicator-input');
+const separatorRow = document.getElementById('separator-row');
+const insertSeparatorBtn = document.getElementById('insert-separator-btn');
+const formatRow = document.getElementById('format-row');
+const formatSelect = document.getElementById('format-select');
+const gs1StemRow = document.getElementById('gs1-stem-row');
+const gs1StemInput = document.getElementById('gs1-stem-input');
+const gs1ExampleBtn = document.getElementById('gs1-example-btn');
+const gs1EncodedEl = document.getElementById('gs1-encoded');
+const decodeGs1El = document.getElementById('decode-gs1');
 const versionSelect = document.getElementById('version-select');
 const rmqrFitRow = document.getElementById('rmqr-fit-row');
 const rmqrFitSelect = document.getElementById('rmqr-fit-select');
@@ -259,6 +270,86 @@ function fnc1Label(result) {
 /** Decoded text for display: the GS1 separator (U+001D) is invisible, so it is shown as ␝ (U+241D). */
 function displayText(text) {
   return text.replace(/\u001d/g, '␝');
+}
+
+const DATA_FORMATS = ['text', 'gs1', 'link', 'aim'];
+
+/**
+ * The WASM request for a playground state. The data format names the route: a GS1 format goes through
+ * the GS1 entry points, which check the data and set the mode, and an AIM format is plain text under
+ * FNC1 in second position. First position is written through the GS1 entry point alone, so a symbol
+ * that claims GS1 data has passed the checks. In every format but plain text each ␝ of the content, the
+ * stand-in the page shows for the separator, is sent as U+001D, the separator a reader returns. Micro QR
+ * has neither FNC1 nor a GS1 carrier, so its request is plain text whatever the hidden control holds.
+ */
+function requestFor(state) {
+  const format = state.symbology === 'microqr' ? 'text' : state.dataFormat;
+  const gs1 = format === 'gs1' ? 'qr' : format === 'link' ? 'link' : 'none';
+  const fnc1 = format === 'aim' ? 'second' : 'none';
+  const content = format === 'text' ? state.content : state.content.replace(/␝/g, '\u001d');
+  return { ...state, gs1, fnc1, content };
+}
+
+/**
+ * What the self-check expects a generated symbol to decode to: for GS1 data, the text the generator
+ * wrote (the element string under FNC1 in first position, or the Digital Link URI with no mode), and
+ * otherwise the content under the request's own mode.
+ */
+function expectedDecode(request, encoded) {
+  if (request.gs1 === 'none' || !encoded) return request;
+  return { ...request, content: encoded, fnc1: request.gs1 === 'qr' ? 'first' : 'none' };
+}
+
+/**
+ * The GS1 view of a decoded symbol: its data as (AI) text with a row for each element, or, for a symbol
+ * under FNC1 in first position whose data fails the checks, why. Hidden for a symbol with no GS1 data.
+ */
+function renderDecodedGs1(result) {
+  decodeGs1El.replaceChildren();
+  decodeGs1El.hidden = !(result?.gs1Hri || result?.gs1Error);
+  if (decodeGs1El.hidden) return;
+  const heading = document.createElement('div');
+  if (result.gs1Error) {
+    heading.textContent = `⚠ FNC1 in first position, but the text does not read as GS1 data: ${result.gs1Error}`;
+    decodeGs1El.appendChild(heading);
+    return;
+  }
+  const carrier = result.fnc1 === 'first' ? 'GS1 element string' : 'GS1 Digital Link URI';
+  heading.textContent = `${carrier}, as (AI) text: ${result.gs1Hri}`;
+  decodeGs1El.appendChild(heading);
+  // Reading takes data the checks refuse, such as a wrong check digit, so the verdict is shown apart.
+  const check = document.createElement('div');
+  check.textContent = result.gs1Check
+    ? `⚠ The element string fails the GS1 checks: ${result.gs1Check}`
+    : '✓ Passes the GS1 checks.';
+  decodeGs1El.appendChild(check);
+  if (!result.gs1Elements?.length) return;
+  const table = document.createElement('table');
+  const head = table.createTHead().insertRow();
+  for (const label of ['AI', 'Value']) {
+    const th = document.createElement('th');
+    th.textContent = label;
+    head.appendChild(th);
+  }
+  const body = table.createTBody();
+  for (const { ai, value } of result.gs1Elements) {
+    const row = body.insertRow();
+    row.insertCell().textContent = `(${ai})`;
+    row.insertCell().textContent = value;
+  }
+  decodeGs1El.appendChild(table);
+}
+
+/**
+ * Whether a decoded symbol carries the mode a request asked for: the position, and in second
+ * position the indicator as the decoder reports it (0-99 as its value, a letter as its code plus 100).
+ */
+function decodedModeMatches(result, request) {
+  if (request.fnc1 === 'none') return !result.fnc1;
+  if (request.fnc1 === 'first') return result.fnc1 === 'first';
+  const indicator = request.applicationIndicator.trim();
+  const expected = /^\d{1,2}$/.test(indicator) ? Number(indicator) : indicator.charCodeAt(0) + 100;
+  return result.fnc1 === 'second' && result.applicationIndicator === expected;
 }
 
 /** Repopulates the ECC select for the symbology, keeping the value when still valid. */
@@ -407,6 +498,9 @@ function collectState() {
     ecc: eccSelect.value,
     eccBoost: eccBoostCheck.checked,
     allowKanji: allowKanjiCheck.checked,
+    dataFormat: formatSelect.value,
+    applicationIndicator: appIndicatorInput.value,
+    gs1Stem: gs1StemInput.value,
     size: Number(sizeRange.value),
     quietZone: Number(quietRange.value),
     version: Number(versionSelect.value),
@@ -445,6 +539,9 @@ function applyStateToControls(state) {
     if (state.ecc) eccSelect.value = state.ecc;
     if (typeof state.eccBoost === 'boolean') eccBoostCheck.checked = state.eccBoost;
     if (typeof state.allowKanji === 'boolean') allowKanjiCheck.checked = state.allowKanji;
+    if (DATA_FORMATS.includes(state.dataFormat)) formatSelect.value = state.dataFormat;
+    if (typeof state.applicationIndicator === 'string') appIndicatorInput.value = state.applicationIndicator.slice(0, 2);
+    if (typeof state.gs1Stem === 'string') gs1StemInput.value = state.gs1Stem;
     if (state.fitStrategy === 'area' || state.fitStrategy === 'height' || state.fitStrategy === 'width') rmqrFitSelect.value = state.fitStrategy;
     if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
     if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
@@ -521,6 +618,14 @@ function syncDerivedControls() {
   eccBoostRow.hidden = isMicroSymbology() || isRmqrSymbology();
   finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
   logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();
+  // Micro QR has neither FNC1 nor a GS1 carrier. The stem belongs to a Digital Link and the indicator
+  // to an AIM format alone.
+  const format = isMicroSymbology() ? 'text' : formatSelect.value;
+  formatRow.hidden = isMicroSymbology();
+  gs1StemRow.hidden = format !== 'link';
+  appIndicatorRow.hidden = format !== 'aim';
+  gs1ExampleBtn.hidden = format !== 'gs1' && format !== 'link';
+  separatorRow.hidden = format === 'text';
   // rMQR fit options apply only to automatic version selection.
   rmqrFitRow.hidden = !isRmqrSymbology();
   rmqrHeightRow.hidden = !isRmqrSymbology();
@@ -677,11 +782,12 @@ function generate() {
     return;
   }
 
+  const request = requestFor(state);
   const logoBytes = state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;
   let bytes;
   const t0 = performance.now();
   try {
-    bytes = exports.FeatherQR.Playground.QrInterop.Generate(JSON.stringify(state), logoBytes);
+    bytes = exports.FeatherQR.Playground.QrInterop.Generate(JSON.stringify(request), logoBytes);
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -696,7 +802,13 @@ function generate() {
   if (bytes.length === 0 || bytes[0] === 0x7b) {
     let message = 'QR generation failed.';
     try {
-      message = JSON.parse(utf8Decoder.decode(bytes)).error ?? message;
+      const envelope = JSON.parse(utf8Decoder.decode(bytes));
+      message = envelope.error ?? message;
+      // Data the GS1 checks refuse names its place in the content, so the characters can be quoted.
+      if (Number.isInteger(envelope.offset)) {
+        const fault = request.content.slice(envelope.offset, envelope.offset + envelope.length);
+        if (fault) message += ` Characters at fault: “${displayText(fault)}”.`;
+      }
     } catch {
       /* keep generic message */
     }
@@ -716,6 +828,7 @@ function generate() {
   downloadSvgBtn.disabled = false;
   copyImageBtn.disabled = false;
 
+  let encoded = null;
   try {
     const meta = JSON.parse(exports.FeatherQR.Playground.QrInterop.GetLastMeta());
     const versionLabel = symbolLabel(meta.symbology, meta.qrVersion);
@@ -723,11 +836,16 @@ function generate() {
     statsEl.textContent =
       `${versionLabel} · ${matrixLabel} modules · `
       + `${meta.totalMs} ms in WASM (${interopMs.toFixed(1)} ms total) · ${formatBytes(meta.bytes)}`;
+    encoded = meta.encoded ?? null;
   } catch {
     statsEl.textContent = '';
   }
+  gs1EncodedEl.hidden = encoded === null;
+  gs1EncodedEl.textContent = encoded === null
+    ? ''
+    : `${request.gs1 === 'link' ? 'Digital Link URI' : 'Element string, under FNC1 in first position'}: ${displayText(encoded)}`;
 
-  scheduleVerifyDecode(bytes, state.content);
+  scheduleVerifyDecode(bytes, expectedDecode(request, encoded));
 }
 
 /* ─── Decode (self-verify + image upload) ─── */
@@ -738,32 +856,37 @@ const VERIFY_DEBOUNCE_MS = 250;
 let verifyTimer = null;
 let pendingVerify = null;
 
-function scheduleVerifyDecode(pngBytes, expectedText) {
+/** @param {object} request what the image should decode to: the content and the FNC1 mode (see expectedDecode) */
+function scheduleVerifyDecode(pngBytes, request) {
   // Clear immediately so the line never describes a previous image
   if (decodeVerifyEl) decodeVerifyEl.textContent = '';
-  pendingVerify = { pngBytes, expectedText };
+  pendingVerify = { pngBytes, request };
   if (verifyTimer !== null) return;
   verifyTimer = window.setTimeout(() => {
     verifyTimer = null;
     const job = pendingVerify;
     pendingVerify = null;
-    if (job) runVerifyDecode(job.pngBytes, job.expectedText);
+    if (job) runVerifyDecode(job.pngBytes, job.request);
   }, VERIFY_DEBOUNCE_MS);
 }
 
-function runVerifyDecode(pngBytes, expectedText) {
+function runVerifyDecode(pngBytes, request) {
   if (!runtimeAlive || !runtimeReady || !exports || !decodeVerifyEl) return;
   const result = callDecode(pngBytes);
   if (!result || result.error) {
     decodeVerifyEl.textContent = '';
     return;
   }
-  if (result.ok && result.text === expectedText) {
+  // The mode changes how the text reads, so a symbol is only right when both come back.
+  if (result.ok && result.text === request.content && decodedModeMatches(result, request)) {
     const corrected = result.errorsCorrected > 0 ? ` · ${result.errorsCorrected} codewords corrected` : '';
     // The decoded ECC is shown rather than the requested one: with "Boost ECC"
     // enabled the two can differ, and this line is where the boost is observable.
     const ecc = result.ecc ? ` · ECC ${result.ecc}` : '';
-    decodeVerifyEl.textContent = `✓ Decodes back to the input (self-check${ecc}${corrected} · ${result.totalMs} ms)`;
+    decodeVerifyEl.textContent = `✓ Decodes back to the input (self-check${ecc}${fnc1Label(result)}${corrected} · ${result.totalMs} ms)`;
+  } else if (result.ok && result.text === request.content) {
+    const mode = fnc1Label(result).replace(/^ · /, '') || 'no FNC1';
+    decodeVerifyEl.textContent = `⚠ Self-check read the text under another mode (${mode}), please test-scan this code.`;
   } else if (result.ok) {
     decodeVerifyEl.textContent = '⚠ Self-check decoded different text, please test-scan this code.';
   } else {
@@ -931,6 +1054,7 @@ async function decodeImageFile(file) {
   const superseded = () => generation !== decodeGeneration;
 
   decodePreviewEl.hidden = true;
+  renderDecodedGs1(null);
   lastDecodeImage?.close();
   lastDecodeImage = null;
   lastDecodeResult = null;
@@ -976,6 +1100,7 @@ async function decodeImageFile(file) {
     decodeResultEl.textContent =
       `“${displayText(result.text)}” · ${decodedLabel}${fnc1Label(result)} · ECC ${result.ecc}${maskLabel}`
       + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
+    renderDecodedGs1(result);
   }
 
   let bitmap;
@@ -1086,7 +1211,8 @@ function markCustomPreset() {
 }
 
 for (const el of [
-  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
+  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, formatSelect, appIndicatorInput, gs1StemInput,
+  versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
   gradientToggle, gradientDirection,
@@ -1108,6 +1234,21 @@ symbologySelect.addEventListener('input', () => {
   syncDerivedControls();
   markCustomPreset();
   scheduleGenerate();
+});
+
+// A textarea cannot take U+001D from a keyboard, so the button puts its visible stand-in at the cursor.
+insertSeparatorBtn.addEventListener('click', () => {
+  const start = contentEl.selectionStart ?? contentEl.value.length;
+  const end = contentEl.selectionEnd ?? start;
+  contentEl.setRangeText('␝', start, end, 'end');
+  contentEl.focus();
+  contentEl.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
+// The retail label the GS1 benchmarks use: a GTIN, an expiry date and a batch.
+gs1ExampleBtn.addEventListener('click', () => {
+  contentEl.value = '(01)09520123456788(17)251231(10)ABC123';
+  contentEl.dispatchEvent(new Event('input', { bubbles: true }));
 });
 
 // Color inputs inside the dynamic gradient list (event delegation).
@@ -1163,7 +1304,7 @@ downloadSvgBtn.addEventListener('click', () => {
   const logoBytes = state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;
   let bytes;
   try {
-    bytes = exports.FeatherQR.Playground.QrInterop.GenerateSvg(JSON.stringify(state), logoBytes);
+    bytes = exports.FeatherQR.Playground.QrInterop.GenerateSvg(JSON.stringify(requestFor(state)), logoBytes);
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -1309,7 +1450,7 @@ async function runBenchmark() {
     return;
   }
   // Snapshot options once so mid-run control edits do not skew results.
-  const optionsJson = JSON.stringify(state);
+  const optionsJson = JSON.stringify(requestFor(state));
   const mode = benchModeSelect.value;
   const total = Number(benchCountSelect.value);
   const logoBytes = mode === 'render' && state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;

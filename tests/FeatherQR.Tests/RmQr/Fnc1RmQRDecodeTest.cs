@@ -154,6 +154,15 @@ public class Fnc1RmQRDecodeTest
         await Assert.That(Decode("001 0000 " + indicator + " 001 0001 0111 000").Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
+    /// <summary>A Kanji segment marks the stream as begun apart from the other three data modes, so an indicator after it needs a stream of its own.</summary>
+    [Test]
+    [Arguments("101")]
+    [Arguments("110 00100101")]
+    public async Task Indicator_AfterAKanjiSegment_IsInvalidBitstream(string indicator)
+    {
+        await Assert.That(Decode("100 01 " + Kanji93FA + " " + indicator + " 001 0001 0111 000").Status).IsEqualTo(DecodeStatus.InvalidBitstream);
+    }
+
     [Test]
     [Arguments("101", "101")]
     [Arguments("101", "110 00100101")]
@@ -277,6 +286,59 @@ public class Fnc1RmQRDecodeTest
         await Assert.That(text).IsEqualTo("%" + Gs);
         await Assert.That(fnc1.IsFirstPosition).IsTrue();
     }
+
+    /// <summary>Under FNC1, in either position, the separator 0x1D is text, so undeclared Shift_JIS around it is still read as Shift_JIS: 93 FA and 96 7B are 日 and 本.</summary>
+    [Test]
+    [Arguments("101")]
+    [Arguments("110 00100101")]
+    public async Task UndeclaredShiftJisWithTheSeparator_IsReadAsShiftJis(string indicator)
+    {
+        // 011 Byte, count 5 (3 bits): 93 FA 1D 96 7B.
+        var (status, text, _) = Decode(indicator + " 011 101 10010011 11111010 00011101 10010110 01111011 000");
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("日" + Gs + "本");
+    }
+
+    /// <summary>
+    /// Without FNC1 the byte 0x1D is a C0 control character other than tab, CR and LF, which marks binary data, so the segment
+    /// stays ISO-8859-1. Only the missing indicator sets this stream apart from the one
+    /// <see cref="UndeclaredShiftJisWithTheSeparator_IsReadAsShiftJis"/> reads as Shift_JIS.
+    /// </summary>
+    [Test]
+    public async Task UndeclaredShiftJisWithByte1DButNoFnc1_IsReadAsIso8859_1()
+    {
+        // 011 Byte, count 5 (3 bits): 93 FA 1D 96 7B.
+        var (status, text, fnc1) = Decode("011 101 10010011 11111010 00011101 10010110 01111011 000");
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("\u0093\u00FA\u001D\u0096{");
+        await Assert.That(fnc1).IsEqualTo(Fnc1Mode.None);
+    }
+
+#if !DEBUG
+    /// <summary>The FNC1 decode allocates nothing once warm, in second position through a literal %% (Release only, as the other allocation tests are).</summary>
+    [Test]
+    [NotInParallel]
+    public async Task SecondPosition_Decode_AllocatesNothing()
+    {
+        var bits = ("110 00100101 010 100 " + PairAPercent + " " + PairPercentB + " 000").Replace(" ", "");
+        var data = new byte[(bits.Length + 7) / 8];
+        for (var i = 0; i < bits.Length; i++)
+        {
+            if (bits[i] == '1')
+                data[i >> 3] |= (byte)(0x80 >> (i & 7));
+        }
+        var destination = new char[16];
+        for (var i = 0; i < 3; i++)
+            RmQRBinaryDecoder.DecodeBitStream(data, bits.Length, RmQRVersion.R7x43, destination, out _, out _);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 16; i++)
+            RmQRBinaryDecoder.DecodeBitStream(data, bits.Length, RmQRVersion.R7x43, destination, out _, out _);
+        await Assert.That(GC.GetAllocatedBytesForCurrentThread() - before).IsEqualTo(0);
+    }
+#endif
 
     /// <summary>The destination is held to the text as it reads, which the rule only shrinks.</summary>
     [Test]

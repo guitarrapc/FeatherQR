@@ -68,6 +68,10 @@ public class Fnc1ModeTest
     [Arguments(' ')]
     [Arguments('é')]
     [Arguments('\u001D')]
+    [Arguments('@')]
+    [Arguments('[')]
+    [Arguments('`')]
+    [Arguments('{')]
     public async Task SecondPosition_CharacterThatIsNotALetter_Throws(char letter)
     {
         await Assert.That(() => Fnc1Mode.SecondPosition(letter)).Throws<ArgumentOutOfRangeException>();
@@ -81,6 +85,21 @@ public class Fnc1ModeTest
         await Assert.That(Fnc1Mode.SecondPosition(37)).IsNotEqualTo(Fnc1Mode.SecondPosition(38));
         await Assert.That(Fnc1Mode.SecondPosition(0)).IsNotEqualTo(Fnc1Mode.FirstPosition);
         await Assert.That(Fnc1Mode.SecondPosition(0)).IsNotEqualTo(Fnc1Mode.None);
+    }
+
+    /// <summary>
+    /// A letter indicator prints the letter it stands for beside its codeword. A number prints as itself, 99 too, the last below
+    /// the letters. A mode with no indicator prints none, as its <see cref="Fnc1Mode.ApplicationIndicator"/> is null.
+    /// </summary>
+    [Test]
+    public async Task ToString_LetterIndicator_ShowsTheLetter()
+    {
+        await Assert.That(Fnc1Mode.SecondPosition('A').ToString()).Contains("ApplicationIndicator = 165 (A) }");
+        await Assert.That(Fnc1Mode.SecondPosition('z').ToString()).Contains("ApplicationIndicator = 222 (z) }");
+        await Assert.That(Fnc1Mode.SecondPosition(37).ToString()).Contains("ApplicationIndicator = 37 }");
+        await Assert.That(Fnc1Mode.SecondPosition(99).ToString()).Contains("ApplicationIndicator = 99 }");
+        await Assert.That(Fnc1Mode.None.ToString()).Contains("ApplicationIndicator =  }");
+        await Assert.That(Fnc1Mode.FirstPosition.ToString()).Contains("IsFirstPosition = True, IsSecondPosition = False, ApplicationIndicator =  }");
     }
 
     /// <summary>A decoded mode is the same value the encoder takes, so a symbol can be re-encoded from its decode info.</summary>

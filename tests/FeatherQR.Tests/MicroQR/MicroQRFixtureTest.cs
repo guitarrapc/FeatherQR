@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// pinned ZXingCpp package, and the pinned Rust qrtool binary), and every fixture
 /// passed the zxing-cpp decode sanity gate before being committed. Regenerate with:
 /// <c>dotnet run --project tools/QRInteropFixtures -- regenerate</c>
-/// (the qrtool binary comes from <c>tools/QRInteropFixtures/get-qrtool.ps1</c>).
+/// (the qrtool binary comes from <c>tools/get_qrtool.cs</c>).
 /// <para>
 /// Both the matrix path and the PNG image path (image detection) are
 /// exercised against every fixture.

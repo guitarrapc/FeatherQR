@@ -359,6 +359,7 @@ public static partial class QRCodeGenerator
     /// <para>
     /// The symbol count comes from <see cref="QRCodeGeneratorOptions.Version"/>: the text is split across the fewest symbols whose version stays within the range, so <c>QRVersionRange.AtMost(n)</c> is how to say how large a symbol may be. Every symbol of the set shares one version, and the split is balanced so the fullest symbol is as empty as it can be, rather than filling each symbol and leaving the remainder to the last one.
     /// Text that fits one symbol within the range returns that one symbol, exactly as <see cref="Create(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> would, with no Structured Append header.
+    /// An FNC1 mode in <see cref="QRCodeGeneratorOptions.Fnc1"/> is refused, for text that fits one symbol too, since no reader is known to read FNC1 across a set.
     /// </para>
     /// <para>
     /// The charset is decided once for the whole text and declared in every symbol, and the parity every symbol carries is the XOR of the whole text's bytes in that charset. With <see cref="QRCodeGeneratorOptions.AllowKanji"/>, text that Kanji mode carries (see the class remarks) makes a Kanji set instead: no symbol declares a charset, a chunk is one Kanji segment under <see cref="QRSegmentation.Single"/> or its mix of Kanji and ASCII runs under <see cref="QRSegmentation.Optimal"/>, and the parity is the XOR of the whole text's Shift_JIS bytes. With ASCII in the text the set is a Kanji set only under <see cref="QRSegmentation.Optimal"/>, and only where it needs fewer symbols than the UTF-8 set, or as many at a lower version. <see cref="EciMode.Utf8"/> keeps the UTF-8 set. A byte order mark, when <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for one, is written in the first symbol only, and only when that symbol is in Byte mode: the mark heads the byte stream, and a first symbol of digits or alphanumerics has none to head, so the set then carries no mark and the parity counts none. <see cref="QRCodeGeneratorOptions.BoostEccLevel"/> raises the whole set to the level every symbol can take. Splits never fall inside a surrogate pair, nor, in UTF-8, before a U+FEFF: a reader takes one at the head of a symbol for a byte order mark and drops it, which is also what becomes of one at the head of the text, as it does in a single symbol.
@@ -369,7 +370,7 @@ public static partial class QRCodeGenerator
     /// <param name="eccLevel">How much damage each QR code should survive, the same level for every symbol of the set.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. The version range bounds the size of every symbol.</param>
     /// <returns>The symbols in set order: one when the text fits a single symbol, otherwise two to sixteen.</returns>
-    /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, which includes a run of U+FEFF that no symbol holds together with the character ahead of it (no symbol after the first may begin with that character), or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, which includes a run of U+FEFF that no symbol holds together with the character ahead of it (no symbol after the first may begin with that character), when the options contradict each other, or when they carry an FNC1 mode.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, or a quiet zone outside 0 to 10,000.</exception>
     public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
         => CreateStructuredAppend(textSpan, eccLevel, in options, planTogether: true);
@@ -882,9 +883,9 @@ public static partial class QRCodeGenerator
         return result;
     }
 
-    private static string DoesNotFitMessage(QRVersionRange range, QREccLevel eccLevel, in TextAnalysisResult analysis)
+    private static string DoesNotFitMessage(QRVersionRange range, QREccLevel eccLevel, in TextAnalysisResult analysis, int fnc1HeaderBits = 0)
         => $"Content does not fit {(range.IsExact ? $"a version {range.Min}" : $"any version in {range}")} QR code at ECC level {eccLevel} " +
-           $"(mode: {analysis.EncodingMode}, ECI: {analysis.EciMode}, {analysis.DataLength} data units). " +
+           $"(mode: {analysis.EncodingMode}, ECI: {analysis.EciMode}, {(fnc1HeaderBits > 0 ? $"FNC1: {fnc1HeaderBits} bits, " : "")}{analysis.DataLength} data units). " +
            $"Widen the version range, lower the ECC level, or leave it at QRVersionRange.Any for automatic selection.";
 
     /// <summary>
@@ -1722,7 +1723,7 @@ public static partial class QRCodeGenerator
             ResolveVersionAndEccFnc1(in analysis, eccLevel, in options, options.Fnc1.StandardQrHeaderBits);
         else if (options.Version.IsAny)
             GetVersion(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, false);
-        throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, in analysis), nameof(options));
+        throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, in analysis, options.Fnc1.StandardQrHeaderBits), nameof(options));
     }
 
     /// <summary>

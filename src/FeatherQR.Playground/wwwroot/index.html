@@ -75,6 +75,35 @@
             <textarea id="content" rows="3" spellcheck="false"
               placeholder="Text or URL to encode">https://github.com/guitarrapc/FeatherQR</textarea>
           </label>
+          <div class="separator-row" id="separator-row" hidden>
+            <button type="button" id="insert-separator-btn" class="small-btn"
+              title="Insert the separator at the cursor. It shows as ␝ and is written as U+001D, the GS character a reader returns.">Insert separator ␝</button>
+            <button type="button" id="gs1-example-btn" class="small-btn"
+              title="Put a retail label's (AI) text in the content: a GTIN, an expiry date and a batch.">GS1 retail example</button>
+            <span class="field__hint">Each ␝ is written as the separator U+001D.</span>
+          </div>
+          <div class="panel__grid gs1-fields">
+            <label class="field" id="format-row">
+              <span class="field__label">Data format</span>
+              <select id="format-select"
+                title="Plain text is written as it is. The two GS1 formats take (AI) text such as (01)09520123456788(17)251231, or an element string, and check it first: GS1 QR Code writes the element string under FNC1 in first position, the carrier for healthcare, logistics and assets, and GS1 Digital Link writes the data's URI in a plain symbol, the retail carrier. GS1 does not list rMQR as a carrier, so a GS1 scanner may not accept one. AIM format writes the text under FNC1 in second position, for an industry format registered with AIM and named by the application indicator. Standard QR and rMQR only.">
+                <option value="text">Plain text</option>
+                <option value="gs1">GS1 QR Code</option>
+                <option value="link">GS1 Digital Link</option>
+                <option value="aim">AIM format (FNC1 second position)</option>
+              </select>
+            </label>
+            <label class="field" id="gs1-stem-row">
+              <span class="field__label">Digital Link stem</span>
+              <input type="text" id="gs1-stem-input" placeholder="https://id.gs1.org" spellcheck="false" autocomplete="off"
+                title="The URI's scheme and domain, with an optional path, such as a brand's own domain. Blank writes GS1's canonical stem." />
+            </label>
+            <label class="field" id="app-indicator-row">
+              <span class="field__label">Application indicator</span>
+              <input type="text" id="app-indicator-input" value="00" maxlength="2" spellcheck="false" autocomplete="off"
+                title="The AIM industry format the data follows: a number 00-99 in one or two digits, or one letter A-Z or a-z." />
+            </label>
+          </div>
           <label class="field">
             <span class="field__label">Style preset</span>
             <select id="preset-select">
@@ -105,14 +134,16 @@
               <select id="ecc-select" title="Higher levels survive more damage or overlay, H is recommended with a logo">
               </select>
             </label>
-            <label class="field field--inline field--checkbox" id="ecc-boost-row">
-              <input type="checkbox" id="ecc-boost-check" />
-              <span class="field__label" title="Raise the ECC level when the chosen version has spare capacity. Never changes the symbol size; the decoded result below shows the level actually used.">Boost ECC to fill spare capacity</span>
-            </label>
-            <label class="field field--inline field--checkbox" id="allow-kanji-row">
-              <input type="checkbox" id="allow-kanji-check" />
-              <span class="field__label" title="Write Japanese text in Kanji mode instead of UTF-8: 13 bits a character, so a smaller symbol. Applies when every character has a Kanji-mode (JIS X 0208) code; other text stays UTF-8. Off by default because Android's own scanners (camera, Google Lens) cannot read Kanji mode; iPhone and dedicated readers can.">Kanji mode for Japanese text</span>
-            </label>
+            <div class="field field--checks">
+              <label class="field field--inline field--checkbox" id="allow-kanji-row">
+                <input type="checkbox" id="allow-kanji-check" />
+                <span class="field__label" title="Write Japanese text in Kanji mode instead of UTF-8: 13 bits a character, so a smaller symbol. Applies when every character has a Kanji-mode (JIS X 0208) code; other text stays UTF-8. Off by default because Android's own scanners (camera, Google Lens) cannot read Kanji mode; iPhone and dedicated readers can.">Kanji mode for Japanese text</span>
+              </label>
+              <label class="field field--inline field--checkbox" id="ecc-boost-row">
+                <input type="checkbox" id="ecc-boost-check" />
+                <span class="field__label" title="Raise the ECC level when the chosen version has spare capacity. Never changes the symbol size; the decoded result below shows the level actually used.">Boost ECC to fill spare capacity</span>
+              </label>
+            </div>
             <label class="field">
               <span class="field__label">Version</span>
               <select id="version-select" title="QR symbol version (matrix size). Auto picks the smallest that fits."></select>
@@ -263,6 +294,7 @@
               <span class="field__label" title="Draws the four corners the decoder reported over the image">Show detected corners</span>
             </label>
             <div id="decode-result" class="qr-stats" aria-live="polite"></div>
+            <div id="decode-gs1" class="decode-gs1" hidden></div>
             <figure id="decode-preview" class="decode-preview" hidden>
               <canvas id="decode-canvas"></canvas>
               <figcaption id="decode-preview-caption" class="field__hint"></figcaption>
@@ -318,6 +350,8 @@
           </div>
           <div id="generate-error" class="generate-error" hidden></div>
           <div id="qr-stats" class="qr-stats"></div>
+          <div id="gs1-encoded" class="qr-stats gs1-encoded" hidden
+            title="The text written into the symbol for the GS1 data: the element string, or the Digital Link URI"></div>
           <div id="decode-verify" class="qr-stats" aria-live="polite"
             title="The generated image is decoded back with the library's own decoder as a self-check"></div>
           <div class="preview-actions">
@@ -349,6 +383,10 @@
         <li>Decorated codes (gradients, shapes, logos) trade error margin for looks, always test-scan before printing.</li>
         <li>Every generated code is <strong>decoded back in-browser</strong> by the library's own decoder as a
           self-check, and the <em>Decode an image</em> panel reads QR codes from your image files the same way.</li>
+        <li>GS1 data is checked and converted by the FeatherQR.Gs1 package, whose application identifier table is
+          generated from the GS1 Syntax Dictionary under the Apache License 2.0. See the
+          <a href="https://github.com/guitarrapc/FeatherQR/blob/main/THIRD-PARTY-NOTICES.md" target="_blank"
+            rel="noopener noreferrer">third-party notices</a>.</li>
       </ul>
       <p>
         The source code is available on <a href="https://github.com/guitarrapc/FeatherQR" target="_blank"

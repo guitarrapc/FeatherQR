@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// the zxing-cpp decode sanity gate (raw-byte payload, version, ECC) before being
 /// committed. Regenerate with:
 /// <c>dotnet run --project tools/QRInteropFixtures -- regenerate</c>
-/// (the qrtool binary comes from <c>tools/QRInteropFixtures/get-qrtool.ps1</c>).
+/// (the qrtool binary comes from <c>tools/get_qrtool.cs</c>).
 /// <para>
 /// This class pins the corpus shape (both lineages present, every version covered,
 /// manifests internally consistent, matrices rectangular and dimensionally exact)

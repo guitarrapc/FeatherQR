@@ -29,7 +29,7 @@ public class ByteSegmentShiftJisTest
         var reader = new BitReader(payload);
         var destination = new char[destinationLength];
         var charsWritten = 0;
-        var status = SegmentDecoders.DecodeBytePayload(ref reader, payload.Length * 8, payload.Length, charset, new byte[Math.Max(payload.Length, 1)], destination, ref charsWritten);
+        var status = SegmentDecoders.DecodeBytePayload(ref reader, payload.Length * 8, payload.Length, charset, fnc1: false, new byte[Math.Max(payload.Length, 1)], destination, ref charsWritten);
         return (status, new string(destination, 0, charsWritten));
     }
 
@@ -143,7 +143,7 @@ public class ByteSegmentShiftJisTest
     [Arguments(new byte[] { 0x80, 0x83, 0x82, 0x83, 0x6F })]              // 0x80 is no lead
     [Arguments(new byte[] { 0xA0, 0x83, 0x82, 0x83, 0x6F })]              // 0xA0 is no lead
     [Arguments(new byte[] { 0xF0, 0x40, 0x83, 0x82, 0x83, 0x6F })]        // 0xF0 and above are no lead
-    [Arguments(new byte[] { 0x01, 0x83, 0x82, 0x83, 0x6F, 0x83, 0x43 })]  // a control character other than tab, CR and LF marks binary data
+    [Arguments(new byte[] { 0x01, 0x83, 0x82, 0x83, 0x6F, 0x83, 0x43 })]  // a C0 control character other than tab, CR and LF marks binary data
     public async Task Undeclared_NotWellFormedShiftJis_StaysLatin1(byte[] payload)
     {
         var (status, decoded) = DecodeBytes(payload, ByteSegmentCharset.Unspecified);
@@ -315,6 +315,29 @@ public class ByteSegmentShiftJisTest
         await Assert.That(new string(destination, 0, written)).IsEqualTo("日本語ﾃｽﾄ");
     }
 
+    /// <summary>
+    /// Micro QR has no FNC1 mode, so the byte 0x1D is a control character there and marks binary data. 93 FA and 96 7B alone
+    /// read as 日本, so the 0x1D between them is what keeps the ISO-8859-1 reading.
+    /// </summary>
+    [Test]
+    public async Task MicroQR_UndeclaredShiftJisWithByte1D_StaysLatin1()
+    {
+        byte[] withByte1D = [0x93, 0xFA, 0x1D, 0x96, 0x7B];
+        byte[] without = [0x93, 0xFA, 0x96, 0x7B];
+
+        await Assert.That(DecodeMicroQR(without)).IsEqualTo((DecodeStatus.Success, "日本"));
+        await Assert.That(DecodeMicroQR(withByte1D)).IsEqualTo((DecodeStatus.Success, Widened(withByte1D)));
+
+        static (DecodeStatus, string) DecodeMicroQR(byte[] payload)
+        {
+            // M4: a 3-bit mode indicator (Byte is 2) and a 5-bit count
+            var data = Build([(2, 3), (payload.Length, 5), .. Bytes(payload), (0, 9)]);
+            var destination = new char[32];
+            var status = MicroQRBinaryDecoder.DecodeBitStream(data, data.Length * 8, MicroQRVersion.M4, destination, out var written);
+            return (status, new string(destination, 0, written));
+        }
+    }
+
     // Symbols another encoder writes.
 
     public static IEnumerable<(string Text, bool Eci)> ForeignShiftJisSymbols()
@@ -341,7 +364,7 @@ public class ByteSegmentShiftJisTest
             {
                 var reader = new BitReader(payload);
                 var written = 0;
-                SegmentDecoders.DecodeBytePayload(ref reader, payload.Length * 8, payload.Length, charset, buffer, destination, ref written);
+                SegmentDecoders.DecodeBytePayload(ref reader, payload.Length * 8, payload.Length, charset, fnc1: false, buffer, destination, ref written);
             }
             fewest = Math.Min(fewest, GC.GetAllocatedBytesForCurrentThread() - before);
         }

@@ -87,10 +87,10 @@ public static class RmQRProbe
 
         Console.WriteLine();
         Console.WriteLine("== zxing-cpp reads qrtool --variant rmqr output (ASCII, module-exact) ==");
-        var exe = FindQrtool(repoRoot);
+        var exe = QrtoolRunner.Find(repoRoot);
         if (exe is null)
         {
-            Console.WriteLine("qrtool not found under tools/QRInteropFixtures/external/qrtool (run get-qrtool.ps1)");
+            Console.WriteLine("qrtool not found under tools/QRInteropFixtures/external/qrtool (run dotnet run tools/get_qrtool.cs)");
             return 0;
         }
 
@@ -140,14 +140,6 @@ public static class RmQRProbe
         }
         Console.WriteLine($"qrtool rMQR read by zxing-cpp: {qrtoolOk}/5");
         return 0;
-    }
-
-    private static string? FindQrtool(string repoRoot)
-    {
-        var root = Path.Combine(repoRoot, "tools", "QRInteropFixtures", "external", "qrtool");
-        if (!Directory.Exists(root)) return null;
-        return Directory.EnumerateFiles(root, "qrtool.exe", SearchOption.AllDirectories).FirstOrDefault()
-            ?? Directory.EnumerateFiles(root, "qrtool", SearchOption.AllDirectories).FirstOrDefault();
     }
 
     private static string RunQrtool(string exe, string arguments)

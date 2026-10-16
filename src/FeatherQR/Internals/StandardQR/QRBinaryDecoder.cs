@@ -13,7 +13,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// Kanji mode is decoded as JIS X 0208, the mapping the encoder writes it with (with <c>AllowKanji</c>).
 /// A Structured Append header and either FNC1 indicator (ISO/IEC 18004 6.4.8) are read and returned to the caller.
 /// FNC1 is accepted once and before the first data segment, with the ECI and Structured Append headers on either side of it. An indicator after a data segment, a second one, or an application indicator outside 00-99 and the letters is <see cref="DecodeStatus.InvalidBitstream"/>.
-/// While FNC1 is active a lone <c>%</c> in an Alphanumeric segment is the separator (U+001D) and <c>%%</c> is one <c>%</c>, read left to right within the segment, as every reader probed reads them. Byte, Numeric and Kanji segments are unchanged.
+/// While FNC1 is active a lone <c>%</c> in an Alphanumeric segment is the separator (U+001D) and <c>%%</c> is one <c>%</c>, read left to right within the segment, as every reader probed reads them. In a Byte segment the separator is the byte 0x1D, which the guess at an undeclared segment's charset counts as text rather than as a control character. Numeric and Kanji segments are unchanged.
 /// <para>
 /// Byte segments without an ECI header have no declared charset (ISO/IEC 18004 defaults to ISO-8859-1, but UTF-8 payloads are common in the wild).
 /// The decoder uses UTF-8 when the payload validates as UTF-8 (or carries a BOM), Shift_JIS when the bytes give it away, and falls back to ISO-8859-1 otherwise, ASCII decodes identically either way.
@@ -116,7 +116,7 @@ internal static class QRBinaryDecoder
                             // Segment payload bytes are staged in a rented buffer (reused
                             // across segments) so the charset conversion sees them whole.
                             rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
-                            var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, charset, rentedBytes, destination, ref charsWritten);
+                            var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, charset, fnc1.IsActive, rentedBytes, destination, ref charsWritten);
                             if (status != DecodeStatus.Success)
                                 return status;
                             break;

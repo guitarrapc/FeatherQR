@@ -27,7 +27,6 @@ internal static partial class Gs1AiTable
     private const int EntrySize = 16;
     private const int ComponentSize = 11;
     private const int PatternSize = 3;
-    private const ushort NoOffset = 0xFFFF;
 
     /// <summary>Finds the entry of a 2- to 4-digit AI, <c>false</c> for anything the release does not assign.</summary>
     public static bool TryFind(ReadOnlySpan<char> ai, out Gs1AiEntry entry)

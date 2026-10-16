@@ -17,7 +17,8 @@ namespace FeatherQR.Internals.MicroQR;
 /// <item>The terminator (2·version + 1 zero bits) is exactly a Numeric mode
 /// indicator followed by an all-zero count, a zero-count Numeric segment ends the stream.
 /// It may be truncated when the data fills the capacity.</item>
-/// <item>No ECI: byte segments always use the UTF-8-validates heuristic.</item>
+/// <item>No ECI, so every Byte segment is undeclared and <see cref="SegmentDecoders.DecodeBytePayload"/> reads its charset
+/// from the bytes: UTF-8 when they validate or start with a BOM, Shift_JIS when they give it away, and ISO-8859-1 otherwise.</item>
 /// <item>The bit capacity is not a whole number of bytes for M1/M3: the final data
 /// codeword carries 4 bits in its high nibble, so decoding is bounded by <c>dataBitCount</c>, not by the codeword byte length.</item>
 /// </list>
@@ -122,7 +123,7 @@ internal static class MicroQRBinaryDecoder
                         {
                             // Micro QR data codewords top out at 16 bytes (M4-L).
                             rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
-                            var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Unspecified, rentedBytes, destination, ref charsWritten);
+                            var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Unspecified, fnc1: false, rentedBytes, destination, ref charsWritten);
                             if (status != DecodeStatus.Success)
                                 return status;
                             break;

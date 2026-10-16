@@ -234,6 +234,11 @@ details.panel[open] summary {
   cursor: pointer;
 }
 
+/* The checkboxes share one grid cell, so a box shown for one symbology alone moves no other field. */
+.field--checks {
+  gap: 8px;
+}
+
 .field--disabled {
   opacity: 0.45;
 }
@@ -246,6 +251,7 @@ details.panel[open] summary {
 
 textarea,
 select,
+input[type="text"],
 input[type="url"],
 input[type="file"] {
   font: inherit;
@@ -260,6 +266,19 @@ input[type="file"] {
 textarea {
   resize: vertical;
   min-height: 60px;
+}
+
+/* The FNC1 separator button and its note, under the content box. */
+.separator-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 6px 0 10px;
+}
+
+.separator-row .field__hint {
+  margin: 0;
 }
 
 textarea:focus-visible,
@@ -383,6 +402,39 @@ output {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   min-height: 1.2em;
+}
+
+/* GS1 data: the carrier fields, the text written into the symbol, and a decoded symbol's elements. */
+.gs1-fields {
+  margin-bottom: 10px;
+}
+
+.gs1-encoded {
+  overflow-wrap: anywhere;
+}
+
+.decode-gs1 {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.decode-gs1 table {
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+.decode-gs1 th,
+.decode-gs1 td {
+  text-align: left;
+  vertical-align: top;
+  padding: 1px 12px 1px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.decode-gs1 td {
+  color: var(--text);
 }
 
 /* Drop target for the decode panel. Scoped to the panel rather than the page because the logo

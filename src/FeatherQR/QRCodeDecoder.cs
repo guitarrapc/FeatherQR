@@ -9,11 +9,11 @@ namespace FeatherQR;
 /// <remarks>
 /// Reads Numeric, Alphanumeric, Byte and Kanji mode across all versions and error correction levels.
 /// A Byte segment is read as its ECI header declares, for ISO-8859-1, UTF-8 and Shift_JIS.
-/// With no ECI header it is read as UTF-8 when the bytes are valid UTF-8 (or carry a BOM), as Shift_JIS when they are well formed Shift_JIS that ISO-8859-1 text would not hold, and as ISO-8859-1 otherwise.
+/// With no ECI header it is read as UTF-8 when the bytes are valid UTF-8 (or carry a BOM), as Shift_JIS when they are well formed Shift_JIS that ISO-8859-1 text would not hold and hold no C0 control character but tab, CR, LF and, under FNC1, the separator 0x1D, and as ISO-8859-1 otherwise.
 /// Shift_JIS is read through JIS X 0208, as Kanji mode is.
 /// Kanji is mapped through JIS X 0208, so a cell outside that repertoire, such as the circled digits CP932 adds, fails the whole QR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
 /// That status is distinct from <see cref="DecodeStatus.UnsupportedContent"/>, which marks a feature this library does not implement, such as an ECI assignment other than 1, 3 and 27 (ISO-8859-1), 26 (UTF-8) and 20 (Shift_JIS).
-/// FNC1 in first position (GS1 data) and in second position (an industry format with its application indicator) are read: the text is the element string with each separator as U+001D, a <c>%%</c> in an Alphanumeric segment is one <c>%</c>, and the mode is reported on <see cref="QRCodeDecodeInfo.Fnc1"/>.
+/// FNC1 in first position (GS1 data) and in second position (an industry format with its application indicator) are read: the text is the data with each separator as U+001D, the element string in first position, a <c>%%</c> in an Alphanumeric segment is one <c>%</c>, and the mode is reported on <see cref="QRCodeDecodeInfo.Fnc1"/>.
 /// </remarks>
 public static class QRCodeDecoder
 {

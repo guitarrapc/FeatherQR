@@ -196,7 +196,7 @@ Choose an API based on the output you need. Start with an image builder for most
 | Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
 | Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 
-All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers.
+All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers. The `FeatherQR.Gs1` package adds GS1 methods to the Standard QR and rMQR generators and reads GS1 data from the decoded text ([GS1 data](#gs1-data)).
 
 ### Image Builders (Recommended)
 
@@ -535,7 +535,7 @@ The bitmap overloads live in `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and
 
 To decode from any other image source, convert the pixels to 8-bit luminance yourself, compositing transparent pixels against white, and call `TryDecodeImage(luminance, width, height, ...)` on the decoder.
 
-A symbol that carries FNC1, the GS1 mode (first position) or an industry format registered with AIM (second position, with an application indicator), decodes to its element string with each separator as U+001D, and the decode information reports the mode as `Fnc1` (`Fnc1Mode`): `IsFirstPosition`, `IsSecondPosition` and `ApplicationIndicator`, the 8-bit codeword (00 to 99 as its value, or a letter as its ASCII value plus 100, `null` outside second position). Standard QR and rMQR carry it. Micro QR has no FNC1 mode. The text holds no symbology identifier and no application indicator, so an application that formats GS1 data as `(01)…(17)…` needs the GS1 application identifier table, which the `FeatherQR.Gs1` package (`dotnet add package FeatherQR.Gs1`) provides. Both generators write FNC1 through the `Fnc1` option (`Fnc1Mode.FirstPosition`, or `Fnc1Mode.SecondPosition` with the application indicator), taking the element string as the text.
+A symbol that carries FNC1, the GS1 mode (first position) or an industry format registered with AIM (second position, with an application indicator), decodes to its data, the element string in first position, with each separator as U+001D, and the decode information reports the mode as `Fnc1` (`Fnc1Mode`): `IsFirstPosition`, `IsSecondPosition` and `ApplicationIndicator`, the 8-bit codeword (00 to 99 as its value, or a letter as its ASCII value plus 100, `null` outside second position). Standard QR and rMQR carry it. Micro QR has no FNC1 mode. The text holds no symbology identifier and no application indicator, so an application that formats GS1 data as `(01)…(17)…` needs the GS1 application identifier table, which the `FeatherQR.Gs1` package provides ([GS1 data](#gs1-data)). Both generators write FNC1 through the `Fnc1` option (`Fnc1Mode.FirstPosition`, or `Fnc1Mode.SecondPosition` with the application indicator), taking as the text what the decoder returns. For GS1 data, `CreateGs1` checks the data and sets the mode itself.
 
 ```csharp
 if (QRCodeDecoder.TryDecode(qrData, out var text, out var info) && info.Fnc1.IsFirstPosition)
@@ -547,6 +547,97 @@ if (QRCodeDecoder.TryDecode(qrData, out var text, out var info) && info.Fnc1.IsF
 ```
 
 The returned decode information includes a status when decoding fails. When an image decode succeeds it also carries `Corners`, the symbol's module-area corners (quiet zone excluded) in the image's continuous pixel coordinates: `TopLeft` is the corner beside the symbol's top-left finder wherever it landed, so the four points draw an outline that follows rotation, reverse their winding for a mirrored capture, and form a general quadrilateral under perspective. Matrix-level decodes have no image and report `Corners.IsEmpty`. See [samples/Dotfiles/DecodeCorners.cs](samples/Dotfiles/DecodeCorners.cs), which decodes a flat, a rotated, a mirrored and a keystoned capture and writes each one with the reported outline drawn on it.
+
+### GS1 data
+
+The `FeatherQR.Gs1` package handles GS1 data: the GS1 application identifier (AI) table, the checks the GS1 General Specifications define, `(AI)` text and GS1 Digital Link URIs. It adds GS1 methods to the Standard QR and rMQR generators.
+
+```bash
+dotnet add package FeatherQR.Gs1
+```
+
+GS1 uses two QR carriers, and which one to write depends on where the symbol is scanned:
+
+| Carrier | Used for | The symbol holds | Generator method |
+|---|---|---|---|
+| QR Code with a GS1 Digital Link URI | Retail, at the point of sale | A web URI, as plain QR with no FNC1 | `CreateGs1DigitalLink` |
+| GS1 QR Code | Healthcare, logistics, assets and other uses away from the point of sale | An element string behind FNC1 in first position | `CreateGs1` |
+
+Both methods take `(AI)` text or an element string, run every check and set the FNC1 mode themselves:
+
+```csharp
+using FeatherQR;
+using FeatherQR.Gs1;
+using FeatherQR.SkiaSharp;
+
+// GS1 QR Code: the separators are placed and FNC1 is set in first position.
+var gs1 = QRCodeGenerator.CreateGs1("(01)09520123456788(17)251231(10)ABC123", QREccLevel.M);
+File.WriteAllBytes("label.png", new QRCodeImageBuilder(gs1).ToByteArray());
+
+// A QR code that holds https://id.gs1.org/01/09520123456788/10/ABC123?17=251231
+var link = QRCodeGenerator.CreateGs1DigitalLink("(01)09520123456788(17)251231(10)ABC123", QREccLevel.M);
+
+// Your own domain in place of id.gs1.org: https://brand.example/01/09520123456788
+var branded = QRCodeGenerator.CreateGs1DigitalLink("(01)09520123456788", QREccLevel.M, stem: "https://brand.example");
+```
+
+Text that starts with `(` is read as `(AI)` text, and any other text as an element string, where U+001D ends each variable-length value that is not the last. Data that fails a check throws `Gs1FormatException`, a `FormatException` whose `Error` says what is wrong (`Kind`) and where in your text (`Offset` and `Length`):
+
+```csharp
+try
+{
+    QRCodeGenerator.CreateGs1("(01)09520123456789", QREccLevel.M);
+}
+catch (Gs1FormatException ex)
+{
+    // "InvalidCheckDigit at 17 (1 character): the check digit is wrong."
+    Console.WriteLine(ex.Message);
+}
+```
+
+To read GS1 data, pass the decoded text and its FNC1 mode to `TryRead`, which gives the `(AI)` text from either carrier:
+
+```csharp
+using SkiaSharp;
+using FeatherQR;
+using FeatherQR.Gs1;
+using FeatherQR.SkiaSharp;
+
+using var bitmap = SKBitmap.Decode("label.png");
+if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info)
+    && Gs1ElementString.TryRead(text, info.Fnc1, out var hri, out _))
+{
+    Console.WriteLine(hri); // (01)09520123456788(17)251231(10)ABC123
+}
+```
+
+`TryRead` checks only what it needs to split the data, so a wrong check digit still reads. When the data must be valid, pass it to `TryValidate`: the decoded text itself under FNC1 in first position, or the element string `TryFromDigitalLink` gives for a URI. `EnumerateElements` walks the AIs and values of an element string.
+
+The conversions also work on their own, with no symbol:
+
+```csharp
+// (AI) text to an element string, with every check: "0109520123456788" + "10ABC123\u001D" + "17251231"
+if (Gs1ElementString.TryFromHri("(01)09520123456788(10)ABC123(17)251231", out var elementString, out var error))
+{
+    Gs1ElementString.TryToHri(elementString, out var hri, out error);         // back to (AI) text, for a label
+    Gs1ElementString.TryToDigitalLink(elementString, out var uri, out error); // https://id.gs1.org/01/09520123456788/10/ABC123?17=251231
+}
+
+// Every check: each value's length, characters and rules such as check digits and dates,
+// and which AIs must or must not appear together.
+if (!Gs1ElementString.TryValidate("0109520123456789", out var invalid))
+{
+    Console.WriteLine(invalid); // InvalidCheckDigit at 15 (1 character): the check digit is wrong.
+}
+```
+
+None of these throws for its input. Each returns `false` with a `Gs1Error`, and each has a span form that writes into your buffer and allocates nothing.
+
+- Leave `EciMode` at its default. GS1 does not support ECI in a GS1 QR Code, and with the default the encoder writes no ECI header for GS1 data, which is ASCII.
+- The default quiet zone of Standard QR, 4 modules, is the one GS1 asks for.
+- `RmQRCodeGenerator` has the same methods, but GS1 does not list rMQR as a carrier (General Specifications Release 26.0), so a GS1 scanner may not accept it. Micro QR has no FNC1 mode, and GS1 excludes it.
+- The generator methods are C# 14 extension members (the default for net10.0, or `<LangVersion>14</LangVersion>`). C# 12 and 13 call them on `Gs1QRCodeGenerator` and `Gs1RmQRCodeGenerator`, as in `Gs1QRCodeGenerator.CreateGs1(text, QREccLevel.M)`.
+- The AI table is generated from the GS1 Barcode Syntax Dictionary, and `Gs1ElementString.DictionaryRelease` names the release it came from. An AI newer than that release is refused as `UnknownAi` when data is built, until a newer package brings it.
 
 ## Platform-Specific Considerations
 
@@ -1219,6 +1310,8 @@ Prerelease versions such as `2.0.0-preview.1` are edited by hand in `Directory.B
 ## License
 
 MIT
+
+`FeatherQR.Gs1` also carries [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md): its AI table is generated from the GS1 Barcode Syntax Dictionary, which is Apache-2.0.
 
 ## Acknowledgments
 

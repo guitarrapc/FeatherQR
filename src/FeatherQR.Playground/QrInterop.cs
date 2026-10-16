@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Runtime.InteropServices.JavaScript;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FeatherQR.Gs1;
 using FeatherQR.SkiaSharp;
 using SkiaSharp;
 
@@ -48,7 +49,7 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Stats of the most recent successful <see cref="Generate"/> call as a JSON string: <c>{"qrVersion":N,"matrixSize":N,"totalMs":N,"bytes":N}</c>.
+    /// Stats of the most recent successful <see cref="Generate"/> call as a JSON string (see <see cref="GenerateMeta"/>): <c>{"symbology":"qr","qrVersion":N,"matrixSize":N,"totalMs":N,"bytes":N}</c>, with <c>"encoded"</c> holding the element string or Digital Link URI written for GS1 data.
     /// </summary>
     [JSExport]
     public static string GetLastMeta() => s_lastMeta;
@@ -116,7 +117,8 @@ public static partial class QrInterop
 
     /// <summary>
     /// Decodes a QR code from encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string: <c>{"ok":true,"text":"...","qrVersion":N,"ecc":"M","maskPattern":N,"errorsCorrected":N,"totalMs":N,"corners":[x,y,...],"imageWidth":N,"imageHeight":N}</c> on success, <c>{"ok":false,"status":"NotDetected","totalMs":N,"imageWidth":N,"imageHeight":N}</c> when no QR decodes, or <c>{"error":"..."}</c> on unexpected failure.
-    /// A Standard QR or rMQR symbol with FNC1 adds <c>"fnc1":"first"</c> (GS1 data) or <c>"fnc1":"second"</c> with <c>"applicationIndicator":N</c> (the 8-bit codeword), and its text is the element string with each separator as U+001D.
+    /// A Standard QR or rMQR symbol with FNC1 adds <c>"fnc1":"first"</c> (GS1 data) or <c>"fnc1":"second"</c> with <c>"applicationIndicator":N</c> (the 8-bit codeword), and its text is the data with each separator as U+001D.
+    /// GS1 data, an element string in first position or a Digital Link URI without FNC1, adds <c>"gs1Hri"</c> and <c>"gs1Elements"</c>, and <c>"gs1Check"</c> when its element string fails the checks. Text in first position that does not read as GS1 data adds <c>"gs1Error"</c>.
     /// <para>
     /// <c>"corners"</c> is the located symbol as eight numbers (top-left, top-right, bottom-right, bottom-left, each x then y) in the decoded image's pixel space, which <c>"imageWidth"</c> and <c>"imageHeight"</c> describe so the page can scale the overlay to whatever size it displays the image at. That space is the file's <em>stored</em> pixels: <c>"orientation"</c> carries the EXIF tag (1-8) the decoder ignored, and the page must map the corners through it, because every browser decode path applies the tag to the picture it shows.
     /// </para>
@@ -146,6 +148,7 @@ public static partial class QrInterop
             if (success)
             {
                 stopwatch.Stop();
+                var gs1 = ReadGs1(text, info.Fnc1);
                 var payload = new DecodePayload(
                     Ok: true,
                     Text: text,
@@ -161,7 +164,11 @@ public static partial class QrInterop
                     ImageHeight: bitmap.Height,
                     Orientation: origin,
                     Fnc1: Fnc1Label(info.Fnc1),
-                    ApplicationIndicator: info.Fnc1.ApplicationIndicator);
+                    ApplicationIndicator: info.Fnc1.ApplicationIndicator,
+                    Gs1Hri: gs1.Hri,
+                    Gs1Elements: gs1.Elements,
+                    Gs1Error: gs1.Error,
+                    Gs1Check: gs1.Check);
                 return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
             }
 
@@ -188,6 +195,7 @@ public static partial class QrInterop
 
             var rmSuccess = RmQRCodeDecoder.TryDecode(bitmap, out var rmText, out var rmInfo);
             stopwatch.Stop();
+            var rmGs1 = rmSuccess ? ReadGs1(rmText, rmInfo.Fnc1) : default;
 
             // rMQR has a single fixed mask, so no mask pattern is reported (-1).
             var resultPayload = rmSuccess
@@ -206,7 +214,11 @@ public static partial class QrInterop
                     ImageHeight: bitmap.Height,
                     Orientation: origin,
                     Fnc1: Fnc1Label(rmInfo.Fnc1),
-                    ApplicationIndicator: rmInfo.Fnc1.ApplicationIndicator)
+                    ApplicationIndicator: rmInfo.Fnc1.ApplicationIndicator,
+                    Gs1Hri: rmGs1.Hri,
+                    Gs1Elements: rmGs1.Elements,
+                    Gs1Error: rmGs1.Error,
+                    Gs1Check: rmGs1.Check)
                 : new DecodePayload(
                     Ok: false,
                     Text: null,
@@ -230,6 +242,29 @@ public static partial class QrInterop
 
     /// <summary>The FNC1 mode for the page: "first" (GS1), "second" (an AIM industry format), or null without FNC1.</summary>
     private static string? Fnc1Label(Fnc1Mode fnc1) => fnc1.IsFirstPosition ? "first" : fnc1.IsSecondPosition ? "second" : null;
+
+    /// <summary>
+    /// GS1 data in a decoded symbol, as (AI) text and its elements: the element string under FNC1 in first position, or a Digital Link URI without FNC1.
+    /// A symbol in first position claims GS1 data, so text that does not read as GS1 data reports why. Plain text that is not a Digital Link URI is not GS1 data and reports nothing, as does second position.
+    /// The read takes data the checks would refuse, a wrong check digit for one, so the element string is checked as well.
+    /// </summary>
+    private static Gs1Read ReadGs1(string text, Fnc1Mode fnc1)
+    {
+        if (fnc1.IsSecondPosition)
+            return default;
+        if (!Gs1ElementString.TryRead(text, fnc1, out var hri, out var error))
+            return fnc1.IsFirstPosition ? new Gs1Read(null, null, error.ToString(), null) : default;
+        var elementString = text;
+        if (!fnc1.IsFirstPosition && !Gs1ElementString.TryFromDigitalLink(text, out elementString, out _))
+            return new Gs1Read(hri, null, null, null);
+        var elements = new List<Gs1ElementDto>();
+        foreach (var element in Gs1ElementString.EnumerateElements(elementString))
+            elements.Add(new Gs1ElementDto(element.Ai.ToString(), element.Value.ToString()));
+        var check = Gs1ElementString.TryValidate(elementString, out var checkError) ? null : checkError.ToString();
+        return new Gs1Read(hri, [.. elements], null, check);
+    }
+
+    private readonly record struct Gs1Read(string? Hri, Gs1ElementDto[]? Elements, string? Error, string? Check);
 
     /// <summary>
     /// The symbol's corners as eight numbers for the page to stroke, in the order the contract
@@ -275,9 +310,7 @@ public static partial class QrInterop
             stopwatch.Stop();
 
             // matrixSize doubles as the width so older page scripts keep working, and matrixHeight is the rectangular extra.
-            s_lastMeta = string.Create(
-                CultureInfo.InvariantCulture,
-                $"{{\"symbology\":\"rmqr\",\"qrVersion\":{(int)rmData.Version},\"matrixSize\":{rmData.Width},\"matrixHeight\":{rmData.Height},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{rmBytes.Length}}}");
+            SetLastMeta(new GenerateMeta("rmqr", (int)rmData.Version, rmData.Width, Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1), rmBytes.Length, rmData.Height, Gs1Encoded(request)));
             return rmBytes;
         }
 
@@ -287,9 +320,7 @@ public static partial class QrInterop
             var microBytes = CreateMicroBuilder(request, microData).ToByteArray();
             stopwatch.Stop();
 
-            s_lastMeta = string.Create(
-                CultureInfo.InvariantCulture,
-                $"{{\"symbology\":\"microqr\",\"qrVersion\":{(int)microData.Version},\"matrixSize\":{microData.Size},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{microBytes.Length}}}");
+            SetLastMeta(new GenerateMeta("microqr", (int)microData.Version, microData.Size, Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1), microBytes.Length));
             return microBytes;
         }
 
@@ -298,11 +329,12 @@ public static partial class QrInterop
         var bytes = CreateBuilder(request, data, customLogo).ToByteArray();
         stopwatch.Stop();
 
-        s_lastMeta = string.Create(
-            CultureInfo.InvariantCulture,
-            $"{{\"symbology\":\"qr\",\"qrVersion\":{data.Version},\"matrixSize\":{data.Size},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{bytes.Length}}}");
+        SetLastMeta(new GenerateMeta("qr", data.Version, data.Size, Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1), bytes.Length, Encoded: Gs1Encoded(request)));
         return bytes;
     }
+
+    private static void SetLastMeta(GenerateMeta meta)
+        => s_lastMeta = JsonSerializer.Serialize(meta, PlaygroundJsonContext.Default.GenerateMeta);
 
     private static bool IsMicroQR(QrRequest request)
         => string.Equals(request.Symbology, "microqr", StringComparison.OrdinalIgnoreCase);
@@ -312,25 +344,85 @@ public static partial class QrInterop
 
     private static QRCodeData CreateStandardData(QrRequest request)
     {
-        return QRCodeGenerator.Create(request.Content.AsSpan(), ParseEcc(request.Ecc), new QRCodeGeneratorOptions
+        var text = request.Content.AsSpan();
+        var ecc = ParseEcc(request.Ecc);
+        var options = StandardOptions(request);
+        return Gs1Carrier(request) switch
         {
-            Version = ParseVersionRange(request.Version),
-            QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
-            BoostEccLevel = request.EccBoost,
-            AllowKanji = request.AllowKanji,
-        });
+            "qr" => QRCodeGenerator.CreateGs1(text, ecc, options),
+            "link" => QRCodeGenerator.CreateGs1DigitalLink(text, ecc, options, Gs1Stem(request)),
+            _ => QRCodeGenerator.Create(text, ecc, options),
+        };
     }
+
+    private static QRCodeGeneratorOptions StandardOptions(QrRequest request) => new()
+    {
+        Version = ParseVersionRange(request.Version),
+        QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
+        BoostEccLevel = request.EccBoost,
+        AllowKanji = request.AllowKanji,
+        Fnc1 = ParseFnc1(request),
+    };
 
     private static RmQRCodeData CreateRmData(QrRequest request)
     {
-        return RmQRCodeGenerator.Create(request.Content.AsSpan(), ParseRmEcc(request.Ecc), new RmQRCodeGeneratorOptions
+        var text = request.Content.AsSpan();
+        var ecc = ParseRmEcc(request.Ecc);
+        var options = RmOptions(request);
+        return Gs1Carrier(request) switch
         {
-            Version = ParseRmVersion(request.Version),
-            FitStrategy = ParseRmFitStrategy(request.FitStrategy),
-            Height = ParseRmHeight(request.Height),
-            QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
-            AllowKanji = request.AllowKanji,
-        });
+            "qr" => RmQRCodeGenerator.CreateGs1(text, ecc, options),
+            "link" => RmQRCodeGenerator.CreateGs1DigitalLink(text, ecc, options, Gs1Stem(request)),
+            _ => RmQRCodeGenerator.Create(text, ecc, options),
+        };
+    }
+
+    private static RmQRCodeGeneratorOptions RmOptions(QrRequest request) => new()
+    {
+        Version = ParseRmVersion(request.Version),
+        FitStrategy = ParseRmFitStrategy(request.FitStrategy),
+        Height = ParseRmHeight(request.Height),
+        QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
+        AllowKanji = request.AllowKanji,
+        Fnc1 = ParseFnc1(request),
+    };
+
+    /// <summary>
+    /// How the request carries GS1 data: "qr" as a GS1 QR Code (the element string under FNC1 in first position), "link" as its Digital Link URI in a plain symbol, "none" as plain text.
+    /// The content is then (AI) text or an element string, which the entry points tell apart by its first character.
+    /// </summary>
+    private static string Gs1Carrier(QrRequest request) => (request.Gs1 ?? "none").ToLowerInvariant() switch
+    {
+        "none" => "none",
+        "qr" => "qr",
+        "link" => "link",
+        _ => throw new ArgumentException($"Unknown GS1 carrier '{request.Gs1}'. Use none, qr or link."),
+    };
+
+    /// <summary>The Digital Link stem, or null for the canonical one when the field is blank.</summary>
+    private static string? Gs1Stem(QrRequest request) => string.IsNullOrWhiteSpace(request.Gs1Stem) ? null : request.Gs1Stem.Trim();
+
+    /// <summary>
+    /// The text a GS1 request wrote into the symbol, for the page to show and to check the decode against: the element string, or its Digital Link URI. Null for plain text.
+    /// It runs after the entry point took the data, so each conversion passes, and it reads (AI) text by the entry points' own rule, a first character of '('.
+    /// </summary>
+    private static string? Gs1Encoded(QrRequest request)
+    {
+        var carrier = Gs1Carrier(request);
+        if (carrier == "none")
+            return null;
+        var text = request.Content;
+        var elementString = text.StartsWith('(') && Gs1ElementString.TryFromHri(text, out var converted, out _) ? converted : text;
+        if (carrier == "qr")
+            return elementString;
+        return Gs1ElementString.TryToDigitalLink(elementString, out var uri, out _, Gs1Stem(request)) ? uri : null;
+    }
+
+    /// <summary>Micro QR cannot carry GS1 data: it has no FNC1, and GS1 excludes it as a carrier.</summary>
+    private static void RequireNoGs1(QrRequest request)
+    {
+        if (Gs1Carrier(request) != "none")
+            throw new ArgumentException("Micro QR cannot carry GS1 data. Use Standard QR or rMQR.");
     }
 
     /// <summary>
@@ -379,6 +471,8 @@ public static partial class QrInterop
 
     private static MicroQRCodeData CreateMicroData(QrRequest request)
     {
+        RequireNoFnc1(request);
+        RequireNoGs1(request);
         return MicroQRCodeGenerator.Create(
             request.Content.AsSpan(),
             ParseMicroEcc(request.Ecc),
@@ -421,6 +515,37 @@ public static partial class QrInterop
         >= 1 and <= 4 => (MicroQRVersion)version,
         _ => throw new ArgumentException($"Unknown Micro QR version '{version}'. Use 1-4 (M1-M4) or -1 for automatic selection."),
     };
+
+    /// <summary>
+    /// The FNC1 mode of a Standard QR or rMQR request. The page sends the separator as U+001D, so the content is already the text the decoder returns.
+    /// </summary>
+    private static Fnc1Mode ParseFnc1(QrRequest request) => (request.Fnc1 ?? "none").ToLowerInvariant() switch
+    {
+        "none" => Fnc1Mode.None,
+        "first" => Fnc1Mode.FirstPosition,
+        "second" => ParseApplicationIndicator(request.ApplicationIndicator),
+        _ => throw new ArgumentException($"Unknown FNC1 mode '{request.Fnc1}'. Use none, first or second."),
+    };
+
+    /// <summary>
+    /// Second position from the indicator: 00 to 99 in one or two digits, or one letter.
+    /// </summary>
+    private static Fnc1Mode ParseApplicationIndicator(string? indicator)
+    {
+        var text = (indicator ?? "").Trim();
+        if (text.Length is 1 or 2 && text.All(char.IsAsciiDigit))
+            return Fnc1Mode.SecondPosition(int.Parse(text, CultureInfo.InvariantCulture));
+        if (text.Length == 1 && char.IsAsciiLetter(text[0]))
+            return Fnc1Mode.SecondPosition(text[0]);
+        throw new ArgumentException($"The application indicator must be a number 00-99 or one letter A-Z or a-z, but was '{text}'.");
+    }
+
+    /// <summary>Micro QR has no FNC1 mode. The page hides the control and sends none, so another value is a malformed request rather than one to ignore.</summary>
+    private static void RequireNoFnc1(QrRequest request)
+    {
+        if (ParseFnc1(request) != Fnc1Mode.None)
+            throw new ArgumentException("Micro QR has no FNC1 mode. Use Standard QR or rMQR for GS1 data.");
+    }
 
     /// <summary>
     /// The request carries -1 for "pick the smallest version that fits", which <see cref="QRVersionRange"/> spells as <see cref="QRVersionRange.Any"/>. It deliberately rejects -1 so a defaulted field cannot pass for automatic.
@@ -472,6 +597,16 @@ public static partial class QrInterop
             if (count is <= 0 or > 1_000_000)
                 throw new ArgumentOutOfRangeException(nameof(count), "Batch count must be between 1 and 1,000,000.");
 
+            if (Gs1Carrier(request) != "none")
+            {
+                return mode switch
+                {
+                    "encode" => BenchmarkGs1Encode(request, count),
+                    "render" => BenchmarkGs1Render(request, count, customLogo),
+                    _ => throw new ArgumentException($"Unknown benchmark mode '{mode}'. Use 'encode' or 'render'."),
+                };
+            }
+
             if (IsRmQR(request))
             {
                 return mode switch
@@ -513,6 +648,7 @@ public static partial class QrInterop
     {
         var ecc = ParseEcc(request.Ecc);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
+        var fnc1 = ParseFnc1(request);
         var prefixLength = request.Content.Length;
 
         // " #" + int.MaxValue digits
@@ -533,7 +669,7 @@ public static partial class QrInterop
             {
                 (startIndex + i + 1).TryFormat(textBuffer.AsSpan(prefixLength + 2), out var digits);
                 var text = textBuffer.AsSpan(0, prefixLength + 2 + digits);
-                written = QRCodeGenerator.Create(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji });
+                written = QRCodeGenerator.Create(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji, Fnc1 = fnc1 });
                 bytesTotal += written;
             }
             stopwatch.Stop();
@@ -556,6 +692,7 @@ public static partial class QrInterop
     {
         var ecc = ParseEcc(request.Ecc);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
+        var fnc1 = ParseFnc1(request);
 
         long bytesTotal = 0;
         var qrVersion = 0;
@@ -564,7 +701,7 @@ public static partial class QrInterop
         for (var i = 0; i < count; i++)
         {
             var text = string.Create(CultureInfo.InvariantCulture, $"{request.Content} #{startIndex + i + 1}");
-            var data = QRCodeGenerator.Create(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji });
+            var data = QRCodeGenerator.Create(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji, Fnc1 = fnc1 });
             qrVersion = data.Version;
             matrixSize = data.Size;
             bytesTotal += CreateBuilder(request, data, customLogo).ToByteArray().Length;
@@ -582,6 +719,7 @@ public static partial class QrInterop
     /// </summary>
     private static string BenchmarkMicroEncode(QrRequest request, int count)
     {
+        RequireNoFnc1(request);
         var ecc = ParseMicroEcc(request.Ecc);
         var version = ParseMicroVersion(request.Version);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
@@ -624,7 +762,7 @@ public static partial class QrInterop
         var height = ParseRmHeight(request.Height);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
 
-        var rmOptions = new RmQRCodeGeneratorOptions { Version = version, FitStrategy = fit, Height = height, QuietZoneSize = quietZone, AllowKanji = request.AllowKanji };
+        var rmOptions = new RmQRCodeGeneratorOptions { Version = version, FitStrategy = fit, Height = height, QuietZoneSize = quietZone, AllowKanji = request.AllowKanji, Fnc1 = ParseFnc1(request) };
         if (!RmQRCodeGenerator.TryGetRequiredBufferSize(request.Content.AsSpan(), ecc, out var calculated, rmOptions))
             throw new ArgumentException($"Content does not fit any rMQR symbol under the requested constraints ({request.Content.Length} characters, ECC {ecc}, Version {(version is null ? "auto" : version.ToString())}, FitStrategy {fit}, Height {(height is null ? "auto" : height.ToString())}, QuietZone {quietZone}).", nameof(request));
 
@@ -647,6 +785,105 @@ public static partial class QrInterop
         {
             ArrayPool<byte>.Shared.Return(moduleBuffer, clearArray: false);
         }
+    }
+
+    /// <summary>
+    /// Tight loop over the GS1 entry points' span forms, the same text every iteration, since a suffix would make the data invalid.
+    /// The data form runs once first, so that data the checks refuse reports their error rather than a size that does not fit.
+    /// </summary>
+    private static string BenchmarkGs1Encode(QrRequest request, int count)
+    {
+        if (IsMicroQR(request))
+            RequireNoGs1(request);
+        var text = request.Content.AsSpan();
+        var link = Gs1Carrier(request) == "link";
+        var stem = Gs1Stem(request);
+        long bytesTotal = 0;
+        if (IsRmQR(request))
+        {
+            _ = CreateRmData(request);
+            var rmEcc = ParseRmEcc(request.Ecc);
+            var rmOptions = RmOptions(request);
+            var rmFits = link
+                ? RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text, rmEcc, out var rmSize, rmOptions, stem)
+                : RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(text, rmEcc, out rmSize, rmOptions);
+            if (!rmFits)
+                throw new InvalidOperationException("The size form refused data the data form took.");
+            var rmBuffer = ArrayPool<byte>.Shared.Rent(rmSize.BufferSize);
+            try
+            {
+                var rmClock = Stopwatch.StartNew();
+                for (var i = 0; i < count; i++)
+                {
+                    bytesTotal += link
+                        ? RmQRCodeGenerator.CreateGs1DigitalLink(text, rmEcc, rmBuffer, rmOptions, stem)
+                        : RmQRCodeGenerator.CreateGs1(text, rmEcc, rmBuffer, rmOptions);
+                }
+                rmClock.Stop();
+                return string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{{\"count\":{count},\"elapsedMs\":{rmClock.Elapsed.TotalMilliseconds:F2},\"symbology\":\"rmqr\",\"qrVersion\":{(int)rmSize.Version},\"matrixSize\":{rmSize.Width},\"matrixHeight\":{rmSize.Height},\"bytesTotal\":{bytesTotal}}}");
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rmBuffer, clearArray: false);
+            }
+        }
+
+        _ = CreateStandardData(request);
+        var ecc = ParseEcc(request.Ecc);
+        var options = StandardOptions(request);
+        var fits = link
+            ? QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(text, ecc, out var size, options, stem)
+            : QRCodeGenerator.TryGetRequiredBufferSizeGs1(text, ecc, out size, options);
+        if (!fits)
+            throw new InvalidOperationException("The size form refused data the data form took.");
+        var buffer = ArrayPool<byte>.Shared.Rent(size.BufferSize);
+        try
+        {
+            var clock = Stopwatch.StartNew();
+            for (var i = 0; i < count; i++)
+            {
+                bytesTotal += link
+                    ? QRCodeGenerator.CreateGs1DigitalLink(text, ecc, buffer, options, stem)
+                    : QRCodeGenerator.CreateGs1(text, ecc, buffer, options);
+            }
+            clock.Stop();
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"count\":{count},\"elapsedMs\":{clock.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{size.Version},\"matrixSize\":{size.Size},\"bytesTotal\":{bytesTotal}}}");
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: false);
+        }
+    }
+
+    /// <summary>Full GS1 pipeline per iteration: the entry point, Skia render, PNG encode, the same text every iteration.</summary>
+    private static string BenchmarkGs1Render(QrRequest request, int count, byte[] customLogo)
+    {
+        // CreateRmData already takes the GS1 entry points for a GS1 request.
+        if (IsRmQR(request))
+            return BenchmarkRmRender(request, count);
+        if (IsMicroQR(request))
+            RequireNoGs1(request);
+
+        long bytesTotal = 0;
+        var qrVersion = 0;
+        var matrixSize = 0;
+        var stopwatch = Stopwatch.StartNew();
+        for (var i = 0; i < count; i++)
+        {
+            var data = CreateStandardData(request);
+            qrVersion = data.Version;
+            matrixSize = data.Size;
+            bytesTotal += CreateBuilder(request, data, customLogo).ToByteArray().Length;
+        }
+        stopwatch.Stop();
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
     }
 
     /// <summary>Full rMQR pipeline per iteration: encode, Skia render, PNG encode.</summary>
@@ -825,9 +1062,13 @@ public static partial class QrInterop
         return bitmap;
     }
 
+    /// <summary>The error for the page. Data the GS1 checks refuse carries the place in the content, so the page can show the characters at fault.</summary>
     private static byte[] SerializeError(Exception ex)
     {
-        return JsonSerializer.SerializeToUtf8Bytes(new ErrorPayload(ToUserFacingMessage(ex)), PlaygroundJsonContext.Default.ErrorPayload);
+        var payload = ex.GetBaseException() is Gs1FormatException gs1
+            ? new ErrorPayload(ToUserFacingMessage(ex), gs1.Error.Offset, gs1.Error.Length)
+            : new ErrorPayload(ToUserFacingMessage(ex));
+        return JsonSerializer.SerializeToUtf8Bytes(payload, PlaygroundJsonContext.Default.ErrorPayload);
     }
 
     /// <summary>
@@ -856,6 +1097,14 @@ public sealed record QrRequest
     public bool EccBoost { get; init; }
     /// <summary>Write Japanese text in Kanji mode where the library can (<see cref="QRCodeGeneratorOptions.AllowKanji"/> and its Micro QR and rMQR twins). Off by default, as in the library, because Android's own scanners read none of it.</summary>
     public bool AllowKanji { get; init; }
+    /// <summary>FNC1 mode, Standard QR and rMQR only: none, first (GS1 data) or second (an AIM industry format named by <see cref="ApplicationIndicator"/>). The content then holds the separator as U+001D.</summary>
+    public string Fnc1 { get; init; } = "none";
+    /// <summary>The application indicator in second position: one or two digits for 00-99, or one letter A-Z or a-z.</summary>
+    public string ApplicationIndicator { get; init; } = "";
+    /// <summary>GS1 data, Standard QR and rMQR only: none (plain text), qr (a GS1 QR Code through <c>CreateGs1</c>) or link (a Digital Link URI through <c>CreateGs1DigitalLink</c>). The content is then (AI) text or an element string, and the FNC1 mode is the entry point's.</summary>
+    public string Gs1 { get; init; } = "none";
+    /// <summary>The Digital Link URI's stem, such as a brand's own domain. Blank writes the canonical <c>https://id.gs1.org</c>.</summary>
+    public string Gs1Stem { get; init; } = "";
     /// <summary>Output image size in pixels (square for Standard / Micro QR, and the image width for rMQR, height from the symbol aspect ratio).</summary>
     public int Size { get; init; } = 512;
     /// <summary>Quiet zone in modules (0-10).</summary>
@@ -897,7 +1146,19 @@ public sealed record LogoDto
     public int BorderWidth { get; init; } = 6;
 }
 
-public sealed record ErrorPayload(string Error);
+/// <param name="Error">The message for the page.</param>
+/// <param name="Offset">For data the GS1 checks refuse, where the fault starts in the content, else null.</param>
+/// <param name="Length">For data the GS1 checks refuse, how many characters the fault spans, else null.</param>
+public sealed record ErrorPayload(string Error, int? Offset = null, int? Length = null);
+
+/// <summary>Stats of a <see cref="QrInterop.Generate"/> call, which <see cref="QrInterop.GetLastMeta"/> returns.</summary>
+/// <param name="MatrixSize">The symbol's width in modules, the side for a square symbol.</param>
+/// <param name="MatrixHeight">rMQR only: the symbol's height in modules.</param>
+/// <param name="Encoded">For GS1 data, the text written into the symbol: the element string, or the Digital Link URI. Null for plain text.</param>
+public sealed record GenerateMeta(string Symbology, int QrVersion, int MatrixSize, double TotalMs, int Bytes, int? MatrixHeight = null, string? Encoded = null);
+
+/// <summary>One element of decoded GS1 data.</summary>
+public sealed record Gs1ElementDto(string Ai, string Value);
 
 /// <summary>Result of a <see cref="QrInterop.Decode"/> call, serialized to the page script.</summary>
 /// <param name="Corners">
@@ -911,6 +1172,10 @@ public sealed record ErrorPayload(string Error);
 /// <param name="Orientation">The file's EXIF orientation tag (1-8), or 1 when it has none. The decoder ignores it but a browser applies it, so the page maps <see cref="Corners"/> through it before drawing.</param>
 /// <param name="Fnc1">"first" (GS1 data) or "second" (an AIM industry format) when the symbol carries FNC1, else null. Standard QR and rMQR only.</param>
 /// <param name="ApplicationIndicator">In second position, the 8-bit codeword (0-99 as its value, or a letter's ASCII value plus 100), else null.</param>
+/// <param name="Gs1Hri">GS1 data as (AI) text, for an element string under FNC1 in first position or a Digital Link URI without FNC1, else null.</param>
+/// <param name="Gs1Elements">The same data's elements, AI and value, in the order the element string holds them.</param>
+/// <param name="Gs1Error">Under FNC1 in first position, why the text does not read as GS1 data, else null.</param>
+/// <param name="Gs1Check">For GS1 data that reads, why its element string fails the GS1 checks, with the place in the element string, else null.</param>
 public sealed record DecodePayload(
     bool Ok,
     string? Text,
@@ -926,10 +1191,15 @@ public sealed record DecodePayload(
     int ImageHeight = 0,
     int Orientation = 1,
     string? Fnc1 = null,
-    int? ApplicationIndicator = null);
+    int? ApplicationIndicator = null,
+    string? Gs1Hri = null,
+    Gs1ElementDto[]? Gs1Elements = null,
+    string? Gs1Error = null,
+    string? Gs1Check = null);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(QrRequest))]
 [JsonSerializable(typeof(ErrorPayload))]
 [JsonSerializable(typeof(DecodePayload))]
+[JsonSerializable(typeof(GenerateMeta))]
 internal sealed partial class PlaygroundJsonContext : JsonSerializerContext;

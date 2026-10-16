@@ -5,7 +5,7 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// Drives the GS1 Barcode Syntax Engine's console app (a prebuilt release asset fetched by
-/// <c>get-gs1-syntax-engine.ps1</c>) as an oracle. The app is a stdin menu: option 1 takes raw data
+/// <c>tools/get_gs1_syntax_engine.cs</c>) as an oracle. The app is a stdin menu: option 1 takes raw data
 /// (plain text, an unbracketed element string with <c>^</c> as FNC1, or a Digital Link URI), option 2
 /// a bracketed element string, option 3 scan data with its symbology identifier. After each input it
 /// prints either an error with its markup or its state: the barcode message, the bracketed AI

@@ -114,7 +114,7 @@ if (command == "probe-fnc1")
 }
 if (command == "import-gs1-syntax-dictionary")
 {
-    // Copies the pinned Syntax Dictionary release and its list linters from the clone get-gs1-syntax-engine.ps1
+    // Copies the pinned Syntax Dictionary release and its list linters from the clone tools/get_gs1_syntax_engine.cs
     // makes into Fixtures/Gs1/syntax-dictionary/, with a provenance note.
     var root = FindRepoRoot();
     return Gs1FixtureGenerator.Import(root, Path.Combine(root, "tests", "FeatherQR.Tests", "Fixtures"));
@@ -175,7 +175,7 @@ if (command == "regenerate-structured-append")
 // FNC1 corpus: three writer lineages (libzint, ZXing.Net, CodeGlyphX), Standard QR under
 // StandardQrFnc1/ and rMQR under RmQrFnc1/, each with its own case list (Fnc1Corpus). Every
 // symbol passes the zxing-cpp gate before it is written: the gate checks the mode, the ECI
-// header and the element string the case claims, and supplies the symbology identifier and
+// header and the text the case claims, and supplies the symbology identifier and
 // the mask libzint does not report.
 var fnc1Generators = new (IFnc1FixtureGenerator Generator, Fnc1CaseDefinition[] Cases)[]
 {
@@ -275,7 +275,7 @@ foreach (var generator in microGenerators)
 {
     if (!generator.IsAvailable)
     {
-        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/QRInteropFixtures/get-qrtool.ps1 for the qrtool binary)");
+        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/get_qrtool.cs for the qrtool binary)");
         continue;
     }
 
@@ -317,7 +317,7 @@ foreach (var (generator, cases) in rmqrGenerators)
 {
     if (!generator.IsAvailable)
     {
-        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/QRInteropFixtures/get-qrtool.ps1 for the qrtool binary)");
+        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/get_qrtool.cs for the qrtool binary)");
         continue;
     }
 

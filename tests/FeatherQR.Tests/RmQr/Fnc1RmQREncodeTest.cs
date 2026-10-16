@@ -1,3 +1,4 @@
+using FeatherQR.Internals;
 using TUnit.Assertions.Enums;
 
 namespace FeatherQR.Tests;
@@ -152,6 +153,22 @@ public class Fnc1RmQREncodeTest
         await Assert.That(failures).IsEmpty();
     }
 
+    /// <summary>A charset the caller names is written as named, under FNC1 as without: UTF-8 named over Japanese text that Kanji mode could carry stays UTF-8.</summary>
+    [Test]
+    [Arguments(RmQRSegmentation.Single)]
+    [Arguments(RmQRSegmentation.Optimal)]
+    public async Task AllowKanji_WithANamedCharset_WritesUtf8(RmQRSegmentation segmentation)
+    {
+        var text = "日本語のテキスト";
+        var data = RmQRCodeGenerator.Create(text, RmQREccLevel.M, First with { AllowKanji = true, EciMode = EciMode.Utf8, Segmentation = segmentation });
+        var (decoded, info, _) = Read(data);
+        var shape = Shape(data, info);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(shape.Headers).IsEquivalentTo(["ECI:26", "FNC1First"], CollectionOrdering.Matching);
+        await Assert.That(shape.DataModes).IsEquivalentTo(["Byte"], CollectionOrdering.Matching);
+    }
+
     [Test]
     public async Task Single_KanjiWithAllowKanji_WritesKanjiMode()
     {
@@ -256,6 +273,26 @@ public class Fnc1RmQREncodeTest
         await Assert.That(Shape(optimal, info).DataModes).IsEquivalentTo(["Numeric", "Alphanumeric", "Numeric"], CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// The Alphanumeric run opens at a literal <c>%</c> and holds a second one, the two places a literal is priced. A plan
+    /// priced wrong is dropped for the single-mode stream, which reads back too, so the modes show the plan was kept.
+    /// </summary>
+    [Test]
+    public async Task Optimal_AlphanumericRunWithLiteralPercents_KeepsThePlan()
+    {
+        var digits = string.Concat(Enumerable.Repeat("0123456789", 5));
+        var text = digits + "%AB%CD" + digits;
+        var single = RmQRCodeGenerator.Create(text, RmQREccLevel.M, First);
+        var optimal = RmQRCodeGenerator.Create(text, RmQREccLevel.M, FirstOptimal);
+        var (decoded, info, _) = Read(optimal);
+        var shape = Shape(optimal, info);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(Area(optimal)).IsLessThan(Area(single));
+        await Assert.That(shape.DataModes).IsEquivalentTo(["Numeric", "Alphanumeric", "Numeric"], CollectionOrdering.Matching);
+        await Assert.That(shape.AlphanumericHasPercent).IsTrue();
+    }
+
     /// <summary>Under FNC1 a Kanji-eligible text with ASCII is planned over UTF-8 only. The symbol still reads back.</summary>
     [Test]
     public async Task Optimal_KanjiAndAscii_ReadsBack()
@@ -285,6 +322,51 @@ public class Fnc1RmQREncodeTest
         await Assert.That(Shape(data, info).DataModes).IsEquivalentTo(["Numeric", "Alphanumeric", "Numeric"], CollectionOrdering.Matching);
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out var size, options)).IsTrue();
         await Assert.That(size.Version).IsEqualTo(RmQRVersion.R7x99);
+    }
+
+    /// <summary>
+    /// Under Optimal with a requested version, the indicator's bits count too. Five lowercase letters take 3 + 3 + 40 bits in
+    /// Byte mode, which R7x43-M's 48 hold, and no plan is cheaper, so the 3 bits of first position leave no symbol, as the 11 of
+    /// second position do for four. A plan priced without them would write 49 bits into 48.
+    /// </summary>
+    [Test]
+    public async Task Optimal_RequestedVersion_TheIndicatorBitsAloneOverflow_IsRefused()
+    {
+        var withoutFnc1 = new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, Segmentation = RmQRSegmentation.Optimal, QuietZoneSize = 0 };
+        foreach (var (text, mode) in new[] { ("aaaaa", Fnc1Mode.FirstPosition), ("aaaa", Fnc1Mode.SecondPosition(37)) })
+        {
+            await Assert.That(RmQRCodeGenerator.Create(text, RmQREccLevel.M, withoutFnc1).Version).IsEqualTo(RmQRVersion.R7x43);
+            var options = withoutFnc1 with { Fnc1 = mode };
+            await Assert.That(() => RmQRCodeGenerator.Create(text, RmQREccLevel.M, options)).Throws<ArgumentException>().Because(text);
+            await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out _, options)).IsFalse().Because(text);
+        }
+    }
+
+    /// <summary>
+    /// Optimal picks the best-ranked version a plan fits, checked against every better-ranked version by a fixed-version sizing,
+    /// which prices the plan for that version alone. The first text runs separators beside Byte text, so the scan's lower bound
+    /// has to price a separator as an Alphanumeric unit. The other three mix runs whose count widths change from version to version,
+    /// so the scan's remembered run costs have to be told apart by those widths, the Byte, Numeric and Alphanumeric width in turn.
+    /// </summary>
+    [Test]
+    [Arguments("A\u001DA\u001DA\u001DA\u001DA\u001DA\u001Dabcdefgh", -1, RmQREccLevel.M, RmQRVersion.R11x43)]
+    [Arguments("a%E\u001DN9887895183\u001D\u001D058928399", 37, RmQREccLevel.H, RmQRVersion.R11x77)]
+    [Arguments("17206985iguyvoMEIBEAVDFINKCMYECGVNT6LUjH", -1, RmQREccLevel.H, RmQRVersion.R13x99)]
+    [Arguments("91214582828LC865821207dph0938230138Q0G", 37, RmQREccLevel.M, RmQRVersion.R15x43)]
+    public async Task Optimal_PicksTheBestRankedVersionAPlanFits(string text, int indicator, RmQREccLevel level, RmQRVersion expected)
+    {
+        var options = new RmQRCodeGeneratorOptions { Fnc1 = indicator < 0 ? Fnc1Mode.FirstPosition : Fnc1Mode.SecondPosition(indicator), Segmentation = RmQRSegmentation.Optimal, QuietZoneSize = 0 };
+        var data = RmQRCodeGenerator.Create(text, level, options);
+        var (decoded, _, _) = Read(data);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(data.Version).IsEqualTo(expected);
+        foreach (var candidate in Enum.GetValues<RmQRVersion>())
+        {
+            if (!RmQRCodeGenerator.TryGetRequiredBufferSize(text, level, out _, options with { Version = candidate }))
+                continue;
+            await Assert.That(IsBetter(candidate, data.Version, RmQRFitStrategy.MinimizeArea)).IsFalse().Because($"{candidate} holds a plan and ranks better than {data.Version}");
+        }
     }
 
     // Capacity: the header's bits move a text across a version edge
@@ -468,6 +550,34 @@ public class Fnc1RmQREncodeTest
         await Assert.That(info.Fnc1).IsEqualTo(c.Options.Fnc1);
     }
 
+    /// <summary>Sizing refuses what Create refuses for the options: ISO-8859-1 declared over a character it cannot hold, under FNC1 as without.</summary>
+    [Test]
+    [Arguments(RmQRSegmentation.Single)]
+    [Arguments(RmQRSegmentation.Optimal)]
+    public async Task Sizing_Iso8859_1DeclaredOverOtherContent_Throws(RmQRSegmentation segmentation)
+    {
+        var options = First with { EciMode = EciMode.Iso8859_1, Segmentation = segmentation };
+        var error = await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("日", RmQREccLevel.M, out _, options)).Throws<ArgumentException>();
+        await Assert.That(error!.ParamName).IsEqualTo("eciMode");
+    }
+
+    /// <summary>The span form writes every byte of its symbol, the quiet zone included, so a buffer that held other data ends as a fresh one does.</summary>
+    [Test]
+    [Arguments(RmQRSegmentation.Single)]
+    [Arguments(RmQRSegmentation.Optimal)]
+    public async Task SpanForm_IntoABufferHoldingOtherData_WritesWhatAFreshOneHolds(RmQRSegmentation segmentation)
+    {
+        var text = Gtin + "10ABC123";
+        var options = new RmQRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition, Segmentation = segmentation, QuietZoneSize = 2 };
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out var size, options)).IsTrue();
+        var fresh = new byte[size.BufferSize];
+        RmQRCodeGenerator.Create(text, RmQREccLevel.M, fresh, options);
+        var used = Enumerable.Repeat((byte)0xAB, size.BufferSize).ToArray();
+        RmQRCodeGenerator.Create(text, RmQREccLevel.M, used, options);
+
+        await Assert.That(used).IsEquivalentTo(fresh, CollectionOrdering.Matching);
+    }
+
     [Test]
     public async Task Sizing_TooLong_ReturnsFalse()
     {
@@ -506,20 +616,30 @@ public class Fnc1RmQREncodeTest
     }
 
 #if !DEBUG
-    /// <summary>The span form allocates nothing under FNC1, Single and Optimal alike (Release only, as the other allocation tests are).</summary>
+    /// <summary>
+    /// The span form allocates nothing under FNC1, Single and Optimal alike (Release only, as the other allocation tests are). The long text
+    /// is past the FNC1 table's stack buffer, so its parent table comes from the pool. The plan itself is always on the stack.
+    /// </summary>
     [Test]
     [NotInParallel]
     public async Task SpanForm_AllocatesNothing()
     {
         var text = Gtin + "10ABC123" + Gs + "17231120" + Gs + "21abc%def";
+        var longText = string.Concat(Enumerable.Repeat(Gtin + "10AB%C" + Gs + "17231120" + Gs, 4));
         var buffer = new byte[4_000];
         var single = new RmQRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition };
         var optimal = new RmQRCodeGeneratorOptions { Fnc1 = Fnc1Mode.SecondPosition(37), Segmentation = RmQRSegmentation.Optimal };
+        // Here a plan is built only for a version better ranked than the single-mode fit, and the FNC1 table leaves the stack only for a text longer than its stack buffer holds.
+        var longSingle = RmQRCodeGenerator.Create(longText, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Fnc1 = optimal.Fnc1 });
+        await Assert.That(IsBetter(RmQRCodeGenerator.Create(longText, RmQREccLevel.M, optimal).Version, longSingle.Version, RmQRFitStrategy.MinimizeArea)).IsTrue();
+        await Assert.That(longText.Length * ModeSegmenter.Fnc1ParentBytesPerChar).IsGreaterThan(ModeSegmenter.Fnc1MaxStackParents);
         for (var i = 0; i < 3; i++)
         {
             RmQRCodeGenerator.Create(text.AsSpan(), RmQREccLevel.M, buffer, single);
             RmQRCodeGenerator.Create(text.AsSpan(), RmQREccLevel.M, buffer, optimal);
             RmQRCodeGenerator.TryGetRequiredBufferSize(text.AsSpan(), RmQREccLevel.M, out _, optimal);
+            RmQRCodeGenerator.Create(longText.AsSpan(), RmQREccLevel.M, buffer, optimal);
+            RmQRCodeGenerator.TryGetRequiredBufferSize(longText.AsSpan(), RmQREccLevel.M, out _, optimal);
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
@@ -528,6 +648,8 @@ public class Fnc1RmQREncodeTest
             RmQRCodeGenerator.Create(text.AsSpan(), RmQREccLevel.M, buffer, single);
             RmQRCodeGenerator.Create(text.AsSpan(), RmQREccLevel.M, buffer, optimal);
             RmQRCodeGenerator.TryGetRequiredBufferSize(text.AsSpan(), RmQREccLevel.M, out _, optimal);
+            RmQRCodeGenerator.Create(longText.AsSpan(), RmQREccLevel.M, buffer, optimal);
+            RmQRCodeGenerator.TryGetRequiredBufferSize(longText.AsSpan(), RmQREccLevel.M, out _, optimal);
         }
         await Assert.That(GC.GetAllocatedBytesForCurrentThread() - before).IsEqualTo(0);
     }

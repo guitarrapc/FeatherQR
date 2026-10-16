@@ -10,7 +10,8 @@ internal static partial class TextAnalyzer
     /// a separator or a literal <c>%</c> keeps the text out of Alphanumeric mode, since a reader takes <c>%%</c>
     /// first within a segment (specs/standardqr-encoder.md, FNC1). Everything else is the analysis without FNC1:
     /// the ECI follows the content or the request, and with <paramref name="allowKanji"/> a text JIS X 0208 holds
-    /// entirely takes Kanji mode. Scalar, kept apart from the SIMD analysis: GS1 strings are tens of characters.
+    /// entirely takes Kanji mode. Scalar, kept apart from the SIMD analysis so the route without FNC1 keeps its
+    /// instructions. A vector form waits for a measured need.
     /// </summary>
     /// <remarks>The result plans no Kanji segments: <see cref="QRSegmentation.Optimal"/> under FNC1 mixes Numeric, Alphanumeric and Byte runs only.</remarks>
     public static TextAnalysisResult AnalyzeFnc1(ReadOnlySpan<char> text, EciMode requestedEciMode, bool allowKanji)

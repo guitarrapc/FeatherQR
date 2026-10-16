@@ -243,10 +243,11 @@ internal static class SegmentDecoders
     /// <param name="totalBits">Length of the whole bitstream, in bits. Used to reject a segment that runs past the end.</param>
     /// <param name="count">Number of bytes in this segment.</param>
     /// <param name="charset">The charset declared for the segment, or <see cref="ByteSegmentCharset.Unspecified"/> to infer it from the bytes.</param>
+    /// <param name="fnc1">Whether an FNC1 mode is active, under which the byte 0x1D is the field separator and so text.</param>
     /// <param name="byteBuffer">Scratch buffer for the segment bytes. It must hold at least <paramref name="count"/> bytes.</param>
     /// <param name="destination">Receives the decoded text.</param>
     /// <param name="charsWritten">How many characters <paramref name="destination"/> already holds. This call advances the count.</param>
-    public static DecodeStatus DecodeBytePayload(ref BitReader reader, int totalBits, int count, ByteSegmentCharset charset, byte[] byteBuffer, Span<char> destination, ref int charsWritten)
+    public static DecodeStatus DecodeBytePayload(ref BitReader reader, int totalBits, int count, ByteSegmentCharset charset, bool fnc1, byte[] byteBuffer, Span<char> destination, ref int charsWritten)
     {
         if (totalBits - reader.BitPosition < count * 8)
             return DecodeStatus.InvalidBitstream;
@@ -281,7 +282,7 @@ internal static class SegmentDecoders
             // so this holds before knowing whether the rest of the segment is well formed.
             // A Shift_JIS reading needs a char per pair, so a segment that turns out to be one is counted below.
             if (status == OperationStatus.DestinationTooSmall
-                && (hasBom || charset == ByteSegmentCharset.Utf8 || IsValidUtf8(bytes) || !GuessesShiftJis(bytes)))
+                && (hasBom || charset == ByteSegmentCharset.Utf8 || IsValidUtf8(bytes) || !GuessesShiftJis(bytes, fnc1)))
                 return DecodeStatus.DestinationTooSmall;
         }
 #else
@@ -306,7 +307,7 @@ internal static class SegmentDecoders
 #endif
 
         // Undeclared and not UTF-8: encoders that write Shift_JIS here leave the ECI header out
-        if (charset == ByteSegmentCharset.Unspecified && GuessesShiftJis(bytes))
+        if (charset == ByteSegmentCharset.Unspecified && GuessesShiftJis(bytes, fnc1))
             return DecodeShiftJis(bytes, destination, ref charsWritten);
 
         // ISO-8859-1 → UTF-16 is a pure widening cast
@@ -332,15 +333,16 @@ internal static class SegmentDecoders
     /// Whether the charset resolution above reads an undeclared byte segment as ISO-8859-1, which is neither of its other two readings.
     /// The Micro QR generator and its mixed-mode planner ask this before they write ISO-8859-1 bytes with no ECI header to declare them, the whole text or a run a split isolates from its disambiguating neighbours.
     /// It must mirror <see cref="DecodeBytePayload"/> exactly, which is why it lives here rather than beside them.
+    /// It mirrors the reading without FNC1, since Micro QR has no FNC1 mode.
     /// </summary>
     public static bool ResolvesToIso8859_1WhenUnspecified(ReadOnlySpan<byte> bytes)
-        => !ResolvesToUtf8WhenUnspecified(bytes) && !GuessesShiftJis(bytes);
+        => !ResolvesToUtf8WhenUnspecified(bytes) && !GuessesShiftJis(bytes, fnc1: false);
 
     /// <summary>
-    /// Whether an undeclared segment that is not UTF-8 is read as Shift_JIS: its bytes are well formed Shift_JIS with no control character but tab, CR and LF,
-    /// and hold a run of three half-width katakana, or a byte from 0x80 to 0x9F, which ISO-8859-1 text does not.
+    /// Whether an undeclared segment that is not UTF-8 is read as Shift_JIS: its bytes are well formed Shift_JIS with no C0 control character but tab, CR and LF,
+    /// and under FNC1 the separator 0x1D, and hold a run of three half-width katakana, or a byte from 0x80 to 0x9F, which ISO-8859-1 text does not.
     /// </summary>
-    private static bool GuessesShiftJis(ReadOnlySpan<byte> bytes)
+    private static bool GuessesShiftJis(ReadOnlySpan<byte> bytes, bool fnc1)
     {
         var katakanaRun = 0;
         var telling = false;
@@ -349,8 +351,8 @@ internal static class SegmentDecoders
             int b = bytes[i];
             if (b < 0x80)
             {
-                // Binary data, not text
-                if (b < 0x20 && b != '\t' && b != '\r' && b != '\n')
+                // Binary data, not text, unless it is the separator FNC1 defines
+                if (b < 0x20 && b != '\t' && b != '\r' && b != '\n' && !(fnc1 && b == 0x1D))
                     return false;
                 katakanaRun = 0;
             }

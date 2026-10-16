@@ -7,7 +7,7 @@ namespace QRInteropFixtures;
 /// rMQR fixture generator backed by the Rust <c>qrtool</c> CLI (qrcode2 crate),
 /// the second external encoder lineage, independent of zint and of the ZXing
 /// family. Uses the prebuilt release binary pinned by version and SHA-256 (see
-/// <c>get-qrtool.ps1</c>), so no Rust toolchain is required. The module matrix is
+/// <c>tools/get_qrtool.cs</c>), so no Rust toolchain is required. The module matrix is
 /// read from the tool's ASCII output (2 characters per module, <c>##</c> dark),
 /// which is exact, no image parsing involved. rMQR is selected with
 /// <c>--variant rmqr --symbol-version H W</c> (verified by <c>probe-rmqr</c>).
@@ -20,12 +20,7 @@ public sealed class QrtoolRmQRFixtureGenerator : IRmQRFixtureGenerator
 
     public QrtoolRmQRFixtureGenerator(string repoRoot)
     {
-        var root = Path.Combine(repoRoot, "tools", "QRInteropFixtures", "external", "qrtool");
-        if (Directory.Exists(root))
-        {
-            _exePath = Directory.EnumerateFiles(root, "qrtool.exe", SearchOption.AllDirectories).FirstOrDefault()
-                ?? Directory.EnumerateFiles(root, "qrtool", SearchOption.AllDirectories).FirstOrDefault();
-        }
+        _exePath = QrtoolRunner.Find(repoRoot);
     }
 
     public string Name => "qrtool";
