@@ -109,17 +109,33 @@ internal static class Gs1DigitalLink
 
     public static bool TryToDigitalLink(ReadOnlySpan<char> elementString, int year, string? stem, out string uri, out Gs1Error error)
     {
+        // One pass into the stack buffer serves a URI that fits it. Build counts the whole URI either way, so a
+        // longer one is built again into a rented buffer of its length. An element string of StackLimit characters
+        // or more is counted without the partial write: each element is written at least as long as it stands
+        // there, so its URI fits only when repeated AIs, written once, make up the difference.
         var stemText = ValidateStem(stem);
         uri = "";
-        if (!Build(elementString, year, stemText, Span<char>.Empty, out var length, out error))
+        int length;
+        if (elementString.Length < StackLimit)
+        {
+            Span<char> buffer = stackalloc char[StackLimit];
+            if (!Build(elementString, year, stemText, buffer, out length, out error))
+                return false;
+            if (length <= StackLimit)
+            {
+                uri = buffer.Slice(0, length).ToString();
+                return true;
+            }
+        }
+        else if (!Build(elementString, year, stemText, Span<char>.Empty, out length, out error))
+        {
             return false;
+        }
 
-        char[]? rented = null;
-        Span<char> buffer = length <= StackLimit ? stackalloc char[StackLimit] : (rented = ArrayPool<char>.Shared.Rent(length));
-        Build(elementString, year, stemText, buffer, out _, out _);
-        uri = buffer.Slice(0, length).ToString();
-        if (rented is not null)
-            ArrayPool<char>.Shared.Return(rented);
+        var rented = ArrayPool<char>.Shared.Rent(length);
+        Build(elementString, year, stemText, rented, out _, out _);
+        uri = new string(rented, 0, length);
+        ArrayPool<char>.Shared.Return(rented);
         return true;
     }
 

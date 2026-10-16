@@ -388,6 +388,48 @@ public class Gs1DigitalLinkTest
         await Assert.That((hri, error.Kind)).IsEqualTo(("", Gs1ErrorKind.InvalidPercentEncoding));
     }
 
+    /// <summary>
+    /// URIs of 511, 512 and 513 characters from an element string about a third as long, so the URI crosses the
+    /// 512-character stack buffer where the input does not. The expected URI is built here, apart from the builder.
+    /// </summary>
+    [Test]
+    [Arguments(511)]
+    [Arguments(512)]
+    [Arguments(513)]
+    public async Task StringForm_AtTheStackBufferEdge_AgreesWithTheSpanForm(int uriLength)
+    {
+        // "https://id.gs1.org/01/09520123456788" is 36 characters, "?91=" and "&92=" 4 each, a '(' is written %28
+        // and an 'A' as it is; (91) carries 90 parentheses and (92) the rest
+        var rest = uriLength - 36 - 4 - 4 - 3 * 90;
+        var escaped = rest / 3;
+        var plain = rest % 3;
+        var elementString = Gtin + "91" + new string('(', 90) + "\u001D" + "92" + new string('(', escaped) + new string('A', plain);
+        var expected = "https://id.gs1.org/01/09520123456788?91=" + string.Concat(Enumerable.Repeat("%28", 90))
+            + "&92=" + string.Concat(Enumerable.Repeat("%28", escaped)) + new string('A', plain);
+        await Assert.That(expected.Length).IsEqualTo(uriLength);
+        await Assert.That(elementString.Length).IsLessThan(200);
+
+        await Assert.That(Gs1ElementString.TryToDigitalLink(elementString, out var uri, out var error)).IsTrue().Because(error.ToString());
+        await Assert.That(uri).IsEqualTo(expected);
+        await Assert.That(Gs1ElementString.TryGetToDigitalLinkLength(elementString, out var length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(uriLength);
+        var exact = new char[uriLength];
+        await Assert.That(Gs1ElementString.TryToDigitalLink(elementString, exact, out var written, out _)).IsTrue();
+        await Assert.That((written, new string(exact))).IsEqualTo((uriLength, expected));
+    }
+
+    /// <summary>An element string over 512 characters that fails a check: the string form gives the length twin's error and no URI.</summary>
+    [Test]
+    public async Task StringForm_LongInputRefused_AsTheLengthTwin()
+    {
+        var elementString = "0109520123456789" + string.Join("\u001D", Enumerable.Range(91, 9).Select(ai => ai + new string('A', 90)));
+        await Assert.That(elementString.Length).IsGreaterThan(512);
+        await Assert.That(Gs1ElementString.TryGetToDigitalLinkLength(elementString, out _, out var twin)).IsFalse();
+        await Assert.That(twin.Kind).IsEqualTo(Gs1ErrorKind.InvalidCheckDigit);
+        await Assert.That(Gs1ElementString.TryToDigitalLink(elementString, out var uri, out var error)).IsFalse();
+        await Assert.That((uri, error)).IsEqualTo(("", twin));
+    }
+
     /// <summary>A refused input yields the data's error from every form, a short destination included.</summary>
     [Test]
     public async Task EveryForm_RefusesTheSameInputTheSameWay()

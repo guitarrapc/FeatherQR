@@ -264,6 +264,56 @@ public class Gs1HriTest
         await Assert.That(hri).IsEqualTo("(01)09520123456788(91)" + new string('A', 600));
     }
 
+    /// <summary>
+    /// (AI) text of 511, 512 and 513 characters from an element string about half as long, so the text crosses the
+    /// 512-character stack buffer where the input does not. The expected text is built here, apart from the formatter.
+    /// </summary>
+    [Test]
+    [Arguments(511)]
+    [Arguments(512)]
+    [Arguments(513)]
+    public async Task StringForm_AtTheStackBufferEdge_AgreesWithTheSpanForm(int hriLength)
+    {
+        // "(01)09520123456788(91)" is 22 characters, a '(' in the value is written "\(" and an 'A' as it is
+        var escaped = (hriLength - 22) / 2;
+        var plain = (hriLength - 22) % 2;
+        var elementString = "0109520123456788" + "91" + new string('(', escaped) + new string('A', plain);
+        var expected = "(01)09520123456788(91)" + string.Concat(Enumerable.Repeat("\\(", escaped)) + new string('A', plain);
+        await Assert.That(expected.Length).IsEqualTo(hriLength);
+        await Assert.That(elementString.Length).IsLessThan(300);
+
+        await Assert.That(Gs1ElementString.TryToHri(elementString, out var hri, out var error)).IsTrue().Because(error.ToString());
+        await Assert.That(hri).IsEqualTo(expected);
+        await Assert.That(Gs1ElementString.TryRead(elementString, Fnc1Mode.FirstPosition, out var read, out _)).IsTrue();
+        await Assert.That(read).IsEqualTo(expected);
+        await Assert.That(Gs1ElementString.TryGetToHriLength(elementString, out var length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(hriLength);
+        var exact = new char[hriLength];
+        await Assert.That(Gs1ElementString.TryToHri(elementString, exact, out var written, out _)).IsTrue();
+        await Assert.That((written, new string(exact))).IsEqualTo((hriLength, expected));
+    }
+
+    /// <summary>
+    /// An element the splitter cannot read after the text has outgrown the stack buffer: the string form gives the
+    /// length twin's error and no text, from an element string under 512 characters, which is written into the stack
+    /// buffer as it is counted, and from one over 512, which is counted first.
+    /// </summary>
+    [Test]
+    [Arguments(300)]
+    [Arguments(600)]
+    public async Task StringForm_RefusedAfterTheStackBufferFills(int parentheses)
+    {
+        // the first two elements alone format to more than 600 characters
+        var elementString = "0109520123456788" + "91" + new string('(', parentheses) + "\u001D" + "89ABC";
+        await Assert.That(elementString.Length < 512).IsEqualTo(parentheses < 400);
+        await Assert.That(Gs1ElementString.TryGetToHriLength(elementString, out _, out var twin)).IsFalse();
+        await Assert.That(twin.Kind).IsEqualTo(Gs1ErrorKind.UnknownAi);
+        await Assert.That(Gs1ElementString.TryToHri(elementString, out var hri, out var error)).IsFalse();
+        await Assert.That((hri, error)).IsEqualTo(("", twin));
+        await Assert.That(Gs1ElementString.TryRead(elementString, Fnc1Mode.FirstPosition, out var read, out error)).IsFalse();
+        await Assert.That((read, error)).IsEqualTo(("", twin));
+    }
+
     /// <summary>A refused input yields the error, not a length or a write, from every form.</summary>
     [Test]
     public async Task EveryForm_RefusesTheSameInputTheSameWay()
