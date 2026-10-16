@@ -24,7 +24,8 @@ using System.Security.Cryptography;
 
 const string Version = "0.13.2";
 
-// One build a system, since the tools that run qrtool take qrtool.exe before qrtool wherever both are present.
+// One build a system. The folder keeps another system's build if it has one (a checkout shared with WSL), and each
+// tool that runs qrtool takes the build named for its own system.
 var build = OperatingSystem.IsWindows()
     ? new Build($"qrtool-v{Version}-x86_64-pc-windows-msvc.zip", "c0cad331b96632e74da48f4e9d32e924cc5d3bd2be4258a4a0a39da99202d712", "qrtool.exe")
     : OperatingSystem.IsLinux() && RuntimeInformation.OSArchitecture == Architecture.X64

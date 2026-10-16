@@ -19,12 +19,7 @@ public sealed class QrtoolMicroQRFixtureGenerator : IMicroQRFixtureGenerator
 
     public QrtoolMicroQRFixtureGenerator(string repoRoot)
     {
-        var root = Path.Combine(repoRoot, "tools", "QRInteropFixtures", "external", "qrtool");
-        if (Directory.Exists(root))
-        {
-            _exePath = Directory.EnumerateFiles(root, "qrtool.exe", SearchOption.AllDirectories).FirstOrDefault()
-                ?? Directory.EnumerateFiles(root, "qrtool", SearchOption.AllDirectories).FirstOrDefault();
-        }
+        _exePath = QrtoolRunner.Find(repoRoot);
     }
 
     public string Name => "qrtool";
