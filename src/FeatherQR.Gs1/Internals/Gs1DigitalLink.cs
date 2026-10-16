@@ -109,10 +109,10 @@ internal static class Gs1DigitalLink
 
     public static bool TryToDigitalLink(ReadOnlySpan<char> elementString, int year, string? stem, out string uri, out Gs1Error error)
     {
-        // One pass into the stack buffer serves a URI that fits it. Build counts the whole URI either way, so a
-        // longer one is built again into a rented buffer of its length. An element string of StackLimit characters
-        // or more is counted without the partial write: each element is written at least as long as it stands
-        // there, so its URI fits only when repeated AIs, written once, make up the difference.
+        // Build writes what fits and counts the whole URI, so a URI that fits the stack buffer needs no second pass.
+        // An element string of StackLimit characters or more seldom has a URI that fits, so counting it first saves
+        // a write that would be thrown away. Each of its elements is written at least as long as it stands there,
+        // and only an AI repeated with one value, which the URI writes once, can make the URI fit.
         var stemText = ValidateStem(stem);
         uri = "";
         int length;

@@ -391,6 +391,8 @@ public class Gs1DigitalLinkTest
     /// <summary>
     /// URIs of 511, 512 and 513 characters from an element string about a third as long, so the URI crosses the
     /// 512-character stack buffer where the input does not. The expected URI is built here, apart from the builder.
+    /// The pool's next buffer is filled before the string form, so a URI written short of its end cannot pass on what
+    /// an earlier test left in that buffer.
     /// </summary>
     [Test]
     [Arguments(511)]
@@ -398,8 +400,8 @@ public class Gs1DigitalLinkTest
     [Arguments(513)]
     public async Task StringForm_AtTheStackBufferEdge_AgreesWithTheSpanForm(int uriLength)
     {
-        // "https://id.gs1.org/01/09520123456788" is 36 characters, "?91=" and "&92=" 4 each, a '(' is written %28
-        // and an 'A' as it is; (91) carries 90 parentheses and (92) the rest
+        // "https://id.gs1.org/01/09520123456788" is 36 characters, and "?91=" and "&92=" are 4 each. A '(' is written
+        // %28 and an 'A' as it is. (91) carries 90 parentheses and (92) the rest.
         var rest = uriLength - 36 - 4 - 4 - 3 * 90;
         var escaped = rest / 3;
         var plain = rest % 3;
@@ -409,6 +411,7 @@ public class Gs1DigitalLinkTest
         await Assert.That(expected.Length).IsEqualTo(uriLength);
         await Assert.That(elementString.Length).IsLessThan(200);
 
+        CharPoolRents.FillNextRent(uriLength);
         await Assert.That(Gs1ElementString.TryToDigitalLink(elementString, out var uri, out var error)).IsTrue().Because(error.ToString());
         await Assert.That(uri).IsEqualTo(expected);
         await Assert.That(Gs1ElementString.TryGetToDigitalLinkLength(elementString, out var length, out _)).IsTrue();
@@ -418,7 +421,43 @@ public class Gs1DigitalLinkTest
         await Assert.That((written, new string(exact))).IsEqualTo((uriLength, expected));
     }
 
-    /// <summary>An element string over 512 characters that fails a check: the string form gives the length twin's error and no URI.</summary>
+    public static IEnumerable<Func<(string ElementString, int UriLength, int Rents)>> RentCases()
+    {
+        yield return () => (Gtin + "91" + new string('(', 90) + "\u001D" + "92" + new string('(', 66), 512, 0);
+        yield return () => (Gtin + "91" + new string('(', 90) + "\u001D" + "92" + new string('(', 66) + "A", 513, 1);
+        yield return () => (Gtin + string.Join("\u001D", Enumerable.Range(91, 9).Select(ai => ai + new string('A', 90))), 882, 1);
+        yield return () => (string.Concat(Enumerable.Repeat(Gtin, 32)), 36, 1);
+        yield return () => (string.Concat(Enumerable.Repeat(Gtin, 31)) + "10" + "ABCDEFGHIJKLM", 53, 0);
+    }
+
+    /// <summary>
+    /// The string form rents a buffer for a URI longer than its 512-character stack buffer, and for an element string
+    /// of 512 characters or more, which is counted before it is written. It returns each one. Every route gives the
+    /// same URI, so a fit check one too strict, an element string of 511 or 512 characters sent down the other route
+    /// or a buffer kept from the pool shows only in the pool's events. Counting a shorter element string's URI before
+    /// writing it rents nothing more, so this test does not see how many passes a call makes. The first two cases sit
+    /// on either side of the stack buffer. The next two are element strings of 852 and 512 characters. The second of
+    /// them repeats one GTIN, so its URI is short and is rented anyway. The last repeats the GTIN 31 times and adds a
+    /// batch. It is 511 characters long, and its URI fits.
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    [MethodDataSource(nameof(RentCases))]
+    public async Task StringForm_RentsOnlyForALongUriOrALongElementString((string ElementString, int UriLength, int Rents) c)
+    {
+        await Assert.That(Gs1ElementString.TryGetToDigitalLinkLength(c.ElementString, out var length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(c.UriLength);
+
+        using var rents = new CharPoolRents();
+        var built = rents.During(() => Gs1ElementString.TryToDigitalLink(c.ElementString, out _, out _), out var answer);
+        await Assert.That(answer).IsTrue();
+        await Assert.That(built).IsEqualTo((c.Rents, c.Rents));
+    }
+
+    /// <summary>
+    /// An element string over 512 characters is counted before it is written, with no stack buffer. Refused by a
+    /// check on that route, the string form gives the length twin's error and no URI.
+    /// </summary>
     [Test]
     public async Task StringForm_LongInputRefused_AsTheLengthTwin()
     {

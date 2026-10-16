@@ -5,6 +5,8 @@ using FeatherQR.Gs1;
 /// What the GS1 data layer costs on three typical element strings: every check (<c>TryValidate</c>), the (AI) text
 /// in both directions, the Digital Link URI in both directions and the decode-side <c>TryRead</c> of the URI, each
 /// through its span form into a buffer sized by the length twin, so the Allocated column is the layer's own.
+/// <c>TryToHri</c> and <c>TryToDigitalLink</c> also have a row for their string form, which sizes its result in the
+/// same pass that writes it. Their Allocated column is the returned string.
 /// CodeGlyphX's validator on the same data as (AI) text stands beside <c>TryValidate</c> for scale, not as a baseline:
 /// it also builds its element list, so the two do not do the same work.
 ///
@@ -61,8 +63,10 @@ public class Gs1DataLayer
         // A call that answers false would have its refusal timed, so each call that writes into a buffer is made
         // once here. TryValidate's row is the call checked above.
         Require(ToHri() >= 0, "TryToHri");
+        Require(ToHriString() >= 0, "TryToHri (string)");
         Require(FromHri() >= 0, "TryFromHri");
         Require(ToDigitalLink() >= 0, "TryToDigitalLink");
+        Require(ToDigitalLinkString() >= 0, "TryToDigitalLink (string)");
         Require(FromDigitalLink() >= 0, "TryFromDigitalLink");
         Require(ReadUri() >= 0, "TryRead of the URI");
     }
@@ -88,11 +92,17 @@ public class Gs1DataLayer
     [Benchmark(Description = "TryToHri (span)")]
     public int ToHri() => Gs1ElementString.TryToHri(_elementString.AsSpan(), _hriBuffer, out var written, out _) ? written : -1;
 
+    [Benchmark(Description = "TryToHri (string)")]
+    public int ToHriString() => Gs1ElementString.TryToHri(_elementString.AsSpan(), out var hri, out _) ? hri.Length : -1;
+
     [Benchmark(Description = "TryFromHri (span)")]
     public int FromHri() => Gs1ElementString.TryFromHri(_hri.AsSpan(), _fromHriBuffer, out var written, out _) ? written : -1;
 
     [Benchmark(Description = "TryToDigitalLink (span)")]
     public int ToDigitalLink() => Gs1ElementString.TryToDigitalLink(_elementString.AsSpan(), _uriBuffer, out var written, out _) ? written : -1;
+
+    [Benchmark(Description = "TryToDigitalLink (string)")]
+    public int ToDigitalLinkString() => Gs1ElementString.TryToDigitalLink(_elementString.AsSpan(), out var uri, out _) ? uri.Length : -1;
 
     [Benchmark(Description = "TryFromDigitalLink (span)")]
     public int FromDigitalLink() => Gs1ElementString.TryFromDigitalLink(_uri.AsSpan(), _fromUriBuffer, out var written, out _) ? written : -1;

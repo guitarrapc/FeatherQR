@@ -22,22 +22,25 @@ internal static class Gs1Hri
     /// <summary>Above this many characters a scratch buffer is rented instead of taken from the stack.</summary>
     private const int StackLimit = 512;
 
+    /// <summary>The stack buffer for the (AI) text of an element string of at most half this many characters.</summary>
+    private const int SmallStackLimit = 128;
+
     // ----- element string -> (AI) text -----
 
     public static bool TryToHri(ReadOnlySpan<char> elementString, out string hri, out Gs1Error error)
     {
-        // One pass into the stack buffer serves text that fits it. Format counts the whole text either way, so
-        // longer text is formatted again into a rented buffer of its length. An element string of StackLimit
-        // characters or more never fits, since each element's parentheses outweigh its separator, so it is counted
-        // without the partial write it would then repeat.
+        // Format writes what fits and counts the whole text, so text that fits the stack buffer needs no second
+        // pass. An element string of StackLimit characters or more never has text that fits, because each element's
+        // parentheses outweigh its separator. Counting it first saves a write that would be thrown away. The text is
+        // at most twice as long as its element string, so a short one fits the small buffer, which costs less to zero.
         hri = "";
         int length;
         if (elementString.Length < StackLimit)
         {
-            Span<char> buffer = stackalloc char[StackLimit];
+            Span<char> buffer = elementString.Length <= SmallStackLimit / 2 ? stackalloc char[SmallStackLimit] : stackalloc char[StackLimit];
             if (!Format(elementString, buffer, out length, out error))
                 return false;
-            if (length <= StackLimit)
+            if (length <= buffer.Length)
             {
                 hri = buffer.Slice(0, length).ToString();
                 return true;
@@ -78,10 +81,10 @@ internal static class Gs1Hri
     /// first element the splitter cannot read.
     /// </summary>
     /// <remarks>
-    /// NoInlining is load-bearing. The public members around it are a few bytes of IL, and a caller that inlined
-    /// them with this pass and the splitter ran out of inline budget before <see cref="Put"/>, leaving a call for
-    /// every character: the span form and the length twin took 2.3 to 2.6 times as long. Compiled on its own, the
-    /// pass inlines its writes whoever calls it.
+    /// NoInlining is load-bearing. The span form and the length twin reach this pass through two short members. A
+    /// small caller can inline them, this pass and the splitter, and then run out of inline budget before
+    /// <see cref="Put"/>. Put then stays a call for every character. Compiled on its own, the pass inlines its
+    /// writes whatever calls it.
     /// </remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool Format(ReadOnlySpan<char> elementString, Span<char> destination, out int length, out Gs1Error error)
