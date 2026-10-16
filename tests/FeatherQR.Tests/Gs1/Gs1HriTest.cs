@@ -264,6 +264,118 @@ public class Gs1HriTest
         await Assert.That(hri).IsEqualTo("(01)09520123456788(91)" + new string('A', 600));
     }
 
+    /// <summary>
+    /// (AI) text of 511, 512 and 513 characters from an element string about half as long, so the text crosses the
+    /// 512-character stack buffer where the input does not. The expected text is built here, apart from the formatter.
+    /// The pool's next buffer is filled before each string form, so text written short of its end cannot pass on what
+    /// an earlier test left in that buffer.
+    /// </summary>
+    [Test]
+    [Arguments(511)]
+    [Arguments(512)]
+    [Arguments(513)]
+    public async Task StringForm_AtTheStackBufferEdge_AgreesWithTheSpanForm(int hriLength)
+    {
+        // "(01)09520123456788(91)" is 22 characters. A '(' in the value is written "\(" and an 'A' as it is.
+        var escaped = (hriLength - 22) / 2;
+        var plain = (hriLength - 22) % 2;
+        var elementString = "0109520123456788" + "91" + new string('(', escaped) + new string('A', plain);
+        var expected = "(01)09520123456788(91)" + string.Concat(Enumerable.Repeat("\\(", escaped)) + new string('A', plain);
+        await Assert.That(expected.Length).IsEqualTo(hriLength);
+        await Assert.That(elementString.Length).IsLessThan(300);
+
+        CharPoolRents.FillNextRent(hriLength);
+        await Assert.That(Gs1ElementString.TryToHri(elementString, out var hri, out var error)).IsTrue().Because(error.ToString());
+        await Assert.That(hri).IsEqualTo(expected);
+        CharPoolRents.FillNextRent(hriLength);
+        await Assert.That(Gs1ElementString.TryRead(elementString, Fnc1Mode.FirstPosition, out var read, out _)).IsTrue();
+        await Assert.That(read).IsEqualTo(expected);
+        await Assert.That(Gs1ElementString.TryGetToHriLength(elementString, out var length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(hriLength);
+        var exact = new char[hriLength];
+        await Assert.That(Gs1ElementString.TryToHri(elementString, exact, out var written, out _)).IsTrue();
+        await Assert.That((written, new string(exact))).IsEqualTo((hriLength, expected));
+    }
+
+    /// <summary>
+    /// Each '(' is written "\(", so the text of a 64-character element string is 128 characters, as long as the small
+    /// stack buffer, and that of a 65-character one is 130. The text shows a wrong write at that edge, but not which
+    /// buffer took it.
+    /// </summary>
+    [Test]
+    [Arguments(62)]
+    [Arguments(63)]
+    public async Task StringForm_AtTheSmallStackBufferEdge_AgreesWithTheSpanForm(int parentheses)
+    {
+        var elementString = "91" + new string('(', parentheses);
+        var expected = "(91)" + string.Concat(Enumerable.Repeat("\\(", parentheses));
+        await Assert.That((elementString.Length, expected.Length)).IsEqualTo((parentheses + 2, 2 * parentheses + 4));
+
+        await Assert.That(Gs1ElementString.TryToHri(elementString, out var hri, out var error)).IsTrue().Because(error.ToString());
+        await Assert.That(hri).IsEqualTo(expected);
+        await Assert.That(Gs1ElementString.TryRead(elementString, Fnc1Mode.FirstPosition, out var read, out _)).IsTrue();
+        await Assert.That(read).IsEqualTo(expected);
+        var exact = new char[expected.Length];
+        await Assert.That(Gs1ElementString.TryToHri(elementString, exact, out var written, out _)).IsTrue();
+        await Assert.That((written, new string(exact))).IsEqualTo((expected.Length, expected));
+    }
+
+    public static IEnumerable<Func<(string ElementString, int TextLength, int Rents)>> RentCases()
+    {
+        yield return () => ("91" + new string('(', 62), 128, 0);
+        yield return () => ("91" + new string('(', 63), 130, 0);
+        yield return () => ("0109520123456788" + "91" + new string('(', 245), 512, 0);
+        yield return () => ("0109520123456788" + "91" + new string('(', 245) + "A", 513, 1);
+        yield return () => ("91" + new string('A', 508), 512, 0);
+        yield return () => ("0109520123456788" + string.Join("\u001D", Enumerable.Range(91, 9).Select(ai => ai + new string('A', 90))), 864, 1);
+    }
+
+    /// <summary>
+    /// The string form rents a buffer only for text longer than its stack buffer, and returns each one. Every route
+    /// gives the same text, so a stack buffer chosen too small, a fit check one too strict, an element string under
+    /// 512 characters that skips the stack buffer or a buffer kept from the pool shows only in the pool's events.
+    /// Counting the text before writing it rents nothing more, so this test does not see how many passes a call
+    /// makes. The first four cases sit on either side of the 128- and 512-character buffers. The last two are element
+    /// strings of 510 and 852 characters, and only the first has text that fits.
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    [MethodDataSource(nameof(RentCases))]
+    public async Task StringForm_RentsOnlyForTextLongerThanItsStackBuffer((string ElementString, int TextLength, int Rents) c)
+    {
+        await Assert.That(Gs1ElementString.TryGetToHriLength(c.ElementString, out var length, out _)).IsTrue();
+        await Assert.That(length).IsEqualTo(c.TextLength);
+
+        using var rents = new CharPoolRents();
+        var formatted = rents.During(() => Gs1ElementString.TryToHri(c.ElementString, out _, out _), out var formattedAnswer);
+        var read = rents.During(() => Gs1ElementString.TryRead(c.ElementString, Fnc1Mode.FirstPosition, out _, out _), out var readAnswer);
+        await Assert.That((formattedAnswer, readAnswer)).IsEqualTo((true, true));
+        await Assert.That((formatted, read)).IsEqualTo(((c.Rents, c.Rents), (c.Rents, c.Rents)));
+    }
+
+    /// <summary>
+    /// The elements before the one the splitter cannot read give text longer than the 512-character stack buffer. An
+    /// element string under 512 characters fills the stack buffer before it is refused, and one over 512 is counted
+    /// first. Either way the string form gives the length twin's error and no text.
+    /// </summary>
+    [Test]
+    [Arguments(300)]
+    [Arguments(600)]
+    public async Task StringForm_RefusedAfterTextLongerThanTheStackBuffer(int parentheses)
+    {
+        var readable = "0109520123456788" + "91" + new string('(', parentheses);
+        var elementString = readable + "\u001D" + "89ABC";
+        await Assert.That(Gs1ElementString.TryGetToHriLength(readable, out var readableLength, out _)).IsTrue();
+        await Assert.That(readableLength).IsGreaterThan(512);
+        await Assert.That(elementString.Length < 512).IsEqualTo(parentheses < 400);
+        await Assert.That(Gs1ElementString.TryGetToHriLength(elementString, out _, out var twin)).IsFalse();
+        await Assert.That(twin.Kind).IsEqualTo(Gs1ErrorKind.UnknownAi);
+        await Assert.That(Gs1ElementString.TryToHri(elementString, out var hri, out var error)).IsFalse();
+        await Assert.That((hri, error)).IsEqualTo(("", twin));
+        await Assert.That(Gs1ElementString.TryRead(elementString, Fnc1Mode.FirstPosition, out var read, out error)).IsFalse();
+        await Assert.That((read, error)).IsEqualTo(("", twin));
+    }
+
     /// <summary>A refused input yields the error, not a length or a write, from every form.</summary>
     [Test]
     public async Task EveryForm_RefusesTheSameInputTheSameWay()

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace FeatherQR.Gs1.Internals;
 
@@ -21,22 +22,39 @@ internal static class Gs1Hri
     /// <summary>Above this many characters a scratch buffer is rented instead of taken from the stack.</summary>
     private const int StackLimit = 512;
 
+    /// <summary>The stack buffer for the (AI) text of an element string of at most half this many characters.</summary>
+    private const int SmallStackLimit = 128;
+
     // ----- element string -> (AI) text -----
 
     public static bool TryToHri(ReadOnlySpan<char> elementString, out string hri, out Gs1Error error)
     {
+        // Format writes what fits and counts the whole text, so text that fits the stack buffer needs no second
+        // pass. An element string of StackLimit characters or more never has text that fits, because each element's
+        // parentheses outweigh its separator. Counting it first saves a write that would be thrown away. The text is
+        // at most twice as long as its element string, so a short one fits the small buffer, which costs less to zero.
         hri = "";
-        if (!Format(elementString, Span<char>.Empty, out var length, out error))
+        int length;
+        if (elementString.Length < StackLimit)
+        {
+            Span<char> buffer = elementString.Length <= SmallStackLimit / 2 ? stackalloc char[SmallStackLimit] : stackalloc char[StackLimit];
+            if (!Format(elementString, buffer, out length, out error))
+                return false;
+            if (length <= buffer.Length)
+            {
+                hri = buffer.Slice(0, length).ToString();
+                return true;
+            }
+        }
+        else if (!Format(elementString, Span<char>.Empty, out length, out error))
+        {
             return false;
-        if (length == 0)
-            return true;
+        }
 
-        char[]? rented = null;
-        Span<char> buffer = length <= StackLimit ? stackalloc char[StackLimit] : (rented = ArrayPool<char>.Shared.Rent(length));
-        Format(elementString, buffer, out _, out _);
-        hri = buffer.Slice(0, length).ToString();
-        if (rented is not null)
-            ArrayPool<char>.Shared.Return(rented);
+        var rented = ArrayPool<char>.Shared.Rent(length);
+        Format(elementString, rented, out _, out _);
+        hri = new string(rented, 0, length);
+        ArrayPool<char>.Shared.Return(rented);
         return true;
     }
 
@@ -62,6 +80,13 @@ internal static class Gs1Hri
     /// same pass serves the length twin and the span form. <c>false</c> with the error, and no length, at the
     /// first element the splitter cannot read.
     /// </summary>
+    /// <remarks>
+    /// NoInlining is load-bearing. The span form and the length twin reach this pass through two short members. A
+    /// small caller can inline them, this pass and the splitter, and then run out of inline budget before
+    /// <see cref="Put"/>. Put then stays a call for every character. Compiled on its own, the pass inlines its
+    /// writes whatever calls it.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool Format(ReadOnlySpan<char> elementString, Span<char> destination, out int length, out Gs1Error error)
     {
         length = 0;

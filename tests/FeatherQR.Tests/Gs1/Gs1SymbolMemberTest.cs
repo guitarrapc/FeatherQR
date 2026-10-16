@@ -1,5 +1,3 @@
-using System.Buffers;
-using System.Diagnostics.Tracing;
 using FeatherQR.Gs1;
 using FeatherQR.Gs1.Internals;
 
@@ -466,47 +464,16 @@ public class Gs1SymbolMemberTest
         await Assert.That(rmqrLongest.Length).IsGreaterThan(Gs1SymbolData.StackLimit);
 
         using var rents = new CharPoolRents();
-        var qrChecked = rents.During(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(qrLongest, QREccLevel.L, out _), out var qrCheckedAnswer);
-        var qrPast = rents.During(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(qrLongest + "1", QREccLevel.L, out _), out var qrPastAnswer);
-        var rmqrChecked = rents.During(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(rmqrLongest, RmQREccLevel.M, out _), out var rmqrCheckedAnswer);
-        var rmqrPast = rents.During(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(rmqrLongest + "1", RmQREccLevel.M, out _), out var rmqrPastAnswer);
+        var qrChecked = rents.During(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(qrLongest, QREccLevel.L, out _), out var qrCheckedAnswer).Rented;
+        var qrPast = rents.During(() => QRCodeGenerator.TryGetRequiredBufferSizeGs1(qrLongest + "1", QREccLevel.L, out _), out var qrPastAnswer).Rented;
+        var rmqrChecked = rents.During(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(rmqrLongest, RmQREccLevel.M, out _), out var rmqrCheckedAnswer).Rented;
+        var rmqrPast = rents.During(() => RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(rmqrLongest + "1", RmQREccLevel.M, out _), out var rmqrPastAnswer).Rented;
 
         await Assert.That(qrCheckedAnswer || qrPastAnswer || rmqrCheckedAnswer || rmqrPastAnswer).IsFalse();
         await Assert.That(qrChecked).IsGreaterThan(0).Because("the checks build the element string of (AI) text in a pooled buffer");
         await Assert.That(qrPast).IsEqualTo(0);
         await Assert.That(rmqrChecked).IsGreaterThan(0).Because("the checks build the element string of (AI) text in a pooled buffer");
         await Assert.That(rmqrPast).IsEqualTo(0);
-    }
-
-    /// <summary>Counts the arrays the shared pool of characters hands out to the thread that made the listener.</summary>
-    private sealed class CharPoolRents : EventListener
-    {
-        // Set before the base constructor runs, which already reports the event sources that exist.
-        private readonly int _thread = Environment.CurrentManagedThreadId;
-        private readonly int _pool = ArrayPool<char>.Shared.GetHashCode();
-        private int _count;
-
-        /// <summary>The rents a call makes, and its answer.</summary>
-        public int During(Func<bool> call, out bool answer)
-        {
-            Volatile.Write(ref _count, 0);
-            answer = call();
-            return Volatile.Read(ref _count);
-        }
-
-        protected override void OnEventSourceCreated(EventSource eventSource)
-        {
-            if (eventSource.Name == "System.Buffers.ArrayPoolEventSource")
-                EnableEvents(eventSource, EventLevel.Verbose);
-        }
-
-        protected override void OnEventWritten(EventWrittenEventArgs eventData)
-        {
-            // A rent's payload is the array's id, its length, the pool's id and the bucket.
-            if (eventData.EventName == "BufferRented" && Environment.CurrentManagedThreadId == _thread
-                && eventData.Payload is { Count: > 2 } payload && Convert.ToInt32(payload[2]) == _pool)
-                Interlocked.Increment(ref _count);
-        }
     }
 
     /// <summary>
