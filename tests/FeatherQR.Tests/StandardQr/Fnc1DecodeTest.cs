@@ -397,7 +397,7 @@ public class Fnc1DecodeTest
         await Assert.That(text).IsEqualTo("ｱｲｳ" + Gs + "ｴ");
     }
 
-    /// <summary>Without FNC1 the byte 0x1D is a control character like any other, and the segment stays ISO-8859-1.</summary>
+    /// <summary>Without FNC1 the byte 0x1D is a C0 control character other than tab, CR and LF, which marks binary data, so the segment stays ISO-8859-1.</summary>
     [Test]
     public async Task UndeclaredShiftJis_WithByte1DButNoFnc1_IsReadAsIso8859_1()
     {

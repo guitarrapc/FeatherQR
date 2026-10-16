@@ -90,8 +90,8 @@ public sealed record Gs1CodeGlyphXVerdict
 
 /// <summary>
 /// libzint's verdict on bracketed input through its <c>gs1</c> option (it refuses any other form). It refuses an
-/// unknown or malformed AI, a wrong length, an empty field and a control character, and writes the symbol for every
-/// other defect its linters find, reporting a non-compliance warning where the wrapper passes one on.
+/// unknown or malformed AI other than <c>(010)</c>, a wrong length, an empty field and a control character, and writes
+/// the symbol for every other defect its linters find, reporting a non-compliance warning where the wrapper passes one on.
 /// </summary>
 public sealed record Gs1LibzintVerdict
 {

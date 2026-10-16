@@ -301,8 +301,9 @@ public class Fnc1RmQRDecodeTest
     }
 
     /// <summary>
-    /// Without FNC1 the byte 0x1D is a C0 control character like any other, so the segment stays ISO-8859-1. Only the missing
-    /// indicator sets this stream apart from the one <see cref="UndeclaredShiftJisWithTheSeparator_IsReadAsShiftJis"/> reads as Shift_JIS.
+    /// Without FNC1 the byte 0x1D is a C0 control character other than tab, CR and LF, which marks binary data, so the segment
+    /// stays ISO-8859-1. Only the missing indicator sets this stream apart from the one
+    /// <see cref="UndeclaredShiftJisWithTheSeparator_IsReadAsShiftJis"/> reads as Shift_JIS.
     /// </summary>
     [Test]
     public async Task UndeclaredShiftJisWithByte1DButNoFnc1_IsReadAsIso8859_1()
