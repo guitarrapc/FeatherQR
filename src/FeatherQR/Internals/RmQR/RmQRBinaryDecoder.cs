@@ -93,7 +93,7 @@ internal static class RmQRBinaryDecoder
                                 default:
                                     // Data codewords top out at 152 bytes (R17x139-M).
                                     rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
-                                    status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, charset, rentedBytes, destination, ref charsWritten);
+                                    status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, charset, fnc1.IsActive, rentedBytes, destination, ref charsWritten);
                                     break;
                             }
                             if (status != DecodeStatus.Success)

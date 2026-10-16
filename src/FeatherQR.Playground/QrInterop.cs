@@ -117,7 +117,7 @@ public static partial class QrInterop
 
     /// <summary>
     /// Decodes a QR code from encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string: <c>{"ok":true,"text":"...","qrVersion":N,"ecc":"M","maskPattern":N,"errorsCorrected":N,"totalMs":N,"corners":[x,y,...],"imageWidth":N,"imageHeight":N}</c> on success, <c>{"ok":false,"status":"NotDetected","totalMs":N,"imageWidth":N,"imageHeight":N}</c> when no QR decodes, or <c>{"error":"..."}</c> on unexpected failure.
-    /// A Standard QR or rMQR symbol with FNC1 adds <c>"fnc1":"first"</c> (GS1 data) or <c>"fnc1":"second"</c> with <c>"applicationIndicator":N</c> (the 8-bit codeword), and its text is the element string with each separator as U+001D.
+    /// A Standard QR or rMQR symbol with FNC1 adds <c>"fnc1":"first"</c> (GS1 data) or <c>"fnc1":"second"</c> with <c>"applicationIndicator":N</c> (the 8-bit codeword), and its text is the data with each separator as U+001D.
     /// GS1 data, an element string in first position or a Digital Link URI without FNC1, adds <c>"gs1Hri"</c> and <c>"gs1Elements"</c>, and <c>"gs1Check"</c> when its element string fails the checks. Text in first position that does not read as GS1 data adds <c>"gs1Error"</c>.
     /// <para>
     /// <c>"corners"</c> is the located symbol as eight numbers (top-left, top-right, bottom-right, bottom-left, each x then y) in the decoded image's pixel space, which <c>"imageWidth"</c> and <c>"imageHeight"</c> describe so the page can scale the overlay to whatever size it displays the image at. That space is the file's <em>stored</em> pixels: <c>"orientation"</c> carries the EXIF tag (1-8) the decoder ignored, and the page must map the corners through it, because every browser decode path applies the tag to the picture it shows.
@@ -528,7 +528,7 @@ public static partial class QrInterop
     };
 
     /// <summary>
-    /// Second position from the indicator as a reader transmits it: one or two digits for 00-99, or one letter.
+    /// Second position from the indicator: 00 to 99 in one or two digits, or one letter.
     /// </summary>
     private static Fnc1Mode ParseApplicationIndicator(string? indicator)
     {
@@ -537,7 +537,7 @@ public static partial class QrInterop
             return Fnc1Mode.SecondPosition(int.Parse(text, CultureInfo.InvariantCulture));
         if (text.Length == 1 && char.IsAsciiLetter(text[0]))
             return Fnc1Mode.SecondPosition(text[0]);
-        throw new ArgumentException($"The application indicator must be two digits 00-99 or one letter A-Z or a-z, but was '{text}'.");
+        throw new ArgumentException($"The application indicator must be a number 00-99 or one letter A-Z or a-z, but was '{text}'.");
     }
 
     /// <summary>Micro QR has no FNC1 mode. The page hides the control and sends none, so another value is a malformed request rather than one to ignore.</summary>

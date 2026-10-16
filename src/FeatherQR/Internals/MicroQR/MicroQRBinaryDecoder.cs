@@ -122,7 +122,7 @@ internal static class MicroQRBinaryDecoder
                         {
                             // Micro QR data codewords top out at 16 bytes (M4-L).
                             rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
-                            var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Unspecified, rentedBytes, destination, ref charsWritten);
+                            var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Unspecified, fnc1: false, rentedBytes, destination, ref charsWritten);
                             if (status != DecodeStatus.Success)
                                 return status;
                             break;

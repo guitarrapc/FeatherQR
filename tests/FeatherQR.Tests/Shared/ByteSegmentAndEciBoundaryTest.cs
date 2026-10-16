@@ -33,7 +33,7 @@ public class ByteSegmentAndEciBoundaryTest
         var reader = new BitReader(payload);
         var destination = new char[destinationLength];
         var charsWritten = 0;
-        var status = SegmentDecoders.DecodeBytePayload(ref reader, payload.Length * 8, payload.Length, charset, new byte[64], destination, ref charsWritten);
+        var status = SegmentDecoders.DecodeBytePayload(ref reader, payload.Length * 8, payload.Length, charset, fnc1: false, new byte[64], destination, ref charsWritten);
         return (status, new string(destination, 0, charsWritten));
     }
 

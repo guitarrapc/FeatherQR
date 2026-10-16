@@ -73,7 +73,7 @@ DL URI ── FromDigitalLink ──> element string (GS as U+001D) ── ToDig
 
 | Out of scope | Why | Revisit when |
 |---|---|---|
-| Scanner transmission strings (a `]Q3` prefix, keyboard-wedge forms) | The decoder reports the FNC1 mode instead, and an AIM symbology identifier follows from the mode and the ECI (the FNC1 and GS1 row of the scope table in [qrcode-symbologies.md](qrcode-symbologies.md)) | A request for an AIM symbology identifier member |
+| Scanner transmission strings (a `]Q3` prefix, keyboard-wedge forms) | The decoder reports the FNC1 mode instead, and an AIM symbology identifier follows from the mode and from whether the reader transmits under the ECI protocol (the FNC1 and GS1 row of the scope table in [qrcode-symbologies.md](qrcode-symbologies.md)) | A request for an AIM symbology identifier member |
 | Data titles and non-HRI text (`GTIN`, `BEST BEFORE`) | They would add the titles to the table, and the General Specifications make them optional (4.14) | A caller's request |
 | Compressed Digital Link URIs, resolvers and `linkType` | The legacy compression is frozen at Digital Link 1.1.4 and superseded by a separate EPC binary standard, and retail requires the uncompressed form. A compressed URI is refused as such | A caller's request to read compressed URIs |
 | A switch that turns the pairing check off | Members that build run every check. Five of the 21 General Specifications examples in the corpus show an attribute without its key, as a second symbol on the item would, and they are refused | A caller who needs to build data split across carriers |

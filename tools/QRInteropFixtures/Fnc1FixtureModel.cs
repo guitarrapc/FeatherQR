@@ -15,8 +15,8 @@ public enum Fnc1Position
 /// <summary>
 /// Input definition of one FNC1 corpus case. Each writer has its own case list, because the
 /// writers take different input forms (libzint and CodeGlyphX's rMQR encoder take bracketed GS1
-/// AI syntax and validate it, the others take the element string with U+001D separators) and
-/// write different modes (only CodeGlyphX writes second position, nothing writes rMQR second position).
+/// AI syntax, the others take the data itself with U+001D separators) and write different modes
+/// (of these writers only CodeGlyphX writes second position, and none writes rMQR second position).
 /// </summary>
 /// <param name="Id">Case name, and the file stem of the three fixture files.</param>
 /// <param name="Input">The text handed to the writer, in the writer's own input form.</param>
@@ -25,7 +25,7 @@ public enum Fnc1Position
 /// <param name="Position">First position (GS1) or second position (an AIM application indicator).</param>
 /// <param name="ApplicationIndicator">Second position only: the 8-bit codeword as on the wire, 0-99 as its value or a letter's ASCII value plus 100.</param>
 /// <param name="ExpectedText">
-/// The element string the symbol means, with U+001D separators and without any indicator: what the
+/// The data the symbol means, an element string in first position, with U+001D separators and without any indicator: what the
 /// reader must return, and what this library's decoder has to reproduce. The sanity gate checks the
 /// zxing-cpp reading against it. Where a writer defect makes the symbol mean something other than its
 /// input (see the fixture spec), this is the standard's reading of the symbol as written, and the

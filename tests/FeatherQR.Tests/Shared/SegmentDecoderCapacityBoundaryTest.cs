@@ -70,7 +70,7 @@ public class SegmentDecoderCapacityBoundaryTest
         charsWritten = 0;
         return mode switch
         {
-            "Byte" => SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Iso8859_1, new byte[64], destination, ref charsWritten),
+            "Byte" => SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Iso8859_1, fnc1: false, new byte[64], destination, ref charsWritten),
             "Kanji" => SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten),
             _ when mode.StartsWith("Alphanumeric", StringComparison.Ordinal)
                 => SegmentDecoders.DecodeAlphanumericPayload(ref reader, totalBits, count, destination, ref charsWritten),
@@ -195,7 +195,7 @@ public class SegmentDecoderCapacityBoundaryTest
         var destination = new char[64];
         var charsWritten = 0;
 
-        var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits: 24, count: 3, ByteSegmentCharset.Unspecified, new byte[8], destination, ref charsWritten);
+        var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits: 24, count: 3, ByteSegmentCharset.Unspecified, fnc1: false, new byte[8], destination, ref charsWritten);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(charsWritten).IsEqualTo(0);

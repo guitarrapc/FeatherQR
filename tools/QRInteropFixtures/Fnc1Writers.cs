@@ -88,7 +88,8 @@ public static class Fnc1Writers
 
     /// <summary>
     /// zxing-cpp over a clean render, in <see cref="TextMode.Plain"/>: the default (HRI) mode re-formats GS1 data
-    /// as <c>(AI)</c> text, and Plain returns the element string with GS as 0x1D, the form the fixtures hold.
+    /// as <c>(AI)</c> text, and Plain returns the data with GS as 0x1D, the form the fixtures hold (in second position after the application
+    /// indicator, which the gate takes off).
     /// </summary>
     public static Barcode[] ReadCpp(ModuleMatrix matrix, BarcodeFormat format, int quietZone, int pixelsPerModule = 4)
     {

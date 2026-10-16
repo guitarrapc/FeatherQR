@@ -50,7 +50,7 @@ public static partial class QRCodeGenerator
                     $"Required: {analysis.EciMode.GetStandardQrHeaderBits() + fnc1HeaderBits + ModeIndicatorBits} header bits + {analysis.DataLength} data units, " +
                     $"Mode: {analysis.EncodingMode}, ECC: {eccLevel}, ECI: {analysis.EciMode}, FNC1: {fnc1HeaderBits} bits");
             }
-            throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, in analysis), nameof(options));
+            throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, in analysis, fnc1HeaderBits), nameof(options));
         }
 
         while (options.BoostEccLevel && eccLevel < QREccLevel.H
@@ -67,7 +67,7 @@ public static partial class QRCodeGenerator
 
     /// <summary>
     /// <see cref="TryGetVersionInRange"/> with the FNC1 indicator's bits (4 in first position, 12 in second, 0 for none)
-    /// in the header. A copy rather than a parameter on the original, which is inlined into the default route.
+    /// in the header. A copy rather than a parameter on the original, so the route without FNC1 keeps its instructions.
     /// </summary>
     internal static bool TryGetVersionInRangeFnc1(int length, EncodingMode encoding, QREccLevel eccLevel, EciMode eciMode, bool utf8BOM, int fnc1HeaderBits, int minVersion, int maxVersion, out int selectedVersion)
     {

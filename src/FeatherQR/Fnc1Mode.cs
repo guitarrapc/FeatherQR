@@ -1,7 +1,9 @@
+using System.Text;
+
 namespace FeatherQR;
 
 /// <summary>
-/// The FNC1 mode a Standard QR or rMQR symbol carries (ISO/IEC 18004 6.4.8, ISO/IEC 23941 7.4.8): written through <see cref="QRCodeGeneratorOptions.Fnc1"/> and <see cref="RmQRCodeGeneratorOptions.Fnc1"/>, read on <see cref="QRCodeDecodeInfo.Fnc1"/> and <see cref="RmQRCodeDecodeInfo.Fnc1"/>.
+/// The FNC1 mode a Standard QR or rMQR symbol carries (ISO/IEC 18004:2006 6.4.8, ISO/IEC 23941 7.4.8): written through <see cref="QRCodeGeneratorOptions.Fnc1"/> and <see cref="RmQRCodeGeneratorOptions.Fnc1"/>, read on <see cref="QRCodeDecodeInfo.Fnc1"/> and <see cref="RmQRCodeDecodeInfo.Fnc1"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -11,11 +13,11 @@ namespace FeatherQR;
 /// </para>
 /// <para>
 /// The mode changes how the text reads. In an Alphanumeric segment a lone <c>%</c> is the separator and comes back as U+001D, and <c>%%</c> is one literal <c>%</c>, read left to right within the segment. A Byte segment carries the separator as the byte 0x1D.
-/// The encoder takes the text with U+001D as the separator and writes it under that rule, so the text given to the generator is the text the decoder returns. The decoded text is the element string alone. It holds neither a symbology identifier nor the application indicator.
+/// The encoder takes the text with U+001D as the separator and writes it under that rule, so the text given to the generator is the text the decoder returns. The decoded text is the data alone, the element string in first position. It holds neither a symbology identifier nor the application indicator.
 /// </para>
 /// <para>
 /// A reader transmits such a symbol as the AIM symbology identifier, then in second position the application indicator as two digits or one letter, then the data.
-/// The identifier is <c>]Q3</c> for first position and <c>]Q5</c> for second, one higher (<c>]Q4</c>, <c>]Q6</c>) when the reader transmits under the ECI protocol, which readers apply when the symbol carries an ECI header, and <c>]Q1</c> or <c>]Q2</c> without FNC1.
+/// The identifier is <c>]Q3</c> for first position and <c>]Q5</c> for second, one higher (<c>]Q4</c>, <c>]Q6</c>) when the reader transmits under the ECI protocol (ISO/IEC 18004:2006 Annex F), and <c>]Q1</c> or <c>]Q2</c> without FNC1.
 /// The indicator <c>n</c> is written <c>n &lt; 100 ? n.ToString("D2") : ((char)(n - 100)).ToString()</c>.
 /// </para>
 /// <para>
@@ -67,7 +69,7 @@ public readonly record struct Fnc1Mode
     /// <summary>Second position from the indicator as on the wire, a value <see cref="IsValidApplicationIndicator"/> accepts: the decoders' entry.</summary>
     internal static Fnc1Mode FromCodeword(int applicationIndicator) => new(Second, (byte)applicationIndicator);
 
-    /// <summary>The ranges of ISO/IEC 18004 6.4.8.2: 00-99 as a number, 165-190 for A-Z and 197-222 for a-z.</summary>
+    /// <summary>The ranges of ISO/IEC 18004:2006 6.4.8.2: 00-99 as a number, 165-190 for A-Z and 197-222 for a-z.</summary>
     internal static bool IsValidApplicationIndicator(int codeword) => codeword is (>= 0 and <= 99) or (>= 165 and <= 190) or (>= 197 and <= 222);
 
     /// <summary>Whether either indicator is set, so the <c>%</c> rule applies to the Alphanumeric segments.</summary>
@@ -98,4 +100,21 @@ public readonly record struct Fnc1Mode
     /// <c>00</c> is the value 0, so a missing indicator is <c>null</c> rather than a number.
     /// </summary>
     public int? ApplicationIndicator => _position == Second ? _applicationIndicator : null;
+
+    // The letter goes beside a letter's codeword, since 165 alone does not say A.
+#pragma warning disable IDE0051 // the generated ToString calls it, but the analyzer does not see that
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("IsFirstPosition = ").Append(IsFirstPosition)
+            .Append(", IsSecondPosition = ").Append(IsSecondPosition)
+            .Append(", ApplicationIndicator = ");
+        if (_position == Second)
+        {
+            builder.Append(_applicationIndicator);
+            if (_applicationIndicator >= 100)
+                builder.Append(" (").Append((char)(_applicationIndicator - 100)).Append(')');
+        }
+        return true;
+    }
+#pragma warning restore IDE0051
 }

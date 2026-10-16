@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Decodes the committed FNC1 corpus (Fixtures/StandardQrFnc1/ from three writer lineages, Fixtures/RmQrFnc1/
-/// from two) with this library's decoders: every symbol must decode to the element string the zxing-cpp gate
+/// from two) with this library's decoders: every symbol must decode to the text the zxing-cpp gate
 /// recorded, with the separator as U+001D and nothing else, and report the mode and application indicator the
 /// gate recorded on <see cref="QRCodeDecodeInfo.Fnc1"/> or <see cref="RmQRCodeDecodeInfo.Fnc1"/>. The corpus
 /// tests pin the shapes a regeneration could silently drop, and the photograph test reads the GS1 symbol of the
@@ -101,7 +101,7 @@ public class Fnc1FixtureTest
 
     [Test]
     [MethodDataSource(nameof(StandardQrIds))]
-    public async Task Decode_StandardQrMatrixFixture_ReportsTheModeAndTheElementString(string fixtureId)
+    public async Task Decode_StandardQrMatrixFixture_ReportsTheModeAndTheText(string fixtureId)
     {
         var fixture = FixtureLoader.Load(StandardQr, fixtureId);
         var manifest = fixture.Manifest;
@@ -163,7 +163,7 @@ public class Fnc1FixtureTest
 
     [Test]
     [MethodDataSource(nameof(StandardQrIds))]
-    public async Task Decode_StandardQrPngFixture_ReportsTheModeAndTheElementString(string fixtureId)
+    public async Task Decode_StandardQrPngFixture_ReportsTheModeAndTheText(string fixtureId)
     {
         var fixture = FixtureLoader.Load(StandardQr, fixtureId);
         var manifest = fixture.Manifest;
@@ -230,9 +230,9 @@ public class Fnc1FixtureTest
     }
 #endif
 
-    // rMQR: both writers that produce rMQR FNC1 symbols write first position only, and nothing writes second.
+    // rMQR: both writers of the corpus that produce rMQR FNC1 symbols write first position only, and neither writes second.
 
-    /// <summary>Two lineages, first position only (no writer produces rMQR second position), an ECI case, the separator carried, and a bracketed input recorded.</summary>
+    /// <summary>Two lineages, first position only (no writer of the corpus produces rMQR second position), an ECI case, the separator carried, and a bracketed input recorded.</summary>
     [Test]
     public async Task RmQrCorpus_HasEveryShapeTheContractNeeds()
     {
@@ -263,7 +263,7 @@ public class Fnc1FixtureTest
 
     [Test]
     [MethodDataSource(nameof(RmQrIds))]
-    public async Task Decode_RmQrMatrixFixture_ReportsTheModeAndTheElementString(string fixtureId)
+    public async Task Decode_RmQrMatrixFixture_ReportsTheModeAndTheText(string fixtureId)
     {
         var fixture = FixtureLoader.Load(RmQr, fixtureId);
         var manifest = fixture.Manifest;
@@ -317,7 +317,7 @@ public class Fnc1FixtureTest
 
     [Test]
     [MethodDataSource(nameof(RmQrIds))]
-    public async Task Decode_RmQrPngFixture_ReportsTheModeAndTheElementString(string fixtureId)
+    public async Task Decode_RmQrPngFixture_ReportsTheModeAndTheText(string fixtureId)
     {
         var fixture = FixtureLoader.Load(RmQr, fixtureId);
         var manifest = fixture.Manifest;

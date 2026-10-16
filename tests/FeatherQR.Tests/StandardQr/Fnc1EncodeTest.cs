@@ -1,3 +1,4 @@
+using FeatherQR.Internals;
 using TUnit.Assertions.Enums;
 
 namespace FeatherQR.Tests;
@@ -22,13 +23,13 @@ public class Fnc1EncodeTest
     [Test]
     public async Task IsoExample_FirstPosition_Optimal_WritesTheStandardsStream()
     {
-        // Level M: the split's 182 bits fit version 2-M (224) where the single Alphanumeric stream (226) does not, so Optimal
+        // Level M: the split's 178 bits fit version 2-M (224) where the single Alphanumeric stream's 226 do not, so Optimal
         // splits. At level L both fit version 2 and Optimal emits the single-mode stream, as its contract says.
         var text = "01049123451234591597033130128" + Gs + "10ABC123";
         var data = QRCodeGenerator.Create(text, QREccLevel.M, FirstOptimal);
         var (decoded, info, codewords) = Read(data);
 
-        await Assert.That(info.Version).IsEqualTo(2).Because("182 data bits, over version 1-M's 128 and within 2-M's 224");
+        await Assert.That(info.Version).IsEqualTo(2).Because("178 data bits and the terminator, over version 1-M's 128 and within 2-M's 224");
         await Assert.That(Convert.ToHexString(codewords, 0, 23)).IsEqualTo("510740A7ACEA80159E4FCA52D2D38409D5E028FD82F0C0")
             .Because("0101 FNC1, 0001 Numeric, the count 29, nine 10-bit and one 7-bit group, 0010 Alphanumeric, the count 9, four 11-bit pairs and one 6-bit character, 0000");
         await Assert.That(decoded).IsEqualTo(text);
@@ -57,6 +58,7 @@ public class Fnc1EncodeTest
     [Arguments(Gtin + "10AB%CD" + Gs + "17231120", "Alphanumeric", true)]
     [Arguments("AB%%CD", "Alphanumeric", true)]
     [Arguments("10AB%" + Gs + "CD", "Alphanumeric", true)]
+    [Arguments("087408145020" + Gs + "38" + Gs + "055%802919575", "Alphanumeric", true)] // two separators apart, then a literal %: neither pair
     [Arguments("%", "Alphanumeric", true)]
     [Arguments(Gs, "Alphanumeric", true)]
     [Arguments(Gtin + "101234567p" + Gs + "17231120", "Byte", false)]
@@ -161,6 +163,48 @@ public class Fnc1EncodeTest
         await Assert.That(shape.DataModes).IsEquivalentTo(["Kanji"], CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// A charset the caller names is written as named, under FNC1 as without. Japanese text that Kanji mode could carry stays UTF-8
+    /// behind its ECI header when UTF-8 is named, and when a byte order mark is asked for, which only a Byte segment has a place for.
+    /// Sizing agrees with the symbol written.
+    /// </summary>
+    [Test]
+    [Arguments(EciMode.Utf8, false, QRSegmentation.Single)]
+    [Arguments(EciMode.Utf8, false, QRSegmentation.Optimal)]
+    [Arguments(EciMode.Default, true, QRSegmentation.Single)]
+    public async Task AllowKanji_WithANamedCharsetOrAByteOrderMark_WritesUtf8(EciMode eci, bool bom, QRSegmentation segmentation)
+    {
+        var text = "日本語のテキスト";
+        var options = new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition, AllowKanji = true, EciMode = eci, Utf8Bom = bom, Segmentation = segmentation, QuietZoneSize = 0 };
+        var data = QRCodeGenerator.Create(text, QREccLevel.M, options);
+        var (decoded, info, _) = Read(data);
+        var shape = Shape(data, info);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(shape.Headers).IsEquivalentTo(["ECI:26", "FNC1First"], CollectionOrdering.Matching);
+        await Assert.That(shape.DataModes).IsEquivalentTo(["Byte"], CollectionOrdering.Matching);
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var size, options)).IsTrue();
+        await Assert.That(size.Version).IsEqualTo(data.Version);
+    }
+
+    /// <summary>
+    /// The charset under FNC1 follows the content as it does without: U+007F is ASCII and takes no ECI header, U+00FF is the last
+    /// character ISO-8859-1 holds and takes ECI 3, and U+0100 is past it and takes UTF-8.
+    /// </summary>
+    [Test]
+    [Arguments("AB\u007F12", "")]
+    [Arguments("ABÿ12", "ECI:3")]
+    [Arguments("ABĀ12", "ECI:26")]
+    public async Task Charset_AtTheEdgesOfAsciiAndIso8859_1_FollowsTheContent(string text, string eciHeader)
+    {
+        var data = QRCodeGenerator.Create(text, QREccLevel.M, First);
+        var (decoded, info, _) = Read(data);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        string[] expected = eciHeader.Length == 0 ? ["FNC1First"] : [eciHeader, "FNC1First"];
+        await Assert.That(Shape(data, info).Headers).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
     /// <summary>The standard's header order: ECI, then FNC1, then the data. Non-ASCII text takes UTF-8 behind the ECI header, as it does without FNC1.</summary>
     [Test]
     [Arguments(Gtin + "10é" + Gs + "17231120", EciMode.Default, "ECI:3")]
@@ -261,6 +305,83 @@ public class Fnc1EncodeTest
         await Assert.That(Shape(optimal, info).DataModes).IsEquivalentTo(["Numeric", "Alphanumeric", "Numeric"], CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// The Alphanumeric run opens at a literal <c>%</c> and holds a second one, the two places a literal is priced. A plan
+    /// priced wrong is dropped for the single-mode stream, which reads back too, so the modes show the plan was kept.
+    /// </summary>
+    [Test]
+    public async Task Optimal_AlphanumericRunWithLiteralPercents_KeepsThePlan()
+    {
+        var digits = string.Concat(Enumerable.Repeat("0123456789", 5));
+        var text = digits + "%AB%CD" + digits;
+        var single = QRCodeGenerator.Create(text, QREccLevel.M, First);
+        var optimal = QRCodeGenerator.Create(text, QREccLevel.M, FirstOptimal);
+        var (decoded, info, _) = Read(optimal);
+        var shape = Shape(optimal, info);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(optimal.Version).IsLessThan(single.Version);
+        await Assert.That(shape.DataModes).IsEquivalentTo(["Numeric", "Alphanumeric", "Numeric"], CollectionOrdering.Matching);
+        await Assert.That(shape.AlphanumericHasPercent).IsTrue();
+    }
+
+    /// <summary>
+    /// Optimal picks the smallest version a plan fits, held against each smaller version in the range by a fixed-version sizing. Each text
+    /// leads the planner where a cost could go wrong: the indicator's bits in the version scan, separators beside Byte text in the scan's
+    /// lower bound, separators and literal percents priced as Alphanumeric units, and a literal percent among separators in a run's cost.
+    /// </summary>
+    [Test]
+    [Arguments("Gc38061687817646030977FERLGYPAILQZJCLERCRKSFCLQVVLFICMQUEc7ZZDf", 90, QREccLevel.Q, 3, 7, EciMode.Default, 5)]
+    [Arguments("A\u001DA\u001DA\u001DA\u001DA\u001DA\u001DA\u001DA\u001DA\u001Dabc", -1, QREccLevel.L, 1, 40, EciMode.Default, 1)]
+    [Arguments("\u001D\u001D\u001D\u001DAA\u001DA\u001DAAA\u001DAAAA\u001DA\u001DAAAAAAAA\u001D", -1, QREccLevel.H, 1, 8, EciMode.Iso8859_1, 3)]
+    [Arguments("%%00%%", 'c' + 100, QREccLevel.H, 1, 40, EciMode.Default, 1)]
+    [Arguments("1 Z\u001D\u001DA1Z\u001DZ1%Z\u001D 10", 'g' + 100, QREccLevel.L, 1, 40, EciMode.Default, 1)]
+    public async Task Optimal_PicksTheSmallestVersionAPlanFits(string text, int indicator, QREccLevel level, int min, int max, EciMode eci, int expected)
+    {
+        var mode = indicator < 0 ? Fnc1Mode.FirstPosition : indicator < 100 ? Fnc1Mode.SecondPosition(indicator) : Fnc1Mode.SecondPosition((char)(indicator - 100));
+        var options = new QRCodeGeneratorOptions { Fnc1 = mode, EciMode = eci, Version = QRVersionRange.Between(min, max), Segmentation = QRSegmentation.Optimal, QuietZoneSize = 0 };
+        var data = QRCodeGenerator.Create(text, level, options);
+        var (decoded, info, _) = Read(data);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(info.Fnc1).IsEqualTo(mode);
+        await Assert.That(data.Version).IsEqualTo(expected);
+        for (var version = min; version < expected; version++)
+            await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(text, level, out _, options with { Version = QRVersionRange.Exactly(version) })).IsFalse().Because($"version {version} would hold a plan");
+    }
+
+    /// <summary>
+    /// A U+FEFF inside the content stays in its Byte run under Optimal, as it does without FNC1, so the digits before it keep their
+    /// Numeric run and the symbol is the plan's version, smaller than the one Byte run Single writes.
+    /// </summary>
+    [Test]
+    public async Task Optimal_AByteOrderMarkInsideTheContent_StaysInItsByteRun()
+    {
+        var text = new string('1', 40) + "\uFEFF" + new string('a', 22);
+        var data = QRCodeGenerator.Create(text, QREccLevel.M, FirstOptimal with { EciMode = EciMode.Utf8 });
+        var (decoded, info, _) = Read(data);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(Shape(data, info).DataModes).IsEquivalentTo(["Numeric", "Byte"], CollectionOrdering.Matching);
+        await Assert.That(data.Version).IsLessThan(QRCodeGenerator.Create(text, QREccLevel.M, First with { EciMode = EciMode.Utf8 }).Version);
+    }
+
+    /// <summary>The planned stream keeps the standard's header order too: ECI, then FNC1. Digits then other text make the plan two runs, so it is the planned route that writes the headers.</summary>
+    [Test]
+    [Arguments("0123456789012345éabc", -1, "ECI:3", "FNC1First")]
+    [Arguments("01234567890123456789012345678901€abc", 37, "ECI:26", "FNC1Second:37")]
+    public async Task Optimal_Eci_IsWrittenBeforeFnc1(string text, int indicator, string eciHeader, string fnc1Header)
+    {
+        var mode = indicator < 0 ? Fnc1Mode.FirstPosition : Fnc1Mode.SecondPosition(indicator);
+        var data = QRCodeGenerator.Create(text, QREccLevel.M, FirstOptimal with { Fnc1 = mode });
+        var (decoded, info, _) = Read(data);
+        var shape = Shape(data, info);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(shape.DataModes.Count).IsGreaterThan(1);
+        await Assert.That(shape.Headers).IsEquivalentTo([eciHeader, fnc1Header], CollectionOrdering.Matching);
+    }
+
     /// <summary>Under FNC1 a Kanji-eligible text with ASCII is planned over UTF-8 only. The symbol still reads back.</summary>
     [Test]
     public async Task Optimal_KanjiAndAscii_ReadsBack()
@@ -314,6 +435,41 @@ public class Fnc1EncodeTest
         await Assert.That((optimalInfo.Version, optimalInfo.EccLevel, optimalInfo.MaskPattern)).IsEqualTo((6, QREccLevel.H, 3));
     }
 
+    /// <summary>
+    /// The boost raises the level only while the stream with the indicator's bits fits. 26 digits take 4 + 10 + 87 bits, which version
+    /// 1-Q's 104 hold, and the 4 bits of first position make 105, so the level stays at M. A boost that left those bits out would go to Q
+    /// and overrun the stream.
+    /// </summary>
+    [Test]
+    [Arguments(QRSegmentation.Single)]
+    [Arguments(QRSegmentation.Optimal)]
+    public async Task Boost_StopsWhereTheIndicatorBitsOverflowTheNextLevel(QRSegmentation segmentation)
+    {
+        var digits = new string('7', 26);
+        var options = new QRCodeGeneratorOptions { BoostEccLevel = true, Segmentation = segmentation, QuietZoneSize = 0 };
+        var withoutFnc1 = Read(QRCodeGenerator.Create(digits, QREccLevel.M, options)).Info;
+        await Assert.That((withoutFnc1.Version, withoutFnc1.EccLevel)).IsEqualTo((1, QREccLevel.Q));
+
+        var (decoded, info, _) = Read(QRCodeGenerator.Create(digits, QREccLevel.M, options with { Fnc1 = Fnc1Mode.FirstPosition }));
+        await Assert.That(decoded).IsEqualTo(digits);
+        await Assert.That((info.Version, info.EccLevel)).IsEqualTo((1, QREccLevel.M));
+    }
+
+    /// <summary>The boost of a written plan counts the indicator's bits too. This mixed text's plan fits version 1-L with second position's 12 bits, and not 1-M.</summary>
+    [Test]
+    public async Task Boost_OfAPlan_StopsWhereTheIndicatorBitsOverflowTheNextLevel()
+    {
+        var text = "1 Z\u001D\u001DA1Z\u001DZ1%Z\u001D 10";
+        var options = new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.SecondPosition('g'), BoostEccLevel = true, Segmentation = QRSegmentation.Optimal, QuietZoneSize = 0 };
+        var data = QRCodeGenerator.Create(text, QREccLevel.L, options);
+        var (decoded, info, _) = Read(data);
+
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That((info.Version, info.EccLevel)).IsEqualTo((1, QREccLevel.L));
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out _, options with { BoostEccLevel = false, Version = QRVersionRange.Exactly(1) })).IsFalse()
+            .Because("the premise: no plan of the text fits version 1-M under second position");
+    }
+
     [Test]
     public async Task StructuredAppend_RefusesFnc1()
     {
@@ -338,6 +494,42 @@ public class Fnc1EncodeTest
         await Assert.That(QRCodeGenerator.Create(letters, QREccLevel.L, new QRCodeGeneratorOptions { QuietZoneSize = 0 }).Version).IsEqualTo(40);
         await Assert.That(() => QRCodeGenerator.Create(letters, QREccLevel.L, FirstOptimal)).Throws<InvalidOperationException>()
             .Because("an unconstrained overflow is the same exception under Optimal as under Single");
+    }
+
+    /// <summary>
+    /// Twenty letters take 4 + 9 + 110 bits, which version 1-M's 128 hold, and second position's 12 more overflow it. The message
+    /// names those bits, so the caller can tell the mode's cost from the content's. Without FNC1 the message keeps its words.
+    /// </summary>
+    [Test]
+    [Arguments(QRSegmentation.Single)]
+    [Arguments(QRSegmentation.Optimal)]
+    public async Task TooLong_ANarrowedRangeTheIndicatorOverflows_NamesTheIndicatorBits(QRSegmentation segmentation)
+    {
+        var text = "ABCDEFGHIJKLMNOPQRST";
+        var options = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(1), Segmentation = segmentation };
+        await Assert.That(QRCodeGenerator.Create(text, QREccLevel.M, options).Version).IsEqualTo(1);
+
+        var error = await Assert.That(() => QRCodeGenerator.Create(text, QREccLevel.M, options with { Fnc1 = Fnc1Mode.SecondPosition(37) })).Throws<ArgumentException>();
+        await Assert.That(error!.Message).Contains("FNC1: 12 bits");
+        var withoutFnc1 = await Assert.That(() => QRCodeGenerator.Create(text + "UVWXYZ", QREccLevel.M, options)).Throws<ArgumentException>();
+        await Assert.That(withoutFnc1!.Message).DoesNotContain("FNC1");
+    }
+
+    /// <summary>The span form writes every byte of its symbol, the quiet zone included, so a buffer that held other data ends as a fresh one does.</summary>
+    [Test]
+    [Arguments(QRSegmentation.Single)]
+    [Arguments(QRSegmentation.Optimal)]
+    public async Task SpanForm_IntoABufferHoldingOtherData_WritesWhatAFreshOneHolds(QRSegmentation segmentation)
+    {
+        var text = Gtin + "10ABC123";
+        var options = new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition, Segmentation = segmentation, QuietZoneSize = 2 };
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var size, options)).IsTrue();
+        var fresh = new byte[size.BufferSize];
+        QRCodeGenerator.Create(text, QREccLevel.M, fresh, options);
+        var used = Enumerable.Repeat((byte)0xAB, size.BufferSize).ToArray();
+        QRCodeGenerator.Create(text, QREccLevel.M, used, options);
+
+        await Assert.That(used).IsEquivalentTo(fresh, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -447,20 +639,30 @@ public class Fnc1EncodeTest
     }
 
 #if !DEBUG
-    /// <summary>The span form allocates nothing under FNC1, Single and Optimal alike (Release only, as the other allocation tests are).</summary>
+    /// <summary>
+    /// The span form allocates nothing under FNC1, Single and Optimal alike (Release only, as the other allocation tests are). The long text
+    /// is past the planner's stack buffers, so its plan and its parent table come from the pool.
+    /// </summary>
     [Test]
     [NotInParallel]
     public async Task SpanForm_AllocatesNothing()
     {
         var text = Gtin + "10ABC123" + Gs + "17231120" + Gs + "21abc%def";
+        var longText = string.Concat(Enumerable.Repeat(Gtin + "10ab%c" + Gs + "17231120" + Gs, 9));
         var buffer = new byte[40_000];
         var single = new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition };
         var optimal = new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.SecondPosition(37), Segmentation = QRSegmentation.Optimal };
+        // Here a plan is built only below the single-mode fit, and the FNC1 table leaves the stack only for a text longer than its stack buffer holds.
+        var longSingle = QRCodeGenerator.Create(longText, QREccLevel.M, new QRCodeGeneratorOptions { Fnc1 = optimal.Fnc1 });
+        await Assert.That(QRCodeGenerator.Create(longText, QREccLevel.M, optimal).Version).IsLessThan(longSingle.Version);
+        await Assert.That(longText.Length * ModeSegmenter.Fnc1ParentBytesPerChar).IsGreaterThan(ModeSegmenter.Fnc1MaxStackParents);
         for (var i = 0; i < 3; i++)
         {
             QRCodeGenerator.Create(text.AsSpan(), QREccLevel.M, buffer, single);
             QRCodeGenerator.Create(text.AsSpan(), QREccLevel.M, buffer, optimal);
             QRCodeGenerator.TryGetRequiredBufferSize(text.AsSpan(), QREccLevel.M, out _, optimal);
+            QRCodeGenerator.Create(longText.AsSpan(), QREccLevel.M, buffer, optimal);
+            QRCodeGenerator.TryGetRequiredBufferSize(longText.AsSpan(), QREccLevel.M, out _, optimal);
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
@@ -469,6 +671,8 @@ public class Fnc1EncodeTest
             QRCodeGenerator.Create(text.AsSpan(), QREccLevel.M, buffer, single);
             QRCodeGenerator.Create(text.AsSpan(), QREccLevel.M, buffer, optimal);
             QRCodeGenerator.TryGetRequiredBufferSize(text.AsSpan(), QREccLevel.M, out _, optimal);
+            QRCodeGenerator.Create(longText.AsSpan(), QREccLevel.M, buffer, optimal);
+            QRCodeGenerator.TryGetRequiredBufferSize(longText.AsSpan(), QREccLevel.M, out _, optimal);
         }
         await Assert.That(GC.GetAllocatedBytesForCurrentThread() - before).IsEqualTo(0);
     }

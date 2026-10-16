@@ -2,7 +2,7 @@
 
 This document maps each part of the Standard QR specification (ISO/IEC 18004, versions 1-40) to its implementation. Micro QR and rMQR get their own maps as they are implemented. [QR Symbology Architecture](qrcode-symbologies.md) lists the document set and the shared components.
 
-It is a map, not a copy of the spec. Normative details (bit layouts, formulas, edge-case constraints) and the reasons for implementation choices are in code comments next to the implementation, where they stay in sync with the code. Section numbers below follow the citations in those comments, which use both the `7.x` numbering of ISO/IEC 18004:2015 and the `8.x` numbering of the earlier edition.
+It is a map, not a copy of the spec. Normative details (bit layouts, formulas, edge-case constraints) and the reasons for implementation choices are in code comments next to the implementation, where they stay in sync with the code. Section numbers below follow the citations in those comments, which use the `7.x` numbering of ISO/IEC 18004:2015, the `8.x` numbering of an earlier edition and, for FNC1, the 2006 edition's 6.4.8, which is 7.4.8 in 2015.
 
 ## Encoding Pipeline Overview
 

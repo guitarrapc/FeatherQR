@@ -175,7 +175,7 @@ if (command == "regenerate-structured-append")
 // FNC1 corpus: three writer lineages (libzint, ZXing.Net, CodeGlyphX), Standard QR under
 // StandardQrFnc1/ and rMQR under RmQrFnc1/, each with its own case list (Fnc1Corpus). Every
 // symbol passes the zxing-cpp gate before it is written: the gate checks the mode, the ECI
-// header and the element string the case claims, and supplies the symbology identifier and
+// header and the text the case claims, and supplies the symbology identifier and
 // the mask libzint does not report.
 var fnc1Generators = new (IFnc1FixtureGenerator Generator, Fnc1CaseDefinition[] Cases)[]
 {
