@@ -142,7 +142,8 @@ internal static partial class ModeSegmenter
                 var isDigit = Vector128.Equals(cls, Vector128.Create(ClassDigit));
                 var isAlnum = Vector128.GreaterThan(cls, Vector128<int>.Zero);
 
-                // The steps of TrackedLatin and TrackedGeneral, every lane taking every branch and keeping what its class allows.
+                // The steps of TrackedGeneral, every lane taking every branch and keeping what its class allows.
+                // TrackedLatin opens every run from the cheapest of all six keys instead, which changes only the parents that lie off the cheapest plan.
                 var numeric = Vector128.Min(Vector128.Min(n0, n1), n2);
                 var alnum = Vector128.Min(a0, a1);
                 var numericKey = Vector128.Min(n0 + Vector128.Create(32), Vector128.Min(alnum, b) + vOpenNumeric);

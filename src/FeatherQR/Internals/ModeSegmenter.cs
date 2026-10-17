@@ -4,7 +4,6 @@ using System.Buffers;
 #endif
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace FeatherQR.Internals;
@@ -251,17 +250,14 @@ internal static partial class ModeSegmenter
     /// The widths are keys already (bits times eight), <paramref name="openByte"/> with its first character in. The table is written <paramref name="stride"/> bytes a character.
     /// </summary>
     /// <remarks>
-    /// The shape of <see cref="CostsLatin"/>: the six keys rotated in place and the cheapest of them, which every run opens from. A target's key is the lesser of continuing and opening, so its parent is that key's low bits, and the key then takes the target's own state for the next character.
-    /// Opening a run from a state of its own mode is never the lesser and never ties with the continuation (a header is dearer than any group's phase), so the cheapest of all six stands in for the cheapest of the other modes, and no mode needs a minimum of its own.
-    /// Temporaries for the next character's keys would spill: the loop with them in read 1.2 to 1.7 times the cost-only loop a character, this one 1.1 to 1.3 (standardqr-encoder.md, "Mixed-mode segmentation").
-    /// The table is written through a reference. Its length is the caller's, asserted here, and a bounds check a byte would cost what the key arithmetic costs.
+    /// The shape of <see cref="CostsLatin"/>: the six keys are updated in place. Keys built beside the old ones for the next character would keep both sets live.
+    /// A run opens from the cheapest of the six keys, which can be a state of the run's own mode. That opening can be cheaper than an opening from another mode. The table can then hold other parents than those <see cref="TrackedGeneral"/> and the vector steps of <c>ComputeCostsLanes</c> write, since they open each mode from the other modes only.
+    /// An opening from the run's own mode never lies on a cheapest plan, since merging the two runs saves a header. So the cost, the final state and the walk back from that state agree with what TrackedGeneral and the vector steps give. One cheapest key then serves every mode, where TrackedGeneral keeps a minimum per mode.
     /// </remarks>
     private static int TrackedLatin(ReadOnlySpan<char> text, int n1, int a1, int b, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> table, int stride)
     {
         const int U = UnreachableKey;
         var length = text.Length;
-        Debug.Assert(length <= 1 || table.Length >= (length - 1) * stride + ParentBytesPerChar);
-        ref var row = ref MemoryMarshal.GetReference(table);
         int n0 = U | StateNumeric0, n2 = U | StateNumeric2, a0 = U | StateAlnum0;
         var cheapest = Math.Min(Math.Min(n1, a1), b);
         for (var i = 1; i < length; i++)
@@ -269,7 +265,7 @@ internal static partial class ModeSegmenter
             var cls = ClassOf(text[i]);
             // Byte continues at 8 bits or opens from the cheapest state. A key carries its state, so the lowest wins a tie.
             var key = Math.Min(b + 64, cheapest + openByte);
-            Unsafe.Add(ref row, i * stride) = (byte)(key & 7);
+            table[i * stride] = (byte)(key & 7);
             b = (key & ~7) | StateByte;
             if (cls == ClassOther)
             {
@@ -280,7 +276,7 @@ internal static partial class ModeSegmenter
                 {
                     i++;
                     b += 64;
-                    Unsafe.Add(ref row, i * stride) = StateByte;
+                    table[i * stride] = StateByte;
                 }
                 cheapest = b;
                 continue;
@@ -310,7 +306,7 @@ internal static partial class ModeSegmenter
                 a1 = (key & ~7) | StateAlnum1;
                 a0 = paired;
             }
-            Unsafe.Add(ref row, i * stride + 1) = (byte)parents;
+            table[i * stride + 1] = (byte)parents;
             cheapest = Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
         }
 

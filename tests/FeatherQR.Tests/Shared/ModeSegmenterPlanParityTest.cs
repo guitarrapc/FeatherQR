@@ -64,10 +64,12 @@ public class ModeSegmenterPlanParityTest
             ("ties-1A", "1A1A1A1A"),
             ("ties-A1", "A1A1A1A1"),
             ("ties-a1", "a1a1a1a1a1a1"),
-            // Ties between opening a run from another mode's state and continuing the run, which the lower state
-            // wins: at (10, 9, 8) a Byte run opened after three digits costs what one Byte run of four costs, and
-            // at (4, 3, 4) an Alphanumeric run opened after four digits, or a Byte run opened after three
-            // alphanumerics, costs what the run continued costs.
+            // At the 4-bit mode indicator, each row's two cheapest plans tie. They are one that opens a run from another
+            // mode's state and one that continues the run. The opening plan's parent is the lower state (Numeric0,
+            // Numeric1 and Alnum1 against Byte, Alnum0 and Byte). The tie goes to it. At (10, 9, 8) three digits and a
+            // Byte run of one cost what one Byte run of four costs. At (4, 3, 4) four digits and an Alphanumeric run of
+            // one cost what one Alphanumeric run of five costs. Three alphanumerics and a Byte run of one cost what one
+            // Byte run of four costs at (4, 3, 4) too.
             ("byte-opened-from-digits-tie", "137b"),
             ("alnum-opened-from-digits-tie", "7777/"),
             ("byte-opened-from-alnum-tie", "Y:Oc"),

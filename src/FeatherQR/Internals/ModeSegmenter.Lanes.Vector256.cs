@@ -91,7 +91,8 @@ internal static partial class ModeSegmenter
                 var isDigit = Vector256.Equals(cls, Vector256.Create(ClassDigit));
                 var isAlnum = Vector256.GreaterThan(cls, Vector256<int>.Zero);
 
-                // The steps of TrackedLatin and TrackedGeneral, every lane taking every branch and keeping what its class allows.
+                // The steps of TrackedGeneral, every lane taking every branch and keeping what its class allows.
+                // TrackedLatin opens every run from the cheapest of all six keys instead, which changes only the parents that lie off the cheapest plan.
                 var numeric = Vector256.Min(Vector256.Min(n0, n1), n2);
                 var alnum = Vector256.Min(a0, a1);
                 var numericKey = Vector256.Min(n0 + Vector256.Create(32), Vector256.Min(alnum, b) + vOpenNumeric);
