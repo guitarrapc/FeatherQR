@@ -1626,7 +1626,7 @@ public static partial class QRCodeGenerator
     }
 
     /// <summary>
-    /// Bytes of the table the version scan keeps for the plan's build: the program's predecessors, two bytes a character for a text whose Kanji plan the planner prices and nine under FNC1 for a text it could split, and none otherwise.
+    /// Bytes of the table the version scan keeps for the plan's build: the program's predecessors, nine a character under FNC1 and two otherwise, for a text of plannable length whose single mode a plan could beat, and none for any other.
     /// </summary>
     private static int PlanTableLength(ReadOnlySpan<char> text, in TextAnalysisResult analysis, Fnc1Mode fnc1)
     {
@@ -1634,7 +1634,21 @@ public static partial class QRCodeGenerator
             return 0;
         if (fnc1.IsActive)
             return QRSegmentPlanner.CanPlanBeatSingleMode(analysis.EncodingMode) ? text.Length * ModeSegmenter.Fnc1ParentBytesPerChar : 0;
-        return analysis.KanjiPlannable ? text.Length * ModeSegmenter.ParentBytesPerChar : 0;
+        return analysis.KanjiPlannable || QRSegmentPlanner.CanPlanBeatSingleMode(analysis.EncodingMode) ? text.Length * ModeSegmenter.ParentBytesPerChar : 0;
+    }
+
+    /// <summary>
+    /// Builds the plan the version scan chose from the table it kept, or with a run of its own for the one plan whose run keeps none: a Kanji-eligible text's UTF-8 plan, priced in the Kanji scan without a table.
+    /// </summary>
+    private static bool TryBuildPlanFromScan(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, Fnc1Mode fnc1, bool kanjiPlan, ReadOnlySpan<byte> table, int tableFinalState, int tablePlannedBits, int version, Span<ModeSegment> plan, out int segmentCount)
+    {
+        if (kanjiPlan)
+            return QRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, table, tableFinalState, tablePlannedBits, plan, out segmentCount);
+        if (table.IsEmpty || analysis.KanjiPlannable)
+            return QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount, out _, fnc1);
+        return fnc1.IsActive
+            ? QRSegmentPlanner.TryBuildPlanFnc1(textSpan, analysis.EciMode, version, eccLevel, fnc1, table, tableFinalState, tablePlannedBits, plan, out segmentCount)
+            : QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, table, tableFinalState, tablePlannedBits, plan, out segmentCount);
     }
 
     /// <summary>The charset a plan is written under: none for a Kanji plan, whose Byte runs hold only ASCII, and the analysis's otherwise.</summary>
@@ -1658,12 +1672,7 @@ public static partial class QRCodeGenerator
     private static QREccLevel BuildPlanOrFallback(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, bool kanjiPlan, ReadOnlySpan<byte> table, int tableFinalState, int tablePlannedBits, Span<ModeSegment> plan, ref int version, out int segmentCount)
     {
         var fnc1 = options.Fnc1;
-        // A Kanji plan and a plan under FNC1 are built from the table the scan kept, without running the program again.
-        var built = kanjiPlan
-            ? QRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, table, tableFinalState, tablePlannedBits, plan, out segmentCount)
-            : fnc1.IsActive && !table.IsEmpty
-                ? QRSegmentPlanner.TryBuildPlanFnc1(textSpan, analysis.EciMode, version, eccLevel, fnc1, table, tableFinalState, tablePlannedBits, plan, out segmentCount)
-                : QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount, out _, fnc1);
+        var built = TryBuildPlanFromScan(textSpan, eccLevel, in analysis, fnc1, kanjiPlan, table, tableFinalState, tablePlannedBits, version, plan, out segmentCount);
         if (!built)
         {
             // The plan that justified this version could not be rebuilt: it needs more runs than the buffer
@@ -1730,12 +1739,7 @@ public static partial class QRCodeGenerator
             : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(textSpan.Length));
         try
         {
-            var built = kanjiPlan
-                ? QRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, table, tableFinalState, tablePlannedBits, plan, out _)
-                : fnc1.IsActive && !table.IsEmpty
-                    ? QRSegmentPlanner.TryBuildPlanFnc1(textSpan, analysis.EciMode, version, eccLevel, fnc1, table, tableFinalState, tablePlannedBits, plan, out _)
-                    : QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out _, out _, fnc1);
-            if (built)
+            if (TryBuildPlanFromScan(textSpan, eccLevel, in analysis, fnc1, kanjiPlan, table, tableFinalState, tablePlannedBits, version, plan, out _))
                 return true;
         }
         finally

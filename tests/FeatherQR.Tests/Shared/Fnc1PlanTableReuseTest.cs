@@ -13,9 +13,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// Standard QR prices once per count indicator band and accepts the first version that holds the band's cost, so
-/// the accepting run is always the last one. A table and a state kept from an earlier band's run would both be
+/// the accepting run is always the last one. A table and a state kept from an earlier band's run can both be
 /// wrong, so the corpus holds a text whose rejected band ends in another state than the accepting one, where the
-/// walk back from the wrong state prices another plan. rMQR walks a strategy's order and remembers a cost per
+/// walk back from the wrong state gives another plan. rMQR walks a strategy's order and remembers a cost per
 /// width triple, so a candidate can be accepted on a remembered cost whose run was not the last, and the table
 /// then belongs to another triple. The scan says whether the table holds the plan, and the build runs the program
 /// itself where it does not. The tests count every one of these outcomes.
@@ -92,8 +92,9 @@ public class Fnc1PlanTableReuseTest
                         if (band > firstBand && QRSegmentPlanner.TrivialLowerBoundBitsFnc1(text, analysis.EciMode) + fnc1.StandardQrHeaderBits <= QRCodeConstants.GetEccInfo(firstBandEnd, level).TotalDataCodewords * 8)
                         {
                             afterABandRejection++;
-                            // The state the rejected band's run ended in. Walked back from it, the accepting band's table
-                            // gives another plan, which the build re-prices and refuses.
+                            // The state the rejected band's run ended in. Where it differs from the accepting run's, the
+                            // accepting band's table walked back from it gives another plan, which the build re-prices
+                            // and refuses where it costs more.
                             ModeSegmenter.ComputeCostsFnc1(text, analysis.EciMode, 4, EncodingMode.Numeric.GetCountIndicatorLength(firstBandEnd), EncodingMode.Alphanumeric.GetCountIndicatorLength(firstBandEnd), EncodingMode.Byte.GetCountIndicatorLength(firstBandEnd), default, out var rejectedState);
                             if (rejectedState != finalState)
                                 afterARejectionInAnotherState++;
@@ -105,7 +106,7 @@ public class Fnc1PlanTableReuseTest
 
         await Assert.That(bands[0]).IsGreaterThan(20);
         await Assert.That(bands[1]).IsGreaterThan(20);
-        await Assert.That(afterABandRejection).IsGreaterThan(10).Because("a later band accepted after an earlier band's run was priced and rejected, where a table kept from the earlier run would be wrong");
+        await Assert.That(afterABandRejection).IsGreaterThan(10).Because("a later band accepted after an earlier band's run was priced and rejected, where a table kept from the earlier run can be wrong");
         await Assert.That(afterARejectionInAnotherState).IsGreaterThan(0).Because("a later band accepted after an earlier band's run ended in another state, where a state kept from the earlier run would walk the table to another plan");
     }
 
