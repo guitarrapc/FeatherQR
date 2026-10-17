@@ -4,6 +4,7 @@ using System.Buffers;
 #endif
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace FeatherQR.Internals;
@@ -247,56 +248,70 @@ internal static partial class ModeSegmenter
 
     /// <summary>
     /// Keys with parents from the second character on, one byte per character, Byte allowed: the per-symbol plan of every Latin symbol. Returns the cheapest key.
-    /// The widths are keys already (bits times eight), <paramref name="openByte"/> with its first character in. The table is read and written <paramref name="stride"/> bytes a character.
+    /// The widths are keys already (bits times eight), <paramref name="openByte"/> with its first character in. The table is written <paramref name="stride"/> bytes a character.
     /// </summary>
+    /// <remarks>
+    /// The shape of <see cref="CostsLatin"/>: the six keys rotated in place and the cheapest of them, which every run opens from. A target's key is the lesser of continuing and opening, so its parent is that key's low bits, and the key then takes the target's own state for the next character.
+    /// Opening a run from a state of its own mode is never the lesser and never ties with the continuation (a header is dearer than any group's phase), so the cheapest of all six stands in for the cheapest of the other modes, and no mode needs a minimum of its own.
+    /// Temporaries for the next character's keys would spill: the loop with them in read 1.2 to 1.7 times the cost-only loop a character, this one 1.1 to 1.3 (standardqr-encoder.md, "Mixed-mode segmentation").
+    /// The table is written through a reference. Its length is the caller's, asserted here, and a bounds check a byte would cost what the key arithmetic costs.
+    /// </remarks>
     private static int TrackedLatin(ReadOnlySpan<char> text, int n1, int a1, int b, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> table, int stride)
     {
         const int U = UnreachableKey;
-        int n0 = U | StateNumeric0, n2 = U | StateNumeric2, a0 = U | StateAlnum0;
         var length = text.Length;
+        Debug.Assert(length <= 1 || table.Length >= (length - 1) * stride + ParentBytesPerChar);
+        ref var row = ref MemoryMarshal.GetReference(table);
+        int n0 = U | StateNumeric0, n2 = U | StateNumeric2, a0 = U | StateAlnum0;
+        var cheapest = Math.Min(Math.Min(n1, a1), b);
         for (var i = 1; i < length; i++)
         {
             var cls = ClassOf(text[i]);
-            // The cheapest state of each denser mode. A key carries its state, so the lowest wins a tie.
-            var numeric = Math.Min(Math.Min(n0, n1), n2);
-            var alnum = Math.Min(a0, a1);
-            var byteKey = Math.Min(Math.Min(numeric, alnum) + openByte, b + 64);
-            table[i * stride] = (byte)(byteKey & 7);
+            // Byte continues at 8 bits or opens from the cheapest state. A key carries its state, so the lowest wins a tie.
+            var key = Math.Min(b + 64, cheapest + openByte);
+            Unsafe.Add(ref row, i * stride) = (byte)(key & 7);
+            b = (key & ~7) | StateByte;
             if (cls == ClassOther)
             {
-                b = (byteKey & ~7) | StateByte;
+                // Only Byte encodes this character, so it alone stays reachable and every
+                // further such character extends its run: one add and one byte each.
                 n0 = U | StateNumeric0; n1 = U | StateNumeric1; n2 = U | StateNumeric2; a0 = U | StateAlnum0; a1 = U | StateAlnum1;
                 while (i + 1 < length && ClassOf(text[i + 1]) == ClassOther)
                 {
                     i++;
                     b += 64;
-                    table[i * stride] = StateByte;
+                    Unsafe.Add(ref row, i * stride) = StateByte;
                 }
+                cheapest = b;
                 continue;
             }
 
-            int nn0 = U | StateNumeric0, nn1 = U | StateNumeric1, nn2 = U | StateNumeric2, na0 = U | StateAlnum0, na1 = U | StateAlnum1;
-            int parentNumeric1 = 0, parentAlnum1 = 0;
+            var parents = 0;
             if (cls == ClassDigit)
             {
-                // Continued from Numeric0 (4 bits), or opened from Alphanumeric or Byte.
-                var key = Math.Min(n0 + 32, Math.Min(alnum, b) + openNumeric);
-                parentNumeric1 = key & 7;
-                nn1 = (key & ~7) | StateNumeric1;
-                nn2 = n1 + 25; // 3 bits, and Numeric1 becomes Numeric2
-                nn0 = n2 + 22; // 3 bits, and Numeric2 becomes Numeric0
+                // The first digit of a group costs 4 bits, continued from Numeric0 or opened from the cheapest state, the next two 3 each.
+                var wrapped = n2 + 22; // 3 bits, and Numeric2 becomes Numeric0
+                n2 = n1 + 25; // 3 bits, and Numeric1 becomes Numeric2
+                key = Math.Min(n0 + 32, cheapest + openNumeric);
+                parents = key & 7;
+                n1 = (key & ~7) | StateNumeric1;
+                n0 = wrapped;
+            }
+            else
+            {
+                n0 = U | StateNumeric0; n1 = U | StateNumeric1; n2 = U | StateNumeric2;
             }
             if (allowAlnum)
             {
-                // Opened from Numeric or Byte, or continued from Alnum0 (6 bits).
-                var key = Math.Min(Math.Min(numeric, b) + openAlnum, a0 + 48);
-                parentAlnum1 = key & 7;
-                na1 = (key & ~7) | StateAlnum1;
-                na0 = a1 + 39; // 5 bits, and Alnum1 becomes Alnum0
+                // 11 bits per pair: 6 for the first character, continued from Alnum0 or opened from the cheapest state, 5 for the second.
+                var paired = a1 + 39; // 5 bits, and Alnum1 becomes Alnum0
+                key = Math.Min(a0 + 48, cheapest + openAlnum);
+                parents |= (key & 7) << 3;
+                a1 = (key & ~7) | StateAlnum1;
+                a0 = paired;
             }
-            table[i * stride + 1] = (byte)(parentNumeric1 | (parentAlnum1 << 3));
-
-            n0 = nn0; n1 = nn1; n2 = nn2; a0 = na0; a1 = na1; b = (byteKey & ~7) | StateByte;
+            Unsafe.Add(ref row, i * stride + 1) = (byte)parents;
+            cheapest = Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
         }
 
         return Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));

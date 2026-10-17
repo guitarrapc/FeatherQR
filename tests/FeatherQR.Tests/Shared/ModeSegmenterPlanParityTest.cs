@@ -64,6 +64,13 @@ public class ModeSegmenterPlanParityTest
             ("ties-1A", "1A1A1A1A"),
             ("ties-A1", "A1A1A1A1"),
             ("ties-a1", "a1a1a1a1a1a1"),
+            // Ties between opening a run from another mode's state and continuing the run, which the lower state
+            // wins: at (10, 9, 8) a Byte run opened after three digits costs what one Byte run of four costs, and
+            // at (4, 3, 4) an Alphanumeric run opened after four digits, or a Byte run opened after three
+            // alphanumerics, costs what the run continued costs.
+            ("byte-opened-from-digits-tie", "137b"),
+            ("alnum-opened-from-digits-tie", "7777/"),
+            ("byte-opened-from-alnum-tie", "Y:Oc"),
             ("digits-then-byte", "1234567890123456" + new string('z', 40)),
             ("byte-then-digits", new string('z', 40) + "1234567890123456"),
             ("runs-with-pairs", "abc😀123\ud83dABC\ude00xyz"),
