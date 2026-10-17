@@ -91,24 +91,24 @@ internal static class QRSegmentPlanner
     /// <c>false</c> means the content fits neither one mode nor a mixed plan in the window. The caller owns the error.
     /// </summary>
     /// <remarks>
-    /// The scan needs no floor/ceiling machinery: count indicator widths are constant within the three version bands, so the optimal cost is computed at most once per band (three O(n) runs in the worst case, no reconstruction table), and capacity grows monotonically inside a band, so the first version that holds the band cost is the smallest.
+    /// The scan needs no floor/ceiling machinery: count indicator widths are constant within the three version bands, so the optimal cost is computed at most once per band (three O(n) runs in the worst case), and capacity grows monotonically inside a band, so the first version that holds the band cost is the smallest. This form keeps no table, so the caller builds its plan with a run of its own.
     /// </remarks>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments, out bool kanjiPlan)
         => TrySelectVersion(text, in analysis, eccLevel, minVersion, maxVersion, default, default, out selected, out useSegments, out kanjiPlan, out _, out _);
 
     /// <summary>
-    /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, out int, out bool, out bool)"/>, keeping the run that priced the Kanji plan it chose.
-    /// When <paramref name="kanjiPlan"/> is true, <paramref name="kanjiTable"/> holds that program's predecessors at the selected version's widths, which ended in <paramref name="kanjiFinalState"/> at <paramref name="kanjiPlannedBits"/>, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
-    /// An empty <paramref name="kanjiTable"/> keeps nothing. Otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character.
-    /// Under FNC1 (<paramref name="fnc1"/> active) the indicator's bits join the stream's headers, the single-mode ceiling is the fit with those bits, the costs come from the FNC1 program, and no Kanji plan is priced.
+    /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, out int, out bool, out bool)"/>, keeping the run that priced the plan it chose.
+    /// When <paramref name="kanjiPlan"/> is true, <paramref name="table"/> holds that program's predecessors at the selected version's widths, which ended in <paramref name="tableFinalState"/> at <paramref name="tablePlannedBits"/>, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
+    /// Under FNC1 (<paramref name="fnc1"/> active) the indicator's bits join the stream's headers, the single-mode ceiling is the fit with those bits, the costs come from the FNC1 program, and no Kanji plan is priced. A split (<paramref name="useSegments"/>) leaves that program's predecessors in <paramref name="table"/> the same way, for <see cref="TryBuildPlanFnc1(ReadOnlySpan{char}, EciMode, int, QREccLevel, Fnc1Mode, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/>.
+    /// An empty <paramref name="table"/> keeps nothing. Otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character for a Kanji plan and <see cref="ModeSegmenter.Fnc1ParentBytesPerChar"/> under FNC1.
     /// </summary>
-    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, Span<byte> kanjiTable, Fnc1Mode fnc1, out int selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, Span<byte> table, Fnc1Mode fnc1, out int selected, out bool useSegments, out bool kanjiPlan, out int tableFinalState, out int tablePlannedBits)
     {
         kanjiPlan = false;
-        kanjiFinalState = 0;
-        kanjiPlannedBits = 0;
+        tableFinalState = 0;
+        tablePlannedBits = 0;
         if (analysis.KanjiPlannable)
-            return TrySelectVersionKanji(text, in analysis, eccLevel, minVersion, maxVersion, kanjiTable, out selected, out useSegments, out kanjiPlan, out kanjiFinalState, out kanjiPlannedBits);
+            return TrySelectVersionKanji(text, in analysis, eccLevel, minVersion, maxVersion, table, out selected, out useSegments, out kanjiPlan, out tableFinalState, out tablePlannedBits);
 
         useSegments = false;
         var charset = analysis.EciMode;
@@ -144,8 +144,14 @@ internal static class QRSegmentPlanner
         // It is what keeps Optimal roughly free on content no split can shrink. A candidate only pays for a cost run when it could hold at least this much.
         var trivialBits = (fnc1.IsActive ? TrivialLowerBoundBitsFnc1(text, charset) : TrivialLowerBoundBits(text, charset)) + eciBits;
 
+        // Under FNC1 each band's run keeps its predecessors in the table. The scan returns at the first version that
+        // holds a band's cost, so the run that accepts is the last one made and its table is the plan's.
+        Debug.Assert(table.IsEmpty || !fnc1.IsActive || table.Length >= text.Length * ModeSegmenter.Fnc1ParentBytesPerChar);
+        var window = fnc1.IsActive && !table.IsEmpty ? table.Slice(0, text.Length * ModeSegmenter.Fnc1ParentBytesPerChar) : default;
+
         var band = -1;
         var bandCost = 0;
+        var bandState = 0;
         for (var version = minVersion; version <= top; version++)
         {
             var capacityBits = QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8;
@@ -162,7 +168,7 @@ internal static class QRSegmentPlanner
                         EncodingMode.Numeric.GetCountIndicatorLength(version),
                         EncodingMode.Alphanumeric.GetCountIndicatorLength(version),
                         EncodingMode.Byte.GetCountIndicatorLength(version),
-                        default, out _)
+                        window, out bandState)
                     : ModeSegmenter.ComputeCosts(
                         text, charset, ModeIndicatorBits,
                         EncodingMode.Numeric.GetCountIndicatorLength(version),
@@ -175,6 +181,8 @@ internal static class QRSegmentPlanner
             {
                 useSegments = true;
                 selected = version;
+                tableFinalState = bandState;
+                tablePlannedBits = bandCost;
                 return true;
             }
         }
@@ -398,6 +406,24 @@ internal static class QRSegmentPlanner
         }
 
         return TryAcceptPlan(text, charset, version, eccLevel, plannedBits, segments, ref segmentCount, out planBits, fnc1);
+    }
+
+    /// <summary>
+    /// <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, int, QREccLevel, Span{ModeSegment}, out int, out int, Fnc1Mode)"/> under FNC1 from the table the version scan kept for the plan it chose (<see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, Span{byte}, Fnc1Mode, out int, out bool, out bool, out int, out int)"/>), without running the program again.
+    /// </summary>
+    public static bool TryBuildPlanFnc1(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Fnc1Mode fnc1, ReadOnlySpan<byte> table, int finalState, int plannedBits, Span<ModeSegment> segments, out int segmentCount)
+    {
+        segmentCount = 0;
+        if (text.Length is 0 or > MaxPlannableChars)
+            return false;
+
+        if (!ModeSegmenter.ReconstructFnc1(text, table.Slice(0, text.Length * ModeSegmenter.Fnc1ParentBytesPerChar), finalState, segments, out segmentCount))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
+        return TryAcceptPlan(text, charset, version, eccLevel, plannedBits, segments, ref segmentCount, out _, fnc1);
     }
 
     /// <summary>

@@ -215,22 +215,38 @@ public static partial class RmQRCodeGenerator
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
 
         var analysis = AnalyzeForPlan(textSpan, eciMode, allowKanji, fnc1);
-        bool useSegments, kanjiPlan = false;
-        if (fnc1.IsActive
-            ? !RmQRSegmentPlanner.TrySelectVersionFnc1(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, out version, out useSegments)
-            : !RmQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out version, out useSegments, out kanjiPlan))
-            return false;
+        byte[]? rentedTable = null;
+        var tableLength = fnc1.IsActive ? RmQRSegmentPlanner.Fnc1TableLength(textSpan, in analysis) : 0;
+        Span<byte> table = tableLength == 0
+            ? default
+            : tableLength <= ModeSegmenter.Fnc1MaxStackParents
+                ? stackalloc byte[ModeSegmenter.Fnc1MaxStackParents]
+                : (rentedTable = ArrayPool<byte>.Shared.Rent(tableLength));
+        try
+        {
+            bool useSegments, kanjiPlan = false, tableHoldsPlan = false;
+            int tableFinalState = 0, tablePlannedBits = 0;
+            if (fnc1.IsActive
+                ? !RmQRSegmentPlanner.TrySelectVersionFnc1(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, table, out version, out useSegments, out tableHoldsPlan, out tableFinalState, out tablePlannedBits)
+                : !RmQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out version, out useSegments, out kanjiPlan))
+                return false;
 
-        if (!useSegments)
-            return true;
+            if (!useSegments)
+                return true;
 
-        Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
-        if (TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, fnc1, plan, out _))
-            return true;
+            Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
+            if (TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, fnc1, table, tableHoldsPlan, tableFinalState, tablePlannedBits, plan, out _))
+                return true;
 
-        return fnc1.IsActive
-            ? RmQRVersionSelector.TrySelectFnc1(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, fnc1.RmQrHeaderBits, out version)
-            : RmQRVersionSelector.TrySelect(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, out version);
+            return fnc1.IsActive
+                ? RmQRVersionSelector.TrySelectFnc1(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, fnc1.RmQrHeaderBits, out version)
+                : RmQRVersionSelector.TrySelect(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, out version);
+        }
+        finally
+        {
+            if (rentedTable is not null)
+                ArrayPool<byte>.Shared.Return(rentedTable, clearArray: false);
+        }
     }
 
     /// <summary>The analysis a plan starts from: under FNC1 the FNC1 rule's (which plans no Kanji), otherwise the ordinary one with Kanji plans on.</summary>
@@ -392,34 +408,55 @@ public static partial class RmQRCodeGenerator
     private static RmQRConfiguration PrepareConfigurationOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, bool allowKanji, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, Span<ModeSegment> plan, out int segmentCount, out EciMode planCharset)
     {
         var analysis = AnalyzeForPlan(textSpan, eciMode, allowKanji, fnc1);
-        bool useSegments, kanjiPlan = false;
-        var version = fnc1.IsActive
-            ? RmQRSegmentPlanner.SelectVersionFnc1(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, out useSegments)
-            : RmQRSegmentPlanner.SelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out useSegments, out kanjiPlan);
-        segmentCount = 0;
-        planCharset = kanjiPlan ? EciMode.Default : analysis.EciMode;
-
-        if (useSegments && !TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, fnc1, plan, out segmentCount))
+        byte[]? rentedTable = null;
+        var tableLength = fnc1.IsActive ? RmQRSegmentPlanner.Fnc1TableLength(textSpan, in analysis) : 0;
+        Span<byte> table = tableLength == 0
+            ? default
+            : tableLength <= ModeSegmenter.Fnc1MaxStackParents
+                ? stackalloc byte[ModeSegmenter.Fnc1MaxStackParents]
+                : (rentedTable = ArrayPool<byte>.Shared.Rent(tableLength));
+        try
         {
-            // No plan could be built for this version: it needs more runs than the buffer holds, the
-            // decoder would misread it, or the exact re-cost disagrees with the dynamic program. The scan
-            // accepts a requested version unpriced, so there the content can also be unplannable or too long.
-            // Only the single-mode fit is left to emit, and it throws "content is too long" when there is none.
+            bool useSegments, kanjiPlan = false, tableHoldsPlan = false;
+            int tableFinalState = 0, tablePlannedBits = 0;
+            var version = fnc1.IsActive
+                ? RmQRSegmentPlanner.SelectVersionFnc1(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, table, out useSegments, out tableHoldsPlan, out tableFinalState, out tablePlannedBits)
+                : RmQRSegmentPlanner.SelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out useSegments, out kanjiPlan);
             segmentCount = 0;
-            version = fnc1.IsActive
-                ? RmQRSegmentPlanner.SelectSingleFnc1(in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1)
-                : RmQRSegmentPlanner.SelectSingle(in analysis, eccLevel, requestedVersion, fitStrategy, height);
-        }
+            planCharset = kanjiPlan ? EciMode.Default : analysis.EciMode;
 
-        return new RmQRConfiguration(version, eccLevel, analysis);
+            if (useSegments && !TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, fnc1, table, tableHoldsPlan, tableFinalState, tablePlannedBits, plan, out segmentCount))
+            {
+                // No plan could be built for this version: it needs more runs than the buffer holds, the
+                // decoder would misread it, or the exact re-cost disagrees with the dynamic program. The scan
+                // accepts a requested version unpriced, so there the content can also be unplannable or too long.
+                // Only the single-mode fit is left to emit, and it throws "content is too long" when there is none.
+                segmentCount = 0;
+                version = fnc1.IsActive
+                    ? RmQRSegmentPlanner.SelectSingleFnc1(in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1)
+                    : RmQRSegmentPlanner.SelectSingle(in analysis, eccLevel, requestedVersion, fitStrategy, height);
+            }
+
+            return new RmQRConfiguration(version, eccLevel, analysis);
+        }
+        finally
+        {
+            if (rentedTable is not null)
+                ArrayPool<byte>.Shared.Return(rentedTable, clearArray: false);
+        }
     }
 
-    /// <summary>Builds the plan the version scan chose: a Kanji-eligible text's Kanji plan, the FNC1 program's plan under FNC1, or the plan in the analysis's charset.</summary>
-    private static bool TryBuildPlan(ReadOnlySpan<char> textSpan, in TextAnalysisResult analysis, bool kanjiPlan, RmQRVersion version, RmQREccLevel eccLevel, Fnc1Mode fnc1, Span<ModeSegment> plan, out int segmentCount)
+    /// <summary>
+    /// Builds the plan the version scan chose: a Kanji-eligible text's Kanji plan, the FNC1 program's plan under FNC1, or the plan in the analysis's charset.
+    /// Under FNC1 the plan comes from the scan's <paramref name="table"/> where <paramref name="tableHoldsPlan"/> says the table is its, and from a run of its own otherwise.
+    /// </summary>
+    private static bool TryBuildPlan(ReadOnlySpan<char> textSpan, in TextAnalysisResult analysis, bool kanjiPlan, RmQRVersion version, RmQREccLevel eccLevel, Fnc1Mode fnc1, ReadOnlySpan<byte> table, bool tableHoldsPlan, int tableFinalState, int tablePlannedBits, Span<ModeSegment> plan, out int segmentCount)
         => kanjiPlan
             ? RmQRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, plan, out segmentCount)
             : fnc1.IsActive
-                ? RmQRSegmentPlanner.TryBuildPlanFnc1(textSpan, analysis.EciMode, version, eccLevel, fnc1, plan, out segmentCount)
+                ? tableHoldsPlan
+                    ? RmQRSegmentPlanner.TryBuildPlanFnc1(textSpan, analysis.EciMode, version, eccLevel, fnc1, table, tableFinalState, tablePlannedBits, plan, out segmentCount)
+                    : RmQRSegmentPlanner.TryBuildPlanFnc1(textSpan, analysis.EciMode, version, eccLevel, fnc1, plan, out segmentCount)
                 : RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount);
 
     private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, EciMode planCharset, ReadOnlySpan<ModeSegment> segments, Fnc1Mode fnc1, Span<byte> core, int stride)

@@ -10,13 +10,20 @@ namespace FeatherQR.Internals.RmQR;
 /// <c>%</c> twice and never hold a separator pair, and no Kanji plan is priced. The scan keeps the trivial bound and
 /// the memoised cost run of the scan without FNC1 and drops its floor filter, whose run counting reads the other
 /// program's packed table. The route is cold, so the exact cost run can decide alone.
+/// With a table, the scan leaves the predecessors of its last run there and says whether that run priced the
+/// candidate it accepted. A remembered cost accepts a candidate priced by an earlier run, whose table is gone,
+/// and a requested version is accepted unpriced. Both build their plan with a run of their own.
 /// </summary>
 internal static partial class RmQRSegmentPlanner
 {
     /// <summary><see cref="SelectVersion"/> under FNC1, throwing what <see cref="RmQRVersionSelector.SelectFnc1"/> throws when nothing fits.</summary>
     public static RmQRVersion SelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, out bool useSegments)
+        => SelectVersionFnc1(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, default, out useSegments, out _, out _, out _);
+
+    /// <summary>The same, keeping the last cost run's predecessors in <paramref name="table"/>, which holds the plan where <paramref name="tableHoldsPlan"/> says so.</summary>
+    public static RmQRVersion SelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, Span<byte> table, out bool useSegments, out bool tableHoldsPlan, out int tableFinalState, out int tablePlannedBits)
     {
-        if (TrySelectVersionFnc1(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, out var version, out useSegments))
+        if (TrySelectVersionFnc1(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, table, out var version, out useSegments, out tableHoldsPlan, out tableFinalState, out tablePlannedBits))
             return version;
 
         return RmQRVersionSelector.SelectFnc1(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, fnc1.RmQrHeaderBits);
@@ -24,8 +31,19 @@ internal static partial class RmQRSegmentPlanner
 
     /// <summary><see cref="TrySelectVersion"/> under FNC1. Argument errors still throw, in the same order and with the same messages.</summary>
     public static bool TrySelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, out RmQRVersion selected, out bool useSegments)
+        => TrySelectVersionFnc1(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, default, out selected, out useSegments, out _, out _, out _);
+
+    /// <summary>
+    /// The same, keeping the last cost run's predecessors in <paramref name="table"/> (<see cref="ModeSegmenter.Fnc1ParentBytesPerChar"/> bytes a character, or empty to keep nothing).
+    /// <paramref name="tableHoldsPlan"/> says whether that run priced the candidate accepted. Then the table ended in <paramref name="tableFinalState"/> at <paramref name="tablePlannedBits"/>, and
+    /// <see cref="TryBuildPlanFnc1(ReadOnlySpan{char}, EciMode, RmQRVersion, RmQREccLevel, Fnc1Mode, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
+    /// </summary>
+    public static bool TrySelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, Span<byte> table, out RmQRVersion selected, out bool useSegments, out bool tableHoldsPlan, out int tableFinalState, out int tablePlannedBits)
     {
         useSegments = false;
+        tableHoldsPlan = false;
+        tableFinalState = 0;
+        tablePlannedBits = 0;
         var charset = analysis.EciMode;
         var mode = analysis.EncodingMode;
         var dataLength = analysis.DataLength;
@@ -66,6 +84,11 @@ internal static partial class RmQRSegmentPlanner
         Span<int> memoCosts = stackalloc int[MemoCapacity];
         var memoCount = 0;
 
+        Debug.Assert(table.IsEmpty || table.Length >= text.Length * ModeSegmenter.Fnc1ParentBytesPerChar);
+        var window = table.IsEmpty ? default : table.Slice(0, text.Length * ModeSegmenter.Fnc1ParentBytesPerChar);
+        var tableKey = -1;
+        var tableState = 0;
+
         for (var rank = 0; rank < order.Length; rank++)
         {
             var candidate = (RmQRVersion)order[rank];
@@ -78,10 +101,13 @@ internal static partial class RmQRSegmentPlanner
             if (capacityBits < trivialBits)
                 continue; // no split of this content could fit, whatever the plan
 
-            if (PlanFitsFnc1(text, charset, candidate, eccLevel, headerBits, memoKeys, memoCosts, ref memoCount))
+            if (PlanFitsFnc1(text, charset, candidate, eccLevel, headerBits, memoKeys, memoCosts, ref memoCount, window, ref tableKey, ref tableState, out var cost, out var key))
             {
                 useSegments = true;
                 selected = candidate;
+                tableHoldsPlan = !window.IsEmpty && tableKey == key;
+                tableFinalState = tableState;
+                tablePlannedBits = cost;
                 return true;
             }
         }
@@ -123,6 +149,31 @@ internal static partial class RmQRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
+        return AcceptPlanFnc1(text, charset, version, eccLevel, fnc1, plannedBits, segments, ref segmentCount);
+    }
+
+    /// <summary>
+    /// <see cref="TryBuildPlanFnc1(ReadOnlySpan{char}, EciMode, RmQRVersion, RmQREccLevel, Fnc1Mode, Span{ModeSegment}, out int)"/> from the table the version scan kept for the plan it chose
+    /// (<see cref="TrySelectVersionFnc1(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, Fnc1Mode, Span{byte}, out RmQRVersion, out bool, out bool, out int, out int)"/>), without running the program again.
+    /// </summary>
+    public static bool TryBuildPlanFnc1(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, Fnc1Mode fnc1, ReadOnlySpan<byte> table, int finalState, int plannedBits, Span<ModeSegment> segments, out int segmentCount)
+    {
+        segmentCount = 0;
+        if (text.Length is 0 or > MaxPlannableChars)
+            return false;
+
+        if (!ModeSegmenter.ReconstructFnc1(text, table.Slice(0, text.Length * ModeSegmenter.Fnc1ParentBytesPerChar), finalState, segments, out segmentCount))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
+        return AcceptPlanFnc1(text, charset, version, eccLevel, fnc1, plannedBits, segments, ref segmentCount);
+    }
+
+    /// <summary>What follows the walk back of a plan under FNC1: the refusal of a plan the decoder would misread, the unit counts, and the re-measurement against the program and the capacity.</summary>
+    private static bool AcceptPlanFnc1(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, Fnc1Mode fnc1, int plannedBits, Span<ModeSegment> segments, ref int segmentCount)
+    {
         // The same refusal as without FNC1: a Byte run opened at a mid-content U+FEFF would lose it to the decoder.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount)))
         {
@@ -154,6 +205,12 @@ internal static partial class RmQRSegmentPlanner
         => (ModeSegmenter.CheapestSixthsFnc1(text, charset) + 5) / 6 + RmQRConstants.ModeIndicatorLength + MinCountBitsAny;
 
     /// <summary>
+    /// Bytes of the table the scan under FNC1 keeps for the plan's build: the program's predecessors, <see cref="ModeSegmenter.Fnc1ParentBytesPerChar"/> a character, for a text the scan prices, and none for one it does not (all-Numeric, Kanji, empty or too long).
+    /// </summary>
+    public static int Fnc1TableLength(ReadOnlySpan<char> text, in TextAnalysisResult analysis)
+        => analysis.EncodingMode is EncodingMode.Numeric or EncodingMode.Kanji || text.Length is 0 or > MaxPlannableChars ? 0 : text.Length * ModeSegmenter.Fnc1ParentBytesPerChar;
+
+    /// <summary>
     /// <see cref="ModeSegmenter.FillUnitCounts"/> under FNC1: a Byte run's encoded byte count, an Alphanumeric run's characters plus its literal percents, a Numeric run's digits.
     /// </summary>
     private static void FillUnitCountsFnc1(ReadOnlySpan<char> text, EciMode charset, Span<ModeSegment> segments)
@@ -172,14 +229,17 @@ internal static partial class RmQRSegmentPlanner
         }
     }
 
-    private static bool PlanFitsFnc1(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, int headerBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount)
+    /// <summary>
+    /// Whether the plan at <paramref name="version"/>'s widths fits its capacity, from the memo or a cost run. A run made with a <paramref name="table"/> leaves its predecessors there and names its widths in <paramref name="tableKey"/>, so the caller can tell whose plan the table holds.
+    /// </summary>
+    private static bool PlanFitsFnc1(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, int headerBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount, Span<byte> table, ref int tableKey, ref int tableState, out int cost, out int key)
     {
         var cciNumeric = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
         var cciAlnum = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
         var cciByte = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
-        var key = cciNumeric | (cciAlnum << 8) | (cciByte << 16);
+        key = cciNumeric | (cciAlnum << 8) | (cciByte << 16);
 
-        var cost = -1;
+        cost = -1;
         for (var i = 0; i < memoCount; i++)
         {
             if (memoKeys[i] == key)
@@ -191,7 +251,12 @@ internal static partial class RmQRSegmentPlanner
 
         if (cost < 0)
         {
-            cost = ModeSegmenter.ComputeCostsFnc1(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, default, out _);
+            cost = ModeSegmenter.ComputeCostsFnc1(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, table, out var finalState);
+            if (!table.IsEmpty)
+            {
+                tableKey = key;
+                tableState = finalState;
+            }
             if (memoCount < memoKeys.Length)
             {
                 memoKeys[memoCount] = key;
