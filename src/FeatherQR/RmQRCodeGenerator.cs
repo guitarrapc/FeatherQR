@@ -452,7 +452,9 @@ public static partial class RmQRCodeGenerator
     /// </summary>
     private static bool TryBuildPlan(ReadOnlySpan<char> textSpan, in TextAnalysisResult analysis, bool kanjiPlan, RmQRVersion version, RmQREccLevel eccLevel, Fnc1Mode fnc1, ReadOnlySpan<byte> table, bool tableHoldsPlan, int tableFinalState, int tablePlannedBits, Span<ModeSegment> plan, out int segmentCount)
         => kanjiPlan
-            ? RmQRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, plan, out segmentCount)
+            ? tableHoldsPlan
+                ? RmQRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, table, tableFinalState, tablePlannedBits, plan, out segmentCount)
+                : RmQRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, plan, out segmentCount)
             : fnc1.IsActive
                 ? tableHoldsPlan
                     ? RmQRSegmentPlanner.TryBuildPlanFnc1(textSpan, analysis.EciMode, version, eccLevel, fnc1, table, tableFinalState, tablePlannedBits, plan, out segmentCount)

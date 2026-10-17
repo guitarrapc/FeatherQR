@@ -217,6 +217,127 @@ public class PlanTableReuseTest
         await Assert.That(builtAgain).IsGreaterThan(0).Because("a candidate accepted on a remembered cost whose run was not the last, where the table belongs to another width triple");
     }
 
+    /// <summary>
+    /// The Kanji scan's two programs write one table. The build walks it back only where the accepting run was the last
+    /// one made, whichever program made it: a UTF-8 plan accepted on a remembered cost after the Kanji plan was priced
+    /// and rejected at the same candidate has the Kanji run's predecessors in the table, which walk back to a plan with
+    /// Kanji runs.
+    /// </summary>
+    [Test]
+    public async Task RmQr_KanjiScansTable_IsThePlanTheBuildMakes()
+    {
+        var kanjiFromTheTable = 0;
+        var utf8FromTheTable = 0;
+        var builtAgain = 0;
+        var utf8WhereTheKanjiPlanWasRejected = 0;
+        var strategies = new[] { RmQRFitStrategy.MinimizeArea, RmQRFitStrategy.MinimizeWidth, RmQRFitStrategy.MinimizeHeight };
+
+        foreach (var text in KanjiTexts())
+        {
+            var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: true, planKanji: true);
+            await Assert.That(analysis.KanjiPlannable).IsTrue().Because(text);
+            var table = new byte[text.Length * ModeSegmenter.ParentBytesPerChar];
+            var fromTable = new ModeSegment[RmQRSegmentPlanner.MaxSegments];
+            var fresh = new ModeSegment[RmQRSegmentPlanner.MaxSegments];
+            foreach (var level in new[] { RmQREccLevel.M, RmQREccLevel.H })
+            {
+                foreach (var strategy in strategies)
+                {
+                    var because = $"「{text}」 at {level}, {strategy}";
+                    var selected = RmQRSegmentPlanner.TrySelectVersion(text, in analysis, level, null, strategy, null, table, out var version, out var useSegments, out var kanjiPlan, out var tableHoldsPlan, out var finalState, out var plannedBits);
+                    var expected = RmQRSegmentPlanner.TrySelectVersion(text, in analysis, level, null, strategy, null, out var expectedVersion, out var expectedUseSegments, out var expectedKanjiPlan);
+                    await Assert.That((selected, version, useSegments, kanjiPlan)).IsEqualTo((expected, expectedVersion, expectedUseSegments, expectedKanjiPlan)).Because(because);
+                    if (!useSegments)
+                        continue;
+
+                    Array.Clear(fresh);
+                    Array.Clear(fromTable);
+                    bool expectedBuilt, built;
+                    int expectedCount, count;
+                    if (kanjiPlan)
+                    {
+                        expectedBuilt = RmQRSegmentPlanner.TryBuildKanjiPlan(text, version, level, fresh, out expectedCount);
+                        if (!tableHoldsPlan)
+                        {
+                            builtAgain++;
+                            continue;
+                        }
+
+                        kanjiFromTheTable++;
+                        built = RmQRSegmentPlanner.TryBuildKanjiPlan(text, version, level, table, finalState, plannedBits, fromTable, out count);
+                    }
+                    else
+                    {
+                        expectedBuilt = RmQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, level, fresh, out expectedCount);
+
+                        // The Kanji plan was priced at this candidate, or skipped on a priced one, and does not fit: the scan's last run before the UTF-8 arm's is a Kanji run, or none.
+                        var capacity = 8 * RmQRConstants.GetDataCodewordCount(version, level);
+                        var kanjiCost = RmQRSegmentPlanner.MinimumPayloadBitsKanji(text, RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric), RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric), RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte), RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Kanji));
+                        if (RmQRSegmentPlanner.TrivialLowerBoundBitsKanji(text) <= capacity && kanjiCost > capacity)
+                            utf8WhereTheKanjiPlanWasRejected++;
+
+                        if (!tableHoldsPlan)
+                        {
+                            builtAgain++;
+                            continue;
+                        }
+
+                        utf8FromTheTable++;
+                        built = RmQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, level, table, finalState, plannedBits, fromTable, out count);
+                    }
+
+                    await Assert.That(built).IsEqualTo(expectedBuilt).Because(because);
+                    await Assert.That(fromTable.AsSpan(0, count).ToArray()).IsEquivalentTo(fresh.AsSpan(0, expectedCount).ToArray(), CollectionOrdering.Matching).Because(because);
+                }
+            }
+        }
+
+        await Assert.That(kanjiFromTheTable).IsGreaterThan(50);
+        await Assert.That(utf8FromTheTable).IsGreaterThan(10);
+        await Assert.That(utf8WhereTheKanjiPlanWasRejected).IsGreaterThan(10).Because("a UTF-8 plan taken where the Kanji plan was priced and rejected, where a table kept from the Kanji run would walk back to the other program's plan");
+        await Assert.That(builtAgain).IsGreaterThan(0).Because("a candidate accepted on a remembered cost whose run was not the last, where the table belongs to another run");
+    }
+
+    /// <summary>
+    /// Kanji-eligible texts with ASCII in them: a stretch of characters with a cell beside a stretch of digits, capitals or lower-case letters, at every pairing of a few lengths, either first, repeated to about 90 characters, with the shapes the benchmark and the exhaustive-scan corpus use.
+    /// </summary>
+    private static IEnumerable<string> KanjiTexts()
+    {
+        yield return string.Concat(Enumerable.Repeat("日本7777", 10));
+        yield return string.Concat(Enumerable.Repeat("a日", 15)) + "1234ABC";
+        yield return "日本語12345";
+        yield return "あい123";
+
+        // At H under MinimizeArea or MinimizeWidth, R13x77's Kanji plan is priced and rejected by two bits and its UTF-8
+        // plan then fits on a remembered cost, so the table holds the Kanji run and the build must run the program.
+        yield return string.Concat(Enumerable.Repeat("日A", 5)) + "0123456789";
+
+        // Finely interleaved, where the UTF-8 plan's one Byte run beats the Kanji plan's header a run once the count indicators widen.
+        foreach (var unit in new[] { "a日", "日a", "ab日", "a日b", "AB日", "日ab" })
+        {
+            foreach (var pairs in new[] { 5, 10, 15, 20, 25, 30 })
+            {
+                yield return string.Concat(Enumerable.Repeat(unit, pairs));
+                yield return string.Concat(Enumerable.Repeat(unit, pairs)) + "1234ABC";
+            }
+        }
+
+        const string Cells = "日本語東京漢字試験文";
+        foreach (var cellLength in new[] { 1, 2, 3, 5, 10 })
+        {
+            foreach (var asciiLength in new[] { 1, 2, 4, 7, 13 })
+            {
+                foreach (var ascii in new[] { "0123456789", "ABCDEFGHIJ", "abcdefghij" })
+                {
+                    var cells = Cells.Substring(0, cellLength);
+                    var run = string.Concat(Enumerable.Repeat(ascii, 2)).Substring(0, asciiLength);
+                    foreach (var pair in new[] { cells + run, run + cells })
+                        yield return string.Concat(Enumerable.Repeat(pair, Math.Max(1, 90 / pair.Length)));
+                }
+            }
+        }
+    }
+
     /// <summary>The first version of the strategy's order, ahead of the single-mode fit, whose capacity clears the trivial bound: where the scan makes its first run.</summary>
     private static RmQRVersion? FirstPricedCandidate(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel level, RmQRFitStrategy strategy, int eciBits)
     {

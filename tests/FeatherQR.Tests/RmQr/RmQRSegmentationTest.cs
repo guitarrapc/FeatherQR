@@ -70,10 +70,28 @@ public class RmQRSegmentationTest
         // R13x77 and rejected by one bit, so a skip taken from a wider triple loses
         // R13x77 (MinimizeWidth at H). The third has a Kanji plan priced and rejected
         // before its UTF-8 plan reaches R15x139 at H. The two plans share the memo,
-        // and a skip that reads a Kanji entry as a UTF-8 one takes R17x139.
+        // and a skip that reads a Kanji entry as a UTF-8 one takes R17x139. The fourth
+        // is the reverse: its Kanji plan is priced and rejected at R17x43 and its UTF-8
+        // plan at R11x77, and the Kanji plan fits R15x59 at H where the UTF-8 cost does
+        // not, so a Kanji skip that reads the UTF-8 entry falls to R7x139 (MinimizeArea
+        // with AllowKanji).
         "AAAAAA7777aaaaaa",
         "AAAAAAAAAAAAA77777777aaaaaaaaaaaaa",
         string.Concat(Enumerable.Repeat("a日", 15)) + "1234ABC",
+        string.Concat(Enumerable.Repeat("日12", 5)),
+
+        // The Kanji skip's own comparisons, with AllowKanji. 「a日a日123456a」: R15x43 is
+        // priced and rejected one count indicator wider in Byte than R11x59, whose Kanji
+        // plan fills R11x59-H exactly, so a skip ignoring the Byte width falls to R9x77
+        // (MinimizeArea at H). 「日12」×5 + digits: R17x59 is priced and rejected one wider
+        // in Numeric than R13x77, which the Kanji plan fits by four bits, so a skip
+        // ignoring the Numeric width falls to R15x77 (MinimizeWidth at H). 「日本1」×8: the
+        // Kanji plan costs exactly R15x59-M's capacity at the widths R11x77 was priced
+        // and rejected at, so a skip rejecting an exact fill falls to R13x77 (MinimizeArea
+        // at M).
+        "a日a日123456a",
+        string.Concat(Enumerable.Repeat("日12", 5)) + "0123456789",
+        string.Concat(Enumerable.Repeat("日本1", 8)),
 
         // Alternating in tens: a shape where a per-version cost run, not a bound, is
         // what decides the version.
@@ -103,6 +121,11 @@ public class RmQRSegmentationTest
         new string('a', 60) + new string('7', 60),
         new string('a', 75) + new string('7', 75),
         new string('7', 361),
+
+        // 60 characters whose Kanji plan, with AllowKanji, fills R17x99-M exactly at the widths
+        // R17x77 was priced and rejected at, so a Kanji skip rejecting an exact fill falls to the
+        // single stream at R13x139.
+        string.Concat(Enumerable.Repeat("日12", 20)),
     ];
 
     public static IEnumerable<RmQRFitStrategy> Strategies() => Enum.GetValues<RmQRFitStrategy>();
@@ -208,7 +231,7 @@ public class RmQRSegmentationTest
     /// the content, and take the best by the strategy comparator. Deliberately does no
     /// pruning, no memoisation and no single-mode ceiling.
     /// </summary>
-    private static RmQRVersion ExhaustiveBestVersion(string content, RmQREccLevel ecc, RmQRFitStrategy strategy, bool allowKanji)
+    private static RmQRVersion ExhaustiveBestVersion(string content, RmQREccLevel ecc, RmQRFitStrategy strategy, bool allowKanji, RmQRHeight? height = null)
     {
         var analysis = TextAnalyzer.Analyze(content.AsSpan(), EciMode.Default, allowKanji: allowKanji, planKanji: allowKanji);
         var charset = analysis.EciMode;
@@ -217,6 +240,9 @@ public class RmQRSegmentationTest
         RmQRVersion? best = null;
         foreach (var version in Enum.GetValues<RmQRVersion>())
         {
+            if (height is { } h && RmQRConstants.GetHeight(version) != (int)h)
+                continue;
+
             // A Kanji-eligible text with ASCII in it also has a Kanji plan (Kanji runs beside runs of the ASCII, no ECI header).
             if (analysis.KanjiPlannable
                 && RmQRSegmentPlanner.MinimumPayloadBitsKanji(
@@ -599,6 +625,64 @@ public class RmQRSegmentationTest
         await Assert.That(optimal.Width).IsLessThanOrEqualTo(single.Width);
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// The scan for a Kanji-eligible text applies the height mask itself, apart from the scan
+    /// without Kanji, so it is held to the exhaustive scan restricted to each height. The
+    /// three texts fit R7x139-M, the smallest capacity any height offers, as a Kanji plan or
+    /// as a UTF-8 plan.
+    /// </summary>
+    [Test]
+    [Arguments(RmQRHeight.H7)]
+    [Arguments(RmQRHeight.H9)]
+    [Arguments(RmQRHeight.H11)]
+    [Arguments(RmQRHeight.H13)]
+    [Arguments(RmQRHeight.H15)]
+    [Arguments(RmQRHeight.H17)]
+    public async Task Optimal_WithKanji_HeightConstraint_MatchesTheExhaustiveScan(RmQRHeight height)
+    {
+        foreach (var content in new[] { "日本語12345", string.Concat(Enumerable.Repeat("日本7777", 4)), string.Concat(Enumerable.Repeat("a日", 5)) + "1234ABC" })
+        {
+            foreach (var strategy in Strategies())
+            {
+                var options = new RmQRCodeGeneratorOptions { Height = height, FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal, AllowKanji = true };
+                var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, options);
+                var because = $"「{content}」 {strategy} {height}";
+                await Assert.That(optimal.Height - 4).IsEqualTo((int)height).Because(because);
+                await Assert.That(optimal.Version).IsEqualTo(ExhaustiveBestVersion(content, RmQREccLevel.M, strategy, allowKanji: true, height)).Because(because);
+                await Assert.That(Sizing.Required(content.AsSpan(), RmQREccLevel.M, options).Version).IsEqualTo(optimal.Version).Because(because);
+                await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue().Because(because);
+                await Assert.That(decoded).IsEqualTo(content).Because(because);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A Kanji-eligible text past 256 characters, whose table outgrows the stack and is rented: on
+    /// the scan's route, which keeps it, and on the fresh build's at a requested version. 「日」 and
+    /// 354 digits is the longest such shape that fits, and only as a Kanji plan.
+    /// </summary>
+    [Test]
+    public async Task Optimal_WithKanji_LongestEligibleText_FitsR17x139OnBothBuildRoutes()
+    {
+        var content = "日" + new string('7', 354);
+        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true })).Throws<ArgumentException>();
+
+        foreach (var strategy in Strategies())
+        {
+            var options = new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal, AllowKanji = true };
+            var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, options);
+            await Assert.That(optimal.Version).IsEqualTo(RmQRVersion.R17x139).Because($"{strategy}");
+            await Assert.That(optimal.Version).IsEqualTo(ExhaustiveBestVersion(content, RmQREccLevel.M, strategy, allowKanji: true));
+            await Assert.That(Sizing.Required(content.AsSpan(), RmQREccLevel.M, options).Version).IsEqualTo(optimal.Version);
+            await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+            await Assert.That(decoded).IsEqualTo(content);
+        }
+
+        var requested = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139, Segmentation = RmQRSegmentation.Optimal, AllowKanji = true });
+        await Assert.That(RmQRCodeDecoder.TryDecode(requested, out var decodedRequested)).IsTrue();
+        await Assert.That(decodedRequested).IsEqualTo(content);
     }
 
     [Test]

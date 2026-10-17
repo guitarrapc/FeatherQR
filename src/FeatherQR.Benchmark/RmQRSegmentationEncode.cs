@@ -31,9 +31,11 @@
 ///                own widths and fits, and the build walks that run back [1 run]
 ///   url-38     : a realistic payload (R11x77 as one run, R15x43 split) [1 run]
 ///   utf8-60    : Japanese with digits, UTF-8 behind an ECI prefix under both (R13x139):
-///                no split of it is smaller
+///                no split of it is smaller. The first candidate past the trivial bound is priced and rejected
+///                and the rest are skipped on that cost [1 run]
 ///   kanji-60   : the same text with AllowKanji: Single still writes UTF-8 (R13x139), since
-///                the digits are ASCII. Optimal writes a Kanji plan, Kanji runs beside Numeric runs (R17x77)
+///                the digits are ASCII. Optimal writes a Kanji plan, Kanji runs beside Numeric runs (R17x77),
+///                taken on a remembered cost after two candidates were priced, so the build runs the program [3 runs]
 ///
 /// Every fixture fits under Single too, so no row is comparing a success with a throw.
 /// ECC M only: the H capacities shift which version wins but not the shape of the work.
