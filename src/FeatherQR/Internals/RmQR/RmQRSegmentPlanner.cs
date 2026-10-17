@@ -32,7 +32,7 @@ internal static partial class RmQRSegmentPlanner
 
     /// <summary>
     /// Count indicator triples memoised during a version scan.
-    /// The 32 versions share 13 distinct triples, but the bounds narrow the band to a few of them. Undersizing is safe, not wrong, because the store is guarded and a miss simply recomputes.
+    /// The 32 versions share 13 distinct triples, but the trivial bound and the skip on a priced triple leave few to price (at most 3 a text over 3,913 texts, specs/rmqr-encoder.md). Undersizing is safe, not wrong, because the store is guarded and a miss simply recomputes.
     /// </summary>
     private const int MemoCapacity = 8;
 
@@ -58,8 +58,12 @@ internal static partial class RmQRSegmentPlanner
     /// Throws exactly what <see cref="RmQRVersionSelector"/> throws.
     /// </summary>
     public static RmQRVersion SelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out bool useSegments, out bool kanjiPlan)
+        => SelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, default, out useSegments, out kanjiPlan, out _, out _, out _);
+
+    /// <summary>The same, keeping the last cost run's predecessors in <paramref name="table"/>, which holds the plan where <paramref name="tableHoldsPlan"/> says so.</summary>
+    public static RmQRVersion SelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<byte> table, out bool useSegments, out bool kanjiPlan, out bool tableHoldsPlan, out int tableFinalState, out int tablePlannedBits)
     {
-        if (TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, out var version, out useSegments, out kanjiPlan))
+        if (TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, table, out var version, out useSegments, out kanjiPlan, out tableHoldsPlan, out tableFinalState, out tablePlannedBits))
             return version;
 
         // Neither one mode nor a mixed plan fits: the single-mode selector owns the message.
@@ -68,12 +72,24 @@ internal static partial class RmQRSegmentPlanner
     }
 
     /// <summary>
-    /// <see cref="SelectVersion"/> without the capacity throw. Argument errors still throw, in the same order and with the same messages.
+    /// <see cref="SelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, out bool, out bool)"/> without the capacity throw. Argument errors still throw, in the same order and with the same messages.
     /// </summary>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan)
+        => TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, default, out selected, out useSegments, out kanjiPlan, out _, out _, out _);
+
+    /// <summary>
+    /// The same, keeping the last cost run's predecessors in <paramref name="table"/> (<see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character, or empty to keep nothing).
+    /// <paramref name="tableHoldsPlan"/> says whether that run priced the candidate accepted. Then the table ended in <paramref name="tableFinalState"/> at <paramref name="tablePlannedBits"/>, and
+    /// <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, RmQRVersion, RmQREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
+    /// A Kanji-eligible text's scan keeps no table.
+    /// </summary>
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<byte> table, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan, out bool tableHoldsPlan, out int tableFinalState, out int tablePlannedBits)
     {
         useSegments = false;
         kanjiPlan = false;
+        tableHoldsPlan = false;
+        tableFinalState = 0;
+        tablePlannedBits = 0;
         var charset = analysis.EciMode;
         var mode = analysis.EncodingMode;
         var dataLength = analysis.DataLength;
@@ -108,7 +124,7 @@ internal static partial class RmQRSegmentPlanner
         // When there is none the scan runs to the end instead of stopping early, because content that overflows every version in one mode can still fit once the modes are mixed (100 letters followed by 100 digits is 200 Byte-mode characters, 50 over the largest capacity, but 1157 bits when split).
         var hasSingle = RmQRVersionSelector.TrySelectAutoFit(mode, dataLength, charset, eccLevel, fitStrategy, height, out var single);
 
-        // Unplannable content skips the scan before any cost run, which is what keeps a pathological length from paying for one (the floor run below is not itself guarded, unlike the per-version runs in PlanFits).
+        // Unplannable content skips the scan before any cost run, which is what keeps a pathological length from paying for one. The runs below are not guarded themselves.
         if (text.Length is 0 or > MaxPlannableChars)
         {
             selected = single;
@@ -121,19 +137,21 @@ internal static partial class RmQRSegmentPlanner
         var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
 
-        // Three filters, cheapest first, so a candidate only reaches an expensive one when the cheap ones could not answer.
-        // Soundness in one line each: the trivial bound and the floor are lower bounds, so they may only reject. The ceiling is the price of a real plan, so it may only accept.
-        // Rationale and measurements: specs/rmqr-encoder.md, "Bounding the scan".
+        // Two filters ahead of a cost run. The trivial bound is a lower bound for every version. A priced width triple is a lower bound for every
+        // version whose three widths are at least its, since widening a count indicator only raises the price of the run that carries it.
+        // A candidate neither filter rejects is priced at its own widths, with its predecessors kept, so the accepting run's table is the plan's.
+        // A floor run at the narrowest widths, with the floor plan re-priced as an upper bound, decided most candidates without a run of their own
+        // but left the build to run the program again. Rationale and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
         var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits;
-
-        var floorPayload = -1;
-        var runsNumeric = 0;
-        var runsAlnum = 0;
-        var runsByte = 0;
 
         Span<int> memoKeys = stackalloc int[MemoCapacity];
         Span<int> memoCosts = stackalloc int[MemoCapacity];
         var memoCount = 0;
+
+        Debug.Assert(table.IsEmpty || table.Length >= text.Length * ModeSegmenter.ParentBytesPerChar);
+        var window = table.IsEmpty ? default : table.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar);
+        var tableKey = -1;
+        var tableState = 0;
 
         for (var rank = 0; rank < order.Length; rank++)
         {
@@ -147,23 +165,13 @@ internal static partial class RmQRSegmentPlanner
             if (capacityBits < trivialBits)
                 continue; // no split of this content could fit, whatever the plan
 
-            if (floorPayload < 0)
-                floorPayload = ComputeFloor(text, charset, out runsNumeric, out runsAlnum, out runsByte);
-
-            if (capacityBits < floorPayload + eciBits)
-                continue; // cannot hold even the cheapest count indicators
-            if (capacityBits >= UpperBound(floorPayload, runsNumeric, runsAlnum, runsByte, candidate) + eciBits)
-            {
-                // Holds the floor plan re-priced at this version, so it holds the optimum too. No cost run needed.
-                useSegments = true;
-                selected = candidate;
-                return true;
-            }
-
-            if (PlanFits(text, charset, candidate, eccLevel, eciBits, memoKeys, memoCosts, ref memoCount))
+            if (PlanFits(text, charset, candidate, eccLevel, eciBits, memoKeys, memoCosts, ref memoCount, window, ref tableKey, ref tableState, out var cost, out var key))
             {
                 useSegments = true;
                 selected = candidate;
+                tableHoldsPlan = !window.IsEmpty && tableKey == key;
+                tableFinalState = tableState;
+                tablePlannedBits = cost;
                 return true;
             }
         }
@@ -178,7 +186,7 @@ internal static partial class RmQRSegmentPlanner
     /// </summary>
     /// <remarks>
     /// The UTF-8 plan is weighed so that a Kanji-eligible text never needs a larger symbol than its UTF-8 plan gives: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
-    /// Each program has its own three filters, the ones <see cref="TrySelectVersion"/> describes. The Kanji plan's are re-derived for its eighth state: the screen prices a character with a cell at 13 bits, and the floor runs at Kanji's narrowest count indicator, 2 bits, so that a plan filling R7x43 exactly is not skipped. The upper bound re-prices the floor plan's Kanji runs too. The memo key carries Kanji's width, which tells apart versions whose other three widths agree (R13x77 and R15x59, R13x139 and R17x99).
+    /// Each program has its own three filters: the trivial bound <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, out RmQRVersion, out bool, out bool)"/> keeps, and a floor and the floor plan's upper bound, which that scan dropped on 2026-10-17 for a kept table. The Kanji plan's are re-derived for its eighth state: the screen prices a character with a cell at 13 bits, and the floor runs at Kanji's narrowest count indicator, 2 bits, so that a plan filling R7x43 exactly is not skipped. The upper bound re-prices the floor plan's Kanji runs too. The memo key carries Kanji's width, which tells apart versions whose other three widths agree (R13x77 and R15x59, R13x139 and R17x99).
     /// </remarks>
     private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRVersion single, bool hasSingle, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan)
     {
@@ -196,6 +204,7 @@ internal static partial class RmQRSegmentPlanner
         int kanjiRunsNumeric = 0, kanjiRunsAlnum = 0, kanjiRunsByte = 0, kanjiRunsKanji = 0;
         var utf8Floor = -1;
         int utf8RunsNumeric = 0, utf8RunsAlnum = 0, utf8RunsByte = 0;
+        int utf8TableKey = -1, utf8TableState = 0;
 
         // One store for both programs: a Kanji key carries Kanji's width (at least 2) in its top byte, a UTF-8 key none.
         Span<int> memoKeys = stackalloc int[MemoCapacity];
@@ -235,7 +244,7 @@ internal static partial class RmQRSegmentPlanner
 
                 if (capacityBits >= utf8Floor + EciHeaderBits
                     && (capacityBits >= UpperBound(utf8Floor, utf8RunsNumeric, utf8RunsAlnum, utf8RunsByte, candidate) + EciHeaderBits
-                        || PlanFits(text, EciMode.Utf8, candidate, eccLevel, EciHeaderBits, memoKeys, memoCosts, ref memoCount)))
+                        || PlanFits(text, EciMode.Utf8, candidate, eccLevel, EciHeaderBits, memoKeys, memoCosts, ref memoCount, default, ref utf8TableKey, ref utf8TableState, out _, out _)))
                 {
                     useSegments = true;
                     selected = candidate;
@@ -249,7 +258,7 @@ internal static partial class RmQRSegmentPlanner
     }
 
     /// <summary>
-    /// <see cref="TryBuildPlan"/> for the Kanji plan <see cref="TrySelectVersion"/> chose: Kanji runs beside runs of the ASCII, which the caller writes with no ECI header.
+    /// <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, RmQRVersion, RmQREccLevel, Span{ModeSegment}, out int)"/> for the Kanji plan <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, out RmQRVersion, out bool, out bool)"/> chose: Kanji runs beside runs of the ASCII, which the caller writes with no ECI header.
     /// </summary>
     public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, RmQRVersion version, RmQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -348,6 +357,31 @@ internal static partial class RmQRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
+        return AcceptPlan(text, charset, version, eccLevel, plannedBits, segments, ref segmentCount);
+    }
+
+    /// <summary>
+    /// <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, RmQRVersion, RmQREccLevel, Span{ModeSegment}, out int)"/> from the table the version scan kept for the plan it chose
+    /// (<see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, Span{byte}, out RmQRVersion, out bool, out bool, out bool, out int, out int)"/>), without running the program again.
+    /// </summary>
+    public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> table, int finalState, int plannedBits, Span<ModeSegment> segments, out int segmentCount)
+    {
+        segmentCount = 0;
+        if (text.Length is 0 or > MaxPlannableChars)
+            return false;
+
+        if (!ModeSegmenter.Reconstruct(text, table.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar), finalState, segments, out segmentCount))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
+        return AcceptPlan(text, charset, version, eccLevel, plannedBits, segments, ref segmentCount);
+    }
+
+    /// <summary>What follows the walk back of a plan: the refusal of a plan the decoder would misread, the unit counts, and the re-measurement against the program and the capacity.</summary>
+    private static bool AcceptPlan(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, int plannedBits, Span<ModeSegment> segments, ref int segmentCount)
+    {
         // A plan that opens a Byte run at a mid-content U+FEFF would lose it to the decoder's BOM consumption (which fires even behind an explicit UTF-8 ECI).
         // Under UTF-8 the program builds none, so this is the refusal of a model that disagreed. The single-mode fallback keeps the character.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount)))
@@ -415,13 +449,10 @@ internal static partial class RmQRSegmentPlanner
         => ModeSegmenter.ComputeCosts(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, default, out _);
 
     /// <summary>
-    /// Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the upper bound the version scan uses to accept a candidate without pricing it. It is the floor plan re-priced at <paramref name="version"/>, in payload bits (no ECI prefix).
+    /// Bytes of the table the version scan keeps for the plan's build: the program's predecessors, <see cref="ModeSegmenter.ParentBytesPerChar"/> a character, for a text of plannable length whose single mode a plan could beat and whose scan is the seven-state one, and none for any other.
     /// </summary>
-    public static int FloorPlanUpperBound(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version)
-    {
-        var floor = ComputeFloor(text, charset, out var runsNumeric, out var runsAlnum, out var runsByte);
-        return UpperBound(floor, runsNumeric, runsAlnum, runsByte, version);
-    }
+    public static int TableLength(ReadOnlySpan<char> text, in TextAnalysisResult analysis)
+        => analysis.EncodingMode is EncodingMode.Numeric or EncodingMode.Kanji || analysis.KanjiPlannable || text.Length is 0 or > MaxPlannableChars ? 0 : text.Length * ModeSegmenter.ParentBytesPerChar;
 
     /// <summary>Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the Kanji plan's minimal payload bits at explicit count indicator widths.</summary>
     public static int MinimumPayloadBitsKanji(ReadOnlySpan<char> text, int cciNumeric, int cciAlnum, int cciByte, int cciKanji)
@@ -442,17 +473,19 @@ internal static partial class RmQRSegmentPlanner
     // Version scan
     // ---------------------------------------------------------------
 
-    private static bool PlanFits(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, int eciBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount)
+    /// <summary>
+    /// Whether the plan at <paramref name="version"/>'s widths fits its capacity, from the memo, from a priced triple no wider in any mode whose cost does not fit, or from a cost run.
+    /// A run made with a <paramref name="table"/> leaves its predecessors there and names its widths in <paramref name="tableKey"/>, so the caller can tell whose plan the table holds.
+    /// </summary>
+    private static bool PlanFits(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, int eciBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount, Span<byte> table, ref int tableKey, ref int tableState, out int cost, out int key)
     {
-        if (text.Length is 0 or > MaxPlannableChars)
-            return false;
-
+        var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
         var cciNumeric = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
         var cciAlnum = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
         var cciByte = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
-        var key = cciNumeric | (cciAlnum << 8) | (cciByte << 16);
+        key = cciNumeric | (cciAlnum << 8) | (cciByte << 16);
 
-        var cost = -1;
+        cost = -1;
         for (var i = 0; i < memoCount; i++)
         {
             if (memoKeys[i] == key)
@@ -464,7 +497,20 @@ internal static partial class RmQRSegmentPlanner
 
         if (cost < 0)
         {
-            cost = ModeSegmenter.ComputeCosts(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, default, out _);
+            // A triple priced already whose every width is at most this one's prices every plan at most what this one would, so its cost not fitting here is this one's not fitting.
+            for (var i = 0; i < memoCount; i++)
+            {
+                var priced = memoKeys[i];
+                if ((priced & 0xFF) <= cciNumeric && ((priced >> 8) & 0xFF) <= cciAlnum && (priced >> 16) <= cciByte && memoCosts[i] + eciBits > capacityBits)
+                    return false;
+            }
+
+            cost = ModeSegmenter.ComputeCosts(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, table, out var finalState);
+            if (!table.IsEmpty)
+            {
+                tableKey = key;
+                tableState = finalState;
+            }
             if (memoCount < memoKeys.Length)
             {
                 memoKeys[memoCount] = key;
@@ -473,7 +519,7 @@ internal static partial class RmQRSegmentPlanner
             }
         }
 
-        return cost + eciBits <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
+        return cost + eciBits <= capacityBits;
     }
 
     /// <summary><see cref="PlanFits"/> for the Kanji plan, memoised under a key that carries Kanji's width as well.</summary>
@@ -533,7 +579,7 @@ internal static partial class RmQRSegmentPlanner
         => (ModeSegmenter.CheapestSixths(text, charset) + 5) / 6 + RmQRConstants.ModeIndicatorLength + MinCountBitsAny;
 
     /// <summary>
-    /// The floor cost run: minimal payload bits at the narrowest count indicator widths, plus how many runs of each mode the plan achieving it contains.
+    /// The floor cost run of the Kanji scan's UTF-8 plan: minimal payload bits at the narrowest count indicator widths, plus how many runs of each mode the plan achieving it contains.
     /// The run counts are what let <see cref="UpperBound"/> re-price that same plan at any version without a second cost run.
     /// </summary>
     private static int ComputeFloor(ReadOnlySpan<char> text, EciMode charset, out int runsNumeric, out int runsAlnum, out int runsByte)
@@ -566,6 +612,15 @@ internal static partial class RmQRSegmentPlanner
             + runsNumeric * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric) - MinCountBitsNumeric)
             + runsAlnum * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric) - MinCountBitsAlnum)
             + runsByte * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte) - MinCountBitsByte);
+
+    /// <summary>
+    /// Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the upper bound the Kanji scan uses to accept a candidate for the UTF-8 plan without pricing it. It is the floor plan re-priced at <paramref name="version"/>, in payload bits (no ECI prefix).
+    /// </summary>
+    public static int FloorPlanUpperBound(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version)
+    {
+        var floor = ComputeFloor(text, charset, out var runsNumeric, out var runsAlnum, out var runsByte);
+        return UpperBound(floor, runsNumeric, runsAlnum, runsByte, version);
+    }
 
     /// <summary>
     /// <see cref="TrivialLowerBoundBits"/> for the Kanji plan: a character with a cell at 13 bits, a header for every stretch of either kind (<see cref="KanjiScreenBits"/>), and no ECI header.

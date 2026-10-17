@@ -1,4 +1,5 @@
 using FeatherQR.Internals;
+using FeatherQR.Internals.RmQR;
 using FeatherQR.Internals.StandardQR;
 using TUnit.Assertions.Enums;
 
@@ -155,6 +156,82 @@ public class PlanTableReuseTest
         await Assert.That(utf8Splits).IsGreaterThan(20).Because("the general loop, which prices each character at its byte count, keeps a table too");
         await Assert.That(afterABandRejection).IsGreaterThan(10).Because("a later band accepted after an earlier band's run was priced and rejected, where a table kept from the earlier run can be wrong");
         await Assert.That(afterARejectionInAnotherState).IsGreaterThan(0).Because("a later band accepted after an earlier band's run ended in another state, where a state kept from the earlier run would walk the table to another plan");
+    }
+
+    [Test]
+    public async Task RmQr_PlanFromTheScansTable_IsThePlanTheBuildMakes()
+    {
+        var fromTheTable = 0;
+        var builtAgain = 0;
+        var afterAPricedRejection = 0;
+        var strategies = new[] { RmQRFitStrategy.MinimizeArea, RmQRFitStrategy.MinimizeWidth, RmQRFitStrategy.MinimizeHeight };
+
+        foreach (var text in Texts(360, 300))
+        {
+            var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: false, planKanji: true);
+            var eciBits = analysis.EciMode == EciMode.Default ? 0 : RmQRConstants.ModeIndicatorLength + 8;
+            var table = new byte[text.Length * ModeSegmenter.ParentBytesPerChar];
+            var fromTable = new ModeSegment[RmQRSegmentPlanner.MaxSegments];
+            var fresh = new ModeSegment[RmQRSegmentPlanner.MaxSegments];
+            foreach (var level in new[] { RmQREccLevel.M, RmQREccLevel.H })
+            {
+                foreach (var strategy in strategies)
+                {
+                    var because = $"「{text}」 at {level}, {strategy}";
+                    var selected = RmQRSegmentPlanner.TrySelectVersion(text, in analysis, level, null, strategy, null, table, out var version, out var useSegments, out var kanjiPlan, out var tableHoldsPlan, out var finalState, out var plannedBits);
+                    var expected = RmQRSegmentPlanner.TrySelectVersion(text, in analysis, level, null, strategy, null, out var expectedVersion, out var expectedUseSegments, out var expectedKanjiPlan);
+                    await Assert.That((selected, version, useSegments, kanjiPlan)).IsEqualTo((expected, expectedVersion, expectedUseSegments, expectedKanjiPlan)).Because(because);
+                    if (!useSegments)
+                        continue;
+
+                    Array.Clear(fresh);
+                    var expectedBuilt = RmQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, level, fresh, out var expectedCount);
+                    if (!tableHoldsPlan)
+                    {
+                        builtAgain++;
+                        continue;
+                    }
+
+                    fromTheTable++;
+                    Array.Clear(fromTable);
+                    var built = RmQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, level, table, finalState, plannedBits, fromTable, out var count);
+                    await Assert.That(built).IsEqualTo(expectedBuilt).Because(because);
+                    await Assert.That(fromTable.AsSpan(0, count).ToArray()).IsEquivalentTo(fresh.AsSpan(0, expectedCount).ToArray(), CollectionOrdering.Matching).Because(because);
+
+                    // The first candidate of the order past the trivial bound, where the scan made its first run. When
+                    // that run did not fit, the accepting run came later, and a table kept from the first run would
+                    // hold another version's plan.
+                    var first = FirstPricedCandidate(text, in analysis, level, strategy, eciBits);
+                    if (first is { } candidate && candidate != version)
+                    {
+                        var cost = RmQRSegmentPlanner.MinimumPayloadBits(text, analysis.EciMode, RmQRConstants.GetCountIndicatorLength(candidate, EncodingMode.Numeric), RmQRConstants.GetCountIndicatorLength(candidate, EncodingMode.Alphanumeric), RmQRConstants.GetCountIndicatorLength(candidate, EncodingMode.Byte));
+                        if (cost + eciBits > 8 * RmQRConstants.GetDataCodewordCount(candidate, level))
+                            afterAPricedRejection++;
+                    }
+                }
+            }
+        }
+
+        await Assert.That(fromTheTable).IsGreaterThan(50);
+        await Assert.That(afterAPricedRejection).IsGreaterThan(10).Because("a candidate accepted after the scan's first run was priced and rejected, where a table kept from the first run would be wrong");
+        await Assert.That(builtAgain).IsGreaterThan(0).Because("a candidate accepted on a remembered cost whose run was not the last, where the table belongs to another width triple");
+    }
+
+    /// <summary>The first version of the strategy's order, ahead of the single-mode fit, whose capacity clears the trivial bound: where the scan makes its first run.</summary>
+    private static RmQRVersion? FirstPricedCandidate(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel level, RmQRFitStrategy strategy, int eciBits)
+    {
+        var hasSingle = RmQRVersionSelector.TrySelectAutoFit(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, level, strategy, null, out var single);
+        var trivial = RmQRSegmentPlanner.TrivialLowerBoundBits(text, analysis.EciMode) + eciBits;
+        foreach (var rank in RmQRVersionSelector.GetFitOrder(strategy))
+        {
+            var candidate = (RmQRVersion)rank;
+            if (hasSingle && candidate == single)
+                return null;
+            if (8 * RmQRConstants.GetDataCodewordCount(candidate, level) >= trivial)
+                return candidate;
+        }
+
+        return null;
     }
 
     /// <summary>The last version of a count-indicator band within the window.</summary>

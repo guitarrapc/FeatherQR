@@ -60,8 +60,20 @@ public class RmQRSegmentationTest
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 
         // Alternating every character: the trivial bound cannot rule this out, so the
-        // floor runs and no candidate is accepted.
+        // scan runs the program.
         "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7",
+
+        // The skip on a priced width triple. The first plan costs exactly R11x59-H's
+        // capacity at the widths R13x43 was priced and rejected at, so a skip that
+        // rejects an exact fill falls to the single fit R9x77 (MinimizeArea at H). The
+        // second is priced at R17x59 under H, one count indicator wider in Numeric than
+        // R13x77 and rejected by one bit, so a skip taken from a wider triple loses
+        // R13x77 (MinimizeWidth at H). The third has a Kanji plan priced and rejected
+        // before its UTF-8 plan reaches R15x139 at H. The two plans share the memo,
+        // and a skip that reads a Kanji entry as a UTF-8 one takes R17x139.
+        "AAAAAA7777aaaaaa",
+        "AAAAAAAAAAAAA77777777aaaaaaaaaaaaa",
+        string.Concat(Enumerable.Repeat("a日", 15)) + "1234ABC",
 
         // Alternating in tens: a shape where a per-version cost run, not a bound, is
         // what decides the version.

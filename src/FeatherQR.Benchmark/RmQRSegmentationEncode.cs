@@ -14,22 +14,22 @@
 ///   Length, shape held fixed   : mixed-20 / -60 / -120 / -150 (half letters, half digits)
 ///   Shape, length held at 120  : numeric / alnum / byte / mixed / alt1 / alt10
 ///
-/// and to cover every filter the scan can terminate in (DP passes per encode in brackets. The scan is bounded before it is priced, so most shapes never build a table at all):
+/// and to cover every way the scan can end (cost runs per encode in brackets. A run writes the table the build walks back, so a shape accepted by its last run pays no run for the build):
 ///
 ///   numeric-*  : all digits, so one mode is provably optimal and the short-circuit
-///                returns before any bound is computed [0 passes]
+///                returns before any bound is computed [0 runs]
 ///   alnum-120  : the trivial O(n) bound rejects every better-ranked version, so no
-///                cost run happens [0 passes]
-///   byte-150   : the same, at the byte capacity boundary [0 passes]
+///                cost run happens [0 runs]
+///   byte-150   : the same, at the byte capacity boundary [0 runs]
 ///   alt1-120   : alternating every character. The trivial bound cannot rule this out
 ///                (it prices each digit at the numeric rate, ignoring that switching
-///                every character never pays), so the floor runs and then rejects
-///                everything. It plans and gains nothing [1 pass]
-///   alt10-120  : alternating every ten, where a per-version cost run is what decides
-///                the version rather than a bound [3 passes]
-///   mixed-*    : the common shape. The upper bound accepts without a per-version run
-///                [2 passes: floor + building the chosen plan]
-///   url-38     : a realistic payload (R11x77 as one run, R15x43 split) [2 passes]
+///                every character never pays), so the first candidate past it is priced,
+///                rejected, and the rest skipped on that cost. It plans and gains nothing [1 run]
+///   alt10-120  : alternating every ten, where the first candidate priced rejects and a
+///                second width triple decides the version [2 runs]
+///   mixed-*    : the common shape. The first candidate past the bound is priced at its
+///                own widths and fits, and the build walks that run back [1 run]
+///   url-38     : a realistic payload (R11x77 as one run, R15x43 split) [1 run]
 ///   utf8-60    : Japanese with digits, UTF-8 behind an ECI prefix under both (R13x139):
 ///                no split of it is smaller
 ///   kanji-60   : the same text with AllowKanji: Single still writes UTF-8 (R13x139), since

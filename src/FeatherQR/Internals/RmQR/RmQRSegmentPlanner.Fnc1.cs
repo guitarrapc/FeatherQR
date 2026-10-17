@@ -7,16 +7,16 @@ namespace FeatherQR.Internals.RmQR;
 /// The version scan and the plan under FNC1 (specs/rmqr-encoder.md, FNC1): the indicator's bits (3 in first
 /// position, 11 in second) join the ECI prefix in every capacity check, the single-mode ceiling is the fit with
 /// those bits, the costs come from the FNC1 program (<see cref="ModeSegmenter.ComputeCostsFnc1"/>), whose Alphanumeric runs count a literal
-/// <c>%</c> twice and never hold a separator pair, and no Kanji plan is priced. The scan keeps the trivial bound and
-/// the memoised cost run of the scan without FNC1 and drops its floor filter, whose run counting reads the other
-/// program's packed table. The route is cold, so the exact cost run can decide alone.
+/// <c>%</c> twice and never hold a separator pair, and no Kanji plan is priced. The scan has the shape of the scan without
+/// FNC1 and without Kanji: the trivial bound, a memoised cost run per width triple and the kept table. A floor run
+/// counting runs would read the other program's packed table. The route is cold, so the exact cost run can decide alone.
 /// With a table, the scan leaves the predecessors of its last run there and says whether that run priced the
 /// candidate it accepted. A remembered cost accepts a candidate priced by an earlier run, whose table is gone,
 /// and a requested version is accepted unpriced. Both build their plan with a run of their own.
 /// </summary>
 internal static partial class RmQRSegmentPlanner
 {
-    /// <summary><see cref="SelectVersion"/> under FNC1, throwing what <see cref="RmQRVersionSelector.SelectFnc1"/> throws when nothing fits.</summary>
+    /// <summary><see cref="SelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, out bool, out bool)"/> under FNC1, throwing what <see cref="RmQRVersionSelector.SelectFnc1"/> throws when nothing fits.</summary>
     public static RmQRVersion SelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, out bool useSegments)
         => SelectVersionFnc1(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, default, out useSegments, out _, out _, out _);
 
@@ -29,7 +29,7 @@ internal static partial class RmQRSegmentPlanner
         return RmQRVersionSelector.SelectFnc1(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, fnc1.RmQrHeaderBits);
     }
 
-    /// <summary><see cref="TrySelectVersion"/> under FNC1. Argument errors still throw, in the same order and with the same messages.</summary>
+    /// <summary><see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, out RmQRVersion, out bool, out bool)"/> under FNC1. Argument errors still throw, in the same order and with the same messages.</summary>
     public static bool TrySelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, out RmQRVersion selected, out bool useSegments)
         => TrySelectVersionFnc1(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, default, out selected, out useSegments, out _, out _, out _);
 
@@ -116,7 +116,7 @@ internal static partial class RmQRSegmentPlanner
         return hasSingle;
     }
 
-    /// <summary><see cref="TryBuildPlan"/> under FNC1: the FNC1 program's plan, its Alphanumeric runs counting their literal percents twice, and the indicator's bits in the capacity check.</summary>
+    /// <summary><see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, RmQRVersion, RmQREccLevel, Span{ModeSegment}, out int)"/> under FNC1: the FNC1 program's plan, its Alphanumeric runs counting their literal percents twice, and the indicator's bits in the capacity check.</summary>
     public static bool TryBuildPlanFnc1(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, Fnc1Mode fnc1, Span<ModeSegment> segments, out int segmentCount)
     {
         segmentCount = 0;

@@ -216,7 +216,7 @@ public static partial class RmQRCodeGenerator
 
         var analysis = AnalyzeForPlan(textSpan, eciMode, allowKanji, fnc1);
         byte[]? rentedTable = null;
-        var tableLength = fnc1.IsActive ? RmQRSegmentPlanner.Fnc1TableLength(textSpan, in analysis) : 0;
+        var tableLength = fnc1.IsActive ? RmQRSegmentPlanner.Fnc1TableLength(textSpan, in analysis) : RmQRSegmentPlanner.TableLength(textSpan, in analysis);
         Span<byte> table = tableLength == 0
             ? default
             : tableLength <= ModeSegmenter.Fnc1MaxStackParents
@@ -224,11 +224,11 @@ public static partial class RmQRCodeGenerator
                 : (rentedTable = ArrayPool<byte>.Shared.Rent(tableLength));
         try
         {
-            bool useSegments, kanjiPlan = false, tableHoldsPlan = false;
-            int tableFinalState = 0, tablePlannedBits = 0;
+            bool useSegments, kanjiPlan = false, tableHoldsPlan;
+            int tableFinalState, tablePlannedBits;
             if (fnc1.IsActive
                 ? !RmQRSegmentPlanner.TrySelectVersionFnc1(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, table, out version, out useSegments, out tableHoldsPlan, out tableFinalState, out tablePlannedBits)
-                : !RmQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out version, out useSegments, out kanjiPlan))
+                : !RmQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, table, out version, out useSegments, out kanjiPlan, out tableHoldsPlan, out tableFinalState, out tablePlannedBits))
                 return false;
 
             if (!useSegments)
@@ -409,7 +409,7 @@ public static partial class RmQRCodeGenerator
     {
         var analysis = AnalyzeForPlan(textSpan, eciMode, allowKanji, fnc1);
         byte[]? rentedTable = null;
-        var tableLength = fnc1.IsActive ? RmQRSegmentPlanner.Fnc1TableLength(textSpan, in analysis) : 0;
+        var tableLength = fnc1.IsActive ? RmQRSegmentPlanner.Fnc1TableLength(textSpan, in analysis) : RmQRSegmentPlanner.TableLength(textSpan, in analysis);
         Span<byte> table = tableLength == 0
             ? default
             : tableLength <= ModeSegmenter.Fnc1MaxStackParents
@@ -417,11 +417,11 @@ public static partial class RmQRCodeGenerator
                 : (rentedTable = ArrayPool<byte>.Shared.Rent(tableLength));
         try
         {
-            bool useSegments, kanjiPlan = false, tableHoldsPlan = false;
-            int tableFinalState = 0, tablePlannedBits = 0;
+            bool useSegments, kanjiPlan = false, tableHoldsPlan;
+            int tableFinalState, tablePlannedBits;
             var version = fnc1.IsActive
                 ? RmQRSegmentPlanner.SelectVersionFnc1(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, table, out useSegments, out tableHoldsPlan, out tableFinalState, out tablePlannedBits)
-                : RmQRSegmentPlanner.SelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out useSegments, out kanjiPlan);
+                : RmQRSegmentPlanner.SelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, table, out useSegments, out kanjiPlan, out tableHoldsPlan, out tableFinalState, out tablePlannedBits);
             segmentCount = 0;
             planCharset = kanjiPlan ? EciMode.Default : analysis.EciMode;
 
@@ -448,7 +448,7 @@ public static partial class RmQRCodeGenerator
 
     /// <summary>
     /// Builds the plan the version scan chose: a Kanji-eligible text's Kanji plan, the FNC1 program's plan under FNC1, or the plan in the analysis's charset.
-    /// Under FNC1 the plan comes from the scan's <paramref name="table"/> where <paramref name="tableHoldsPlan"/> says the table is its, and from a run of its own otherwise.
+    /// The plan comes from the scan's <paramref name="table"/> where <paramref name="tableHoldsPlan"/> says the table is its, and from a run of its own otherwise.
     /// </summary>
     private static bool TryBuildPlan(ReadOnlySpan<char> textSpan, in TextAnalysisResult analysis, bool kanjiPlan, RmQRVersion version, RmQREccLevel eccLevel, Fnc1Mode fnc1, ReadOnlySpan<byte> table, bool tableHoldsPlan, int tableFinalState, int tablePlannedBits, Span<ModeSegment> plan, out int segmentCount)
         => kanjiPlan
@@ -457,7 +457,9 @@ public static partial class RmQRCodeGenerator
                 ? tableHoldsPlan
                     ? RmQRSegmentPlanner.TryBuildPlanFnc1(textSpan, analysis.EciMode, version, eccLevel, fnc1, table, tableFinalState, tablePlannedBits, plan, out segmentCount)
                     : RmQRSegmentPlanner.TryBuildPlanFnc1(textSpan, analysis.EciMode, version, eccLevel, fnc1, plan, out segmentCount)
-                : RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount);
+                : tableHoldsPlan
+                    ? RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, table, tableFinalState, tablePlannedBits, plan, out segmentCount)
+                    : RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount);
 
     private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, EciMode planCharset, ReadOnlySpan<ModeSegment> segments, Fnc1Mode fnc1, Span<byte> core, int stride)
     {
