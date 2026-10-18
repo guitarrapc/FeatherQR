@@ -158,16 +158,11 @@ public class PlanTableReuseTest
         await Assert.That(afterARejectionInAnotherState).IsGreaterThan(0).Because("a later band accepted after an earlier band's run ended in another state, where a state kept from the earlier run would walk the table to another plan");
     }
 
-    /// <summary>
-    /// The table holds the last run's plan. Where that plan, re-priced at a later candidate's widths, fits the candidate, the
-    /// scan takes the candidate with that plan instead of pricing it again, so the plan the build walks back is the minimal
-    /// plan at the kept run's widths, not at the candidate's. It must still measure what the scan said and fit.
-    /// </summary>
     [Test]
     public async Task RmQr_PlanFromTheScansTable_IsThePlanTheBuildMakes()
     {
-        var exact = 0;
-        var repriced = 0;
+        var fromTheTable = 0;
+        var builtAgain = 0;
         var afterAPricedRejection = 0;
         var strategies = new[] { RmQRFitStrategy.MinimizeArea, RmQRFitStrategy.MinimizeWidth, RmQRFitStrategy.MinimizeHeight };
 
@@ -192,20 +187,16 @@ public class PlanTableReuseTest
                     Array.Clear(fresh);
                     var expectedBuilt = RmQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, level, fresh, out var expectedCount);
                     if (!tableHoldsPlan)
+                    {
+                        builtAgain++;
                         continue;
+                    }
 
+                    fromTheTable++;
                     Array.Clear(fromTable);
                     var built = RmQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, level, table, finalState, plannedBits, fromTable, out var count);
                     await Assert.That(built).IsEqualTo(expectedBuilt).Because(because);
-                    if (SamePlan(fromTable.AsSpan(0, count), fresh.AsSpan(0, expectedCount)))
-                    {
-                        exact++;
-                    }
-                    else
-                    {
-                        repriced++;
-                        await AssertRepricedPlan(text, analysis.EciMode, version, level, eciBits, plannedBits, fromTable.AsMemory(0, count), kanji: false, because);
-                    }
+                    await Assert.That(fromTable.AsSpan(0, count).ToArray()).IsEquivalentTo(fresh.AsSpan(0, expectedCount).ToArray(), CollectionOrdering.Matching).Because(because);
 
                     // The first candidate of the order past the trivial bound, where the scan made its first run. When
                     // that run did not fit, the accepting run came later, and a table kept from the first run would
@@ -221,53 +212,9 @@ public class PlanTableReuseTest
             }
         }
 
-        await Assert.That(exact).IsGreaterThan(50);
-        await Assert.That(repriced).IsGreaterThan(10).Because("a candidate taken on the kept run's plan re-priced at its widths, where the plan is the minimal one at the kept widths and a build pricing the candidate again would make another");
+        await Assert.That(fromTheTable).IsGreaterThan(50);
         await Assert.That(afterAPricedRejection).IsGreaterThan(10).Because("a candidate accepted after the scan's first run was priced and rejected, where a table kept from the first run would be wrong");
-    }
-
-    private static bool SamePlan(ReadOnlySpan<ModeSegment> a, ReadOnlySpan<ModeSegment> b)
-    {
-        if (a.Length != b.Length)
-            return false;
-        for (var i = 0; i < a.Length; i++)
-        {
-            if (a[i].ModeIndex != b[i].ModeIndex || a[i].Start != b[i].Start || a[i].Length != b[i].Length || a[i].UnitCount != b[i].UnitCount)
-                return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// A plan taken from the kept run re-priced: it measures what the scan reported, fits the version with its ECI header, and is the minimal plan at the widths of some version no wider in any count indicator than the one taken, since that is where the run that wrote the table priced it.
-    /// </summary>
-    private static async Task AssertRepricedPlan(string text, EciMode charset, RmQRVersion version, RmQREccLevel level, int eciBits, int plannedBits, ReadOnlyMemory<ModeSegment> plan, bool kanji, string because)
-    {
-        var measured = RmQRSegmentPlanner.MeasurePlan(version, plan.Span);
-        await Assert.That(measured).IsEqualTo(plannedBits).Because(because);
-        await Assert.That(measured + eciBits).IsLessThanOrEqualTo(8 * RmQRConstants.GetDataCodewordCount(version, level)).Because(because);
-
-        var minimalSomewhere = false;
-        foreach (var narrower in Enum.GetValues<RmQRVersion>())
-        {
-            if (RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Numeric) > RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric)
-                || RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Alphanumeric) > RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric)
-                || RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Byte) > RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte)
-                || (kanji && RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Kanji) > RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Kanji)))
-                continue;
-
-            var optimum = kanji
-                ? RmQRSegmentPlanner.MinimumPayloadBitsKanji(text, RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Numeric), RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Alphanumeric), RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Byte), RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Kanji))
-                : RmQRSegmentPlanner.MinimumPayloadBits(text, charset, RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Numeric), RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Alphanumeric), RmQRConstants.GetCountIndicatorLength(narrower, EncodingMode.Byte));
-            if (RmQRSegmentPlanner.MeasurePlan(narrower, plan.Span) == optimum)
-            {
-                minimalSomewhere = true;
-                break;
-            }
-        }
-
-        await Assert.That(minimalSomewhere).IsTrue().Because($"{because}: the plan is the minimal plan at none of the narrower widths");
+        await Assert.That(builtAgain).IsGreaterThan(0).Because("a candidate accepted on a remembered cost whose run was not the last, where the table belongs to another width triple");
     }
 
     /// <summary>
@@ -280,16 +227,10 @@ public class PlanTableReuseTest
     public async Task RmQr_KanjiScansTable_IsThePlanTheBuildMakes()
     {
         var kanjiFromTheTable = 0;
-        var kanjiRepriced = 0;
         var utf8FromTheTable = 0;
         var builtAgain = 0;
         var utf8WhereTheKanjiPlanWasRejected = 0;
         var strategies = new[] { RmQRFitStrategy.MinimizeArea, RmQRFitStrategy.MinimizeWidth, RmQRFitStrategy.MinimizeHeight };
-
-        // At M under MinimizeArea this text's Kanji plan is priced and rejected at R15x77 and R9x139. Before the ceiling it fit R17x77 on the
-        // first run's remembered cost, whose table was gone. The last run's plan re-priced at R17x77 fits, so the table is the plan's and the
-        // build runs no program.
-        var acceptedOnTheKeptPlan = string.Concat(Enumerable.Repeat("日本7777", 10));
 
         foreach (var text in KanjiTexts())
         {
@@ -308,8 +249,6 @@ public class PlanTableReuseTest
                     await Assert.That((selected, version, useSegments, kanjiPlan)).IsEqualTo((expected, expectedVersion, expectedUseSegments, expectedKanjiPlan)).Because(because);
                     if (!useSegments)
                         continue;
-                    if (text == acceptedOnTheKeptPlan && level == RmQREccLevel.M && strategy == RmQRFitStrategy.MinimizeArea)
-                        await Assert.That((version, kanjiPlan, tableHoldsPlan)).IsEqualTo((RmQRVersion.R17x77, true, true)).Because(because);
 
                     Array.Clear(fresh);
                     Array.Clear(fromTable);
@@ -348,18 +287,12 @@ public class PlanTableReuseTest
                     }
 
                     await Assert.That(built).IsEqualTo(expectedBuilt).Because(because);
-                    if (!SamePlan(fromTable.AsSpan(0, count), fresh.AsSpan(0, expectedCount)))
-                    {
-                        if (kanjiPlan)
-                            kanjiRepriced++;
-                        await AssertRepricedPlan(text, analysis.EciMode, version, level, kanjiPlan ? 0 : RmQRConstants.ModeIndicatorLength + 8, plannedBits, fromTable.AsMemory(0, count), kanjiPlan, because);
-                    }
+                    await Assert.That(fromTable.AsSpan(0, count).ToArray()).IsEquivalentTo(fresh.AsSpan(0, expectedCount).ToArray(), CollectionOrdering.Matching).Because(because);
                 }
             }
         }
 
         await Assert.That(kanjiFromTheTable).IsGreaterThan(50);
-        await Assert.That(kanjiRepriced).IsGreaterThan(0).Because("a Kanji plan taken on the kept run's plan re-priced that is not the minimal plan at the version's widths");
         await Assert.That(utf8FromTheTable).IsGreaterThan(10);
         await Assert.That(utf8WhereTheKanjiPlanWasRejected).IsGreaterThan(10).Because("a UTF-8 plan taken where the Kanji plan was priced and rejected, where a table kept from the Kanji run would walk back to the other program's plan");
         await Assert.That(builtAgain).IsGreaterThan(0).Because("a candidate accepted on a remembered cost whose run was not the last, where the table belongs to another run");
@@ -374,10 +307,6 @@ public class PlanTableReuseTest
         yield return string.Concat(Enumerable.Repeat("a日", 15)) + "1234ABC";
         yield return "日本語12345";
         yield return "あい123";
-
-        // At H under MinimizeHeight the Kanji plan is priced and rejected at R7x77 and R7x99 is taken on that run's plan re-priced,
-        // which splits the ASCII into a Numeric and an Alphanumeric run where the minimal plan at R7x99's widths has one Alphanumeric run.
-        yield return "a日12345ABC";
 
         // At H under MinimizeArea or MinimizeWidth, R13x77's Kanji plan is priced and rejected by two bits and its UTF-8
         // plan then fits on a remembered cost, so the table holds the Kanji run and the build must run the program.

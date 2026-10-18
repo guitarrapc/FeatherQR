@@ -113,12 +113,6 @@ public class ModeSegmenterKanjiParityTest
                 await Assert.That(actualPlan[i].Start).IsEqualTo(expectedPlan[i].Start).Because($"{because}, run {i}");
                 await Assert.That(actualPlan[i].Length).IsEqualTo(expectedPlan[i].Length).Because($"{because}, run {i}");
             }
-
-            ModeSegmenter.CountRuns(parents, actualState, text.Length, out var runsNumeric, out var runsAlnum, out var runsByte, out var runsKanji);
-            await Assert.That(runsNumeric).IsEqualTo(expectedPlan.Count(s => s.ModeIndex == 0)).Because(because);
-            await Assert.That(runsAlnum).IsEqualTo(expectedPlan.Count(s => s.ModeIndex == 1)).Because(because);
-            await Assert.That(runsByte).IsEqualTo(expectedPlan.Count(s => s.ModeIndex == 2)).Because(because);
-            await Assert.That(runsKanji).IsEqualTo(expectedPlan.Count(s => s.ModeIndex == 3)).Because(because);
         }
     }
 

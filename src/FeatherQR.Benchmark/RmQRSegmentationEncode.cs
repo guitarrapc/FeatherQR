@@ -14,7 +14,7 @@
 ///   Length, shape held fixed   : mixed-20 / -60 / -120 / -150 (half letters, half digits)
 ///   Shape, length held at 120  : numeric / alnum / byte / mixed / alt1 / alt10
 ///
-/// and to cover every way the scan can end (cost runs per encode in brackets. A run writes the table the build walks back, so a shape taken on its last run's plan pays no run for the build):
+/// and to cover every way the scan can end (cost runs per encode in brackets. A run writes the table the build walks back, so a shape accepted by its last run pays no run for the build):
 ///
 ///   numeric-*  : all digits, so one mode is provably optimal and the short-circuit
 ///                returns before any bound is computed [0 runs]
@@ -25,8 +25,8 @@
 ///                (it prices each digit at the numeric rate, ignoring that switching
 ///                every character never pays), so the first candidate past it is priced,
 ///                rejected, and the rest skipped on that cost. It plans and gains nothing [1 run]
-///   alt10-120  : alternating every ten, where the first candidate priced rejects, the next two are screened
-///                or skipped, and the third is taken on that run's plan re-priced [1 run]
+///   alt10-120  : alternating every ten, where the first candidate priced rejects and a
+///                second width triple decides the version [2 runs]
 ///   mixed-*    : the common shape. The first candidate past the bound is priced at its
 ///                own widths and fits, and the build walks that run back [1 run]
 ///   url-38     : a realistic payload (R11x77 as one run, R15x43 split) [1 run]
@@ -35,7 +35,7 @@
 ///                and the rest are skipped on that cost [1 run]
 ///   kanji-60   : the same text with AllowKanji: Single still writes UTF-8 (R13x139), since
 ///                the digits are ASCII. Optimal writes a Kanji plan, Kanji runs beside Numeric runs (R17x77),
-///                taken at R17x77 on the second run's plan re-priced, so the build walks that table back [2 runs]
+///                taken on a remembered cost after two candidates were priced, so the build runs the program [3 runs]
 ///
 /// Every fixture fits under Single too, so no row is comparing a success with a throw.
 /// ECC M only: the H capacities shift which version wins but not the shape of the work.
