@@ -137,11 +137,12 @@ internal static partial class RmQRSegmentPlanner
         var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
 
-        // Two filters ahead of a cost run. The trivial bound is a lower bound for every version. A priced width triple is a lower bound for every
-        // version whose three widths are at least its, since widening a count indicator only raises the price of the run that carries it.
-        // A candidate neither filter rejects is priced at its own widths, with its predecessors kept, so the accepting run's table is the plan's.
-        // A floor run at the narrowest widths, with the floor plan re-priced as an upper bound, decided most candidates without a run of their own
-        // but left the build to run the program again. Rationale and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
+        // Three filters ahead of a cost run. The trivial bound is a lower bound for every version. A priced width triple is a lower bound for every
+        // version whose three widths are at least its, since widening a count indicator only raises the price of the run that carries it. The kept
+        // run's plan re-priced at a candidate's widths is an upper bound, and where it fits the candidate is taken with that plan, so the build
+        // walks the table back without a run of its own. A candidate no filter decides is priced at its own widths, with its predecessors kept.
+        // A floor run at the narrowest widths once gave the upper bound, but its table was never the plan's and the build ran the program
+        // again. Rationale and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
         var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits;
 
         Span<int> memoKeys = stackalloc int[MemoCapacity];
@@ -150,8 +151,7 @@ internal static partial class RmQRSegmentPlanner
 
         Debug.Assert(table.IsEmpty || table.Length >= text.Length * ModeSegmenter.ParentBytesPerChar);
         var window = table.IsEmpty ? default : table.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar);
-        var tableKey = -1;
-        var tableState = 0;
+        var kept = KeptRun.None;
 
         for (var rank = 0; rank < order.Length; rank++)
         {
@@ -165,12 +165,12 @@ internal static partial class RmQRSegmentPlanner
             if (capacityBits < trivialBits)
                 continue; // no split of this content could fit, whatever the plan
 
-            if (PlanFits(text, charset, candidate, eccLevel, eciBits, memoKeys, memoCosts, ref memoCount, window, ref tableKey, ref tableState, out var cost, out var key))
+            if (PlanFits(text, charset, candidate, eccLevel, eciBits, memoKeys, memoCosts, ref memoCount, window, ref kept, out var cost, out var fromTable))
             {
                 useSegments = true;
                 selected = candidate;
-                tableHoldsPlan = !window.IsEmpty && tableKey == key;
-                tableFinalState = tableState;
+                tableHoldsPlan = fromTable;
+                tableFinalState = kept.State;
                 tablePlannedBits = cost;
                 return true;
             }
@@ -186,9 +186,9 @@ internal static partial class RmQRSegmentPlanner
     /// </summary>
     /// <remarks>
     /// The UTF-8 plan is weighed so that a Kanji-eligible text never needs a larger symbol than its UTF-8 plan gives: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
-    /// Each program has the two filters of the scan without Kanji, a screen and the skip on a priced width set, and both memoise in one store. A Kanji key carries Kanji's width in its top byte, so neither skip reads the other program's cost, and the key tells apart versions whose other three widths agree (R13x77 and R15x59, R13x139 and R17x99).
+    /// Each program has the three filters of the scan without Kanji, a screen, the kept plan re-priced and the skip on a priced width set, and both memoise in one store. A Kanji key carries Kanji's width in its top byte, so neither skip reads the other program's cost, and the key tells apart versions whose other three widths agree (R13x77 and R15x59, R13x139 and R17x99).
     /// The Kanji plan's screen prices a character with a cell at 13 bits and a header a stretch at Kanji's narrowest count indicator, 2 bits, so that a plan filling R7x43 exactly is not skipped.
-    /// Both programs write the one <paramref name="table"/>, so it holds the plan taken only where the accepting run was the last made, whichever program made it.
+    /// Both programs write the one <paramref name="table"/>, so its plan re-priced bounds a candidate of the program that made it alone, and the build walks it back where that plan is the one taken, whichever program made it.
     /// </remarks>
     private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRVersion single, bool hasSingle, Span<byte> table, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan, out bool tableHoldsPlan, out int tableFinalState, out int tablePlannedBits)
     {
@@ -212,8 +212,7 @@ internal static partial class RmQRSegmentPlanner
 
         Debug.Assert(table.IsEmpty || table.Length >= text.Length * ModeSegmenter.ParentBytesPerChar);
         var window = table.IsEmpty ? default : table.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar);
-        var tableKey = -1;
-        var tableState = 0;
+        var kept = KeptRun.None;
 
         for (var rank = 0; rank < order.Length; rank++)
         {
@@ -226,24 +225,24 @@ internal static partial class RmQRSegmentPlanner
             var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(candidate, eccLevel);
 
             if (capacityBits >= kanjiTrivialBits
-                && KanjiPlanFits(text, candidate, capacityBits, memoKeys, memoCosts, ref memoCount, window, ref tableKey, ref tableState, out var kanjiCost, out var kanjiKey))
+                && KanjiPlanFits(text, candidate, capacityBits, memoKeys, memoCosts, ref memoCount, window, ref kept, out var kanjiCost, out var kanjiFromTable))
             {
                 useSegments = true;
                 kanjiPlan = true;
                 selected = candidate;
-                tableHoldsPlan = !window.IsEmpty && tableKey == kanjiKey;
-                tableFinalState = tableState;
+                tableHoldsPlan = kanjiFromTable;
+                tableFinalState = kept.State;
                 tablePlannedBits = kanjiCost;
                 return true;
             }
 
             if (capacityBits >= utf8TrivialBits
-                && PlanFits(text, EciMode.Utf8, candidate, eccLevel, EciHeaderBits, memoKeys, memoCosts, ref memoCount, window, ref tableKey, ref tableState, out var cost, out var key))
+                && PlanFits(text, EciMode.Utf8, candidate, eccLevel, EciHeaderBits, memoKeys, memoCosts, ref memoCount, window, ref kept, out var cost, out var fromTable))
             {
                 useSegments = true;
                 selected = candidate;
-                tableHoldsPlan = !window.IsEmpty && tableKey == key;
-                tableFinalState = tableState;
+                tableHoldsPlan = fromTable;
+                tableFinalState = kept.State;
                 tablePlannedBits = cost;
                 return true;
             }
@@ -483,17 +482,33 @@ internal static partial class RmQRSegmentPlanner
     // ---------------------------------------------------------------
 
     /// <summary>
-    /// Whether the plan at <paramref name="version"/>'s widths fits its capacity, from the memo, from a priced triple no wider in any mode whose cost does not fit, or from a cost run.
-    /// A run made with a <paramref name="table"/> leaves its predecessors there and names its widths in <paramref name="tableKey"/>, so the caller can tell whose plan the table holds.
+    /// Whether a plan fits <paramref name="version"/>: the kept run's plan re-priced at its widths (<paramref name="fromTable"/>, the plan the build walks back), else the memo, else a priced triple no wider in any mode whose cost does not fit, else a cost run.
+    /// A run made with a <paramref name="table"/> leaves its predecessors there and becomes the <paramref name="kept"/> run.
     /// </summary>
-    private static bool PlanFits(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, int eciBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount, Span<byte> table, ref int tableKey, ref int tableState, out int cost, out int key)
+    private static bool PlanFits(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, int eciBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount, Span<byte> table, ref KeptRun kept, out int cost, out bool fromTable)
     {
         var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
         var cciNumeric = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
         var cciAlnum = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
         var cciByte = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
-        key = cciNumeric | (cciAlnum << 8) | (cciByte << 16);
+        var key = cciNumeric | (cciAlnum << 8) | (cciByte << 16);
 
+        // The kept plan is a real plan, so its price at these widths bounds the optimum from above, and a plan that fits is a plan to emit.
+        // It is taken only where each count indicator is at least the one it was priced at: a narrower field holds a fitting run's count too,
+        // but only because the tables size every field to its version's capacity, and the plan is not made to rest on that. A Kanji key (top
+        // byte at least 2) is the other program's plan.
+        // Re-pricing only adds, so a kept cost over the capacity is rejected before its runs are counted.
+        if (kept.Key >= 0 && (kept.Key >> 24) == 0 && kept.Cost + eciBits <= capacityBits && kept.WidthsWithin(cciNumeric, cciAlnum, cciByte, 0))
+        {
+            cost = kept.RepricedAt(table, text.Length, cciNumeric, cciAlnum, cciByte, 0);
+            if (cost + eciBits <= capacityBits)
+            {
+                fromTable = true;
+                return true;
+            }
+        }
+
+        fromTable = false;
         cost = -1;
         for (var i = 0; i < memoCount; i++)
         {
@@ -517,8 +532,8 @@ internal static partial class RmQRSegmentPlanner
             cost = ModeSegmenter.ComputeCosts(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, table, out var finalState);
             if (!table.IsEmpty)
             {
-                tableKey = key;
-                tableState = finalState;
+                kept = new KeptRun(key, finalState, cost);
+                fromTable = true;
             }
             if (memoCount < memoKeys.Length)
             {
@@ -532,16 +547,70 @@ internal static partial class RmQRSegmentPlanner
     }
 
     /// <summary>
-    /// <see cref="PlanFits"/> for the Kanji plan, keyed by all four widths. Its skip reads Kanji keys alone: the other program's cost is no bound on this plan.
+    /// The last cost run made with a table: the widths it priced (the memo key), the state its plan ends in, its cost, and the runs of each mode on that plan once counted.
     /// </summary>
-    private static bool KanjiPlanFits(ReadOnlySpan<char> text, RmQRVersion version, int capacityBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount, Span<byte> table, ref int tableKey, ref int tableState, out int cost, out int key)
+    private struct KeptRun
+    {
+        public int Key;
+        public int State;
+        public int Cost;
+        private int runs;
+
+        public static KeptRun None => new() { Key = -1 };
+
+        public KeptRun(int key, int state, int cost)
+        {
+            Key = key;
+            State = state;
+            Cost = cost;
+            runs = -1;
+        }
+
+        /// <summary>Whether each width the run priced is at most the given one, Kanji's compared only where given.</summary>
+        public readonly bool WidthsWithin(int cciNumeric, int cciAlnum, int cciByte, int cciKanji)
+            => (Key & 0xFF) <= cciNumeric && ((Key >> 8) & 0xFF) <= cciAlnum && ((Key >> 16) & 0xFF) <= cciByte && (Key >> 24) <= cciKanji;
+
+        /// <summary>
+        /// The kept plan's price at other widths: its payload is unchanged and each run's count indicator grows by the width's difference. The runs are counted from the table on the first call.
+        /// </summary>
+        public int RepricedAt(ReadOnlySpan<byte> table, int length, int cciNumeric, int cciAlnum, int cciByte, int cciKanji)
+        {
+            if (runs < 0)
+            {
+                ModeSegmenter.CountRuns(table, State, length, out var numeric, out var alnum, out var @byte, out var kanji);
+                runs = numeric | (alnum << 8) | (@byte << 16) | (kanji << 24);
+            }
+
+            return Cost
+                + (runs & 0xFF) * (cciNumeric - (Key & 0xFF))
+                + ((runs >> 8) & 0xFF) * (cciAlnum - ((Key >> 8) & 0xFF))
+                + ((runs >> 16) & 0xFF) * (cciByte - ((Key >> 16) & 0xFF))
+                + (runs >> 24) * (cciKanji - (Key >> 24));
+        }
+    }
+
+    /// <summary>
+    /// <see cref="PlanFits"/> for the Kanji plan, keyed by all four widths. Its bounds read Kanji keys alone: the other program's plan and cost bound nothing here.
+    /// </summary>
+    private static bool KanjiPlanFits(ReadOnlySpan<char> text, RmQRVersion version, int capacityBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount, Span<byte> table, ref KeptRun kept, out int cost, out bool fromTable)
     {
         var cciNumeric = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
         var cciAlnum = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
         var cciByte = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
         var cciKanji = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Kanji);
-        key = cciNumeric | (cciAlnum << 8) | (cciByte << 16) | (cciKanji << 24);
+        var key = cciNumeric | (cciAlnum << 8) | (cciByte << 16) | (cciKanji << 24);
 
+        if (kept.Key >= 0 && (kept.Key >> 24) != 0 && kept.Cost <= capacityBits && kept.WidthsWithin(cciNumeric, cciAlnum, cciByte, cciKanji))
+        {
+            cost = kept.RepricedAt(table, text.Length, cciNumeric, cciAlnum, cciByte, cciKanji);
+            if (cost <= capacityBits)
+            {
+                fromTable = true;
+                return true;
+            }
+        }
+
+        fromTable = false;
         cost = -1;
         for (var i = 0; i < memoCount; i++)
         {
@@ -566,8 +635,8 @@ internal static partial class RmQRSegmentPlanner
             cost = KanjiPlanCost(text, version, table, out var finalState);
             if (!table.IsEmpty)
             {
-                tableKey = key;
-                tableState = finalState;
+                kept = new KeptRun(key, finalState, cost);
+                fromTable = true;
             }
             if (memoCount < memoKeys.Length)
             {

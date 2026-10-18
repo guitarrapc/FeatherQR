@@ -764,16 +764,24 @@ internal static partial class ModeSegmenter
     /// Returns false when the plan needs more runs than the caller lent room for.
     /// </summary>
     public static bool Reconstruct(ReadOnlySpan<char> text, ReadOnlySpan<byte> parents, int finalState, Span<ModeSegment> segments, out int segmentCount)
-        => WalkBack(text.Length, parents, ParentBytesPerChar, finalState, segments, out segmentCount);
+        => WalkBack(text.Length, parents, ParentBytesPerChar, finalState, segments, materialise: true, out segmentCount, out _, out _, out _, out _);
+
+    /// <summary>Counts the runs of each mode on the minimal-cost path, without materialising it: what re-pricing that plan at other count indicator widths needs.</summary>
+    public static void CountRuns(ReadOnlySpan<byte> parents, int finalState, int length, out int runsNumeric, out int runsAlnum, out int runsByte, out int runsKanji)
+        => WalkBack(length, parents, ParentBytesPerChar, finalState, default, materialise: false, out _, out runsNumeric, out runsAlnum, out runsByte, out runsKanji);
 
     /// <summary>
     /// The walk back, run by run. A run of Numeric can only begin where the state is Numeric1, every third character of the run, and a run of Alphanumeric where it is Alnum1, every second. A run of Byte or Kanji begins at the first entry that does not say Byte or Kanji.
     /// Each step reads whether the run continued at the place before, whose address is the position alone, so no load waits for the one before it.
     /// The first character's predecessor is the start, which no run continues from, so every search lands at or after it.
     /// </summary>
-    private static bool WalkBack(int length, ReadOnlySpan<byte> table, int stride, int finalState, Span<ModeSegment> segments, out int segmentCount)
+    private static bool WalkBack(int length, ReadOnlySpan<byte> table, int stride, int finalState, Span<ModeSegment> segments, bool materialise, out int segmentCount, out int runsNumeric, out int runsAlnum, out int runsByte, out int runsKanji)
     {
         segmentCount = 0;
+        runsNumeric = 0;
+        runsAlnum = 0;
+        runsByte = 0;
+        runsKanji = 0;
         var state = finalState;
         var end = length;
         var count = 0;
@@ -785,12 +793,14 @@ internal static partial class ModeSegmenter
             if (state == StateByte)
             {
                 mode = 2;
+                runsByte++;
                 while ((parent = table[i * stride]) == StateByte)
                     i--;
             }
             else if (state <= StateNumeric2)
             {
                 mode = 0;
+                runsNumeric++;
                 // Back to where this group of three began.
                 i -= state == StateNumeric1 ? 0 : state == StateNumeric2 ? 1 : 2;
                 while ((parent = table[i * stride + 1] & 7) == StateNumeric0)
@@ -799,6 +809,7 @@ internal static partial class ModeSegmenter
             else if (state <= StateAlnum1)
             {
                 mode = 1;
+                runsAlnum++;
                 i -= state == StateAlnum1 ? 0 : 1;
                 while ((parent = table[i * stride + 1] >> 3) == StateAlnum0)
                     i -= 2;
@@ -807,13 +818,17 @@ internal static partial class ModeSegmenter
             {
                 // Kanji, whose predecessor sits where Byte's does at an ASCII position.
                 mode = 3;
+                runsKanji++;
                 while ((parent = table[i * stride]) == StateKanji)
                     i--;
             }
 
-            if (count >= segments.Length)
-                return false;
-            segments[count++] = new ModeSegment(mode, i, end - i, 0);
+            if (materialise)
+            {
+                if (count >= segments.Length)
+                    return false;
+                segments[count++] = new ModeSegment(mode, i, end - i, 0);
+            }
             end = i;
             state = parent;
         }
