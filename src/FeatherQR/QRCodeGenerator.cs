@@ -1425,6 +1425,14 @@ public static partial class QRCodeGenerator
 
         byte[]? rentedTable = null;
         var tableLength = PlanTableLength(textSpan, in analysis, fnc1);
+
+        // Content whose scan keeps no table and plans no Kanji selects the single-mode fit, so it is written from here: the planned route's two frames and the scan's call are what Optimal would cost it over Single.
+        if (tableLength == 0 && !analysis.KanjiPlannable)
+        {
+            var single = SelectSingleVersion(eccLevel, in analysis, in options, fnc1);
+            return CreateSingleModeCore(textSpan, PrepareConfiguration(in analysis, ResolveSingleLevel(in analysis, eccLevel, single, options.BoostEccLevel, fnc1.StandardQrHeaderBits), options.Utf8Bom, single), fnc1, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+        }
+
         Span<byte> table = tableLength == 0
             ? default
             : tableLength <= ModeSegmenter.MaxStackParents
@@ -1510,6 +1518,14 @@ public static partial class QRCodeGenerator
 
         byte[]? rentedTable = null;
         var tableLength = PlanTableLength(textSpan, in analysis, fnc1);
+
+        // Content whose scan keeps no table and plans no Kanji selects the single-mode fit, so it is written from here: the planned route's two frames and the scan's call are what Optimal would cost it over Single.
+        if (tableLength == 0 && !analysis.KanjiPlannable)
+        {
+            var single = SelectSingleVersion(eccLevel, in analysis, in options, fnc1);
+            return CreateSingleModeCore(textSpan, PrepareConfiguration(in analysis, ResolveSingleLevel(in analysis, eccLevel, single, options.BoostEccLevel, fnc1.StandardQrHeaderBits), options.Utf8Bom, single), fnc1, destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+        }
+
         Span<byte> table = tableLength == 0
             ? default
             : tableLength <= ModeSegmenter.MaxStackParents
@@ -1526,6 +1542,16 @@ public static partial class QRCodeGenerator
             if (rentedTable is not null)
                 ArrayPool<byte>.Shared.Return(rentedTable, clearArray: false);
         }
+    }
+
+    /// <summary>
+    /// The version of a text whose scan keeps no table and plans no Kanji: the single-mode fit, which is what <see cref="SelectOptimalVersion"/> returns for such a text, with the same throw when nothing fits.
+    /// </summary>
+    private static int SelectSingleVersion(QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Fnc1Mode fnc1)
+    {
+        if (!TryGetVersionInRangeFnc1(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, utf8BOM: false, fnc1.StandardQrHeaderBits, options.Version.Min, options.Version.Max, out var version))
+            ThrowDoesNotFit(in analysis, eccLevel, in options);
+        return version;
     }
 
     /// <summary>The rest of <see cref="CreateOptimalTo"/>, with the plan's table held (empty for a text whose scan keeps none).</summary>
