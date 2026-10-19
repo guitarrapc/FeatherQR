@@ -948,26 +948,6 @@ internal static partial class ModeSegmenter
     }
 
     /// <summary>
-    /// The sixths sum of pricing each character at the cheapest rate any mode could give it: one O(n) pass, no table.
-    /// Rounded up and topped with the cheapest possible header by the caller, it is a lower bound on any plan at any version, so it may only reject.
-    /// </summary>
-    public static int CheapestSixths(ReadOnlySpan<char> text, EciMode charset)
-    {
-        var sixths = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (CharacterSets.IsNumeric(c))
-                sixths += SixthsPerDigit;
-            else if (CharacterSets.IsAlphanumeric(c))
-                sixths += SixthsPerAlnum;
-            else
-                sixths += SixthsPerByte * ByteCost(text, i, charset);
-        }
-        return sixths;
-    }
-
-    /// <summary>
     /// <see cref="CheapestSixths"/> for a Kanji-eligible text, the screen of <see cref="ComputeCostsKanji"/>: a character with a cell at Kanji's 13 bits, the only mode that carries it without an ECI header, and ASCII at one byte.
     /// Priced as its UTF-8 bytes instead, a kana would count 24 bits against the 13 a Kanji plan pays, and the screen would reject versions the plan fits.
     /// </summary>

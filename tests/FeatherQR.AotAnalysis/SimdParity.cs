@@ -46,6 +46,7 @@ internal static class SimdParity
         failures += Report("ModulePlacer.ApplyMaskPattern", MaskApplyMismatches);
         failures += Report("QRBinaryEncoder payload writers", PayloadWriterMismatches);
         failures += Report("ModeSegmenter.ComputeCostsLanes", SegmenterLaneMismatches);
+        failures += Report("ModeSegmenter.CheapestSixths", SixthsMismatches);
         failures += Report("StructuredAppendPlanner.WalkLanes", WalkLaneMismatches);
         failures += Report("EccBinaryDecoder.ComputeSyndromesVector128", SyndromeMismatches);
         failures += Report("EccBinaryEncoder.PackedSimdKernel", EccEncoderMismatches);
@@ -1006,6 +1007,46 @@ internal static class SimdParity
                         same = expected[k].Start == actual[k].Start && expected[k].Length == actual[k].Length && expected[k].ModeIndex == actual[k].ModeIndex;
                     if (!same)
                         mismatches.Add($"lengths {string.Join(',', lengths)}, {charset}, lane {lane}: cost {costs[lane]}, expected {cost}");
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The trivial lower bound's vector tiers against its scalar loop: every tier this build runs, called directly, and the dispatch, on digits,
+    /// alphanumerics, punctuation, Latin-1, wider characters, pairs and lone surrogates, one-byte and UTF-8, at every length across the block and
+    /// masked-tail boundaries.
+    /// </summary>
+    private static List<string> SixthsMismatches()
+    {
+        var mismatches = new List<string>();
+        // A vector tier reads its last block overlapped, so it takes only a text of at least one block, as the dispatch gives it.
+        var tiers = new List<(string Name, int MinLength, Func<string, EciMode, int> Run)> { ("dispatch", 0, (text, charset) => ModeSegmenter.CheapestSixths(text, charset)) };
+#if NET8_0_OR_GREATER
+        if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+            tiers.Add(("Vector128", 0, (text, charset) => ModeSegmenter.CheapestSixthsVector128(text, charset)));
+        if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+            tiers.Add(("Avx2", 0, (text, charset) => ModeSegmenter.CheapestSixthsAvx2(text, charset)));
+#endif
+        var random = new Random(20261018);
+        string[] alphabets = ["0123456789", "ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:", "abcxyz!?@[]", "0123456789AZ $xéλあ\uFEFF\uD800\uDC00", "日本語漢字\u0800\uFFFF", "😀🎉a1"];
+        foreach (var alphabet in alphabets)
+        {
+            foreach (var length in Enumerable.Range(0, 71).Concat([100, 120, 361, 1000, 100_000]))
+            {
+                var text = new string(Enumerable.Range(0, length).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray());
+                foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+                {
+                    var expected = ModeSegmenter.CheapestSixthsScalar(text, charset);
+                    foreach (var (name, minLength, run) in tiers)
+                    {
+                        if (length < minLength)
+                            continue;
+                        var actual = run(text, charset);
+                        if (actual != expected)
+                            mismatches.Add($"{name}, {charset}, {length} chars of \"{alphabet}\": {actual}, scalar {expected}");
+                    }
                 }
             }
         }
