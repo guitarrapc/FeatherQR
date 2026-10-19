@@ -28,6 +28,7 @@ public class SimdTiersTest
         ["ModuleBitPacker"] = ["ModuleBitPacker.cs"],
         ["ModeSegmenterLanes"] = ["ModeSegmenter.Lanes.cs", "ModeSegmenter.Lanes.Arm64.cs", "ModeSegmenter.Lanes.Simd.cs"],
         ["ModeSegmenterSixths"] = ["ModeSegmenter.Sixths.cs", "ModeSegmenter.Sixths.X86.cs", "ModeSegmenter.Sixths.Vector128.cs"],
+        ["ModeSegmenterCosts"] = ["ModeSegmenter.cs", "ModeSegmenter.Costs.X86.cs", "ModeSegmenter.Costs.Arm64.cs"],
         ["EccBinaryEncoder"] = ["BinaryEncoders/EccBinaryEncoder.cs", "BinaryEncoders/EccBinaryEncoder.X86.cs", "BinaryEncoders/EccBinaryEncoder.Wasm.cs"],
         ["EccBinaryDecoder"] = ["BinaryDecoders/EccBinaryDecoder.cs", "BinaryDecoders/EccBinaryDecoder.Arm64.cs", "BinaryDecoders/EccBinaryDecoder.Vector128.cs"],
         ["LuminanceConverter"] = ["ImageDecoders/LuminanceConverter.cs", "ImageDecoders/LuminanceConverter.Simd.cs"],

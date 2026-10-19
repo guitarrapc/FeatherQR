@@ -99,6 +99,65 @@ public class ModeSegmenterSixthsParityTest
         }
     }
 
+    /// <summary>
+    /// The FNC1 bound against its own rule, priced one character at a time: a separator is an Alphanumeric character and a
+    /// literal percent a byte, the rest as without FNC1. The alphabets put both characters beside every class, the pairs and
+    /// the mark, at every length the vector tiers see, so a bound derived from the plain kernel is held to the rule itself.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Fnc1Alphabets))]
+    public async Task Fnc1Bound_MatchesTheFnc1Rule_AtEveryLengthAndCharset(string alphabet)
+    {
+        var random = new Random(20261019);
+        foreach (var length in Enumerable.Range(0, 71).Concat([100, 120, 361, 1000, 7_089, 40_000]))
+        {
+            for (var seed = 0; seed < (length > 1000 ? 1 : 3); seed++)
+            {
+                var chars = new char[length];
+                for (var i = 0; i < length; i++)
+                    chars[i] = alphabet[random.Next(alphabet.Length)];
+                var text = new string(chars);
+                foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+                    await Assert.That(ModeSegmenter.CheapestSixthsFnc1(text, charset)).IsEqualTo(ReferenceFnc1(text, charset)).Because($"FNC1 on {charset} text of {text.Length} chars 「{Show(text)}」");
+            }
+        }
+    }
+
+    public static IEnumerable<string> Fnc1Alphabets() =>
+    [
+        "%",
+        "\u001D",
+        "%\u001D",
+        "0123456789%\u001D",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ $*+-./:%\u001D",
+        "abcxyz%\u001D",
+        "0123456789ABCDEFGHIJ $%*+-./:abcxyz!?\u001D",
+        "éèêàçñüß%\u001D",
+        "日本語漢字%\u001D\uFEFF",
+        "\uD83D\uDE00\uD800\uDC00%\u001D\uD800\uDC00",
+        "a日1\uD83D\uDE00Z\uD800é:7%\u001D",
+    ];
+
+    private static int ReferenceFnc1(string text, EciMode charset)
+    {
+        var sixths = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c is >= '0' and <= '9')
+                sixths += SixthsPerDigit;
+            else if (c == '\u001D')
+                sixths += SixthsPerAlnum;
+            else if (c == '%')
+                sixths += SixthsPerByte;
+            else if (Alphanumeric.Contains(c))
+                sixths += SixthsPerAlnum;
+            else
+                sixths += SixthsPerByte * Utf8Bytes(text, i, charset);
+        }
+        return sixths;
+    }
+
     private static int Reference(string text, EciMode charset)
     {
         var sixths = 0;

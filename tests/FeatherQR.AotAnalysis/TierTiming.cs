@@ -131,6 +131,7 @@ internal static partial class TierTiming
         Console.WriteLine($"# label {label ?? "-"}");
         Console.WriteLine($"# runtime {RuntimeInformation.FrameworkDescription} {RuntimeInformation.RuntimeIdentifier} {RuntimeInformation.ProcessArchitecture}");
         Console.WriteLine($"# vectors 128 {Vector128.IsHardwareAccelerated}, 256 {Vector256.IsHardwareAccelerated}");
+        Console.WriteLine($"# dynamic code supported {RuntimeFeature.IsDynamicCodeSupported}, compiled {RuntimeFeature.IsDynamicCodeCompiled}");
         Console.WriteLine($"# tiers {string.Join(' ', SimdTiers.Report().Select(k => $"{k.Name}={k.Active}"))}");
     }
 
