@@ -47,6 +47,7 @@ internal static class SimdParity
         failures += Report("QRBinaryEncoder payload writers", PayloadWriterMismatches);
         failures += Report("ModeSegmenter.ComputeCostsLanes", SegmenterLaneMismatches);
         failures += Report("ModeSegmenter.CheapestSixths", SixthsMismatches);
+        failures += Report("ModeSegmenter.ComputeCosts", CostsMismatches);
         failures += Report("StructuredAppendPlanner.WalkLanes", WalkLaneMismatches);
         failures += Report("EccBinaryDecoder.ComputeSyndromesVector128", SyndromeMismatches);
         failures += Report("EccBinaryEncoder.PackedSimdKernel", EccEncoderMismatches);
@@ -1046,6 +1047,55 @@ internal static class SimdParity
                         var actual = run(text, charset);
                         if (actual != expected)
                             mismatches.Add($"{name}, {charset}, {length} chars of \"{alphabet}\": {actual}, scalar {expected}");
+                    }
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The cost run's lane tier against the scalar loops, through the dispatch and called directly: cost, final state and the parent table, on digits,
+    /// alphanumerics, bytes and their mixes under both one-byte charsets, at the three Standard QR bands, with and without Alphanumeric, at every length
+    /// across the lanes' run paths and past the tier's limit.
+    /// </summary>
+    private static List<string> CostsMismatches()
+    {
+        var mismatches = new List<string>();
+        var random = new Random(20261019);
+        string[] alphabets = ["0123456789", "ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:", "abcxyz!?@[]", "0123456789ABCDEFGHIJ $%*+-./:abcxyz!?", "a7A1", "éèê 12 AB"];
+        (int Numeric, int Alnum, int Byte)[] widths = [(10, 9, 8), (12, 11, 16), (14, 13, 16)];
+        foreach (var alphabet in alphabets)
+        {
+            foreach (var length in Enumerable.Range(0, 71).Concat([100, 120, 361, 1000, 7089, 7090]))
+            {
+                var text = new string(Enumerable.Range(0, length).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray());
+                foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1 })
+                {
+                    foreach (var (numeric, alnum, bytes) in widths)
+                    {
+                        foreach (var allowAlnum in new[] { true, false })
+                        {
+                            var expectedTable = new byte[length * ModeSegmenter.ParentBytesPerChar];
+                            var expected = ModeSegmenter.ComputeCostsScalar(text, charset, 4 + numeric + 4, 4 + alnum + 6, 4 + bytes, default, out var expectedState, allowAlnum);
+                            if (length > 0)
+                                ModeSegmenter.ComputeCostsScalar(text, charset, 4 + numeric + 4, 4 + alnum + 6, 4 + bytes, expectedTable, out _, allowAlnum);
+                            var table = new byte[length * ModeSegmenter.ParentBytesPerChar];
+                            var actual = ModeSegmenter.ComputeCosts(text, charset, 4, numeric, alnum, bytes, default, out var actualState, allowAlnum);
+                            var tracked = length == 0 ? actual : ModeSegmenter.ComputeCosts(text, charset, 4, numeric, alnum, bytes, table, out _, allowAlnum);
+                            if (actual != expected || actualState != expectedState || tracked != expected || !table.AsSpan().SequenceEqual(expectedTable))
+                                mismatches.Add($"dispatch, {charset}, ({numeric}, {alnum}, {bytes}) alnum={allowAlnum}, {length} chars of \"{alphabet}\": {actual}/{actualState}, tracked {tracked}, scalar {expected}/{expectedState}");
+#if NET8_0_OR_GREATER
+                            if (System.Runtime.Intrinsics.X86.Sse41.IsSupported && length <= ModeSegmenter.MaxLaneCostChars)
+                            {
+                                var laneTable = new byte[length * ModeSegmenter.ParentBytesPerChar];
+                                var lanes = ModeSegmenter.CostsLatinSse41(text, 4 + numeric + 4, 4 + alnum + 6, 4 + bytes + 8, allowAlnum, out var laneState);
+                                var laneTracked = length == 0 ? lanes : ModeSegmenter.TrackedLatinSse41(text, 4 + numeric + 4, 4 + alnum + 6, 4 + bytes + 8, allowAlnum, laneTable, out _);
+                                if (lanes != expected || laneState != expectedState || laneTracked != expected || !laneTable.AsSpan().SequenceEqual(expectedTable))
+                                    mismatches.Add($"Sse41, {charset}, ({numeric}, {alnum}, {bytes}) alnum={allowAlnum}, {length} chars of \"{alphabet}\": {lanes}/{laneState}, tracked {laneTracked}, scalar {expected}/{expectedState}");
+                            }
+#endif
+                        }
                     }
                 }
             }

@@ -78,6 +78,7 @@ For each kernel, its tiers in the order its dispatch tries them, and the tier th
 | `ModuleBitPacker` | `Avx2`, `Ssse3`, `AdvSimd`, `PackedSimd` | `Ssse3` | `Avx2` | `AdvSimd` | `PackedSimd` |
 | `ModeSegmenterLanes` | `Vector256`, `AdvSimd`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Vector256` | `AdvSimd` | `PackedSimd` |
 | `ModeSegmenterSixths` | `Avx2`, `Vector128` | `Vector128` | `Avx2` | `Vector128` | `Vector128` |
+| `ModeSegmenterCosts` | `Sse41` | `Sse41` | `Sse41` | `Scalar` | `Scalar` |
 | `EccBinaryEncoder` | `GfniV256`, `Gfni`, `Ssse3`, `AdvSimd`, `PackedSimd` | `Gfni` or `Ssse3` | `GfniV256` or `Ssse3` | `AdvSimd` | `PackedSimd` |
 | `EccBinaryDecoder` | `GfniV256`, `AdvSimd`, `Vector128` | `Vector128` | `GfniV256` or `Vector128` | `AdvSimd` | `Vector128` |
 | `LuminanceConverter` | `Avx2`, `AdvSimdDp`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Avx2` | `AdvSimdDp` or `Vector128` | `PackedSimd` |

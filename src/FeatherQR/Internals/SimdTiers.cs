@@ -193,6 +193,8 @@ internal static class SimdTiers
         new("ModeSegmenterLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // ModeSegmenter.CheapestSixths: the trivial lower bound of every Optimal version scan, each character priced at its cheapest mode. The AVX2 tier classifies 32 characters a step by byte shuffles, the 128-bit tier 8 by range compares.
         new("ModeSegmenterSixths", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Vector128, Isa.Vector128)),
+        // ModeSegmenter.ComputeCosts: the cost run of the Optimal version scans on a one-byte charset, the six states as 16-bit lanes of one vector, the cheapest state by one horizontal minimum.
+        new("ModeSegmenterCosts", (SimdTier.Sse41, Isa.Sse41)),
         // EccBinaryEncoder.CalculateEcc / CalculateECCBlocks: Reed-Solomon remainder, a group's blocks side by side in one loop on x86 (from .NET 8 two with SSSE3 up to 16 codewords, and on .NET 10 up to four with GFNI, above 16 codewords only with 256-bit GFNI and AVX2). GFNI runs inside the SSSE3 entry, and its 256-bit form, for blocks over 16 codewords, also asks for AVX2. WebAssembly runs the NEON kernel with its swizzle for the table lookup.
         new("EccBinaryEncoder", (SimdTier.GfniV256, Isa.GfniV256 && Isa.Avx2), (SimdTier.Gfni, Isa.Gfni), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // EccBinaryDecoder.ComputeSyndromes: the syndrome pass. The 128-bit tier multiplies by each lane's constant through its bit planes, with no platform instruction.
@@ -286,6 +288,8 @@ internal static class SimdTiers
         new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
         new("ModeSegmenterLanes",      [Sse2],          [Vector256],          [AdvSimd],            [PackedSimd]),
         new("ModeSegmenterSixths",     [Vector128],     [Avx2],               [Vector128],          [Vector128]),
+        // ModeSegmenterCosts: the horizontal minimum with its index is one SSE4.1 instruction, which NEON and WebAssembly have no counterpart of, and the scalar loops keep their states in registers there.
+        new("ModeSegmenterCosts",      [Sse41],         [Sse41],              [Scalar],             [Scalar]),
         new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [PackedSimd]),
         new("EccBinaryDecoder",        [Vector128],     [GfniV256, Vector128], [AdvSimd],           [Vector128]),
         new("LuminanceConverter",      [Sse2],          [Avx2],               [AdvSimdDp, Vector128], [PackedSimd]),

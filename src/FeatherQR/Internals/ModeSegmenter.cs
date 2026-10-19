@@ -104,6 +104,22 @@ internal static partial class ModeSegmenter
         var openNumeric = modeIndicatorBits + cciNumeric + 4;
         var openAlnum = modeIndicatorBits + cciAlnum + 6;
         var openByte = modeIndicatorBits + cciByte;
+#if NET8_0_OR_GREATER
+        // The lane form holds the six states in one vector and takes the cheapest state by one horizontal minimum, which the scalar loops' minimum trees do not match on any text a scan sees (specs/standardqr-encoder.md, "Mixed-mode segmentation").
+        if (charset != EciMode.Utf8 && allowByte && TakesLaneCosts(text.Length))
+        {
+            return parents.IsEmpty
+                ? CostsLatinSse41(text, openNumeric, openAlnum, openByte + 8, allowAlnum, out finalState)
+                : TrackedLatinSse41(text, openNumeric, openAlnum, openByte + 8, allowAlnum, parents, out finalState);
+        }
+#endif
+
+        return ComputeCostsScalar(text, charset, openNumeric, openAlnum, openByte, parents, out finalState, allowAlnum, allowByte);
+    }
+
+    /// <summary><see cref="ComputeCosts"/> by the scalar loops alone, the header costs already summed, for the lane tier's parity.</summary>
+    internal static int ComputeCostsScalar(ReadOnlySpan<char> text, EciMode charset, int openNumeric, int openAlnum, int openByte, Span<byte> parents, out int finalState, bool allowAlnum = true, bool allowByte = true)
+    {
         var latin = charset != EciMode.Utf8 && allowByte;
 
         if (parents.IsEmpty)
