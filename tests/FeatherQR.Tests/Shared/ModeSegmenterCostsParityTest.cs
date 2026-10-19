@@ -4,7 +4,8 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The lane tier of the cost run (<see cref="ModeSegmenter.CostsLatinSse41"/> and <see cref="ModeSegmenter.TrackedLatinSse41"/>) against the scalar loops,
+/// The lane tiers of the cost run (<see cref="ModeSegmenter.CostsLatinSse41"/> and <see cref="ModeSegmenter.TrackedLatinSse41"/> on x64,
+/// <see cref="ModeSegmenter.CostsLatinAdvSimd"/> on ARM64, which has no tracked form) against the scalar loops,
 /// cost, final state and the parent table byte for byte, on every class mix the scans see, at every length to the tier's limit and past it, under both
 /// one-byte charsets, with and without Alphanumeric, at the three Standard QR bands, an rMQR triple and a narrow shape. The dispatch is held to the same on
 /// both sides of the tier's limit. <c>ModeSegmenterPlanParityTest</c> holds the dispatch to an all-states reference besides.
@@ -15,17 +16,23 @@ public class ModeSegmenterCostsParityTest
 
     private delegate int Kernel(string text, EciMode charset, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> parents, out int finalState);
 
-    private static IEnumerable<(string Name, Kernel Run)> Kernels()
+    /// <summary>The dispatch and each lane tier this machine runs, with whether it writes the parents.</summary>
+    private static IEnumerable<(string Name, Kernel Run, bool Tracks)> Kernels()
     {
         yield return ("dispatch", (string text, EciMode charset, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> parents, out int finalState)
-            => ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, openNumeric - ModeIndicatorBits - 4, openAlnum - ModeIndicatorBits - 6, openByte - ModeIndicatorBits - 8, parents, out finalState, allowAlnum));
+            => ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, openNumeric - ModeIndicatorBits - 4, openAlnum - ModeIndicatorBits - 6, openByte - ModeIndicatorBits - 8, parents, out finalState, allowAlnum), true);
 #if NET8_0_OR_GREATER
         if (System.Runtime.Intrinsics.X86.Sse41.IsSupported)
         {
             yield return ("Sse41", (string text, EciMode charset, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> parents, out int finalState)
                 => parents.IsEmpty
                     ? ModeSegmenter.CostsLatinSse41(text, openNumeric, openAlnum, openByte, allowAlnum, out finalState)
-                    : ModeSegmenter.TrackedLatinSse41(text, openNumeric, openAlnum, openByte, allowAlnum, parents, out finalState));
+                    : ModeSegmenter.TrackedLatinSse41(text, openNumeric, openAlnum, openByte, allowAlnum, parents, out finalState), true);
+        }
+        if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            yield return ("AdvSimd", (string text, EciMode charset, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> parents, out int finalState)
+                => ModeSegmenter.CostsLatinAdvSimd(text, openNumeric, openAlnum, openByte, allowAlnum, out finalState), false);
         }
 #endif
     }
@@ -80,13 +87,13 @@ public class ModeSegmenterCostsParityTest
                             var expectedTable = new byte[length * ModeSegmenter.ParentBytesPerChar];
                             if (length > 0)
                                 ModeSegmenter.ComputeCostsScalar(text, charset, openNumeric, openAlnum, openByte - 8, expectedTable, out _, allowAlnum);
-                            foreach (var (name, run) in Kernels())
+                            foreach (var (name, run, tracks) in Kernels())
                             {
                                 if (name != "dispatch" && length > ModeSegmenter.MaxLaneCostChars)
                                     continue;
                                 var actual = run(text, charset, openNumeric, openAlnum, openByte, allowAlnum, default, out var actualState);
                                 await Assert.That((actual, actualState)).IsEqualTo((expected, expectedState)).Because($"{name} costs only, {because}");
-                                if (length == 0)
+                                if (length == 0 || !tracks)
                                     continue;
                                 var table = new byte[length * ModeSegmenter.ParentBytesPerChar];
                                 var tracked = run(text, charset, openNumeric, openAlnum, openByte, allowAlnum, table, out var trackedState);

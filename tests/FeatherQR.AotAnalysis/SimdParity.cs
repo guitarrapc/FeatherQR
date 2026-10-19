@@ -1055,7 +1055,7 @@ internal static class SimdParity
     }
 
     /// <summary>
-    /// The cost run's lane tier against the scalar loops, through the dispatch and called directly: cost, final state and the parent table, on digits,
+    /// The cost run's lane tiers against the scalar loops, through the dispatch and called directly: cost, final state and (but on ARM64's costs-only tier) the parent table, on digits,
     /// alphanumerics, bytes and their mixes under both one-byte charsets, at the three Standard QR bands, with and without Alphanumeric, at every length
     /// across the lanes' run paths and past the tier's limit.
     /// </summary>
@@ -1093,6 +1093,13 @@ internal static class SimdParity
                                 var laneTracked = length == 0 ? lanes : ModeSegmenter.TrackedLatinSse41(text, 4 + numeric + 4, 4 + alnum + 6, 4 + bytes + 8, allowAlnum, laneTable, out _);
                                 if (lanes != expected || laneState != expectedState || laneTracked != expected || !laneTable.AsSpan().SequenceEqual(expectedTable))
                                     mismatches.Add($"Sse41, {charset}, ({numeric}, {alnum}, {bytes}) alnum={allowAlnum}, {length} chars of \"{alphabet}\": {lanes}/{laneState}, tracked {laneTracked}, scalar {expected}/{expectedState}");
+                            }
+                            // ARM64's lane tier prices costs only.
+                            if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported && length <= ModeSegmenter.MaxLaneCostChars)
+                            {
+                                var lanes = ModeSegmenter.CostsLatinAdvSimd(text, 4 + numeric + 4, 4 + alnum + 6, 4 + bytes + 8, allowAlnum, out var laneState);
+                                if (lanes != expected || laneState != expectedState)
+                                    mismatches.Add($"AdvSimd, {charset}, ({numeric}, {alnum}, {bytes}) alnum={allowAlnum}, {length} chars of \"{alphabet}\": {lanes}/{laneState}, scalar {expected}/{expectedState}");
                             }
 #endif
                         }

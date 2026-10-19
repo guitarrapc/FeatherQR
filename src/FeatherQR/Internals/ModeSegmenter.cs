@@ -112,6 +112,9 @@ internal static partial class ModeSegmenter
                 ? CostsLatinSse41(text, openNumeric, openAlnum, openByte + 8, allowAlnum, out finalState)
                 : TrackedLatinSse41(text, openNumeric, openAlnum, openByte + 8, allowAlnum, parents, out finalState);
         }
+        // ARM64 takes the lane form for costs only, the tracked run staying on the scalar loop (ModeSegmenter.Costs.Arm64.cs).
+        if (parents.IsEmpty && charset != EciMode.Utf8 && allowByte && TakesLaneCostsAdvSimd(text.Length))
+            return CostsLatinAdvSimd(text, openNumeric, openAlnum, openByte + 8, allowAlnum, out finalState);
 #endif
 
         return ComputeCostsScalar(text, charset, openNumeric, openAlnum, openByte, parents, out finalState, allowAlnum, allowByte);
