@@ -56,6 +56,10 @@ public class ModeSegmenterLaneParityTest
             ["\uFEFF123456789\uFEFFx", "123456789\uFEFF\uFEFF", "\uD800", "\uDC00"],
             ["x\uD800", "\uDC00x", "\uD800\uD800\uDC00\uDC00", "😀123\uFEFFABC"],
             [new string('x', 3000), new string('あ', 2900), new string('0', 6000), new string('A', 4000)],
+            // A sparse group (58 characters, longest 40), which the 128-bit tier plans lane by lane with the scalar
+            // loops at the lanes' stride. The second lane's Byte run lies under the first lane's digits, so a write
+            // that ignored the stride would overwrite the first lane's parents after that lane was planned.
+            [string.Concat(Enumerable.Repeat("1234567890", 4)), "abcdefghijklmnop", "x", "y"],
         ];
         foreach (var chunks in cases)
             foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })

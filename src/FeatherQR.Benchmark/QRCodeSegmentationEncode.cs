@@ -4,7 +4,8 @@
 /// The Ratio column is the end-to-end multiplier a caller actually pays, but note it is not the planning cost in isolation.
 /// On the rows where the split wins, the Optimal arm lands on a smaller version and therefore also does less ECC, placement and module writing, so the ratio nets planning against a cheaper encode.
 ///
-/// Count indicator widths are constant within the three version bands (1-9 / 10-26 / 27-40), so the planner runs at most three O(n) cost passes plus one reconstruction pass, and a trivial single-pass bound rejects candidates no split could fit before any cost pass runs.
+/// Count indicator widths are constant within the three version bands (1-9 / 10-26 / 27-40), so the planner prices each band at most once per program (two programs for a Kanji-eligible text), and a trivial single-pass bound rejects candidates no split could fit before any cost pass runs.
+/// The plan is walked back from the accepting run's table. The one plan built by a run of its own, a Kanji-eligible text's UTF-8 plan, no shape below takes.
 /// The shapes separate the paths the scan can take:
 ///
 ///   numeric-*  : all digits, one mode is provably optimal, no cost run at all

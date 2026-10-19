@@ -110,7 +110,7 @@ public class KanjiPlanTableReuseTest
 
         await Assert.That(accepted[(int)MicroQRVersion.M3]).IsGreaterThan(20);
         await Assert.That(accepted[(int)MicroQRVersion.M4]).IsGreaterThan(20);
-        await Assert.That(afterARejection).IsGreaterThan(10).Because("M4 accepted after M3 was priced and rejected, where a table kept from M3's run would be wrong");
+        await Assert.That(afterARejection).IsGreaterThan(10).Because("M4 accepted after M3 was priced and rejected, where a table kept from M3's run can be wrong");
     }
 
     [Test]
@@ -157,7 +157,7 @@ public class KanjiPlanTableReuseTest
 
         await Assert.That(bands[0]).IsGreaterThan(20);
         await Assert.That(bands[1]).IsGreaterThan(20);
-        await Assert.That(afterABandRejection).IsGreaterThan(10).Because("a later band accepted after an earlier band's run was priced and rejected, where a table kept from the earlier run would be wrong");
+        await Assert.That(afterABandRejection).IsGreaterThan(10).Because("a later band accepted after an earlier band's run was priced and rejected, where a table kept from the earlier run can be wrong");
     }
 
     /// <summary>The last version of a count-indicator band within the window.</summary>

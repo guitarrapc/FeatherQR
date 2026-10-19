@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The eligible-path program (the eighth state, Kanji) against <see cref="KanjiPlanReference"/>, an all-states relaxation that shares only the cost model's numbers with it:
-/// the cost, the state it ends in, the plan the predecessor table walks back to (which decides the stream the writer emits), the runs counted per mode, and the lower bound the planners screen candidates with.
+/// the cost, the state it ends in, the plan the predecessor table walks back to (which decides the stream the writer emits), and the lower bound the planners screen candidates with.
 /// </summary>
 /// <remarks>
 /// The seven-state program is untouched by the eighth state and keeps its own suites (<c>ModeSegmenterPlanParityTest</c>, <c>ModeSegmenterByteRunParityTest</c>, <c>ModeSegmenterCostRunParityTest</c>, <c>ModeSegmenterLaneParityTest</c>).
@@ -113,12 +113,6 @@ public class ModeSegmenterKanjiParityTest
                 await Assert.That(actualPlan[i].Start).IsEqualTo(expectedPlan[i].Start).Because($"{because}, run {i}");
                 await Assert.That(actualPlan[i].Length).IsEqualTo(expectedPlan[i].Length).Because($"{because}, run {i}");
             }
-
-            ModeSegmenter.CountRuns(parents, actualState, text.Length, out var runsNumeric, out var runsAlnum, out var runsByte, out var runsKanji);
-            await Assert.That(runsNumeric).IsEqualTo(expectedPlan.Count(s => s.ModeIndex == 0)).Because(because);
-            await Assert.That(runsAlnum).IsEqualTo(expectedPlan.Count(s => s.ModeIndex == 1)).Because(because);
-            await Assert.That(runsByte).IsEqualTo(expectedPlan.Count(s => s.ModeIndex == 2)).Because(because);
-            await Assert.That(runsKanji).IsEqualTo(expectedPlan.Count(s => s.ModeIndex == 3)).Because(because);
         }
     }
 

@@ -247,24 +247,30 @@ internal static partial class ModeSegmenter
 
     /// <summary>
     /// Keys with parents from the second character on, one byte per character, Byte allowed: the per-symbol plan of every Latin symbol. Returns the cheapest key.
-    /// The widths are keys already (bits times eight), <paramref name="openByte"/> with its first character in. The table is read and written <paramref name="stride"/> bytes a character.
+    /// The widths are keys already (bits times eight), <paramref name="openByte"/> with its first character in. The table is written <paramref name="stride"/> bytes a character.
     /// </summary>
+    /// <remarks>
+    /// The shape of <see cref="CostsLatin"/>: the six keys are updated in place. Keys built beside the old ones for the next character would keep both sets live.
+    /// A run opens from the cheapest of the six keys, which can be a state of the run's own mode. That opening can be cheaper than an opening from another mode. The table can then hold other parents than those <see cref="TrackedGeneral"/> and the vector steps of <c>ComputeCostsLanes</c> write, since they open each mode from the other modes only.
+    /// An opening from the run's own mode never lies on a cheapest plan, since merging the two runs saves a header. So the cost, the final state and the walk back from that state agree with what TrackedGeneral and the vector steps give. One cheapest key then serves every mode, where TrackedGeneral keeps a minimum per mode.
+    /// </remarks>
     private static int TrackedLatin(ReadOnlySpan<char> text, int n1, int a1, int b, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> table, int stride)
     {
         const int U = UnreachableKey;
-        int n0 = U | StateNumeric0, n2 = U | StateNumeric2, a0 = U | StateAlnum0;
         var length = text.Length;
+        int n0 = U | StateNumeric0, n2 = U | StateNumeric2, a0 = U | StateAlnum0;
+        var cheapest = Math.Min(Math.Min(n1, a1), b);
         for (var i = 1; i < length; i++)
         {
             var cls = ClassOf(text[i]);
-            // The cheapest state of each denser mode. A key carries its state, so the lowest wins a tie.
-            var numeric = Math.Min(Math.Min(n0, n1), n2);
-            var alnum = Math.Min(a0, a1);
-            var byteKey = Math.Min(Math.Min(numeric, alnum) + openByte, b + 64);
-            table[i * stride] = (byte)(byteKey & 7);
+            // Byte continues at 8 bits or opens from the cheapest state. A key carries its state, so the lowest wins a tie.
+            var key = Math.Min(b + 64, cheapest + openByte);
+            table[i * stride] = (byte)(key & 7);
+            b = (key & ~7) | StateByte;
             if (cls == ClassOther)
             {
-                b = (byteKey & ~7) | StateByte;
+                // Only Byte encodes this character, so it alone stays reachable and every
+                // further such character extends its run: one add and one byte each.
                 n0 = U | StateNumeric0; n1 = U | StateNumeric1; n2 = U | StateNumeric2; a0 = U | StateAlnum0; a1 = U | StateAlnum1;
                 while (i + 1 < length && ClassOf(text[i + 1]) == ClassOther)
                 {
@@ -272,31 +278,36 @@ internal static partial class ModeSegmenter
                     b += 64;
                     table[i * stride] = StateByte;
                 }
+                cheapest = b;
                 continue;
             }
 
-            int nn0 = U | StateNumeric0, nn1 = U | StateNumeric1, nn2 = U | StateNumeric2, na0 = U | StateAlnum0, na1 = U | StateAlnum1;
-            int parentNumeric1 = 0, parentAlnum1 = 0;
+            var parents = 0;
             if (cls == ClassDigit)
             {
-                // Continued from Numeric0 (4 bits), or opened from Alphanumeric or Byte.
-                var key = Math.Min(n0 + 32, Math.Min(alnum, b) + openNumeric);
-                parentNumeric1 = key & 7;
-                nn1 = (key & ~7) | StateNumeric1;
-                nn2 = n1 + 25; // 3 bits, and Numeric1 becomes Numeric2
-                nn0 = n2 + 22; // 3 bits, and Numeric2 becomes Numeric0
+                // The first digit of a group costs 4 bits, continued from Numeric0 or opened from the cheapest state, the next two 3 each.
+                var wrapped = n2 + 22; // 3 bits, and Numeric2 becomes Numeric0
+                n2 = n1 + 25; // 3 bits, and Numeric1 becomes Numeric2
+                key = Math.Min(n0 + 32, cheapest + openNumeric);
+                parents = key & 7;
+                n1 = (key & ~7) | StateNumeric1;
+                n0 = wrapped;
+            }
+            else
+            {
+                n0 = U | StateNumeric0; n1 = U | StateNumeric1; n2 = U | StateNumeric2;
             }
             if (allowAlnum)
             {
-                // Opened from Numeric or Byte, or continued from Alnum0 (6 bits).
-                var key = Math.Min(Math.Min(numeric, b) + openAlnum, a0 + 48);
-                parentAlnum1 = key & 7;
-                na1 = (key & ~7) | StateAlnum1;
-                na0 = a1 + 39; // 5 bits, and Alnum1 becomes Alnum0
+                // 11 bits per pair: 6 for the first character, continued from Alnum0 or opened from the cheapest state, 5 for the second.
+                var paired = a1 + 39; // 5 bits, and Alnum1 becomes Alnum0
+                key = Math.Min(a0 + 48, cheapest + openAlnum);
+                parents |= (key & 7) << 3;
+                a1 = (key & ~7) | StateAlnum1;
+                a0 = paired;
             }
-            table[i * stride + 1] = (byte)(parentNumeric1 | (parentAlnum1 << 3));
-
-            n0 = nn0; n1 = nn1; n2 = nn2; a0 = na0; a1 = na1; b = (byteKey & ~7) | StateByte;
+            table[i * stride + 1] = (byte)parents;
+            cheapest = Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
         }
 
         return Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
@@ -567,7 +578,7 @@ internal static partial class ModeSegmenter
         return length;
     }
 
-    /// <summary>Costs only, for a Kanji-eligible text: the version scans and the rMQR floor.</summary>
+    /// <summary>Costs only, for a Kanji-eligible text: the version scans.</summary>
     private static int CostsKanji(ReadOnlySpan<char> text, int openNumeric, int openAlnum, int openByte, int openKanji, out int finalState)
     {
         int n0 = Unreachable, n1 = Unreachable, n2 = Unreachable, a0 = Unreachable, a1 = Unreachable, b = Unreachable, k = Unreachable;
@@ -753,28 +764,16 @@ internal static partial class ModeSegmenter
     /// Returns false when the plan needs more runs than the caller lent room for.
     /// </summary>
     public static bool Reconstruct(ReadOnlySpan<char> text, ReadOnlySpan<byte> parents, int finalState, Span<ModeSegment> segments, out int segmentCount)
-        => WalkBack(text.Length, parents, ParentBytesPerChar, finalState, segments, materialise: true, out segmentCount, out _, out _, out _, out _);
-
-    /// <summary>Counts the runs of each mode on the minimal-cost path, without materialising it.</summary>
-    public static void CountRuns(ReadOnlySpan<byte> parents, int finalState, int length, out int runsNumeric, out int runsAlnum, out int runsByte)
-        => WalkBack(length, parents, ParentBytesPerChar, finalState, default, materialise: false, out _, out runsNumeric, out runsAlnum, out runsByte, out _);
-
-    /// <summary>Counts the runs of each mode on the minimal-cost path of <see cref="ComputeCostsKanji"/>, without materialising it.</summary>
-    public static void CountRuns(ReadOnlySpan<byte> parents, int finalState, int length, out int runsNumeric, out int runsAlnum, out int runsByte, out int runsKanji)
-        => WalkBack(length, parents, ParentBytesPerChar, finalState, default, materialise: false, out _, out runsNumeric, out runsAlnum, out runsByte, out runsKanji);
+        => WalkBack(text.Length, parents, ParentBytesPerChar, finalState, segments, out segmentCount);
 
     /// <summary>
     /// The walk back, run by run. A run of Numeric can only begin where the state is Numeric1, every third character of the run, and a run of Alphanumeric where it is Alnum1, every second. A run of Byte or Kanji begins at the first entry that does not say Byte or Kanji.
     /// Each step reads whether the run continued at the place before, whose address is the position alone, so no load waits for the one before it.
     /// The first character's predecessor is the start, which no run continues from, so every search lands at or after it.
     /// </summary>
-    private static bool WalkBack(int length, ReadOnlySpan<byte> table, int stride, int finalState, Span<ModeSegment> segments, bool materialise, out int segmentCount, out int runsNumeric, out int runsAlnum, out int runsByte, out int runsKanji)
+    private static bool WalkBack(int length, ReadOnlySpan<byte> table, int stride, int finalState, Span<ModeSegment> segments, out int segmentCount)
     {
         segmentCount = 0;
-        runsNumeric = 0;
-        runsAlnum = 0;
-        runsByte = 0;
-        runsKanji = 0;
         var state = finalState;
         var end = length;
         var count = 0;
@@ -786,14 +785,12 @@ internal static partial class ModeSegmenter
             if (state == StateByte)
             {
                 mode = 2;
-                runsByte++;
                 while ((parent = table[i * stride]) == StateByte)
                     i--;
             }
             else if (state <= StateNumeric2)
             {
                 mode = 0;
-                runsNumeric++;
                 // Back to where this group of three began.
                 i -= state == StateNumeric1 ? 0 : state == StateNumeric2 ? 1 : 2;
                 while ((parent = table[i * stride + 1] & 7) == StateNumeric0)
@@ -802,7 +799,6 @@ internal static partial class ModeSegmenter
             else if (state <= StateAlnum1)
             {
                 mode = 1;
-                runsAlnum++;
                 i -= state == StateAlnum1 ? 0 : 1;
                 while ((parent = table[i * stride + 1] >> 3) == StateAlnum0)
                     i -= 2;
@@ -811,17 +807,13 @@ internal static partial class ModeSegmenter
             {
                 // Kanji, whose predecessor sits where Byte's does at an ASCII position.
                 mode = 3;
-                runsKanji++;
                 while ((parent = table[i * stride]) == StateKanji)
                     i--;
             }
 
-            if (materialise)
-            {
-                if (count >= segments.Length)
-                    return false;
-                segments[count++] = new ModeSegment(mode, i, end - i, 0);
-            }
+            if (count >= segments.Length)
+                return false;
+            segments[count++] = new ModeSegment(mode, i, end - i, 0);
             end = i;
             state = parent;
         }
@@ -953,26 +945,6 @@ internal static partial class ModeSegmenter
 
         numericRun = longestNumeric;
         alnumRun = longestAlnum;
-    }
-
-    /// <summary>
-    /// The sixths sum of pricing each character at the cheapest rate any mode could give it: one O(n) pass, no table.
-    /// Rounded up and topped with the cheapest possible header by the caller, it is a lower bound on any plan at any version, so it may only reject.
-    /// </summary>
-    public static int CheapestSixths(ReadOnlySpan<char> text, EciMode charset)
-    {
-        var sixths = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (CharacterSets.IsNumeric(c))
-                sixths += SixthsPerDigit;
-            else if (CharacterSets.IsAlphanumeric(c))
-                sixths += SixthsPerAlnum;
-            else
-                sixths += SixthsPerByte * ByteCost(text, i, charset);
-        }
-        return sixths;
     }
 
     /// <summary>

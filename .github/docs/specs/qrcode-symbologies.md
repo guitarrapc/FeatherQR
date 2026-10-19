@@ -687,9 +687,9 @@ The kernels behind the default arm's gap, by shape, are those each shape's clean
 
 | Shape | Kernels that change tier, `x86-64-v3` to default |
 |---|---|
-| Standard QR encode | `TextAnalyzer` (`Avx2` to `Sse2`), `ModulePlacerExpandBits` and `ModulePlacerMaskCode` (`Avx2` to `Ssse3`). `EccBinaryEncoder` (`GfniV256` to `Gfni`) only where a block has more than 16 ECC codewords |
-| Micro QR encode | `TextAnalyzer`, `MicroQRModulePlacer` (`Avx2Pext` to `Ssse3`), `ModuleBitPacker` (`Avx2` to `Ssse3`) |
-| rMQR encode | `TextAnalyzer`, `RmQRModulePlacer` (`Avx2` to `Ssse3`), `ModuleBitPacker`, and `EccBinaryEncoder` where a block has more than 16 ECC codewords, here the R17x139 entry |
+| Standard QR encode | `TextAnalyzer` (`Avx2` to `Sse2`), `ModulePlacerExpandBits` and `ModulePlacerMaskCode` (`Avx2` to `Ssse3`), and under `Optimal` the version scan's trivial bound `ModeSegmenterSixths` (`Avx2` to `Vector128`). `EccBinaryEncoder` (`GfniV256` to `Gfni`) only where a block has more than 16 ECC codewords |
+| Micro QR encode | `TextAnalyzer`, `MicroQRModulePlacer` (`Avx2Pext` to `Ssse3`), `ModuleBitPacker` (`Avx2` to `Ssse3`), and under `Optimal` `ModeSegmenterSixths` |
+| rMQR encode | `TextAnalyzer`, `RmQRModulePlacer` (`Avx2` to `Ssse3`), `ModuleBitPacker`, `EccBinaryEncoder` where a block has more than 16 ECC codewords, here the R17x139 entry, and under `Optimal` `ModeSegmenterSixths` |
 | Matrix decode, all three | `EccBinaryDecoder` (`GfniV256` to `Vector128`), and for rMQR `RmQRExtractCodewords` (`Avx2Pext` to `Vector128`) |
 | Image decode, all three | `Binarizer` and `FinderRowEdges` (`Vector256` to `Vector128`), then the matrix decode's kernels. Standard QR adds `PerspectiveGridSampler` (`Vector256` to `Sse2`) and, from version 2, `AlignmentRowMask` (`Vector256` to `Vector128`) |
 

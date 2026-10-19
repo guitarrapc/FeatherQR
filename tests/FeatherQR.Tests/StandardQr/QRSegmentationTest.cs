@@ -379,6 +379,56 @@ public class QRSegmentationTest
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal })).IsFalse();
     }
 
+    /// <summary>
+    /// Content no plan can help (its single mode Numeric or Kanji, or an empty text) leaves the Optimal route before any scan, so the
+    /// options that route reads on its own, the level boost, the version range, an FNC1 mode, a pinned mask and the quiet zone, must
+    /// reach the single-mode symbol as they do under Single. The content with a gain is the premise: it is the case that does scan.
+    /// </summary>
+    [Test]
+    [Arguments("1234567890")]
+    [Arguments("12345678901234567890123456789012345678901234567890")]
+    [Arguments("こんにちは")]
+    [Arguments("")]
+    public async Task Optimal_ContentNoPlanCanHelp_MatchesSingleUnderEveryOption(string content)
+    {
+        foreach (var options in new[]
+        {
+            new QRCodeGeneratorOptions { BoostEccLevel = true },
+            new QRCodeGeneratorOptions { Version = new QRVersionRange(3, 40) },
+            new QRCodeGeneratorOptions { Version = new QRVersionRange(3, 40), BoostEccLevel = true },
+            new QRCodeGeneratorOptions { MaskPattern = 3, QuietZoneSize = 0 },
+            new QRCodeGeneratorOptions { AllowKanji = true },
+            new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition },
+        })
+        {
+            var single = QRCodeGenerator.Create(content, QREccLevel.L, options);
+            var optimal = QRCodeGenerator.Create(content, QREccLevel.L, options with { Segmentation = QRSegmentation.Optimal });
+            await Assert.That(optimal.Version).IsEqualTo(single.Version).Because($"version under {Describe(options)}");
+            await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching).Because($"modules under {Describe(options)}");
+
+            var singleBytes = new byte[40_000];
+            var optimalBytes = new byte[40_000];
+            var singleWritten = QRCodeGenerator.Create(content, QREccLevel.L, singleBytes, options);
+            var optimalWritten = QRCodeGenerator.Create(content, QREccLevel.L, optimalBytes, options with { Segmentation = QRSegmentation.Optimal });
+            await Assert.That(optimalWritten).IsEqualTo(singleWritten).Because($"written size under {Describe(options)}");
+            await Assert.That(optimalBytes.AsSpan(0, optimalWritten).ToArray()).IsEquivalentTo(singleBytes.AsSpan(0, singleWritten).ToArray(), CollectionOrdering.Matching).Because($"written modules under {Describe(options)}");
+        }
+
+        static string Describe(QRCodeGeneratorOptions o) => $"boost={o.BoostEccLevel} version={o.Version.Min}-{o.Version.Max} mask={o.MaskPattern} quiet={o.QuietZoneSize} kanji={o.AllowKanji} fnc1={o.Fnc1}";
+    }
+
+    /// <summary>Digits a plan cannot help under a range no version of which holds them: the route that leaves before any scan throws the single-mode route's exception.</summary>
+    [Test]
+    public async Task Optimal_ContentNoPlanCanHelp_NarrowRangeThrowsLikeSingle()
+    {
+        var content = new string('7', 100);
+        var narrow = new QRCodeGeneratorOptions { Version = new QRVersionRange(1, 1) };
+        var fromSingle = Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(content, QREccLevel.H, narrow));
+        var fromOptimal = Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(content, QREccLevel.H, narrow with { Segmentation = QRSegmentation.Optimal }));
+        await Assert.That(fromSingle.Message).Contains("does not fit");
+        await Assert.That(fromOptimal.Message).Contains("does not fit");
+    }
+
     [Test]
     public async Task Optimal_InvalidSegmentationValue_Throws_OnEveryEntryPoint()
     {

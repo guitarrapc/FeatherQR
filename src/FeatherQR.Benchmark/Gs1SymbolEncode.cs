@@ -4,7 +4,9 @@ using FeatherQR.Gs1;
 /// What the GS1 entry points add to an encode, on the three element strings of <see cref="Gs1DataLayer"/>: each
 /// entry point beside the <c>Create</c> call it ends in, all in the span form into one buffer, so the Allocated
 /// column is the layer's own. The difference between a row and its <c>Create</c> row is the data layer's work for
-/// the text: the checks, the separators of (AI) text, and for Digital Link the URI.
+/// the text: the checks, the separators of (AI) text, and for Digital Link the URI. <c>CreateGs1</c> has a row
+/// under <c>Optimal</c> in each symbology too, where the element string is split into runs when that lowers the
+/// version, so the cost of planning a GS1 label stands beside the default.
 ///
 ///   retail    : (01) GTIN, (17) expiry, (10) lot, the point-of-sale label
 ///   logistics : (00) SSCC, (02) content GTIN, (11) production date, (37) count, (10) lot, a logistic label
@@ -15,6 +17,8 @@ public class Gs1SymbolEncode
     private static readonly string[] shapeKeys = ["retail", "logistics", "weighed"];
     private static readonly QRCodeGeneratorOptions firstPosition = new() { Fnc1 = Fnc1Mode.FirstPosition };
     private static readonly RmQRCodeGeneratorOptions rmqrFirstPosition = new() { Fnc1 = Fnc1Mode.FirstPosition };
+    private static readonly QRCodeGeneratorOptions optimal = new() { Segmentation = QRSegmentation.Optimal };
+    private static readonly RmQRCodeGeneratorOptions rmqrOptimal = new() { Segmentation = RmQRSegmentation.Optimal };
 
     private string _elementString = default!;
     private string _hri = default!;
@@ -55,6 +59,9 @@ public class Gs1SymbolEncode
     [Benchmark(Description = "CreateGs1 from an element string")]
     public int CreateGs1FromElementString() => QRCodeGenerator.CreateGs1(_elementString.AsSpan(), QREccLevel.M, _destination);
 
+    [Benchmark(Description = "CreateGs1 from an element string, Optimal")]
+    public int CreateGs1FromElementStringOptimal() => QRCodeGenerator.CreateGs1(_elementString.AsSpan(), QREccLevel.M, _destination, optimal);
+
     [Benchmark(Description = "Create, the URI")]
     public int CreateUri() => QRCodeGenerator.Create(_uri.AsSpan(), QREccLevel.M, _destination);
 
@@ -66,4 +73,7 @@ public class Gs1SymbolEncode
 
     [Benchmark(Description = "rMQR CreateGs1 from (AI) text")]
     public int RmQrCreateGs1() => RmQRCodeGenerator.CreateGs1(_hri.AsSpan(), RmQREccLevel.M, _destination);
+
+    [Benchmark(Description = "rMQR CreateGs1 from (AI) text, Optimal")]
+    public int RmQrCreateGs1Optimal() => RmQRCodeGenerator.CreateGs1(_hri.AsSpan(), RmQREccLevel.M, _destination, rmqrOptimal);
 }

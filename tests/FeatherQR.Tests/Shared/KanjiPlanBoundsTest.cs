@@ -6,8 +6,8 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The bounds the three planners screen a Kanji plan's candidates with, re-derived for the eighth state: each lower bound must never exceed the Kanji plan's optimum at any version, and each upper bound must never fall below it.
-/// A lower bound that did would skip a version the plan fits, and an upper bound that did would accept one it does not.
+/// The screens the three planners filter a Kanji plan's candidates with, re-derived for the eighth state: each must never exceed the Kanji plan's optimum at any version.
+/// One that did would skip a version the plan fits.
 /// </summary>
 /// <remarks>
 /// The optimum is the eight-state program, which <c>ModeSegmenterKanjiParityTest</c> holds to an independent reference. The corpus is that test's.
@@ -136,45 +136,10 @@ public class KanjiPlanBoundsTest
 
     [Test]
     [MethodDataSource(nameof(Corpus))]
-    public async Task RmQr_KanjiFloorAndScreen_NeverExceedAnyVersionsOptimum(string text)
+    public async Task RmQr_KanjiScreen_NeverExceedsAnyVersionsOptimum(string text)
     {
-        var floor = RmQRSegmentPlanner.FloorKanji(text);
         var screen = RmQRSegmentPlanner.TrivialLowerBoundBitsKanji(text);
-        await Assert.That(screen).IsLessThanOrEqualTo(floor);
         foreach (var version in Enum.GetValues<RmQRVersion>())
-            await Assert.That(floor).IsLessThanOrEqualTo(RmQrKanjiOptimum(text, version)).Because($"{version}");
-    }
-
-    [Test]
-    [MethodDataSource(nameof(Corpus))]
-    public async Task RmQr_KanjiUpperBound_NeverFallsBelowAnyVersionsOptimum(string text)
-    {
-        foreach (var version in Enum.GetValues<RmQRVersion>())
-            await Assert.That(RmQRSegmentPlanner.FloorPlanUpperBoundKanji(text, version)).IsGreaterThanOrEqualTo(RmQrKanjiOptimum(text, version)).Because($"{version}");
-
-        // R7x43's widths are all four minima, so there the floor plan is the optimum and the bound is exact.
-        await Assert.That(RmQRSegmentPlanner.FloorPlanUpperBoundKanji(text, RmQRVersion.R7x43)).IsEqualTo(RmQRSegmentPlanner.FloorKanji(text));
-    }
-
-    /// <summary>
-    /// The upper bound re-prices the floor plan's Kanji runs as well: at R17x139 (Kanji 7 bits against the floor's 2) a text of many Kanji runs is priced five bits a run above its floor for them.
-    /// </summary>
-    [Test]
-    public async Task RmQr_KanjiUpperBound_RepricesTheKanjiRuns()
-    {
-        var text = string.Concat(Enumerable.Repeat("日本7777", 10));
-        var floor = RmQRSegmentPlanner.FloorKanji(text);
-        var parents = new byte[text.Length * ModeSegmenter.ParentBytesPerChar];
-        ModeSegmenter.ComputeCostsKanji(text, 3, 4, 3, 3, 2, parents, out var state);
-        ModeSegmenter.CountRuns(parents, state, text.Length, out var runsNumeric, out var runsAlnum, out var runsByte, out var runsKanji);
-        await Assert.That(runsKanji).IsEqualTo(10);
-
-        var version = RmQRVersion.R17x139;
-        var expected = floor
-            + runsNumeric * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric) - 4)
-            + runsAlnum * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric) - 3)
-            + runsByte * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte) - 3)
-            + runsKanji * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Kanji) - 2);
-        await Assert.That(RmQRSegmentPlanner.FloorPlanUpperBoundKanji(text, version)).IsEqualTo(expected);
+            await Assert.That(screen).IsLessThanOrEqualTo(RmQrKanjiOptimum(text, version)).Because($"{version}");
     }
 }

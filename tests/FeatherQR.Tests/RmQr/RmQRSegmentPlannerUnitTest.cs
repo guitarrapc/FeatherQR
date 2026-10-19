@@ -326,9 +326,9 @@ public class RmQRSegmentPlannerUnitTest
     }
 
     /// <summary>
-    /// The version scan prunes candidates with a cost run at the narrowest count
-    /// indicators any version uses. If those constants were not the true minima the
-    /// floor would not be a floor, and a version that actually fits could be skipped.
+    /// The screens charge a header at the narrowest count indicators any version
+    /// uses. If those constants were not the true minima a screen would not be a
+    /// lower bound, and a version that actually fits could be skipped.
     /// </summary>
     [Test]
     public async Task MinimumCountIndicatorWidths_AreTheNarrowestAnyVersionUses()
@@ -350,8 +350,9 @@ public class RmQRSegmentPlannerUnitTest
 
 
     /// <summary>
-    /// The pruning floor must never exceed a version's real cost, or the scan would
-    /// skip a version the plan fits.
+    /// A cost at the narrowest widths of all never exceeds a version's real cost. The
+    /// scan's skip rests on this rule at every priced width triple, and this is the
+    /// triple below every version.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(Corpus))]
@@ -432,58 +433,115 @@ public class RmQRSegmentPlannerUnitTest
     }
 
     /// <summary>
-    /// The version scan accepts a candidate without pricing it when the candidate
-    /// holds an arithmetic upper bound derived from the floor plan. The bound must
-    /// never fall below the version's true cost, or a version the plan does not fit
-    /// would be accepted.
+    /// The premise of the second header the scan adds to the bound: a candidate ranked ahead of the single-mode fit does not hold the
+    /// single-mode stream, which is what a plan of one run is, so every plan that fits such a candidate has two runs or more. Held
+    /// over the corpus and the labels the scan sees, under every strategy and level.
     /// </summary>
     [Test]
-    [MethodDataSource(nameof(Corpus))]
-    public async Task UpperBound_NeverFallsBelowTheTrueCost(string text)
+    public async Task AheadOfTheSingleModeFit_EveryPlanThatFits_HasTwoRunsOrMore()
     {
-        if (text.Length == 0)
-            return;
-
-        foreach (var charset in new[] { EciMode.Default, EciMode.Utf8 })
+        var texts = Corpus().Concat(
+        [
+            "0109520123456788" + "17251231" + "10ABC123",
+            "00195201234567891232" + "0209520123456788" + "11250504" + "3725X" + "10ABC123",
+            "0109520123456788" + "3103000195" + "39220299X" + "17251231",
+            "https://example.com/item?id=123456789012345678901234567890",
+            new string('a', 60) + new string('7', 60),
+            string.Concat(Enumerable.Repeat("A7", 60)),
+        ]);
+        var checkedPlans = 0;
+        foreach (var text in texts)
         {
-            if (charset == EciMode.Default && text.Any(c => c > 255))
+            if (text.Length == 0)
                 continue;
-
-            foreach (var version in Enum.GetValues<RmQRVersion>())
+            var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: false, planKanji: true);
+            if (analysis.KanjiPlannable || analysis.EncodingMode is EncodingMode.Numeric or EncodingMode.Kanji)
+                continue;
+            var segments = new ModeSegment[text.Length];
+            foreach (var strategy in Enum.GetValues<RmQRFitStrategy>())
             {
-                var bound = RmQRSegmentPlanner.FloorPlanUpperBound(text.AsSpan(), charset, version);
-                var actual = RmQRSegmentPlanner.MinimumPayloadBits(
-                    text.AsSpan(),
-                    charset,
-                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric),
-                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric),
-                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte));
-
-                await Assert.That(bound).IsGreaterThanOrEqualTo(actual);
+                foreach (var level in new[] { RmQREccLevel.M, RmQREccLevel.H })
+                {
+                    var hasSingle = RmQRVersionSelector.TrySelectAutoFit(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, level, strategy, null, out var single);
+                    foreach (var rank in RmQRVersionSelector.GetFitOrder(strategy).ToArray())
+                    {
+                        var candidate = (RmQRVersion)rank;
+                        if (hasSingle && candidate == single)
+                            break;
+                        if (!RmQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, candidate, level, segments, out var count))
+                            continue;
+                        checkedPlans++;
+                        await Assert.That(count).IsGreaterThanOrEqualTo(2).Because($"「{text}」 fits {candidate} at {level} under {strategy}, ahead of its single-mode fit {single}");
+                    }
+                }
             }
         }
+
+        await Assert.That(checkedPlans).IsGreaterThan(20);
     }
 
     /// <summary>
-    /// And it must stay tight enough to be worth having: the floor plan is a real
-    /// plan, so at the narrowest widths the bound is exactly the true cost.
+    /// With that second header the scan makes no run on content that clears the one-header bound at some candidate ahead of the
+    /// fit and the two-header bound at none. Such content is found in the list rather than assumed, since rMQR's capacities are
+    /// dense. A run writes its predecessors into the table, so a table left at its sentinel shows the scan made none.
     /// </summary>
     [Test]
-    [MethodDataSource(nameof(Corpus))]
-    public async Task UpperBound_IsExactAtTheNarrowestWidths(string text)
+    public async Task Scan_MakesNoRun_WhereOnlyTheSecondHeaderRejectsEveryCandidate()
     {
-        if (text.Length == 0)
-            return;
+        var texts = new[]
+        {
+            "0109520123456788" + "17251231" + "10ABC123",
+            "aaaaaaaaaa7777777777",
+            "ORDER 12345 ITEM 6789",
+            "123Abc",
+            "SN/2024-000123456789",
+            "ABC-1234567890123456",
+            "a1b2c3d4e5f6g7h8i9",
+            "12A34B56C78D90E",
+            "x1234567890123456789012345678901234567890",
+            "1234567890abcdefghij1234567890",
+            "https://example.com/p/1234567890123456",
+            "AB12345678901234567890",
+            "ab12345678901234567890",
+            "abc123456789012345678901234567890",
+            "ABCD1234567890123456789012345678901234567890",
+        };
+        var found = 0;
+        foreach (var text in texts)
+        {
+            var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: false, planKanji: true);
+            foreach (var strategy in Enum.GetValues<RmQRFitStrategy>())
+            {
+                foreach (var level in new[] { RmQREccLevel.M, RmQREccLevel.H })
+                {
+                    if (!RmQRVersionSelector.TrySelectAutoFit(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, level, strategy, null, out var single))
+                        continue;
+                    var oneHeader = RmQRSegmentPlanner.TrivialLowerBoundBits(text, analysis.EciMode);
+                    var admittedByOne = false;
+                    var admittedByTwo = false;
+                    foreach (var rank in RmQRVersionSelector.GetFitOrder(strategy).ToArray())
+                    {
+                        var candidate = (RmQRVersion)rank;
+                        if (candidate == single)
+                            break;
+                        var capacity = 8 * RmQRConstants.GetDataCodewordCount(candidate, level);
+                        admittedByOne |= capacity >= oneHeader;
+                        admittedByTwo |= capacity >= oneHeader + RmQRSegmentPlanner.SecondRunHeaderBits;
+                    }
+                    if (!admittedByOne || admittedByTwo)
+                        continue;
 
-        var charset = text.Any(c => c > 255) ? EciMode.Utf8 : EciMode.Default;
-        var floor = RmQRSegmentPlanner.MinimumPayloadBits(text.AsSpan(), charset, 4, 3, 3);
+                    found++;
+                    var table = new byte[text.Length * ModeSegmenter.ParentBytesPerChar];
+                    Array.Fill(table, (byte)0xFF);
+                    var selected = RmQRSegmentPlanner.TrySelectVersion(text, in analysis, level, null, strategy, null, table, out var version, out var useSegments, out _, out _, out _, out _);
+                    await Assert.That((selected, version, useSegments)).IsEqualTo((true, single, false)).Because($"「{text}」 at {level} under {strategy}");
+                    await Assert.That(table.All(b => b == 0xFF)).IsTrue().Because($"「{text}」 at {level} under {strategy}: a cost run writes its predecessors into the table, and none was due");
+                }
+            }
+        }
 
-        // R7x43 is the only version whose widths are exactly the minima (4 / 3 / 3), so
-        // it is the one version where the bound must equal the floor exactly.
-        var bound = RmQRSegmentPlanner.FloorPlanUpperBound(text.AsSpan(), charset, RmQRVersion.R7x43);
-        await Assert.That(bound).IsEqualTo(floor);
-        await Assert.That(bound).IsGreaterThanOrEqualTo(floor);
-        await Assert.That(bound - floor).IsLessThanOrEqualTo(RmQRSegmentPlanner.MaxSegments);
+        await Assert.That(found).IsGreaterThan(0).Because("the list holds content the one-header bound admits somewhere ahead of its fit and the two-header bound nowhere");
     }
 
     /// <summary>

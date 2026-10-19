@@ -13,6 +13,17 @@ namespace FeatherQR.Internals;
 /// packed table of the program without FNC1, whose eight states fill its three bits. Kanji is not planned
 /// under FNC1.
 /// </summary>
+/// <remarks>
+/// A charset of one byte a character takes loops that keep the nine states in locals, as the program without FNC1
+/// keeps its six (see <see cref="ModeSegmenter"/>): relaxing every state through arrays costs far more in memory
+/// traffic than the arithmetic. UTF-8 keeps the array loop: GS1 data is ASCII, so the shape is rare under FNC1, and
+/// its byte count is per character.
+/// With parents, the loop carries a state as a key, its cost shifted up four bits with the state's number below
+/// it, one bit more than the program without FNC1 needs for its eight. The minimum of keys is the minimum cost and,
+/// among equal costs, the lowest state, which is the rule the array loop's search has. A continued run beats an
+/// opened one at equal cost, which no key order can say, so each target compares its two keys by cost before it
+/// keeps one.
+/// </remarks>
 internal static partial class ModeSegmenter
 {
     private const int Fnc1StateNumeric0 = 0;
@@ -32,6 +43,9 @@ internal static partial class ModeSegmenter
 
     /// <summary>The stack budget of the FNC1 parent table, 112 characters (1008 bytes): the two-byte table's budget would send a 57-character text to the pool.</summary>
     public const int Fnc1MaxStackParents = Fnc1ParentBytesPerChar * 112;
+
+    // An unreachable state as a key, below any number a few additions could overflow.
+    private const int Fnc1UnreachableKey = (int.MaxValue / 32) << 4;
 
     /// <summary>The Alphanumeric unit count of a run under FNC1: its characters plus its literal percents, each written twice.</summary>
     public static int AlphanumericUnitsFnc1(ReadOnlySpan<char> chars)
@@ -74,10 +88,211 @@ internal static partial class ModeSegmenter
     public static int ComputeCostsFnc1(ReadOnlySpan<char> text, EciMode charset, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, Span<byte> parents, out int finalState)
     {
         Debug.Assert(parents.IsEmpty || parents.Length == text.Length * Fnc1ParentBytesPerChar);
-        var track = !parents.IsEmpty;
+
+        // Opening a run costs its headers plus its first character: 4 bits for a digit, 6 for an alphanumeric, 8 for
+        // a byte where the charset has one byte a character.
         var openNumeric = modeIndicatorBits + cciNumeric + 4;
         var openAlnum = modeIndicatorBits + cciAlnum + 6;
-        var openByte = modeIndicatorBits + cciByte;
+        if (charset != EciMode.Utf8)
+        {
+            return parents.IsEmpty
+                ? CostsFnc1Latin(text, openNumeric, openAlnum, modeIndicatorBits + cciByte + 8, out finalState)
+                : TrackedFnc1Latin(text, openNumeric, openAlnum, modeIndicatorBits + cciByte + 8, parents, out finalState);
+        }
+
+        return CostsFnc1General(text, charset, openNumeric, openAlnum, modeIndicatorBits + cciByte, parents, out finalState);
+    }
+
+    /// <summary>Costs only, one byte per character: the version scans.</summary>
+    private static int CostsFnc1Latin(ReadOnlySpan<char> text, int openNumeric, int openAlnum, int openByte, out int finalState)
+    {
+        const int U = Unreachable;
+        int n0 = U, n1 = U, n2 = U, a0 = U, a1 = U, s0 = U, s1 = U, b = U;
+        // The start state: a run opens from it before the first character and from nothing else after.
+        var start = 0;
+        var length = text.Length;
+        for (var i = 0; i < length; i++)
+        {
+            var c = text[i];
+            var cls = ClassOf(c);
+
+            var numeric = Math.Min(Math.Min(n0, n1), n2);
+            var alnum = Math.Min(a0, a1);
+            var separator = Math.Min(s0, s1);
+            var alnumAll = Math.Min(alnum, separator);
+
+            // Byte: continue, or open from the cheapest other state. A byte order mark inside the text never opens a run.
+            var nb = c == ByteOrderMark && i > 0 ? b + 8 : Math.Min(b + 8, Math.Min(Math.Min(numeric, alnumAll), start) + openByte);
+
+            int nn0 = U, nn1 = U, nn2 = U, na0 = U, na1 = U, ns0 = U, ns1 = U;
+            if (cls == ClassDigit)
+            {
+                // The first digit of a group costs 4 bits, the next two 3 each.
+                var open = Math.Min(Math.Min(alnumAll, b), start);
+                nn1 = Math.Min(n0 + 4, open + openNumeric);
+                nn2 = n1 + 3;
+                nn0 = n2 + 3;
+            }
+
+            if (c == Fnc1FieldSeparator)
+            {
+                // One Alphanumeric character that lands in a separator state. A run continues from a plain
+                // Alphanumeric state only: after a separator, another one must open a new run.
+                var open = Math.Min(Math.Min(Math.Min(numeric, separator), b), start);
+                ns1 = Math.Min(a0 + 6, open + openAlnum);
+                ns0 = a1 + 5;
+            }
+            else if (c == '%')
+            {
+                // Two Alphanumeric characters, 11 bits whichever half of a pair they start at, so the pairing state
+                // stays. After a separator the two cannot continue the run.
+                var open = Math.Min(Math.Min(Math.Min(numeric, separator), b), start);
+                na0 = Math.Min(a0 + 11, open + openAlnum + 5);
+                na1 = a1 + 11;
+            }
+            else if (cls != ClassOther)
+            {
+                // A plain Alphanumeric character: 6 bits as the first of a pair, 5 as the second, continuing from
+                // either kind of Alphanumeric state.
+                var open = Math.Min(Math.Min(numeric, b), start);
+                na1 = Math.Min(Math.Min(a0, s0) + 6, open + openAlnum);
+                na0 = Math.Min(a1, s1) + 5;
+            }
+
+            n0 = nn0; n1 = nn1; n2 = nn2; a0 = na0; a1 = na1; s0 = ns0; s1 = ns1; b = nb;
+            start = U;
+        }
+
+        if (length == 0)
+        {
+            finalState = Fnc1StateStart;
+            return 0;
+        }
+
+        // The cheapest state to end in, the lowest winning a tie.
+        var best = U;
+        finalState = Fnc1StateByte;
+        if (n0 < best) { best = n0; finalState = Fnc1StateNumeric0; }
+        if (n1 < best) { best = n1; finalState = Fnc1StateNumeric1; }
+        if (n2 < best) { best = n2; finalState = Fnc1StateNumeric2; }
+        if (a0 < best) { best = a0; finalState = Fnc1StateAlnum0; }
+        if (a1 < best) { best = a1; finalState = Fnc1StateAlnum1; }
+        if (s0 < best) { best = s0; finalState = Fnc1StateSeparator0; }
+        if (s1 < best) { best = s1; finalState = Fnc1StateSeparator1; }
+        if (b < best) { best = b; finalState = Fnc1StateByte; }
+        return best;
+    }
+
+    /// <summary>
+    /// Keys with parents, one byte per character: the plan of a symbol under FNC1. The widths arrive in bits,
+    /// <paramref name="openByte"/> with its first character in, and become keys here (bits times sixteen). Returns
+    /// the cost and the state of the cheapest key.
+    /// </summary>
+    private static int TrackedFnc1Latin(ReadOnlySpan<char> text, int openNumeric, int openAlnum, int openByte, Span<byte> parents, out int finalState)
+    {
+        Debug.Assert(text.Length <= MaxTrackedChars);
+        const int UK = Fnc1UnreachableKey;
+        openNumeric <<= 4;
+        openAlnum <<= 4;
+        openByte <<= 4;
+
+        int n0 = UK | Fnc1StateNumeric0, n1 = UK | Fnc1StateNumeric1, n2 = UK | Fnc1StateNumeric2;
+        int a0 = UK | Fnc1StateAlnum0, a1 = UK | Fnc1StateAlnum1, s0 = UK | Fnc1StateSeparator0, s1 = UK | Fnc1StateSeparator1, b = UK | Fnc1StateByte;
+        // The start state as a key: cost 0 before the first character, unreachable after it.
+        var start = Fnc1StateStart;
+        var length = text.Length;
+        for (var i = 0; i < length; i++)
+        {
+            var c = text[i];
+            var cls = ClassOf(c);
+            var row = parents.Slice(i * Fnc1ParentBytesPerChar, Fnc1ParentBytesPerChar);
+
+            var numeric = Math.Min(Math.Min(n0, n1), n2);
+            var alnum = Math.Min(a0, a1);
+            var separator = Math.Min(s0, s1);
+            var alnumAll = Math.Min(alnum, separator);
+
+            int nn0 = UK | Fnc1StateNumeric0, nn1 = UK | Fnc1StateNumeric1, nn2 = UK | Fnc1StateNumeric2;
+            int na0 = UK | Fnc1StateAlnum0, na1 = UK | Fnc1StateAlnum1, ns0 = UK | Fnc1StateSeparator0, ns1 = UK | Fnc1StateSeparator1;
+
+            var nb = c == ByteOrderMark && i > 0
+                ? ContinueKey(row, Fnc1StateByte, b + (8 << 4))
+                : ChooseKey(row, Fnc1StateByte, b + (8 << 4), Math.Min(Math.Min(numeric, alnumAll), start) + openByte);
+
+            if (cls == ClassDigit)
+            {
+                var open = Math.Min(Math.Min(alnumAll, b), start);
+                nn1 = ChooseKey(row, Fnc1StateNumeric1, n0 + (4 << 4), open + openNumeric);
+                nn2 = ContinueKey(row, Fnc1StateNumeric2, n1 + (3 << 4));
+                nn0 = ContinueKey(row, Fnc1StateNumeric0, n2 + (3 << 4));
+            }
+
+            if (c == Fnc1FieldSeparator)
+            {
+                var open = Math.Min(Math.Min(Math.Min(numeric, separator), b), start);
+                ns1 = ChooseKey(row, Fnc1StateSeparator1, a0 + (6 << 4), open + openAlnum);
+                ns0 = ContinueKey(row, Fnc1StateSeparator0, a1 + (5 << 4));
+            }
+            else if (c == '%')
+            {
+                var open = Math.Min(Math.Min(Math.Min(numeric, separator), b), start);
+                na0 = ChooseKey(row, Fnc1StateAlnum0, a0 + (11 << 4), open + openAlnum + (5 << 4));
+                na1 = ContinueKey(row, Fnc1StateAlnum1, a1 + (11 << 4));
+            }
+            else if (cls != ClassOther)
+            {
+                var open = Math.Min(Math.Min(numeric, b), start);
+                na1 = ChooseKey(row, Fnc1StateAlnum1, Math.Min(a0, s0) + (6 << 4), open + openAlnum);
+                na0 = ContinueKey(row, Fnc1StateAlnum0, Math.Min(a1, s1) + (5 << 4));
+            }
+
+            n0 = nn0; n1 = nn1; n2 = nn2; a0 = na0; a1 = na1; s0 = ns0; s1 = ns1; b = nb;
+            start = UK | Fnc1StateStart;
+        }
+
+        if (length == 0)
+        {
+            finalState = Fnc1StateStart;
+            return 0;
+        }
+
+        var best = Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(Math.Min(a1, s0), Math.Min(s1, b)));
+        if (best >= UK)
+        {
+            finalState = Fnc1StateByte;
+            return Unreachable;
+        }
+        finalState = best & 15;
+        return best >> 4;
+    }
+
+    /// <summary>Records the continued key or the opened key for <paramref name="state"/>, the continuation winning a tie on cost, and returns the one kept with <paramref name="state"/> below it.</summary>
+    private static int ChooseKey(Span<byte> row, int state, int continuedKey, int openedKey)
+    {
+        if ((continuedKey >> 4) <= (openedKey >> 4))
+            return ContinueKey(row, state, continuedKey);
+        if (openedKey >= Fnc1UnreachableKey)
+            return Fnc1UnreachableKey | state;
+        row[state] = (byte)((openedKey & 15) | Fnc1Opened);
+        return (openedKey & ~15) | state;
+    }
+
+    /// <summary>Records the continued key for <paramref name="state"/>, or leaves an unreachable one at its floor so no sum of them can reach a reachable cost.</summary>
+    private static int ContinueKey(Span<byte> row, int state, int continuedKey)
+    {
+        if (continuedKey >= Fnc1UnreachableKey)
+            return Fnc1UnreachableKey | state;
+        row[state] = (byte)(continuedKey & 15);
+        return (continuedKey & ~15) | state;
+    }
+
+    /// <summary>
+    /// The program for the remaining shape, a UTF-8 charset, where a character's byte count is its own and a byte
+    /// order mark can stand anywhere: the states in two arrays, relaxed from one row into the next.
+    /// </summary>
+    private static int CostsFnc1General(ReadOnlySpan<char> text, EciMode charset, int openNumeric, int openAlnum, int openByte, Span<byte> parents, out int finalState)
+    {
+        var track = !parents.IsEmpty;
 
         // The cost of each state after the character before, Unreachable where no run ends there.
         Span<int> cost = stackalloc int[Fnc1StateCount];
