@@ -288,7 +288,7 @@ internal static class SimdTiers
         new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
         new("ModeSegmenterLanes",      [Sse2],          [Vector256],          [AdvSimd],            [PackedSimd]),
         new("ModeSegmenterSixths",     [Vector128],     [Avx2],               [Vector128],          [Vector128]),
-        // ModeSegmenterCosts: the horizontal minimum with its index is one SSE4.1 instruction, which NEON and WebAssembly have no counterpart of, and the scalar loops keep their states in registers there.
+        // ModeSegmenterCosts: the horizontal minimum with its index is one SSE4.1 instruction. WebAssembly has no minimum across a vector, and its lane form, three swizzles and three minimums a character, loses to the scalar loops on the interpreter while winning under AOT, which the library cannot tell apart at run time. ARM64 has uminv without the index and stays scalar until the NEON form is timed (specs/standardqr-encoder.md, "Mixed-mode segmentation").
         new("ModeSegmenterCosts",      [Sse41],         [Sse41],              [Scalar],             [Scalar]),
         new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [PackedSimd]),
         new("EccBinaryDecoder",        [Vector128],     [GfniV256, Vector128], [AdvSimd],           [Vector128]),
