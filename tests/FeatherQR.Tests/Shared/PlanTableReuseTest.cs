@@ -137,7 +137,7 @@ public class PlanTableReuseTest
                     bands[band]++;
                     var firstBand = min < 10 ? 0 : min < 27 ? 1 : 2;
                     var firstBandEnd = BandEnd(firstBand, max);
-                    if (band > firstBand && QRSegmentPlanner.TrivialLowerBoundBits(text, analysis.EciMode) + eciBits <= QRCodeConstants.GetEccInfo(firstBandEnd, level).TotalDataCodewords * 8)
+                    if (band > firstBand && QRSegmentPlanner.TrivialLowerBoundBits(text, analysis.EciMode) + eciBits + QRSegmentPlanner.SecondRunHeaderBits <= QRCodeConstants.GetEccInfo(firstBandEnd, level).TotalDataCodewords * 8)
                     {
                         afterABandRejection++;
                         // The state the rejected band's run ended in. Where it differs from the accepting run's, the
@@ -342,7 +342,7 @@ public class PlanTableReuseTest
     private static RmQRVersion? FirstPricedCandidate(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel level, RmQRFitStrategy strategy, int eciBits)
     {
         var hasSingle = RmQRVersionSelector.TrySelectAutoFit(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, level, strategy, null, out var single);
-        var trivial = RmQRSegmentPlanner.TrivialLowerBoundBits(text, analysis.EciMode) + eciBits;
+        var trivial = RmQRSegmentPlanner.TrivialLowerBoundBits(text, analysis.EciMode) + eciBits + RmQRSegmentPlanner.SecondRunHeaderBits;
         foreach (var rank in RmQRVersionSelector.GetFitOrder(strategy))
         {
             var candidate = (RmQRVersion)rank;

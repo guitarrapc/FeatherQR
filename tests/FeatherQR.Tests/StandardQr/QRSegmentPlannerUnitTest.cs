@@ -160,6 +160,78 @@ public class QRSegmentPlannerUnitTest
         await Assert.That(bound).IsLessThanOrEqualTo(optimumAtNarrowest).Because($"content=\"{content}\", charset={charset}");
     }
 
+    /// <summary>
+    /// The premise of the second header the scan adds to the bound: below the single-mode fit a plan of one run is the single-mode
+    /// stream itself, which does not fit there, so every plan that fits below it has two runs or more. Held at every level over the
+    /// brute-force corpus and the longer labels the scan sees, at every version below the fit.
+    /// </summary>
+    [Test]
+    public async Task BelowTheSingleModeFit_EveryPlanThatFits_HasTwoRunsOrMore()
+    {
+        var texts = BruteForceCorpus().Select(c => c.Content).Concat(
+        [
+            "0109520123456788" + "17251231" + "10ABC123",
+            "https://example.com/item?id=123456789012345678901234567890",
+            new string('a', 60) + new string('7', 60),
+            string.Concat(Enumerable.Repeat("a7", 60)),
+            string.Concat(Enumerable.Repeat("A7", 60)),
+            "ORDER 12345 ITEM 6789 QTY 42 PRICE 1999 SKU ABC-123",
+            "ABCD" + "123456789012345678901234567890123456789012345678901234567890",
+            "abcdefgh" + "12345678901234567890123456789012345678901234567890123456789012345",
+            "order 20260915 item 0000123456 qty 42 ",
+            string.Concat(Enumerable.Repeat("1234567890ab", 19)) + "1234567AB",
+        ]);
+        var checkedPlans = 0;
+        foreach (var text in texts)
+        {
+            if (text.Length == 0)
+                continue;
+            var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: false, planKanji: true);
+            if (!QRSegmentPlanner.CanPlanBeatSingleMode(analysis.EncodingMode))
+                continue;
+            var segments = new ModeSegment[text.Length];
+            foreach (var level in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+            {
+                var top = QRCodeGenerator.TryGetVersionInRangeFnc1(analysis.DataLength, analysis.EncodingMode, level, analysis.EciMode, false, 0, 1, 40, out var single) ? single - 1 : 40;
+                for (var version = 1; version <= top; version++)
+                {
+                    if (!QRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, level, segments, out var count))
+                        continue;
+                    checkedPlans++;
+                    await Assert.That(count).IsGreaterThanOrEqualTo(2).Because($"「{text}」 fits version {version}-{level} below its single-mode fit {single}");
+                }
+            }
+        }
+
+        await Assert.That(checkedPlans).IsGreaterThan(20);
+    }
+
+    /// <summary>
+    /// With that second header the scan makes no run on content that clears the one-header bound by a few bits and splits to no
+    /// gain. The GS1 retail label clears version 1-M by two bits with one header, and its run found nothing. A run writes its
+    /// predecessors into the table, so a table left at its sentinel shows the scan made none.
+    /// </summary>
+    [Test]
+    [Arguments("0109520123456788" + "17251231" + "10ABC123")]
+    [Arguments("aaaaaaaaaa7777777777")]
+    public async Task Scan_MakesNoRun_WhereOnlyTheSecondHeaderRejectsEveryCandidate(string text)
+    {
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: false, planKanji: true);
+        await Assert.That(QRCodeGenerator.TryGetVersionInRangeFnc1(analysis.DataLength, analysis.EncodingMode, QREccLevel.M, analysis.EciMode, false, 0, 1, 40, out var single)).IsTrue();
+
+        // The premise: the largest capacity below the fit admits the one-header bound and rejects the two-header one.
+        var oneHeader = QRSegmentPlanner.TrivialLowerBoundBits(text, analysis.EciMode);
+        var capacityBelow = 8 * QRCodeConstants.GetEccInfo(single - 1, QREccLevel.M).TotalDataCodewords;
+        await Assert.That(oneHeader).IsLessThanOrEqualTo(capacityBelow);
+        await Assert.That(oneHeader + QRSegmentPlanner.SecondRunHeaderBits).IsGreaterThan(capacityBelow);
+
+        var table = new byte[text.Length * ModeSegmenter.ParentBytesPerChar];
+        Array.Fill(table, (byte)0xFF);
+        var selected = QRSegmentPlanner.TrySelectVersion(text, in analysis, QREccLevel.M, 1, 40, table, default, out var version, out var useSegments, out _, out _, out _);
+        await Assert.That((selected, version, useSegments)).IsEqualTo((true, single, false));
+        await Assert.That(table.All(b => b == 0xFF)).IsTrue().Because("a cost run writes its predecessors into the table, and none was due");
+    }
+
     [Test]
     [MethodDataSource(nameof(BruteForceCorpus))]
     public async Task TryBuildPlan_CostsExactlyWhatTheDynamicProgramComputed(string content, EciMode charset)

@@ -78,6 +78,7 @@ internal static partial class RmQRSegmentPlanner
 
         var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
+        // The one-header bound: under FNC1 a literal percent costs two Alphanumeric units and one byte, so one Byte run can undercut the Alphanumeric stream the fit priced and fit a candidate ahead of it.
         var trivialBits = TrivialLowerBoundBitsFnc1(text, charset) + headerBits;
 
         Span<int> memoKeys = stackalloc int[MemoCapacity];

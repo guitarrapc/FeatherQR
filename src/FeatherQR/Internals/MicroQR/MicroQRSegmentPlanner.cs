@@ -90,9 +90,9 @@ internal static class MicroQRSegmentPlanner
             if (!MicroQRConstants.IsValidCombination(candidate, eccLevel) || !MicroQRConstants.IsModeSupported(candidate, analysis.EncodingMode))
                 continue;
 
-            // Cheapest header at this version: the (version - 1)-bit mode indicator
-            // plus the narrowest count indicator, version + 1 bits (Alphanumeric/Byte).
-            var trivialBits = (cheapestSixths + 5) / 6 + 2 * (int)candidate;
+            // Two cheapest headers at this version, each the (version - 1)-bit mode indicator plus the narrowest count indicator,
+            // version + 1 bits (Alphanumeric/Byte): a plan of one run is the single-mode stream, which does not fit below its fit.
+            var trivialBits = (cheapestSixths + 5) / 6 + 4 * (int)candidate;
             if (MicroQRConstants.GetDataBitCapacity(candidate, eccLevel) < trivialBits)
                 continue; // no split of this content could fit, whatever the plan
 

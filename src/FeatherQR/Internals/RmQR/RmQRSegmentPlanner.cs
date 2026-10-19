@@ -45,6 +45,11 @@ internal static partial class RmQRSegmentPlanner
     /// <summary>Narrowest count indicator of any mode at any version, the minimum of the three widths pinned by RmQRSegmentPlannerUnitTest.</summary>
     private const int MinCountBitsAny = 3;
 
+    /// <summary>
+    /// The header a split's second run pays, which the scan without FNC1 or Kanji adds to the trivial bound: a plan of one run is the single-mode stream, which no candidate ahead of the single-mode fit holds, so every plan that fits one has a second header.
+    /// </summary>
+    public const int SecondRunHeaderBits = RmQRConstants.ModeIndicatorLength + MinCountBitsAny;
+
     // Kanji's narrowest count indicator (R7x43 and R11x27), the header the Kanji screen charges a stretch of characters with a cell. Pinned by KanjiPlanBoundsTest.
     private const int MinCountBitsKanji = 2;
 
@@ -142,7 +147,7 @@ internal static partial class RmQRSegmentPlanner
         // A candidate neither filter rejects is priced at its own widths, with its predecessors kept, so the accepting run's table is the plan's.
         // A floor run at the narrowest widths, with the floor plan re-priced as an upper bound, decided most candidates without a run of their own
         // but left the build to run the program again. Rationale and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
-        var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits;
+        var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits + SecondRunHeaderBits;
 
         Span<int> memoKeys = stackalloc int[MemoCapacity];
         Span<int> memoCosts = stackalloc int[MemoCapacity];

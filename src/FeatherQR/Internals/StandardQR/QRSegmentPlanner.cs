@@ -39,6 +39,11 @@ internal static class QRSegmentPlanner
     private const int MinCountBitsAny = 8;
 
     /// <summary>
+    /// The header a split's second run pays, which the scan without FNC1 or Kanji adds to the trivial bound: a plan of one run is the single-mode stream, which does not fit below the single-mode fit, so every plan that fits there has a second header.
+    /// </summary>
+    public const int SecondRunHeaderBits = ModeIndicatorBits + MinCountBitsAny;
+
+    /// <summary>
     /// Whether a mixed plan could ever cost less than the single-mode stream for content the analyser put in <paramref name="singleMode"/>.
     /// </summary>
     /// <remarks>
@@ -141,9 +146,13 @@ internal static class QRSegmentPlanner
             return hasSingle;
         }
 
-        // One O(n) pass pricing each character at the cheapest rate any mode could give it: a lower bound on any plan at any version, so it may only reject.
+        // One O(n) pass pricing each character at the cheapest rate any mode could give it, plus the second run's header, since a plan of one run is the
+        // single-mode stream and fits no version below its fit: a lower bound on any plan at any version scanned, so it may only reject.
+        // Not under FNC1, where a literal percent costs two Alphanumeric units and one byte, so one Byte run can undercut the Alphanumeric stream the fit priced.
         // It is what keeps Optimal roughly free on content no split can shrink. A candidate only pays for a cost run when it could hold at least this much.
-        var trivialBits = (fnc1.IsActive ? TrivialLowerBoundBitsFnc1(text, charset) : TrivialLowerBoundBits(text, charset)) + eciBits;
+        var trivialBits = fnc1.IsActive
+            ? TrivialLowerBoundBitsFnc1(text, charset) + eciBits
+            : TrivialLowerBoundBits(text, charset) + eciBits + SecondRunHeaderBits;
 
         // Each band's run keeps its predecessors in the table. The scan returns at the first version that holds a
         // band's cost, so the run that accepts is the last one made and its table is the plan's.
