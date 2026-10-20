@@ -113,8 +113,8 @@ namespace FeatherQR
 
     public enum MicroQRSegmentation : int
     {
-        Single = 0,
-        Optimal = 1,
+        Optimal = 0,
+        Single = 1,
     }
 
     public enum MicroQRVersion : int
@@ -234,8 +234,8 @@ namespace FeatherQR
 
     public enum QRSegmentation : int
     {
-        Single = 0,
-        Optimal = 1,
+        Optimal = 0,
+        Single = 1,
     }
 
     public readonly struct QRStructuredAppend : IEquatable<QRStructuredAppend>
@@ -357,8 +357,8 @@ namespace FeatherQR
 
     public enum RmQRSegmentation : int
     {
-        Single = 0,
-        Optimal = 1,
+        Optimal = 0,
+        Single = 1,
     }
 
     public enum RmQRVersion : int
