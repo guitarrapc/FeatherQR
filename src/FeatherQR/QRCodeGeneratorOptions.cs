@@ -98,7 +98,7 @@ public record struct QRCodeGeneratorOptions
 
     /// <summary>
     /// How the content is split into encoding-mode segments (see <see cref="QRSegmentation"/>).
-    /// Defaults to <see cref="QRSegmentation.Single"/>.
+    /// Defaults to <see cref="QRSegmentation.Optimal"/>.
     /// <see cref="QRSegmentation.Optimal"/> never selects a larger version, emits the identical bit stream when a split would not shrink the symbol, and defers to the single-mode stream when <see cref="Utf8Bom"/> would actually write a byte order mark.
     /// Size a destination buffer with the same value you encode with.
     /// </summary>
@@ -130,11 +130,11 @@ public record struct QRCodeGeneratorOptions
         set => _route = (_route & SegmentationMask) | (value.RouteBits << Fnc1Shift);
     }
 
-    // One field holds the segmentation (the low 22 bits) and the FNC1 mode (the top 10 bits), so the generator's
-    // default route tells "nothing but Single and no FNC1" from everything else with the one compare it already
-    // made on the segmentation alone: a non-zero field sends the call to the cold route, which reads both out.
+    // One field holds the segmentation (the low 22 bits) and the FNC1 mode (the top 10 bits), so the generator
+    // tells "Single and no FNC1" from everything else with the one compare it already made on the segmentation
+    // alone: any other field sends the call to the planning route, which reads both out.
     // An undefined segmentation value is kept as given when the 22 bits hold it and saturated to the mask when
-    // they do not, so the cold route refuses either (a masked value could read back as Single).
+    // they do not, so the planning route refuses either (a masked value could read back as a defined one).
     private int _route;
     private const int SegmentationMask = (1 << Fnc1Shift) - 1;
     private const int Fnc1Shift = 22;
@@ -142,8 +142,8 @@ public record struct QRCodeGeneratorOptions
     /// <summary>The largest segmentation value the field keeps as given. A value below 0 or above it reads back as the next one up, so an error cannot name the value the caller gave.</summary>
     internal const int LargestKeptSegmentation = SegmentationMask - 1;
 
-    /// <summary>Whether a call takes the cold route: a segmentation other than <see cref="QRSegmentation.Single"/>, an FNC1 mode, or both.</summary>
-    internal readonly bool TakesColdRoute => _route != 0;
+    /// <summary>Whether a call takes the single-mode route: <see cref="QRSegmentation.Single"/> and no FNC1 mode, the one route that reads no other option on its way in.</summary>
+    internal readonly bool TakesSingleRoute => _route == (int)QRSegmentation.Single;
 
     /// <summary>
     /// Write text in Kanji mode where it can be: 13 bits a character and no ECI header, where UTF-8 takes 24 bits a kana or kanji behind a 12-bit ECI header.

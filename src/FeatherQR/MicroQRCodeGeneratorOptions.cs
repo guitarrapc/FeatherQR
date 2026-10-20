@@ -58,7 +58,7 @@ public record struct MicroQRCodeGeneratorOptions
 
     /// <summary>
     /// How the content is split into encoding-mode segments (see <see cref="MicroQRSegmentation"/>).
-    /// Defaults to <see cref="MicroQRSegmentation.Single"/>.
+    /// Defaults to <see cref="MicroQRSegmentation.Optimal"/>.
     /// <see cref="MicroQRSegmentation.Optimal"/> never selects a larger version, and emits the identical bit stream when a split would not shrink the symbol.
     /// Size a destination buffer with the same value you encode with.
     /// </summary>

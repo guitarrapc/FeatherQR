@@ -119,7 +119,7 @@ public class KanjiEligibilityTest
     [MethodDataSource(nameof(EligibleWithAscii))]
     public async Task StandardQr_EligibleWithAscii_SingleStaysUtf8(string text)
     {
-        foreach (var options in new[] { default, Kanji })
+        foreach (var options in new[] { new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Single }, Kanji with { Segmentation = QRSegmentation.Single } })
             await Assert.That(StandardCore(text, QREccLevel.M, options)).IsEquivalentTo(ExpectedStandard([new Run('E', "26"), new Run('U', text)], QREccLevel.M), CollectionOrdering.Matching).Because($"AllowKanji {options.AllowKanji}");
     }
 

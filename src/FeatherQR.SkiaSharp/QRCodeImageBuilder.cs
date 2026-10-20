@@ -21,7 +21,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     private EciMode _eciMode = EciMode.Default;
     private QRVersionRange _versionRange;
     private int? _maskPattern;
-    private QRSegmentation _segmentation = QRSegmentation.Single;
+    private QRSegmentation _segmentation = QRSegmentation.Optimal;
 
     // rendering (Standard QR-only option, since Micro QR and rMQR have no ECC headroom for overlays)
     private IconData? _iconData;
@@ -397,7 +397,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
 
     /// <summary>
     /// Split the content into mixed-mode segments when that lowers the version (see <see cref="QRSegmentation"/>).
-    /// Defaults to <see cref="QRSegmentation.Single"/>.
+    /// Defaults to <see cref="QRSegmentation.Optimal"/>.
     /// Never selects a larger version, and produces the identical QR code when a split would not shrink it.
     /// </summary>
     /// <param name="segmentation">Segmentation strategy.</param>

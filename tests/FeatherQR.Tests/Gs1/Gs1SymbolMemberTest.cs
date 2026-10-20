@@ -260,8 +260,13 @@ public class Gs1SymbolMemberTest
 
         await Assert.That(sizes.Distinct().Count()).IsEqualTo(cases.Length).Because("the premise: the level, the quiet zone and the version each change the GS1 symbol's size");
         await Assert.That(linkSizes.Distinct().Count()).IsEqualTo(cases.Length).Because("the premise: and the Digital Link symbol's");
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(elementString, QREccLevel.M, out var withoutFnc1)).IsTrue();
-        await Assert.That(withoutFnc1.BufferSize).IsNotEqualTo(sizes[0]).Because("the premise: so does FNC1");
+        var withoutFnc1Single = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Single };
+
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1(hri, QREccLevel.M, out var withoutFnc1Fnc1, withoutFnc1Single)).IsTrue();
+
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(elementString, QREccLevel.M, out var withoutFnc1, withoutFnc1Single)).IsTrue();
+
+        await Assert.That(withoutFnc1.BufferSize).IsNotEqualTo(withoutFnc1Fnc1.BufferSize).Because("the premise: so does FNC1, read in one mode, where no plan absorbs the indicator's bits");
 
         var rmqrSizes = new List<int>();
         var rmqrLinkSizes = new List<int>();
@@ -297,8 +302,13 @@ public class Gs1SymbolMemberTest
 
         await Assert.That(rmqrSizes.Distinct().Count()).IsEqualTo(rmqrCases.Length).Because("the premise: the level, the quiet zone and the version each change the rMQR symbol's size");
         await Assert.That(rmqrLinkSizes.Distinct().Count()).IsEqualTo(rmqrCases.Length).Because("the premise: and the rMQR Digital Link symbol's");
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(elementString, RmQREccLevel.M, out var rmqrWithoutFnc1)).IsTrue();
-        await Assert.That(rmqrWithoutFnc1.BufferSize).IsNotEqualTo(rmqrSizes[0]).Because("the premise: so does FNC1");
+        var rmqrWithoutFnc1Single = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single };
+
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1(hri, RmQREccLevel.M, out var rmqrWithoutFnc1Fnc1, rmqrWithoutFnc1Single)).IsTrue();
+
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(elementString, RmQREccLevel.M, out var rmqrWithoutFnc1, rmqrWithoutFnc1Single)).IsTrue();
+
+        await Assert.That(rmqrWithoutFnc1.BufferSize).IsNotEqualTo(rmqrWithoutFnc1Fnc1.BufferSize).Because("the premise: so does FNC1, read in one mode, where no plan absorbs the indicator's bits");
 
         // Data that is refused is still reported before the destination, which no member can size without it.
         await Assert.That(() => QRCodeGenerator.CreateGs1("(01)09506000134353", QREccLevel.M, new byte[1])).Throws<Gs1FormatException>();

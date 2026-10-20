@@ -6,15 +6,15 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR;
 
 /// <summary>
-/// The cold route of the generator (specs/rmqr-encoder.md, FNC1): a segmentation other than
-/// <see cref="RmQRSegmentation.Single"/>, an FNC1 mode, or both. The single-mode route under FNC1 is the default
+/// The planning route of the generator (specs/rmqr-encoder.md, FNC1): a segmentation other than
+/// <see cref="RmQRSegmentation.Single"/>, an FNC1 mode, or both. The single-mode route under FNC1 is the single-mode
 /// route's steps with the indicator's bits in the version fit and the indicator in the stream, written as its own
-/// methods so the default route keeps its instructions. The mixed-mode route takes the mode as a parameter.
+/// methods so that route keeps its instructions. The mixed-mode route takes the mode as a parameter.
 /// </summary>
 public static partial class RmQRCodeGenerator
 {
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static RmQRCodeData CreateCold(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options)
+    private static RmQRCodeData CreatePlanned(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options)
     {
         if (options.Segmentation != RmQRSegmentation.Single)
             return CreateOptimal(textSpan, eccLevel, options.EciMode, options.AllowKanji, options.Version, options.FitStrategy, options.Height, options.QuietZoneSize, options.Segmentation, options.Fnc1);
@@ -38,7 +38,7 @@ public static partial class RmQRCodeGenerator
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static int CreateColdTo(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options)
+    private static int CreatePlannedTo(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options)
     {
         if (options.Segmentation != RmQRSegmentation.Single)
             return CreateOptimalTo(textSpan, eccLevel, options.EciMode, options.AllowKanji, destination, options.Version, options.FitStrategy, options.Height, options.QuietZoneSize, options.Segmentation, options.Fnc1);
@@ -65,9 +65,9 @@ public static partial class RmQRCodeGenerator
         return requiredSize;
     }
 
-    /// <summary><see cref="TryGetRequiredBufferSize"/>'s fit on the cold route: the plan under a segmentation, or the single-mode fit under FNC1.</summary>
+    /// <summary><see cref="TryGetRequiredBufferSize"/>'s fit on the planning route: the plan under a segmentation, or the single-mode fit under FNC1.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static bool TryGetRequiredBufferSizeCold(ReadOnlySpan<char> text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options, out RmQRVersion version)
+    private static bool TryGetRequiredBufferSizePlanned(ReadOnlySpan<char> text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options, out RmQRVersion version)
     {
         if (options.Segmentation != RmQRSegmentation.Single)
             return TryPlanOptimalVersion(text, eccLevel, options.EciMode, options.AllowKanji, options.Version, options.FitStrategy, options.Height, options.Segmentation, options.Fnc1, out version);

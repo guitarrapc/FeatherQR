@@ -15,7 +15,7 @@ public class Fnc1EncodeTest
 {
     private const string Gs = "\u001D";
     private const string Gtin = "0109524000059109";
-    private static readonly QRCodeGeneratorOptions First = new() { Fnc1 = Fnc1Mode.FirstPosition, QuietZoneSize = 0 };
+    private static readonly QRCodeGeneratorOptions First = new() { Fnc1 = Fnc1Mode.FirstPosition, QuietZoneSize = 0, Segmentation = QRSegmentation.Single };
     private static readonly QRCodeGeneratorOptions FirstOptimal = new() { Fnc1 = Fnc1Mode.FirstPosition, QuietZoneSize = 0, Segmentation = QRSegmentation.Optimal };
 
     // The two examples of the standard, bit for bit
@@ -653,7 +653,7 @@ public class Fnc1EncodeTest
         var single = new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition };
         var optimal = new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.SecondPosition(37), Segmentation = QRSegmentation.Optimal };
         // Here a plan is built only below the single-mode fit, and the FNC1 table leaves the stack only for a text longer than its stack buffer holds.
-        var longSingle = QRCodeGenerator.Create(longText, QREccLevel.M, new QRCodeGeneratorOptions { Fnc1 = optimal.Fnc1 });
+        var longSingle = QRCodeGenerator.Create(longText, QREccLevel.M, new QRCodeGeneratorOptions { Fnc1 = optimal.Fnc1, Segmentation = QRSegmentation.Single });
         await Assert.That(QRCodeGenerator.Create(longText, QREccLevel.M, optimal).Version).IsLessThan(longSingle.Version);
         await Assert.That(longText.Length * ModeSegmenter.Fnc1ParentBytesPerChar).IsGreaterThan(ModeSegmenter.Fnc1MaxStackParents);
         for (var i = 0; i < 3; i++)

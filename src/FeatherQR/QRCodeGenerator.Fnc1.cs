@@ -27,7 +27,7 @@ public static partial class QRCodeGenerator
         return CreateCoreFnc1(textSpan, in config, options.Fnc1, destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
     }
 
-    /// <summary>The analysis under the FNC1 rule and the version and level it resolves to, the options already validated by the cold entry.</summary>
+    /// <summary>The analysis under the FNC1 rule and the version and level it resolves to, the options already validated by the planning entry.</summary>
     private static QRConfiguration ResolveConfigurationFnc1(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
         var analysis = TextAnalyzer.AnalyzeFnc1(textSpan, options.EciMode, AllowsKanji(in options));

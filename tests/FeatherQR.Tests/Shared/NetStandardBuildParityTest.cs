@@ -91,7 +91,7 @@ public class NetStandardBuildParityTest
                     var expected = host(text, quietZone, optimal);
                     var options = Activator.CreateInstance(optionsType)!;
                     optionsType.GetProperty("QuietZoneSize")!.SetValue(options, quietZone);
-                    optionsType.GetProperty("Segmentation")!.SetValue(options, Enum.ToObject(segmentationType, optimal ? 1 : 0));
+                    optionsType.GetProperty("Segmentation")!.SetValue(options, Enum.Parse(segmentationType, optimal ? "Optimal" : "Single"));
 
                     var destination = new byte[expected.Length + 7];
                     destination.AsSpan().Fill(0xA5);

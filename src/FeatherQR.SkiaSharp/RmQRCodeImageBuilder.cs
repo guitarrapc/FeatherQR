@@ -25,7 +25,7 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     private RmQRVersion? _requestedVersion;
     private RmQRFitStrategy _fitStrategy = RmQRFitStrategy.MinimizeArea;
     private RmQRHeight? _height;
-    private RmQRSegmentation _segmentation = RmQRSegmentation.Single;
+    private RmQRSegmentation _segmentation = RmQRSegmentation.Optimal;
     private int? _widthOnly;
 
     /// <summary>
@@ -389,7 +389,7 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
 
     /// <summary>
     /// Split the content into mixed-mode segments when that lowers the module count (see <see cref="RmQRSegmentation"/>).
-    /// Defaults to <see cref="RmQRSegmentation.Single"/>.
+    /// Defaults to <see cref="RmQRSegmentation.Optimal"/>.
     /// Fewer modules is not the same as a smaller image: a flatter, wider rMQR code can render onto a larger grid.
     /// </summary>
     /// <param name="segmentation">Segmentation strategy.</param>

@@ -87,11 +87,12 @@ public static partial class RmQRCodeGenerator
 
         var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
-        // One compare on the default path, on the field that holds the segmentation and the
-        // FNC1 mode together. Validation of the values lives in the cold method so Single
-        // without FNC1 costs a predicted not-taken branch and nothing else.
-        if (options.TakesColdRoute)
-            return CreateCold(textSpan, eccLevel, in options);
+        // One compare, on the field that holds the segmentation and the FNC1 mode together: the
+        // default (Optimal, no FNC1) and every FNC1 call take the planning route, and Single
+        // without FNC1 keeps its one-pass route with nothing else read on the way in. Validation
+        // of the values lives in the planning method.
+        if (!options.TakesSingleRoute)
+            return CreatePlanned(textSpan, eccLevel, in options);
 
         var config = PrepareConfiguration(textSpan, eccLevel, options.EciMode, options.AllowKanji, options.Version, options.FitStrategy, options.Height);
         var result = new RmQRCodeData(config.Version, quietZoneSize);
@@ -131,8 +132,8 @@ public static partial class RmQRCodeGenerator
     {
         var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
-        if (options.TakesColdRoute)
-            return CreateColdTo(textSpan, eccLevel, destination, in options);
+        if (!options.TakesSingleRoute)
+            return CreatePlannedTo(textSpan, eccLevel, destination, in options);
 
         var config = PrepareConfiguration(textSpan, eccLevel, options.EciMode, options.AllowKanji, options.Version, options.FitStrategy, options.Height);
         var coreWidth = RmQRConstants.GetWidth(config.Version);
@@ -186,9 +187,9 @@ public static partial class RmQRCodeGenerator
 
         bool fits;
         RmQRVersion version;
-        if (options.TakesColdRoute)
+        if (!options.TakesSingleRoute)
         {
-            fits = TryGetRequiredBufferSizeCold(text, eccLevel, in options, out version);
+            fits = TryGetRequiredBufferSizePlanned(text, eccLevel, in options, out version);
         }
         else
         {

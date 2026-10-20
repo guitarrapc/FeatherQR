@@ -66,7 +66,7 @@ public class TryGetRequiredBufferSizeTest
         // capacity, but fits once the digit run is split off into Numeric.
         var content = new string('a', 100) + new string('0', 100);
 
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _)).IsFalse();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single })).IsFalse();
 
         var ok = RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out var size, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
         var symbol = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
