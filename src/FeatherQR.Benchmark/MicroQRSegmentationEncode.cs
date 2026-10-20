@@ -46,7 +46,7 @@ public class MicroQRSegmentationEncode
 
         _content = _contents[Shape];
         var allowKanji = Shape is "kanji-8";
-        _single = new MicroQRCodeGeneratorOptions { AllowKanji = allowKanji };
+        _single = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Single, AllowKanji = allowKanji };
         _optimal = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal, AllowKanji = allowKanji };
 
         // Sized for the Single arm, which never selects a smaller version than Optimal.

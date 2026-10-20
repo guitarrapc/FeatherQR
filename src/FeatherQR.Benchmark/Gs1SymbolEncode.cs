@@ -15,8 +15,8 @@ using FeatherQR.Gs1;
 public class Gs1SymbolEncode
 {
     private static readonly string[] shapeKeys = ["retail", "logistics", "weighed"];
-    private static readonly QRCodeGeneratorOptions firstPosition = new() { Fnc1 = Fnc1Mode.FirstPosition };
-    private static readonly RmQRCodeGeneratorOptions rmqrFirstPosition = new() { Fnc1 = Fnc1Mode.FirstPosition };
+    private static readonly QRCodeGeneratorOptions firstPosition = new() { Fnc1 = Fnc1Mode.FirstPosition, Segmentation = QRSegmentation.Single };
+    private static readonly RmQRCodeGeneratorOptions rmqrFirstPosition = new() { Fnc1 = Fnc1Mode.FirstPosition, Segmentation = RmQRSegmentation.Single };
     private static readonly QRCodeGeneratorOptions optimal = new() { Segmentation = QRSegmentation.Optimal };
     private static readonly RmQRCodeGeneratorOptions rmqrOptimal = new() { Segmentation = RmQRSegmentation.Optimal };
 

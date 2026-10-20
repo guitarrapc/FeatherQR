@@ -100,7 +100,7 @@ public class QRCodeStructuredAppendEncode
         var charset = Shape is "utf8-15k-any" or "utf8-15k-mixed" or "cells-15k-utf8" or "interleaved-1k-utf8" ? EciMode.Utf8 : EciMode.Default;
         var allowKanji = Shape is "kanji-15k-any" or "kanji-15k-mixed" or "cells-15k-any" or "kanji-1k-max10" or "cells-1k-max10" or "interleaved-1k-max10";
 
-        _single = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, EciMode = charset, AllowKanji = allowKanji };
+        _single = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, EciMode = charset, Segmentation = QRSegmentation.Single, AllowKanji = allowKanji };
         _optimal = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, EciMode = charset, Segmentation = QRSegmentation.Optimal, AllowKanji = allowKanji };
 
         // The chunks of the Single set, read back through the decoder, with the version and
@@ -114,7 +114,7 @@ public class QRCodeStructuredAppendEncode
                 throw new InvalidOperationException($"symbol {i} of shape {Shape} did not decode: {info.Status}");
             _chunkLevel = info.EccLevel;
         }
-        _chunkOptions = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(set[0].Version), EciMode = charset, AllowKanji = allowKanji };
+        _chunkOptions = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(set[0].Version), EciMode = charset, Segmentation = QRSegmentation.Single, AllowKanji = allowKanji };
     }
 
     [Benchmark(Baseline = true, Description = "Symbols")]

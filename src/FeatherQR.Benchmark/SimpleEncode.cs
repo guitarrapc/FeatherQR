@@ -5,11 +5,12 @@ using SkiaSharp;
 /// Cross-library Standard QR encoding: the shortest call each library offers for "text in, module matrix out", over five representative payloads.
 ///
 /// Comparability: every library selects the same QR version for every payload here (numeric 1, alphanumeric 2, url 3, unicode 4, wifi 3 at ECC L), so each row encodes the same amount of data into the same symbol size.
-/// Two differences are inherent to the libraries and are not normalized away:
+/// Two notes on comparability:
 ///
-///   Segmentation - FeatherQR encodes the payload in a single mode by default,
-///     while Net.Codecrete.QrCodeGenerator, QRCoder and CodeGlyphX plan mixed-mode
-///     segments by default. The version comes out the same for these payloads either way.
+///   Segmentation - FeatherQR, Net.Codecrete.QrCodeGenerator, QRCoder and CodeGlyphX
+///     plan mixed-mode segments by default, so the FeatherQR rows include the planning
+///     pass. For these payloads the plan is the one-mode stream, so each row encodes
+///     the same symbol as the one-mode setting would.
 ///   Quiet zone - FeatherQR and QRCoder place a quiet zone in the returned matrix,
 ///     while Net.Codecrete.QrCodeGenerator and CodeGlyphX return the bare symbol.
 ///

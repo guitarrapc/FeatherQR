@@ -73,7 +73,7 @@ public class QRCodeSegmentationEncode
 
         _content = _contents[Shape];
         var allowKanji = Shape is "kanji-60" or "kanji-prose-66";
-        _single = new QRCodeGeneratorOptions { AllowKanji = allowKanji };
+        _single = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Single, AllowKanji = allowKanji };
         _optimal = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal, AllowKanji = allowKanji };
 
         // Sized for the Single arm, which never selects a smaller version than Optimal.

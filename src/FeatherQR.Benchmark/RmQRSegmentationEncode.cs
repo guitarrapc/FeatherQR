@@ -86,7 +86,7 @@ public class RmQRSegmentationEncode
 
         _content = _contents[Shape];
         var allowKanji = Shape is "kanji-60";
-        _single = new RmQRCodeGeneratorOptions { AllowKanji = allowKanji };
+        _single = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single, AllowKanji = allowKanji };
         _optimal = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal, AllowKanji = allowKanji };
 
         // Sized from the largest-area version rather than from any shape's content: with

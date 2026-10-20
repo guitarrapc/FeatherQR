@@ -11,8 +11,9 @@ using BenchmarkDotNet.Configs;
 ///
 ///   FeatherQR places a quiet zone in the returned matrix, while CodeGlyphX returns the
 ///   bare symbol.
-///   Both libraries pick one mode for the whole payload by default, so the rows do the
-///   same work.
+///   FeatherQR plans mixed-mode segments by default, while CodeGlyphX picks one mode
+///   for the whole payload, so the FeatherQR rows include the planning pass. For these
+///   payloads the plan is the one-mode stream, so both sides encode the same symbol.
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
