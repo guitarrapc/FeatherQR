@@ -42,6 +42,19 @@ public class Gs1AllocationTest
         await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryValidate(refused.AsSpan(), out _))).IsEqualTo(0);
     }
 
+    /// <summary>
+    /// The check character pair (AI 8013) weights the data by a table of primes. As a span property written as a collection
+    /// expression the table read from a fresh array on every access on .NET 8, so a validation allocated once per data character;
+    /// the table is an array built once, and this holds it there on both frameworks. The GMN is the one GS1's own examples use.
+    /// </summary>
+    [Test]
+    public async Task CheckCharacterPair_AllocatesNothing()
+    {
+        var gmn = "8013" + "1987654Ad4X4bL5ttr2310c2K";
+        await Assert.That(Gs1ElementString.TryValidate(gmn.AsSpan(), out _)).IsTrue().Because("the premise: the pair is valid, so the whole table is read");
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryValidate(gmn.AsSpan(), out _))).IsEqualTo(0);
+    }
+
     [Test]
     public async Task HriSpanForms_AllocateNothing()
     {
