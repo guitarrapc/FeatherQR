@@ -14,7 +14,7 @@ public class Fnc1RmQREncodeTest
 {
     private const string Gs = "\u001D";
     private const string Gtin = "0109524000059109";
-    private static readonly RmQRCodeGeneratorOptions First = new() { Fnc1 = Fnc1Mode.FirstPosition, QuietZoneSize = 0 };
+    private static readonly RmQRCodeGeneratorOptions First = new() { Fnc1 = Fnc1Mode.FirstPosition, QuietZoneSize = 0, Segmentation = RmQRSegmentation.Single };
     private static readonly RmQRCodeGeneratorOptions FirstOptimal = new() { Fnc1 = Fnc1Mode.FirstPosition, QuietZoneSize = 0, Segmentation = RmQRSegmentation.Optimal };
 
     // The two smallest streams, bit for bit: the decode tests read these same bits
@@ -630,7 +630,7 @@ public class Fnc1RmQREncodeTest
         var single = new RmQRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition };
         var optimal = new RmQRCodeGeneratorOptions { Fnc1 = Fnc1Mode.SecondPosition(37), Segmentation = RmQRSegmentation.Optimal };
         // Here a plan is built only for a version better ranked than the single-mode fit, and the FNC1 table leaves the stack only for a text longer than its stack buffer holds.
-        var longSingle = RmQRCodeGenerator.Create(longText, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Fnc1 = optimal.Fnc1 });
+        var longSingle = RmQRCodeGenerator.Create(longText, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Fnc1 = optimal.Fnc1, Segmentation = RmQRSegmentation.Single });
         await Assert.That(IsBetter(RmQRCodeGenerator.Create(longText, RmQREccLevel.M, optimal).Version, longSingle.Version, RmQRFitStrategy.MinimizeArea)).IsTrue();
         await Assert.That(longText.Length * ModeSegmenter.Fnc1ParentBytesPerChar).IsGreaterThan(ModeSegmenter.Fnc1MaxStackParents);
         for (var i = 0; i < 3; i++)

@@ -172,8 +172,9 @@ public static class MicroQRCodeGenerator
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     public static MicroQRCodeData Create(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options = default)
     {
-        // One compare on the default path. Validation of the value itself lives in
-        // the cold method so Single costs a predicted not-taken branch and nothing else.
+        // One compare: the default (Optimal) takes the planning route, and Single keeps its
+        // one-pass route with nothing else read on the way in. Validation of the value itself
+        // lives in the planning method.
         if (options.Segmentation != MicroQRSegmentation.Single)
             return CreateOptimal(textSpan, eccLevel, in options);
 
@@ -634,7 +635,7 @@ public static class MicroQRCodeGenerator
             : MicroQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, eccLevel, plan, out segmentCount);
 
     /// <summary>
-    /// Everything the mixed-mode entry points must reject, gathered off the default path so <see cref="MicroQRSegmentation.Single"/> pays only one compare.
+    /// Everything the planning entry points must reject, gathered off the single-mode route so <see cref="MicroQRSegmentation.Single"/> pays only one compare.
     /// The parameter name matches the other symbologies, so every surface reports the same argument for the same mistake.
     /// </summary>
     private static void ValidateOptimalEntry(MicroQRSegmentation segmentation)

@@ -38,7 +38,7 @@ public class RmQRCodeGeneratorOptionsTest
         await Assert.That(options.FitStrategy).IsEqualTo(RmQRFitStrategy.MinimizeArea);
         await Assert.That(options.Height.HasValue).IsFalse();
         await Assert.That(options.QuietZoneSize).IsEqualTo(SpecQuietZone);
-        await Assert.That(options.Segmentation).IsEqualTo(RmQRSegmentation.Single);
+        await Assert.That(options.Segmentation).IsEqualTo(RmQRSegmentation.Optimal);
     }
 
     [Test]

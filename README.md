@@ -357,29 +357,29 @@ Because an `int?` converts implicitly, an optional version needs no branch at th
 
 #### Mixed-mode segmentation (smaller symbols for mixed content)
 
-By default the whole content is encoded in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode. `QRSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits, which often drops the symbol by a version or more and can even encode content that no single mode fits at any version. It is safe to turn on: the symbol is never larger than the default, and whenever splitting would not shrink it the default bit stream is emitted unchanged.
+`QRSegmentation.Single` encodes the whole content in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode. `QRSegmentation.Optimal`, the default since 2.0.0, splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits, which often drops the symbol by a version or more and can even encode content that no single mode fits at any version. The symbol is never larger than the single-mode one, and whenever splitting would not shrink it the single-mode bit stream is emitted unchanged.
 
 ```csharp
 const string content = "https://example.com/item?id=123456789012345678901234567890";
 
-var single = QRCodeGenerator.Create(content, QREccLevel.M);
-Console.WriteLine(single.Version);  // 4 - one Byte segment
-
-var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
+var optimal = QRCodeGenerator.Create(content, QREccLevel.M);
 Console.WriteLine(optimal.Version); // 3 - Byte + Numeric
+
+var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Single });
+Console.WriteLine(single.Version);  // 4 - one Byte segment
 
 // 5,500 characters overflow Byte mode at every version (40-L holds 2,953), but fit once split
 var mixed = new string('x', 1000) + new string('1', 4500);
-QRCodeGenerator.Create(mixed, QREccLevel.L);                                   // throws: too long
-QRCodeGenerator.Create(mixed, QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal }); // version 40
+QRCodeGenerator.Create(mixed, QREccLevel.L);                                                                      // version 40
+QRCodeGenerator.Create(mixed, QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Single }); // throws: too long
 
-// Also available on the image builder
+// The image builder takes the same option
 var pngBytes = new QRCodeImageBuilder(content)
-    .WithSegmentation(QRSegmentation.Optimal)
+    .WithSegmentation(QRSegmentation.Single)
     .ToByteArray();
 ```
 
-It is opt-in so existing callers keep their exact bit streams. Planning allocates nothing for typical content and adds noticeable cost only where a split could actually win a smaller version.
+Planning allocates nothing for typical content and, on the benchmark labels, costs 0.9 to 1.2 times the single-mode encode. `QRSegmentation.Single` keeps the one-mode stream of the releases before 2.0.0, for callers that depend on those exact bits or on the "too long" exception.
 
 Three notes:
 
@@ -388,7 +388,7 @@ Three notes:
 - All three symbologies carry the option (`QRSegmentation`, `MicroQRSegmentation`, `RmQRSegmentation`, see the rMQR section below). On Micro QR the plan respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode), and the tiny capacities make even short mixed content win:
 
 ```csharp
-var micro = MicroQRCodeGenerator.Create("AB12345678901234567", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal }); // M3 instead of M4
+var micro = MicroQRCodeGenerator.Create("AB12345678901234567", MicroQREccLevel.L); // M3, where MicroQRSegmentation.Single needs M4
 ```
 
 #### Kanji mode for Japanese text
@@ -1247,26 +1247,26 @@ using FeatherQR.SkiaSharp;
 
 const string content = "https://example.com/p/1234567890123456";
 
-var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
-Console.WriteLine(single.Version);  // R11x77 - one Byte segment, 313 bits
-
-var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
 Console.WriteLine(optimal.Version); // R15x43 - Byte + Numeric, 249 bits
+
+var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single });
+Console.WriteLine(single.Version);  // R11x77 - one Byte segment, 313 bits
 
 // 200 characters is 50 over the largest Byte-mode capacity, but fits once split
 var mixed = new string('a', 100) + new string('7', 100);
-RmQRCodeGenerator.Create(mixed, RmQREccLevel.M);                                  // throws: too long
-RmQRCodeGenerator.Create(mixed, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal }); // R17x139
+RmQRCodeGenerator.Create(mixed, RmQREccLevel.M);                                                                        // R17x139
+RmQRCodeGenerator.Create(mixed, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single }); // throws: too long
 
-// Also available on the image builder
+// The image builder takes the same option
 var pngBytes = new RmQRCodeImageBuilder(content)
-    .WithSegmentation(RmQRSegmentation.Optimal)
+    .WithSegmentation(RmQRSegmentation.Single)
     .ToByteArray();
 ```
 
 `Optimal` minimizes bits, not symbol dimensions: the version it lands on is still whichever one `RmQRFitStrategy` ranks best among those the plan fits.
 
-It is opt-in so existing callers keep their exact bit streams. Planning allocates nothing and adds noticeable cost only where a split could actually win a smaller symbol. For a payload with a known mixed shape (a URL followed by a numeric ID, say), `Optimal` wins every time.
+Planning allocates nothing, and content no split can help is ruled out before the search starts. `RmQRSegmentation.Single` keeps the one-mode stream of the releases before 2.0.0, for callers that depend on those exact bits, on the "too long" exception, or on the rendered dimensions the single mode gave them.
 
 #### Decode (matrix and image)
 

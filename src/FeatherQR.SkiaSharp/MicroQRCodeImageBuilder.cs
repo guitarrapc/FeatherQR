@@ -20,7 +20,7 @@ public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCode
     private MicroQREccLevel _eccLevel = MicroQREccLevel.M;
     private MicroQRVersionRange _versionRange;
     private int? _maskPattern;
-    private MicroQRSegmentation _segmentation = MicroQRSegmentation.Single;
+    private MicroQRSegmentation _segmentation = MicroQRSegmentation.Optimal;
 
     /// <summary>
     /// Starts a builder that will encode <paramref name="content"/> when you ask for an image.
@@ -375,7 +375,7 @@ public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCode
 
     /// <summary>
     /// Split the content into mixed-mode segments when that lowers the version (see <see cref="MicroQRSegmentation"/>).
-    /// Defaults to <see cref="MicroQRSegmentation.Single"/>.
+    /// Defaults to <see cref="MicroQRSegmentation.Optimal"/>.
     /// Never selects a larger version, and produces the identical Micro QR code when a split would not shrink it.
     /// </summary>
     /// <param name="segmentation">Segmentation strategy.</param>

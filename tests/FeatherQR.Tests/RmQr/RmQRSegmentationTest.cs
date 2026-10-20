@@ -19,6 +19,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class RmQRSegmentationTest
 {
+    // The one-mode stream, which the default no longer is.
+    private static readonly RmQRCodeGeneratorOptions RmSingle = new() { Segmentation = RmQRSegmentation.Single };
+
     private static int Area(RmQRCodeData data) => (data.Width - 4) * (data.Height - 4);
 
     /// <summary>
@@ -300,7 +303,7 @@ public class RmQRSegmentationTest
     {
         const string content = "37~yhakdP$%F$SMQINKKTSHJ";
 
-        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.H);
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.H, RmSingle);
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.H, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(single.Version).IsEqualTo(RmQRVersion.R15x59);
@@ -325,7 +328,7 @@ public class RmQRSegmentationTest
     {
         const string content = "37~yhakdP$%F$SMQINKKTSHJ";
 
-        var singleSize = Sizing.Required(content.AsSpan(), RmQREccLevel.H);
+        var singleSize = Sizing.Required(content.AsSpan(), RmQREccLevel.H, RmSingle);
         var optimalSize = Sizing.Required(content.AsSpan(), RmQREccLevel.H, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimalSize.BufferSize).IsGreaterThan(singleSize.BufferSize);
 
@@ -340,14 +343,20 @@ public class RmQRSegmentationTest
     }
 
     [Test]
-    public async Task Optimal_IsNotTheDefault()
+    public async Task Optimal_IsTheDefault()
     {
+        await Assert.That(default(RmQRCodeGeneratorOptions).Segmentation).IsEqualTo(RmQRSegmentation.Optimal);
+        await Assert.That(default(RmQRSegmentation)).IsEqualTo(RmQRSegmentation.Optimal);
+
+        // A URL with a long numeric tail: the split lands a smaller symbol than the single mode, so the default and the explicit Optimal agree and differ from Single.
         const string content = "https://example.com/p/1234567890123456";
         var implicitDefault = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var explicitOptimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
         var explicitSingle = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single });
 
-        await Assert.That(implicitDefault.Version).IsEqualTo(explicitSingle.Version);
-        await Assert.That(implicitDefault.GetRawData()).IsEquivalentTo(explicitSingle.GetRawData(), CollectionOrdering.Matching);
+        await Assert.That(implicitDefault.Version).IsEqualTo(explicitOptimal.Version);
+        await Assert.That(implicitDefault.GetRawData()).IsEquivalentTo(explicitOptimal.GetRawData(), CollectionOrdering.Matching);
+        await Assert.That(implicitDefault.Version).IsNotEqualTo(explicitSingle.Version);
     }
 
     // -----------------------------------------------------------------
@@ -361,7 +370,7 @@ public class RmQRSegmentationTest
         // (R11x77), splitting into Byte + Numeric needs 249 (R15x43).
         const string content = "https://example.com/p/1234567890123456";
 
-        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, RmSingle);
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(single.Version).IsEqualTo(RmQRVersion.R11x77);
@@ -381,7 +390,7 @@ public class RmQRSegmentationTest
     [Arguments("éèê1234567890", RmQRVersion.R11x43, RmQRVersion.R13x27, false)]
     public async Task Optimal_MixedContent_ShrinksTheSymbol(string content, RmQRVersion expectedSingle, RmQRVersion expectedOptimal, bool allowKanji)
     {
-        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = allowKanji });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single, AllowKanji = allowKanji });
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal, AllowKanji = allowKanji });
 
         await Assert.That(single.Version).IsEqualTo(expectedSingle);
@@ -398,7 +407,7 @@ public class RmQRSegmentationTest
     [Arguments("$%*+-./: 0123456789")]
     public async Task Optimal_AlphanumericContent_KeepsTheSingleModeSymbol(string content)
     {
-        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, RmSingle);
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
@@ -413,7 +422,7 @@ public class RmQRSegmentationTest
     [Arguments("こんにちは")]
     public async Task Optimal_SingleModeContent_KeepsTheSameVersion(string content)
     {
-        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, RmSingle);
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
     }
@@ -430,7 +439,7 @@ public class RmQRSegmentationTest
         const string content = "abcdefghij1234567890abcdefghij";
         const RmQRVersion version = RmQRVersion.R7x99;
 
-        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version })).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Single })).Throws<ArgumentException>();
 
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimal.Version).IsEqualTo(version);
@@ -535,7 +544,7 @@ public class RmQRSegmentationTest
         // but 811 + 346 = 1157 bits of the 1216 available once the digits split off.
         var content = new string('a', 100) + new string('7', 100);
 
-        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, RmSingle)).Throws<ArgumentException>();
 
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimal.Version).IsEqualTo(RmQRVersion.R17x139);
@@ -557,7 +566,7 @@ public class RmQRSegmentationTest
     {
         var content = new string('a', letters) + new string('7', digits);
 
-        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7 })).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7, Segmentation = RmQRSegmentation.Single })).Throws<ArgumentException>();
 
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7, Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimal.Height - 4).IsEqualTo(7);
@@ -578,7 +587,7 @@ public class RmQRSegmentationTest
 
         foreach (var strategy in Strategies())
         {
-            await Assert.That(() => RmQRCodeGenerator.Create(ascii, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy })).Throws<ArgumentException>();
+            await Assert.That(() => RmQRCodeGenerator.Create(ascii, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Single })).Throws<ArgumentException>();
             var optimal = RmQRCodeGenerator.Create(ascii, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
             await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
             await Assert.That(decoded).IsEqualTo(ascii);
@@ -586,7 +595,7 @@ public class RmQRSegmentationTest
 
         foreach (var (content, eci) in new[] { (latin1, EciMode.Iso8859_1), (utf8, EciMode.Utf8) })
         {
-            await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = eci })).Throws<ArgumentException>();
+            await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = eci, Segmentation = RmQRSegmentation.Single })).Throws<ArgumentException>();
             var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = eci, Segmentation = RmQRSegmentation.Optimal });
             await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
             await Assert.That(decoded).IsEqualTo(content);
@@ -667,7 +676,7 @@ public class RmQRSegmentationTest
     public async Task Optimal_WithKanji_LongestEligibleText_FitsR17x139OnBothBuildRoutes()
     {
         var content = "日" + new string('7', 354);
-        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true })).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true, Segmentation = RmQRSegmentation.Single })).Throws<ArgumentException>();
 
         foreach (var strategy in Strategies())
         {
@@ -721,7 +730,7 @@ public class RmQRSegmentationTest
         // The area assertion is strict: without the run-at-offset-0 exemption the plan
         // falls back to the identical single-mode symbol, which would decode the same.
         var content = "\uFEFF" + new string('1', 30) + "a";
-        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, RmSingle);
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(Area(optimal)).IsLessThan(Area(single));
@@ -739,7 +748,7 @@ public class RmQRSegmentationTest
         var content = new string('1', 300) + "\uFEFF";
         var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
 
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _)).IsFalse();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, RmSingle)).IsFalse();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, options)).IsTrue();
 
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, options);
@@ -776,7 +785,7 @@ public class RmQRSegmentationTest
         // before a mid-content U+FEFF, so the mark sits interior and survives. The digits
         // ahead of it still go to Numeric, which the area shows.
         var content = new string('1', 30) + "\uFEFF" + "a";
-        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, RmSingle);
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(Area(optimal)).IsLessThan(Area(single));
@@ -999,7 +1008,7 @@ public class RmQRSegmentationTest
         var optimal = new RmQRCodeImageBuilder(content)
             .WithSegmentation(RmQRSegmentation.Optimal)
             .ToByteArray();
-        var single = new RmQRCodeImageBuilder(content).ToByteArray();
+        var single = new RmQRCodeImageBuilder(content).WithSegmentation(RmQRSegmentation.Single).ToByteArray();
 
         await Assert.That(optimal).IsNotEquivalentTo(single);
 

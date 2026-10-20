@@ -127,7 +127,7 @@ public class Fnc1ModeTest
         await Assert.That(options.Fnc1).IsEqualTo(Fnc1Mode.SecondPosition('z'));
         options.Fnc1 = Fnc1Mode.None;
         await Assert.That(options.Segmentation).IsEqualTo(QRSegmentation.Single);
-        await Assert.That(options).IsEqualTo(default(QRCodeGeneratorOptions));
+        await Assert.That(options).IsEqualTo(default(QRCodeGeneratorOptions) with { Segmentation = QRSegmentation.Single });
         await Assert.That(new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition }).IsEqualTo(default(QRCodeGeneratorOptions) with { Fnc1 = Fnc1Mode.FirstPosition });
     }
 }

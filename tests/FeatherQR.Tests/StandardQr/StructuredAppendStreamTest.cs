@@ -467,7 +467,7 @@ public class StructuredAppendStreamTest
 
         var markedSet = QRCodeGenerator.CreateStructuredAppend(marked, QREccLevel.L, optimal);
         var unmarkedSet = QRCodeGenerator.CreateStructuredAppend(unmarked, QREccLevel.L, optimal);
-        var singleSet = QRCodeGenerator.CreateStructuredAppend(marked, QREccLevel.L);
+        var singleSet = QRCodeGenerator.CreateStructuredAppend(marked, QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Single });
 
         await Assert.That(markedSet.Length).IsEqualTo(unmarkedSet.Length);
         await Assert.That(markedSet.Length).IsLessThan(singleSet.Length);
@@ -489,7 +489,7 @@ public class StructuredAppendStreamTest
 
         var withMark = QRCodeGenerator.CreateStructuredAppend(Mark + body, QREccLevel.L, options);
         var without = QRCodeGenerator.CreateStructuredAppend(body, QREccLevel.L, options);
-        var single = QRCodeGenerator.CreateStructuredAppend(Mark + body, QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(10) });
+        var single = QRCodeGenerator.CreateStructuredAppend(Mark + body, QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(10), Segmentation = QRSegmentation.Single });
 
         await Assert.That(withMark.Length).IsEqualTo(without.Length);
         await Assert.That(withMark.Length).IsLessThan(single.Length);
@@ -534,7 +534,7 @@ public class StructuredAppendStreamTest
         var latin1 = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(10), Segmentation = QRSegmentation.Optimal, EciMode = EciMode.Iso8859_1 };
         var set = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, latin1);
         var twin = QRCodeGenerator.CreateStructuredAppend(text.Replace(Mark, '?'), QREccLevel.L, latin1);
-        var single = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(10), EciMode = EciMode.Iso8859_1 });
+        var single = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(10), EciMode = EciMode.Iso8859_1, Segmentation = QRSegmentation.Single });
 
         await Assert.That(set.Length).IsLessThan(single.Length);
         await Assert.That(set.Length).IsEqualTo(twin.Length);

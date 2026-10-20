@@ -110,7 +110,8 @@ internal static partial class Gs1Linters
     }
 
     /// <summary>The first 97 primes: the weights of the check character pair, the rightmost data character taking 2.</summary>
-    private static ReadOnlySpan<ushort> Primes =>
+    // An array built once rather than a span property with a collection expression, which on .NET 8 reads from a fresh array on every access.
+    private static readonly ushort[] Primes =
     [
         2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89,
         97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223,

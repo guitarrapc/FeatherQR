@@ -235,10 +235,11 @@ public static partial class QRCodeGenerator
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
     {
-        // One compare on the default path, on the field that holds the segmentation and the
-        // FNC1 mode together. Validation of the values lives in the cold method so Single
-        // without FNC1 costs a predicted not-taken branch and nothing else.
-        if (options.TakesColdRoute)
+        // One compare, on the field that holds the segmentation and the FNC1 mode together: the
+        // default (Optimal, no FNC1) and every FNC1 call take the planning route, and Single
+        // without FNC1 keeps its one-pass route with nothing else read on the way in. Validation
+        // of the values lives in the planning method.
+        if (!options.TakesSingleRoute)
             return CreateOptimal(textSpan, eccLevel, in options);
 
         if (options.Version.IsAny && !options.BoostEccLevel)
@@ -272,7 +273,7 @@ public static partial class QRCodeGenerator
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static int Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default)
     {
-        if (options.TakesColdRoute)
+        if (!options.TakesSingleRoute)
             return CreateOptimalTo(textSpan, eccLevel, destination, in options);
 
         if (options.Version.IsAny && !options.BoostEccLevel)
@@ -297,8 +298,8 @@ public static partial class QRCodeGenerator
     /// <exception cref="ArgumentOutOfRangeException">Thrown for a quiet zone outside 0 to 10,000, or an undefined level, ECI or segmentation.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = default)
     {
-        if (options.TakesColdRoute)
-            return TryGetRequiredBufferSizeCold(text, eccLevel, out size, in options);
+        if (!options.TakesSingleRoute)
+            return TryGetRequiredBufferSizePlanned(text, eccLevel, out size, in options);
 
         size = default;
         ValidateQuietZoneSize(options.QuietZoneSize);
@@ -316,7 +317,7 @@ public static partial class QRCodeGenerator
 
     /// <summary>Sizing under <see cref="QRSegmentation.Optimal"/>, FNC1, or both: the entry points' validation order, then the version the encode with the same options would use.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static bool TryGetRequiredBufferSizeCold(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options)
+    private static bool TryGetRequiredBufferSizePlanned(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options)
     {
         size = default;
         ValidateQuietZoneSize(options.QuietZoneSize);
@@ -743,6 +744,8 @@ public static partial class QRCodeGenerator
         for (var i = 0; i < changes.Length && (i < 3 || advice.Length == 0); i++)
         {
             var change = changes[i];
+            if ((change & Plan) != 0 && options.Segmentation == QRSegmentation.Optimal)
+                continue; // the plan is in use already, so this change is one of the others
             var maxVersion = (change & Widen) != 0 ? QRVersionRange.MaxVersion : options.Version.Max;
             var segmentation = (change & Plan) != 0 ? QRSegmentation.Optimal : options.Segmentation;
             var level = eccLevel;
@@ -1398,7 +1401,7 @@ public static partial class QRCodeGenerator
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static QRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
-        // The cold route: Optimal segmentation, an FNC1 mode, or both. Quiet zone,
+        // The planning route: Optimal segmentation, an FNC1 mode, or both. Quiet zone,
         // segmentation, ECI, then level: the same precedence as TryGetRequiredBufferSize
         // and the rMQR generator (Micro QR has no ECI), so every surface reports the same
         // error first for the same broken arguments.
@@ -1618,12 +1621,12 @@ public static partial class QRCodeGenerator
     }
 
     /// <summary>
-    /// Everything the mixed-mode entry points must reject, gathered off the default path so <see cref="QRSegmentation.Single"/> pays only one compare.
+    /// Everything the planning entry points must reject, gathered off the single-mode route so <see cref="QRSegmentation.Single"/> pays only one compare.
     /// The parameter name matches the rMQR generator and the builder, so the three surfaces report the same argument for the same mistake.
     /// </summary>
     private static void ValidateOptimalEntry(QRSegmentation segmentation)
     {
-        // Single reaches the cold route beside an FNC1 mode, so the check is for a defined value.
+        // Single reaches this route beside an FNC1 mode, so the check is for a defined value.
         if (segmentation is not (QRSegmentation.Single or QRSegmentation.Optimal))
         {
             throw new ArgumentOutOfRangeException(nameof(segmentation), (int)segmentation > QRCodeGeneratorOptions.LargestKeptSegmentation

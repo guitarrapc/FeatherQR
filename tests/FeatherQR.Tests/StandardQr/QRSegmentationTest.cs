@@ -16,6 +16,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class QRSegmentationTest
 {
+    // The one-mode stream, which the default no longer is.
+    private static readonly QRCodeGeneratorOptions QrSingle = new() { Segmentation = QRSegmentation.Single };
+
     /// <summary>
     /// Contents spanning the equivalence classes of the decision: single-mode only
     /// (no gain possible), mixed with a gain, mixed without a gain, every charset,
@@ -52,17 +55,18 @@ public class QRSegmentationTest
     ];
 
     [Test]
-    public async Task Optimal_IsNotTheDefault()
+    public async Task Optimal_IsTheDefault()
     {
-        await Assert.That(default(QRCodeGeneratorOptions).Segmentation).IsEqualTo(QRSegmentation.Single);
-        await Assert.That(QRCodeGeneratorOptions.Default.Segmentation).IsEqualTo(QRSegmentation.Single);
+        await Assert.That(default(QRCodeGeneratorOptions).Segmentation).IsEqualTo(QRSegmentation.Optimal);
+        await Assert.That(QRCodeGeneratorOptions.Default.Segmentation).IsEqualTo(QRSegmentation.Optimal);
+        await Assert.That(default(QRSegmentation)).IsEqualTo(QRSegmentation.Optimal);
     }
 
     [Test]
     [MethodDataSource(nameof(Corpus))]
     public async Task Optimal_IsNeverLargerThanSingle_AndAlwaysRoundTrips(string content)
     {
-        var single = QRCodeGenerator.Create(content, QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var single = QRCodeGenerator.Create(content, QREccLevel.M, QrSingle);
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsLessThanOrEqualTo(single.Version);
@@ -75,7 +79,7 @@ public class QRSegmentationTest
     [MethodDataSource(nameof(Corpus))]
     public async Task Optimal_SameVersionAsSingle_ProducesTheIdenticalMatrix(string content)
     {
-        var single = QRCodeGenerator.Create(content, QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var single = QRCodeGenerator.Create(content, QREccLevel.M, QrSingle);
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         if (optimal.Version != single.Version)
@@ -90,7 +94,7 @@ public class QRSegmentationTest
     [Arguments("日本語12345678901234567890123456789012345678901234567890")]
     public async Task Optimal_MixedContent_SelectsSmallerVersionThanSingle(string content)
     {
-        var single = QRCodeGenerator.Create(content, QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var single = QRCodeGenerator.Create(content, QREccLevel.M, QrSingle);
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsLessThan(single.Version);
@@ -105,7 +109,7 @@ public class QRSegmentationTest
     [Arguments("こんにちは")]
     public async Task Optimal_SingleModeContent_KeepsTheSameVersion(string content)
     {
-        var single = QRCodeGenerator.Create(content, QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var single = QRCodeGenerator.Create(content, QREccLevel.M, QrSingle);
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
@@ -119,7 +123,7 @@ public class QRSegmentationTest
         // but split into a Byte run and a Numeric run the stream fits version 40-L.
         var content = new string('x', 1000) + new string('1', 4500);
 
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, QRCodeGeneratorOptions.Default)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, QrSingle)).IsFalse();
 
         var options = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out var size, options)).IsTrue();
@@ -157,7 +161,7 @@ public class QRSegmentationTest
         // run opens a digit early and the mark sits interior, where it survives.
         // The digits ahead of it still go to Numeric, which the version shows.
         var content = new string('1', 40) + "\uFEFF" + "a";
-        var single = QRCodeGenerator.Create(content, QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var single = QRCodeGenerator.Create(content, QREccLevel.M, QrSingle);
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsLessThan(single.Version);
@@ -176,7 +180,7 @@ public class QRSegmentationTest
         // exemption (which silently falls back to the identical single-mode
         // symbol) fails this test instead of passing it vacuously.
         var content = "\uFEFF" + new string('1', 40) + "a";
-        var single = QRCodeGenerator.Create(content, QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var single = QRCodeGenerator.Create(content, QREccLevel.M, QrSingle);
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsLessThan(single.Version);
@@ -194,7 +198,7 @@ public class QRSegmentationTest
         var content = new string('1', 5000) + "\uFEFF";
         var options = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
 
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, QRCodeGeneratorOptions.Default)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, QrSingle)).IsFalse();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, options)).IsTrue();
 
         var sibling = QRCodeGenerator.Create(new string('1', 5000) + "a", QREccLevel.L, options);
@@ -252,7 +256,7 @@ public class QRSegmentationTest
     [Test]
     public async Task Optimal_EmptyContent_MatchesSingle()
     {
-        var single = QRCodeGenerator.Create("", QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var single = QRCodeGenerator.Create("", QREccLevel.M, QrSingle);
         var optimal = QRCodeGenerator.Create("", QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
@@ -267,7 +271,7 @@ public class QRSegmentationTest
         // An explicitly requested UTF-8 charset forces the 12-bit ECI prefix into
         // the planned cost. The split must still round-trip and never grow.
         var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = QRSegmentation.Optimal };
-        var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = QRSegmentation.Single });
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, options);
 
         await Assert.That(optimal.Version).IsLessThanOrEqualTo(single.Version);
@@ -284,7 +288,7 @@ public class QRSegmentationTest
     public async Task Optimal_ExplicitIso88591Eci_RoundTripsAndNeverGrows(string content)
     {
         var options = new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Segmentation = QRSegmentation.Optimal };
-        var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
+        var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Segmentation = QRSegmentation.Single });
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, options);
 
         await Assert.That(optimal.Version).IsLessThanOrEqualTo(single.Version);
@@ -339,7 +343,7 @@ public class QRSegmentationTest
         // The single-mode fit is version 4 and the mixed-mode fit version 3. A range
         // that starts at 4 excludes the gain, so the single-mode stream is emitted.
         var content = "https://example.com/item?id=123456789012345678901234567890";
-        var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = new QRVersionRange(4, 40) });
+        var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = new QRVersionRange(4, 40), Segmentation = QRSegmentation.Single });
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = new QRVersionRange(4, 40), Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
@@ -352,7 +356,7 @@ public class QRSegmentationTest
         // At version 3-M the single Byte-mode stream overflows, but the mixed plan
         // fits, so requesting that exact version must succeed under Optimal.
         var content = "https://example.com/item?id=123456789012345678901234567890";
-        Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 }));
+        Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3, Segmentation = QRSegmentation.Single }));
 
         var data = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3, Segmentation = QRSegmentation.Optimal });
         await Assert.That(data.Version).IsEqualTo(3);
@@ -401,14 +405,14 @@ public class QRSegmentationTest
             new QRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition },
         })
         {
-            var single = QRCodeGenerator.Create(content, QREccLevel.L, options);
+            var single = QRCodeGenerator.Create(content, QREccLevel.L, options with { Segmentation = QRSegmentation.Single });
             var optimal = QRCodeGenerator.Create(content, QREccLevel.L, options with { Segmentation = QRSegmentation.Optimal });
             await Assert.That(optimal.Version).IsEqualTo(single.Version).Because($"version under {Describe(options)}");
             await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching).Because($"modules under {Describe(options)}");
 
             var singleBytes = new byte[40_000];
             var optimalBytes = new byte[40_000];
-            var singleWritten = QRCodeGenerator.Create(content, QREccLevel.L, singleBytes, options);
+            var singleWritten = QRCodeGenerator.Create(content, QREccLevel.L, singleBytes, options with { Segmentation = QRSegmentation.Single });
             var optimalWritten = QRCodeGenerator.Create(content, QREccLevel.L, optimalBytes, options with { Segmentation = QRSegmentation.Optimal });
             await Assert.That(optimalWritten).IsEqualTo(singleWritten).Because($"written size under {Describe(options)}");
             await Assert.That(optimalBytes.AsSpan(0, optimalWritten).ToArray()).IsEquivalentTo(singleBytes.AsSpan(0, singleWritten).ToArray(), CollectionOrdering.Matching).Because($"written modules under {Describe(options)}");
@@ -422,7 +426,7 @@ public class QRSegmentationTest
     public async Task Optimal_ContentNoPlanCanHelp_NarrowRangeThrowsLikeSingle()
     {
         var content = new string('7', 100);
-        var narrow = new QRCodeGeneratorOptions { Version = new QRVersionRange(1, 1) };
+        var narrow = new QRCodeGeneratorOptions { Version = new QRVersionRange(1, 1), Segmentation = QRSegmentation.Single };
         var fromSingle = Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(content, QREccLevel.H, narrow));
         var fromOptimal = Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(content, QREccLevel.H, narrow with { Segmentation = QRSegmentation.Optimal }));
         await Assert.That(fromSingle.Message).Contains("does not fit");
@@ -558,7 +562,7 @@ public class QRSegmentationTest
     {
         await Assert.That(() => new QRCodeImageBuilder("HELLO").WithSegmentation((QRSegmentation)5)).Throws<ArgumentOutOfRangeException>();
 
-        var data = QRCodeGenerator.Create("HELLO", QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var data = QRCodeGenerator.Create("HELLO", QREccLevel.M, QrSingle);
         await Assert.That(() => new QRCodeImageBuilder(data).WithSegmentation(QRSegmentation.Optimal)).Throws<InvalidOperationException>();
     }
 

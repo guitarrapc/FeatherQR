@@ -252,7 +252,7 @@ public class StructuredAppendKanjiTest
 
     // ---- Through the public API -----------------------------------------------------
 
-    private static readonly QRCodeGeneratorOptions Pinned = new() { MaskPattern = 0, QuietZoneSize = 0, AllowKanji = true };
+    private static readonly QRCodeGeneratorOptions Pinned = new() { MaskPattern = 0, QuietZoneSize = 0, AllowKanji = true, Segmentation = QRSegmentation.Single };
 
     private static byte[] Modules(QRCodeData data)
     {
@@ -666,7 +666,7 @@ public class StructuredAppendKanjiTest
     {
         // A version 2-L symbol holds about 19 characters of this text as a Kanji plan and 9 as UTF-8: 162 characters are about ten Kanji symbols and eighteen UTF-8 ones.
         var text = Repeat("日本語のテキスト7", 18);
-        var single = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(2) };
+        var single = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(2), Segmentation = QRSegmentation.Single };
         var ex = await Assert.That(() => QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, single)).Throws<ArgumentException>();
         await Assert.That(ex!.Message).Contains("use QRSegmentation.Optimal");
 

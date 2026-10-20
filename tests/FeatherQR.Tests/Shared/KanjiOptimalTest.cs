@@ -91,7 +91,7 @@ public class KanjiOptimalTest
     }
 
     private static readonly QRCodeGeneratorOptions StandardOptimal = new() { Segmentation = QRSegmentation.Optimal, AllowKanji = true };
-    private static readonly QRCodeGeneratorOptions StandardSingle = new() { AllowKanji = true };
+    private static readonly QRCodeGeneratorOptions StandardSingle = new() { Segmentation = QRSegmentation.Single, AllowKanji = true };
 
     private static int StandardCapacity(int version, QREccLevel ecc) => QRCodeConstants.GetEccInfo(version, ecc).TotalDataCodewords * 8;
 
@@ -311,7 +311,7 @@ public class KanjiOptimalTest
     ];
 
     private static readonly MicroQRCodeGeneratorOptions MicroOptimal = new() { Segmentation = MicroQRSegmentation.Optimal, AllowKanji = true };
-    private static readonly MicroQRCodeGeneratorOptions MicroSingle = new() { AllowKanji = true };
+    private static readonly MicroQRCodeGeneratorOptions MicroSingle = new() { Segmentation = MicroQRSegmentation.Single, AllowKanji = true };
 
     private static int MicroCapacity(MicroQRVersion version, MicroQREccLevel ecc) => MicroQRConstants.GetDataBitCapacity(version, ecc);
 
