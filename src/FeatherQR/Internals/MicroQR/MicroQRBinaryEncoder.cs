@@ -426,7 +426,7 @@ internal static partial class MicroQRBinaryEncoder
         // EncodeUtf8 throws.
         Debug.Assert(text.Length <= 15, "byte payloads beyond any Micro QR capacity must be rejected by the caller");
         Span<byte> utf8 = stackalloc byte[64];
-        var n = EncodeUtf8(text, utf8);
+        var n = CharacterSets.EncodeUtf8(text, utf8);
 
         Append(ref hi, ref lo, ref pos, modeValue | n, headerBits);
         var i = 0;
@@ -441,57 +441,6 @@ internal static partial class MicroQRBinaryEncoder
 
         FinishAndStore(hi, lo, pos, version, capacityBits, codewordCount, destination);
         return codewordCount;
-    }
-
-    /// <summary>
-    /// Hand-rolled UTF-8 encoder matching Encoding.UTF8.GetBytes semantics, including U+FFFD replacement for lone surrogates.
-    /// Payloads are tiny (≤ 15 encoded bytes), where Encoding's fixed dispatch cost dominates.
-    /// It allocates nothing, on netstandard2.0 too, which has no span overload of <c>Encoding.UTF8.GetBytes</c>.
-    /// </summary>
-    private static int EncodeUtf8(ReadOnlySpan<char> text, Span<byte> utf8)
-    {
-        var n = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            int c = text[i];
-            if (c < 0x80)
-            {
-                utf8[n++] = (byte)c;
-            }
-            else if (c < 0x800)
-            {
-                utf8[n++] = (byte)(0xC0 | (c >> 6));
-                utf8[n++] = (byte)(0x80 | (c & 0x3F));
-            }
-            else if (c is >= 0xD800 and <= 0xDFFF)
-            {
-                // surrogate range: a valid high+low pair encodes a supplementary
-                // code point (U+10000..U+10FFFF) as 4 bytes
-                if (c <= 0xDBFF && i + 1 < text.Length && text[i + 1] is >= (char)0xDC00 and <= (char)0xDFFF)
-                {
-                    var cp = 0x10000 + ((c - 0xD800) << 10) + (text[i + 1] - 0xDC00);
-                    i++;
-                    utf8[n++] = (byte)(0xF0 | (cp >> 18));
-                    utf8[n++] = (byte)(0x80 | ((cp >> 12) & 0x3F));
-                    utf8[n++] = (byte)(0x80 | ((cp >> 6) & 0x3F));
-                    utf8[n++] = (byte)(0x80 | (cp & 0x3F));
-                }
-                else
-                {
-                    // lone surrogate -> U+FFFD, matching Encoding.UTF8 replacement
-                    utf8[n++] = 0xEF;
-                    utf8[n++] = 0xBF;
-                    utf8[n++] = 0xBD;
-                }
-            }
-            else
-            {
-                utf8[n++] = (byte)(0xE0 | (c >> 12));
-                utf8[n++] = (byte)(0x80 | ((c >> 6) & 0x3F));
-                utf8[n++] = (byte)(0x80 | (c & 0x3F));
-            }
-        }
-        return n;
     }
 
     // ---------------------------------------------------------------

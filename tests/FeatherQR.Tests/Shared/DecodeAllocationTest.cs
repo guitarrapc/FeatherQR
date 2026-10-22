@@ -33,7 +33,7 @@ public class DecodeAllocationTest
     /// The fewest over a few rounds of calls: tests run in parallel, and the shared array pool can drop a buffer when a collection runs meanwhile, so one round can see a rent allocate once.
     /// A call that allocates every time allocates in every round.
     /// </remarks>
-    private static long SteadyStateBytes(Action call)
+    internal static long SteadyStateBytes(Action call)
     {
         const int WarmUp = 3;
         const int Rounds = 3;

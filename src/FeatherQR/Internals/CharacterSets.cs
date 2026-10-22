@@ -29,22 +29,60 @@ internal static class CharacterSets
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
         return Encoding.UTF8.GetBytes(text, destination);
 #else
-        // netstandard2.0 has no span overloads, and the pointer overloads would be unsafe code. The array overloads over rented arrays allocate nothing.
-        var chars = System.Buffers.ArrayPool<char>.Shared.Rent(Math.Max(text.Length, 1));
-        var bytes = System.Buffers.ArrayPool<byte>.Shared.Rent(Math.Max(destination.Length, 1));
-        try
-        {
-            text.CopyTo(chars);
-            var length = Encoding.UTF8.GetBytes(chars, 0, text.Length, bytes, 0);
-            bytes.AsSpan(0, length).CopyTo(destination);
-            return length;
-        }
-        finally
-        {
-            System.Buffers.ArrayPool<byte>.Shared.Return(bytes);
-            System.Buffers.ArrayPool<char>.Shared.Return(chars);
-        }
+        // netstandard2.0 has no span overloads, and the pointer overloads would be unsafe code. The array overloads need pooled arrays, and a
+        // long text's caller already holds one of the same size, so whether the second rent allocates would depend on the pool and on other threads.
+        return EncodeUtf8(text, destination);
 #endif
+    }
+
+    /// <summary>
+    /// Writes the UTF-8 of <paramref name="text"/> by hand, as <see cref="Encoding.UTF8"/> writes it with a lone surrogate replaced by U+FFFD, and returns its length.
+    /// Micro QR writes its payloads with it on every build: they are at most 15 bytes, where <see cref="Encoding"/>'s fixed dispatch cost dominates.
+    /// </summary>
+    internal static int EncodeUtf8(ReadOnlySpan<char> text, Span<byte> utf8)
+    {
+        var n = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            int c = text[i];
+            if (c < 0x80)
+            {
+                utf8[n++] = (byte)c;
+            }
+            else if (c < 0x800)
+            {
+                utf8[n++] = (byte)(0xC0 | (c >> 6));
+                utf8[n++] = (byte)(0x80 | (c & 0x3F));
+            }
+            else if (c is >= 0xD800 and <= 0xDFFF)
+            {
+                // surrogate range: a valid high+low pair encodes a supplementary
+                // code point (U+10000..U+10FFFF) as 4 bytes
+                if (c <= 0xDBFF && i + 1 < text.Length && text[i + 1] is >= (char)0xDC00 and <= (char)0xDFFF)
+                {
+                    var cp = 0x10000 + ((c - 0xD800) << 10) + (text[i + 1] - 0xDC00);
+                    i++;
+                    utf8[n++] = (byte)(0xF0 | (cp >> 18));
+                    utf8[n++] = (byte)(0x80 | ((cp >> 12) & 0x3F));
+                    utf8[n++] = (byte)(0x80 | ((cp >> 6) & 0x3F));
+                    utf8[n++] = (byte)(0x80 | (cp & 0x3F));
+                }
+                else
+                {
+                    // lone surrogate -> U+FFFD, matching Encoding.UTF8 replacement
+                    utf8[n++] = 0xEF;
+                    utf8[n++] = 0xBF;
+                    utf8[n++] = 0xBD;
+                }
+            }
+            else
+            {
+                utf8[n++] = (byte)(0xE0 | (c >> 12));
+                utf8[n++] = (byte)(0x80 | ((c >> 6) & 0x3F));
+                utf8[n++] = (byte)(0x80 | (c & 0x3F));
+            }
+        }
+        return n;
     }
 
     /// <summary>

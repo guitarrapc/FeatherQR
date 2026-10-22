@@ -6,19 +6,23 @@ using System.Runtime.Loader;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The netstandard builds' span outputs against this host's, on a dirty destination: each symbology, both segmentations, quiet zones
-/// from 0 up. No test host runs a netstandard build, and Standard QR's quiet-zone span path on netstandard2.0 is code of its
-/// own (a pooled core copied into the cleared destination, where the other builds move the core in place), so this loads the build
-/// beside the core project into a load context of its own and calls its public span API.
+/// The netstandard builds' span API against this host's build: encode on a dirty destination for each symbology, both segmentations and
+/// quiet zones from 0 up, then sizing, encode, matrix decode and image decode on the paths a netstandard build has code of its own for,
+/// each allocating nothing once warm. No test host runs a netstandard build, so this loads the build beside the core project into a load
+/// context of its own and calls its public span API.
 /// </summary>
 /// <remarks>
 /// The builds are found and checked for staleness as <see cref="CoreAssemblyDependencyTest"/> finds them: <c>dotnet build</c> of the
 /// solution produces them before <c>dotnet test</c> runs, and a build older than a source of the core is skipped (failed on CI).
 /// The span API takes spans, which reflection cannot pass, so each entry is called through a dynamic method that makes them from arrays.
+/// The same dynamic methods over this host's build give the expected answers. A loaded build runs on this host's runtime, so the
+/// allocation checks hold the build's own code, not .NET Framework's.
 /// </remarks>
 public class NetStandardBuildParityTest
 {
     private delegate int SpanCreate(string text, int eccLevel, byte[] destination, object options);
+    private delegate bool SpanSizing(string text, int eccLevel, object options, out int bufferSize, out int width, out int height);
+    private delegate bool SpanDecode(byte[] input, int width, int height, char[] destination, out int charsWritten, object?[]? info);
 
     // Lazy, so that cases starting together load a build once: a load context is not unloaded.
     private static readonly ConcurrentDictionary<string, Lazy<Assembly>> Builds = new();
@@ -117,48 +121,245 @@ public class NetStandardBuildParityTest
     private const string Utf8Text = "Zürich こんにちは 🎉";
     private const string MicroQRUtf8Text = "日本";
 
-#if !DEBUG
     /// <summary>
-    /// UTF-8 text through each netstandard build's span API allocates nothing once warm, with and without a byte order mark for Standard QR, and writes this host's matrix.
-    /// netstandard2.0 has no span overloads on <see cref="System.Text.Encoding"/>, so it is the build where a transcode could allocate.
+    /// A text and the options that steer it onto one path. A netstandard build has code of its own for the UTF-8 transcode both ways, since
+    /// netstandard2.0's <see cref="System.Text.Encoding"/> has no span overloads, for Standard QR's pooled quiet-zone and FNC1 cores on
+    /// netstandard2.0, and for the scalar form of every vectorized step. Kanji, ECI, a pinned mask and version 40 are paths of their own on
+    /// every build.
     /// </summary>
-    [Test]
-    [MethodDataSource(nameof(Cases))]
-    public async Task SpanCreate_Utf8_AllocatesNothing(string targetFramework, string symbology)
+    private sealed record SpanCase(string Name, string Symbology, string Text, string EccLevel, params (string Property, object Value)[] Options)
     {
-        var (build, path) = await LoadBuild(targetFramework);
-        var create = BindSpanCreate(build, symbology, path);
-        var optionsType = build.GetType($"FeatherQR.{symbology}CodeGeneratorOptions", throwOnError: true)!;
-
-        foreach (var bom in symbology == "QR" ? new[] { false, true } : [false])
-        {
-            var text = symbology == "MicroQR" ? MicroQRUtf8Text : Utf8Text;
-            var expected = symbology switch
-            {
-                "QR" => HostQR(text, bom),
-                "MicroQR" => HostMicroQR(text),
-                _ => HostRmQR(text),
-            };
-            var options = Activator.CreateInstance(optionsType)!;
-            if (bom)
-                optionsType.GetProperty("Utf8Bom")!.SetValue(options, true);
-            var eccLevel = symbology switch { "QR" => (int)QREccLevel.M, "MicroQR" => (int)MicroQREccLevel.L, _ => (int)RmQREccLevel.M };
-            var destination = new byte[expected.Length];
-
-            // Warm up the JIT, the array pool and the lazily built tables.
-            for (var i = 0; i < 3; i++)
-                create(text, eccLevel, destination, options);
-
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            var written = create(text, eccLevel, destination, options);
-            var after = GC.GetAllocatedBytesForCurrentThread();
-
-            var context = $"{targetFramework} {symbology}{(bom ? " with a byte order mark" : "")}";
-            await Assert.That(destination.AsSpan(0, written).SequenceEqual(expected)).IsTrue().Because($"{context}: the matrix this host's build writes");
-            await Assert.That(after - before).IsEqualTo(0).Because($"{context}: allocated bytes once warm");
-        }
+        /// <summary>The text read back where it differs from <see cref="Text"/>: the encoder writes a lone surrogate as U+FFFD.</summary>
+        public string? Decoded { get; init; }
     }
+
+    // Past the encoders' stack budgets for one UTF-8 run (Standard QR's 256 bytes at four a character, rMQR's 160), so that under Single,
+    // or with a byte order mark, the whole text transcodes into a pooled buffer.
+    private static readonly string LongUtf8Text = string.Concat(Enumerable.Repeat(Utf8Text, 10));
+    private static readonly string RmQRLongUtf8Text = string.Concat(Enumerable.Repeat(Utf8Text, 6));
+
+    private static readonly SpanCase[] SpanCaseTable =
+    [
+        new("QR ASCII URL", "QR", "https://example.com/item?id=42", "M"),
+        new("QR Latin-1", "QR", "Zürich Hauptbahnhof, Gleis 7", "M"),
+        new("QR UTF-8", "QR", Utf8Text, "M"),
+        new("QR UTF-8 with a byte order mark", "QR", Utf8Text, "M", ("Utf8Bom", true)),
+        new("QR UTF-8 long", "QR", LongUtf8Text, "M", ("Segmentation", "Optimal")),
+        new("QR UTF-8 long Single", "QR", LongUtf8Text, "M", ("Segmentation", "Single")),
+        new("QR UTF-8 long with a byte order mark", "QR", LongUtf8Text, "M", ("Utf8Bom", true)),
+        new("QR lone surrogates", "QR", "a\uD800b\uDC00c\uD83D", "M") { Decoded = "a\uFFFDb\uFFFDc\uFFFD" },
+        new("QR ECI UTF-8", "QR", "plain ascii", "M", ("EciMode", "Utf8")),
+        new("QR ECI ISO-8859-1", "QR", "Zürich", "M", ("EciMode", "Iso8859_1")),
+        new("QR Kanji", "QR", "日本語の漢字モード", "M", ("AllowKanji", true)),
+        new("QR Kanji Single", "QR", "日本語の漢字モード", "M", ("AllowKanji", true), ("Segmentation", "Single")),
+        new("QR Kanji among ASCII", "QR", "商品番号 1234567890 東京都", "M", ("AllowKanji", true)),
+        new("QR Single", "QR", "HELLO WORLD 1234567890 hello", "M", ("Segmentation", "Single")),
+        new("QR Optimal long", "QR", string.Concat(Enumerable.Repeat("ABC123456789xyz-", 60)), "M", ("Segmentation", "Optimal")),
+        new("QR FNC1 first position", "QR", "0109521234543213\u001d10ABC123", "M", ("Fnc1", Fnc1First())),
+        new("QR FNC1 first position quiet zone 0", "QR", "0109521234543213\u001d10ABC123", "M", ("Fnc1", Fnc1First()), ("QuietZoneSize", 0)),
+        new("QR FNC1 second position", "QR", "AB12345", "M", ("Fnc1", Fnc1Second(37))),
+        new("QR quiet zone 0", "QR", "https://example.com", "M", ("QuietZoneSize", 0)),
+        new("QR quiet zone 20", "QR", "https://example.com", "M", ("QuietZoneSize", 20)),
+        new("QR mask 3", "QR", "https://example.com", "M", ("MaskPattern", 3)),
+        new("QR boosted ECC", "QR", "https://example.com", "L", ("BoostEccLevel", true)),
+        new("QR version 40", "QR", new string('9', 7000), "L"),
+        new("MicroQR numeric", "MicroQR", "0123456789", "L"),
+        new("MicroQR alphanumeric", "MicroQR", "HELLO WORLD 14", "L"),
+        new("MicroQR Latin-1", "MicroQR", "Zürich", "L"),
+        new("MicroQR UTF-8", "MicroQR", MicroQRUtf8Text, "L"),
+        new("MicroQR lone surrogate", "MicroQR", "a\uD800", "L") { Decoded = "a\uFFFD" },
+        new("MicroQR Kanji", "MicroQR", "日本語", "L", ("AllowKanji", true)),
+        new("MicroQR Optimal", "MicroQR", "a1234567890", "L", ("Segmentation", "Optimal")),
+        new("MicroQR quiet zone 0", "MicroQR", "HELLO", "L", ("QuietZoneSize", 0)),
+        new("MicroQR mask 2", "MicroQR", "12345", "L", ("MaskPattern", 2)),
+        new("RmQR ASCII", "RmQR", "HELLO WORLD", "M"),
+        new("RmQR UTF-8", "RmQR", Utf8Text, "M"),
+        new("RmQR UTF-8 long Single", "RmQR", RmQRLongUtf8Text, "M", ("Segmentation", "Single")),
+        new("RmQR lone surrogates", "RmQR", "a\uD800b\uDC00c", "M") { Decoded = "a\uFFFDb\uFFFDc" },
+        new("RmQR ECI UTF-8", "RmQR", "plain ascii", "M", ("EciMode", "Utf8")),
+        new("RmQR Kanji", "RmQR", "日本語の漢字", "M", ("AllowKanji", true)),
+        new("RmQR FNC1 first position", "RmQR", "0109521234543213\u001d10ABC123", "M", ("Fnc1", Fnc1First())),
+        new("RmQR FNC1 second position", "RmQR", "AB12345", "M", ("Fnc1", Fnc1Second(37))),
+        new("RmQR Optimal long", "RmQR", string.Concat(Enumerable.Repeat("AB12345678xy-", 8)), "M", ("Segmentation", "Optimal")),
+        new("RmQR quiet zone 0", "RmQR", "HELLO WORLD", "M", ("QuietZoneSize", 0)),
+    ];
+
+    /// <summary>A symbol of this host's build rendered as a luminance image, black on white or inverted.</summary>
+    private sealed record ImageCase(string Name, string Symbology, string Text, string EccLevel, int PixelsPerModule, bool Inverted = false);
+
+    private static readonly ImageCase[] ImageCaseTable =
+    [
+        new("QR URL", "QR", "https://example.com/item?id=42", "M", 8),
+        // Version 10, so alignment patterns and the version information are read.
+        new("QR version 10", "QR", new string('z', 200), "M", 4),
+        new("QR inverted", "QR", "https://example.com/item?id=42", "M", 8, Inverted: true),
+        new("MicroQR", "MicroQR", "HELLO WORLD 14", "L", 8),
+        new("MicroQR inverted", "MicroQR", "HELLO WORLD 14", "L", 8, Inverted: true),
+        new("RmQR", "RmQR", "HELLO WORLD", "M", 8),
+        new("RmQR inverted", "RmQR", "HELLO WORLD", "M", 8, Inverted: true),
+    ];
+
+    // Holds any decoded text of the cases: version 40's 7,000 digits.
+    private const int DecodedChars = 8192;
+
+    public static IEnumerable<Func<(string TargetFramework, string Case)>> SpanCases() =>
+        from framework in Frameworks().Select(f => f())
+        from c in SpanCaseTable
+        select (Func<(string, string)>)(() => (framework, c.Name));
+
+    public static IEnumerable<Func<(string TargetFramework, string Case)>> ImageCases() =>
+        from framework in Frameworks().Select(f => f())
+        from c in ImageCaseTable
+        select (Func<(string, string)>)(() => (framework, c.Name));
+
+    /// <summary>
+    /// Sizing, encode and matrix decode through each netstandard build's span API give this host's build's answers: the same size, the
+    /// same matrix, and the text back with the same decode info. Each call allocates nothing once warm.
+    /// </summary>
+    /// <remarks>Runs alone, as <see cref="DecodeAllocationTest"/> does: a test running beside it can empty the array pool's shared stacks.</remarks>
+    [Test]
+    [NotInParallel]
+    [MethodDataSource(nameof(SpanCases))]
+    public async Task SpanApis_MatchThisHostsBuildAndAllocateNothing(string targetFramework, string caseName)
+    {
+        var c = SpanCaseTable.Single(x => x.Name == caseName);
+        var (build, path) = await LoadBuild(targetFramework);
+        var context = $"{targetFramework} {caseName}";
+
+        var decoded = c.Decoded ?? c.Text;
+        var expected = Encode(typeof(QRCodeGenerator).Assembly, typeof(QRCodeGenerator).Assembly.Location, c);
+        await Assert.That(expected.Fits).IsTrue().Because($"{caseName}: fits a symbol on this host's build");
+        await Assert.That(expected.Text).IsEqualTo(decoded).Because($"{caseName}: this host's build reads its own matrix back");
+
+        var actual = Encode(build, path, c);
+        await Assert.That(actual.Fits).IsTrue().Because($"{context}: fits a symbol");
+        await Assert.That((actual.BufferSize, actual.Width, actual.Height)).IsEqualTo((expected.BufferSize, expected.Width, expected.Height)).Because($"{context}: the size this host's build gives");
+        await Assert.That(actual.Matrix.AsSpan().SequenceEqual(expected.Matrix)).IsTrue().Because($"{context}: the matrix this host's build writes");
+        await Assert.That(actual.Text).IsEqualTo(decoded).Because($"{context}: decodes its own matrix to the text");
+        await Assert.That(actual.Info).IsEqualTo(expected.Info).Because($"{context}: the decode info this host's build gives");
+
+#if !DEBUG
+        var sizing = BindSizing(build, c.Symbology, path);
+        var create = BindSpanCreate(build, c.Symbology, path);
+        var decode = BindDecode(build, c.Symbology, image: false, path);
+        var options = Options(build, c.Symbology, c.Options);
+        var eccLevel = EccLevel(build, c.Symbology, c.EccLevel);
+        var matrix = new byte[expected.BufferSize];
+        var chars = new char[DecodedChars];
+
+        var allocated = new (string Call, long Bytes)[]
+        {
+            ("sizing", DecodeAllocationTest.SteadyStateBytes(() => sizing(c.Text, eccLevel, options, out _, out _, out _))),
+            ("encode", DecodeAllocationTest.SteadyStateBytes(() => create(c.Text, eccLevel, matrix, options))),
+            ("matrix decode", DecodeAllocationTest.SteadyStateBytes(() => decode(matrix, expected.Width, expected.Height, chars, out _, null))),
+        };
+        foreach (var (call, bytes) in allocated)
+            await Assert.That(bytes).IsEqualTo(0).Because($"{context}: bytes the {call} allocates once warm");
 #endif
+    }
+
+    /// <summary>
+    /// Image decode through each netstandard build's span API reads the text with this host's build's decode info, corners included, and
+    /// allocates nothing once warm. Every image step runs its scalar form there.
+    /// </summary>
+    /// <remarks>Runs alone, as <see cref="DecodeAllocationTest"/> does: a test running beside it can empty the array pool's shared stacks.</remarks>
+    [Test]
+    [NotInParallel]
+    [MethodDataSource(nameof(ImageCases))]
+    public async Task SpanDecodeImage_MatchesThisHostsBuildAndAllocatesNothing(string targetFramework, string caseName)
+    {
+        var c = ImageCaseTable.Single(x => x.Name == caseName);
+        var (build, path) = await LoadBuild(targetFramework);
+        var context = $"{targetFramework} {caseName}";
+
+        var host = typeof(QRCodeGenerator).Assembly;
+        var symbol = Encode(host, host.Location, new SpanCase(c.Name, c.Symbology, c.Text, c.EccLevel));
+        var (luminance, width, height) = Render(symbol.Matrix, symbol.Width, symbol.Height, c.PixelsPerModule, c.Inverted);
+
+        var expected = DecodeImage(host, host.Location, c.Symbology, luminance, width, height);
+        await Assert.That(expected.Text).IsEqualTo(c.Text).Because($"{caseName}: this host's build reads the image");
+
+        var actual = DecodeImage(build, path, c.Symbology, luminance, width, height);
+        await Assert.That(actual.Text).IsEqualTo(c.Text).Because($"{context}: reads the image");
+        await Assert.That(actual.Info).IsEqualTo(expected.Info).Because($"{context}: the decode info this host's build gives");
+
+#if !DEBUG
+        var decode = BindDecode(build, c.Symbology, image: true, path);
+        var chars = new char[DecodedChars];
+        await Assert.That(DecodeAllocationTest.SteadyStateBytes(() => decode(luminance, width, height, chars, out _, null))).IsEqualTo(0)
+            .Because($"{context}: bytes the image decode allocates once warm");
+#endif
+    }
+
+    private sealed record EncodeOutcome(bool Fits, int BufferSize, int Width, int Height, byte[] Matrix, string? Text, string? Info);
+
+    /// <summary>Sizes, writes and decodes <paramref name="c"/> through <paramref name="assembly"/>'s span API.</summary>
+    private static EncodeOutcome Encode(Assembly assembly, string path, SpanCase c)
+    {
+        var options = Options(assembly, c.Symbology, c.Options);
+        var eccLevel = EccLevel(assembly, c.Symbology, c.EccLevel);
+        if (!BindSizing(assembly, c.Symbology, path)(c.Text, eccLevel, options, out var bufferSize, out var width, out var height))
+            return new(false, 0, 0, 0, [], null, null);
+
+        // A dirty destination, so that a module the encoder leaves unwritten shows.
+        var matrix = new byte[bufferSize];
+        matrix.AsSpan().Fill(0xA5);
+        var written = BindSpanCreate(assembly, c.Symbology, path)(c.Text, eccLevel, matrix, options);
+        if (written != bufferSize)
+            throw new InvalidOperationException($"{c.Name}: wrote {written} bytes where sizing gave {bufferSize}");
+
+        var (text, info) = Decode(BindDecode(assembly, c.Symbology, image: false, path), matrix, width, height);
+        return new(true, bufferSize, width, height, matrix, text, info);
+    }
+
+    private static (string? Text, string? Info) DecodeImage(Assembly assembly, string path, string symbology, byte[] luminance, int width, int height)
+        => Decode(BindDecode(assembly, symbology, image: true, path), luminance, width, height);
+
+    private static (string? Text, string? Info) Decode(SpanDecode decode, byte[] input, int width, int height)
+    {
+        var chars = new char[DecodedChars];
+        var info = new object?[1];
+        var decoded = decode(input, width, height, chars, out var written, info);
+        return (decoded ? new string(chars, 0, written) : null, info[0]?.ToString());
+    }
+
+    private static (byte[] Luminance, int Width, int Height) Render(byte[] modules, int width, int height, int pixelsPerModule, bool inverted)
+    {
+        byte dark = inverted ? (byte)255 : (byte)0;
+        var (w, h) = (width * pixelsPerModule, height * pixelsPerModule);
+        var luminance = new byte[w * h];
+        for (var y = 0; y < h; y++)
+        {
+            for (var x = 0; x < w; x++)
+                luminance[y * w + x] = modules[y / pixelsPerModule * width + x / pixelsPerModule] != 0 ? dark : (byte)(255 - dark);
+        }
+        return (luminance, w, h);
+    }
+
+    /// <summary>A <c>{symbology}CodeGeneratorOptions</c> of <paramref name="assembly"/> with each property set: an enum by member name, a function of the property type for anything else that is not a plain value.</summary>
+    private static object Options(Assembly assembly, string symbology, (string Property, object Value)[] settings)
+    {
+        var type = assembly.GetType($"FeatherQR.{symbology}CodeGeneratorOptions", throwOnError: true)!;
+        var options = Activator.CreateInstance(type)!;
+        foreach (var (name, value) in settings)
+        {
+            var property = type.GetProperty(name)!;
+            property.SetValue(options, value switch
+            {
+                string member when property.PropertyType.IsEnum => Enum.Parse(property.PropertyType, member),
+                Func<Type, object> make => make(property.PropertyType),
+                _ => value,
+            });
+        }
+        return options;
+    }
+
+    private static int EccLevel(Assembly assembly, string symbology, string name)
+        => Convert.ToInt32(Enum.Parse(assembly.GetType($"FeatherQR.{symbology}EccLevel", throwOnError: true)!, name), System.Globalization.CultureInfo.InvariantCulture);
+
+    private static Func<Type, object> Fnc1First() => fnc1 => fnc1.GetProperty("FirstPosition")!.GetValue(null)!;
+
+    private static Func<Type, object> Fnc1Second(int applicationIndicator) => fnc1 => fnc1.GetMethod("SecondPosition", [typeof(int)])!.Invoke(null, [applicationIndicator])!;
 
     /// <summary>The core's build for <paramref name="targetFramework"/>, loaded once into a load context of its own. A stale build skips the case.</summary>
     private static async Task<(Assembly Build, string Path)> LoadBuild(string targetFramework)
@@ -175,28 +376,6 @@ public class NetStandardBuildParityTest
         var options = new QRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = optimal ? QRSegmentation.Optimal : QRSegmentation.Single };
         var matrix = new byte[Sizing.Required(text.AsSpan(), QREccLevel.M, options).BufferSize];
         QRCodeGenerator.Create(text.AsSpan(), QREccLevel.M, matrix, options);
-        return matrix;
-    }
-
-    private static byte[] HostQR(string text, bool utf8Bom)
-    {
-        var options = new QRCodeGeneratorOptions { Utf8Bom = utf8Bom };
-        var matrix = new byte[Sizing.Required(text.AsSpan(), QREccLevel.M, options).BufferSize];
-        QRCodeGenerator.Create(text.AsSpan(), QREccLevel.M, matrix, options);
-        return matrix;
-    }
-
-    private static byte[] HostMicroQR(string text)
-    {
-        var matrix = new byte[Sizing.Required(text.AsSpan(), MicroQREccLevel.L).BufferSize];
-        MicroQRCodeGenerator.Create(text.AsSpan(), MicroQREccLevel.L, matrix);
-        return matrix;
-    }
-
-    private static byte[] HostRmQR(string text)
-    {
-        var matrix = new byte[Sizing.Required(text.AsSpan(), RmQREccLevel.M).BufferSize];
-        RmQRCodeGenerator.Create(text.AsSpan(), RmQREccLevel.M, matrix);
         return matrix;
     }
 
@@ -237,5 +416,88 @@ public class NetStandardBuildParityTest
         il.Emit(OpCodes.Call, target);
         il.Emit(OpCodes.Ret);
         return method.CreateDelegate<SpanCreate>();
+    }
+
+    /// <summary>
+    /// The loaded build's <c>{symbology}CodeGenerator.TryGetRequiredBufferSize(ReadOnlySpan&lt;char&gt;, ecc, out size, in options)</c>, giving the
+    /// size's buffer length and sides. Standard QR's and Micro QR's square gives its side as both.
+    /// </summary>
+    private static SpanSizing BindSizing(Assembly build, string symbology, string path)
+    {
+        var generator = build.GetType($"FeatherQR.{symbology}CodeGenerator", throwOnError: true)!;
+        var eccLevel = build.GetType($"FeatherQR.{symbology}EccLevel", throwOnError: true)!;
+        var options = build.GetType($"FeatherQR.{symbology}CodeGeneratorOptions", throwOnError: true)!;
+        var size = build.GetType($"FeatherQR.{symbology}CodeCalculatedSize", throwOnError: true)!;
+        var target = generator.GetMethod("TryGetRequiredBufferSize", [typeof(ReadOnlySpan<char>), eccLevel, size.MakeByRefType(), options.MakeByRefType()])
+            ?? throw new InvalidOperationException($"{generator.FullName}.TryGetRequiredBufferSize(ReadOnlySpan<char>, {eccLevel.Name}, out {size.Name}, in {options.Name}) not found in {path}");
+        var sides = symbology == "RmQR" ? new[] { "Width", "Height" } : ["Size", "Size"];
+
+        var method = new DynamicMethod($"{symbology}.TryGetRequiredBufferSize", typeof(bool),
+            [typeof(string), typeof(int), typeof(object), typeof(int).MakeByRefType(), typeof(int).MakeByRefType(), typeof(int).MakeByRefType()], typeof(NetStandardBuildParityTest).Module, skipVisibility: true);
+        var il = method.GetILGenerator();
+        var calculated = il.DeclareLocal(size);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(MemoryExtensions).GetMethod(nameof(MemoryExtensions.AsSpan), [typeof(string)])!);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, calculated);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Unbox, options);
+        il.Emit(OpCodes.Call, target);
+        foreach (var (argument, property) in new[] { (3, "BufferSize"), (4, sides[0]), (5, sides[1]) })
+        {
+            il.Emit(OpCodes.Ldarg_S, (byte)argument);
+            il.Emit(OpCodes.Ldloca, calculated);
+            il.Emit(OpCodes.Call, size.GetProperty(property)!.GetMethod!);
+            il.Emit(OpCodes.Stind_I4);
+        }
+        il.Emit(OpCodes.Ret);
+        return method.CreateDelegate<SpanSizing>();
+    }
+
+    /// <summary>
+    /// The loaded build's <c>{symbology}CodeDecoder.TryDecode</c> over a matrix, or <c>TryDecodeImage</c> over a luminance image, writing to a
+    /// <c>Span&lt;char&gt;</c>. A square matrix takes one side, so the height is dropped there. The decode info is boxed into <c>info[0]</c>
+    /// only when <c>info</c> is given, so that a measured call boxes nothing.
+    /// </summary>
+    private static SpanDecode BindDecode(Assembly build, string symbology, bool image, string path)
+    {
+        var decoder = build.GetType($"FeatherQR.{symbology}CodeDecoder", throwOnError: true)!;
+        var info = build.GetType($"FeatherQR.{symbology}CodeDecodeInfo", throwOnError: true)!;
+        var twoSides = image || symbology == "RmQR";
+        Type[] parameters = twoSides
+            ? [typeof(ReadOnlySpan<byte>), typeof(int), typeof(int), typeof(Span<char>), typeof(int).MakeByRefType(), info.MakeByRefType()]
+            : [typeof(ReadOnlySpan<byte>), typeof(int), typeof(Span<char>), typeof(int).MakeByRefType(), info.MakeByRefType()];
+        var name = image ? "TryDecodeImage" : "TryDecode";
+        var target = decoder.GetMethod(name, parameters)
+            ?? throw new InvalidOperationException($"{decoder.FullName}.{name}({string.Join(", ", parameters.Select(p => p.Name))}) not found in {path}");
+
+        var method = new DynamicMethod($"{symbology}.{name}", typeof(bool),
+            [typeof(byte[]), typeof(int), typeof(int), typeof(char[]), typeof(int).MakeByRefType(), typeof(object[])], typeof(NetStandardBuildParityTest).Module, skipVisibility: true);
+        var il = method.GetILGenerator();
+        var decoded = il.DeclareLocal(info);
+        var succeeded = il.DeclareLocal(typeof(bool));
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(ReadOnlySpan<byte>).GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Ldarg_1);
+        if (twoSides)
+            il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Newobj, typeof(Span<char>).GetConstructor([typeof(char[])])!);
+        il.Emit(OpCodes.Ldarg_S, (byte)4);
+        il.Emit(OpCodes.Ldloca, decoded);
+        il.Emit(OpCodes.Call, target);
+        il.Emit(OpCodes.Stloc, succeeded);
+        il.Emit(OpCodes.Ldarg_S, (byte)5);
+        il.Emit(OpCodes.Brfalse_S, done);
+        il.Emit(OpCodes.Ldarg_S, (byte)5);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, decoded);
+        il.Emit(OpCodes.Box, info);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, succeeded);
+        il.Emit(OpCodes.Ret);
+        return method.CreateDelegate<SpanDecode>();
     }
 }

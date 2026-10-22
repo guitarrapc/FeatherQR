@@ -82,7 +82,7 @@ internal static partial class MicroQRBinaryEncoder
                 default:
                     if (charset == EciMode.Utf8)
                     {
-                        var n = EncodeUtf8(chars, utf8);
+                        var n = CharacterSets.EncodeUtf8(chars, utf8);
                         if (n != segment.UnitCount)
                             throw new ArgumentException($"Segment plan budgeted {segment.UnitCount} UTF-8 bytes but the run encodes to {n}.");
                         for (var i = 0; i < n; i++)
