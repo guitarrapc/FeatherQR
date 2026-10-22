@@ -2,7 +2,8 @@ using BenchmarkDotNet.Configs;
 using SkiaSharp;
 
 /// <summary>
-/// Cross-library Standard QR decoding over the same five payloads as <see cref="SimpleEncode"/>.
+/// Cross-library Standard QR decoding over the same five payloads as <see cref="SimpleEncode"/>, all in versions 1 to 4 at ECC L.
+/// <see cref="SimpleCorpusDecode"/> covers all four levels and the larger versions.
 /// Only three of the compared libraries decode at all: QRCoder and Net.Codecrete.QrCodeGenerator are encoders only.
 ///
 /// Two entry points are measured, because the libraries differ in what they accept:

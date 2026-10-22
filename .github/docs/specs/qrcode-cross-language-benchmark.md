@@ -13,7 +13,7 @@ This record covers `tools/CrossLanguageBenchmark/`, which times this library aga
 | FeatherQR under the JIT, the JIT without AVX, NativeAOT for the default target and NativeAOT for `x86-64-v3` | Multi-threaded throughput |
 | linux-x64 and linux-arm64, from one Docker image built for both | Windows and macOS as platforms. Docker Desktop runs the Linux image in a VM there, which served for development, and an amd64 image on Apple silicon is emulated |
 
-The corpus is the payloads and symbols of the benchmark project's `Simple*` classes: five Standard QR payloads (numeric, alphanumeric, a URL, Unicode text, a Wi-Fi string), three Micro QR and three rMQR. Each is encoded, decoded as a matrix and decoded as an image, 33 entries in all. FeatherQR writes the inputs, and the corpus command fails if FeatherQR cannot read its own inputs back.
+The corpus is the payloads and symbols of the benchmark project's `Simple*` classes other than the two `SimpleCorpus*` ones: five Standard QR payloads (numeric, alphanumeric, a URL, Unicode text, a Wi-Fi string), three Micro QR and three rMQR. Each is encoded, decoded as a matrix and decoded as an image, 33 entries in all. FeatherQR writes the inputs, and the corpus command fails if FeatherQR cannot read its own inputs back.
 
 ### Libraries
 
