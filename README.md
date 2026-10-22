@@ -12,16 +12,20 @@
 
 FeatherQR is a lightweight QR Code, Micro QR and rMQR library for .NET. Lightweight means three things: the core package has no dependencies, the hot paths allocate nothing, and every build is trim and NativeAOT safe. It is not a claim about assembly bytes; the core carries three symbologies, decoders and SIMD paths.
 
-`FeatherQR` generates and decodes module matrices with the BCL alone. `FeatherQR.SkiaSharp` adds rendering and image decoding with [SkiaSharp](https://github.com/mono/SkiaSharp): PNG, JPEG, WebP and SVG output, canvas rendering, gradients, module shapes, finder patterns and logos. `SkiaSharp.QrCode`, the name this library shipped under through 1.x, is now an empty package that depends on `FeatherQR.SkiaSharp`, so an existing install line keeps working.
+Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. FeatherQR was created to provide high performance, minimum memory allocation.
+
+[Benchmark]((src/FeatherQR.Benchmark)) results comparing FeatherQR with other libraries, on .NET 10 with an AMD Ryzen 9 7950X3D CPU.
 
 <div style="display: flex; align-items: flex-start;">
-  <img src="assets/benchmark_simpleencode_net10.0.png" width="600" alt="Encode Performance"/>
-  <img src="assets/benchmark_simpledecode_net10.0.png" width="600" alt="Decode Performance"/>
+  <img src="assets/benchmark_simplecorpus_encode_net10.png" width="500" alt="Encode Performance"/>
+  <img src="assets/benchmark_simplecorpus_decode_net10.png" width="500" alt="Decode Performance"/>
 </div>
 
-> Benchmark results comparing FeatherQR with other libraries. See [src/FeatherQR.Benchmark](src/FeatherQR.Benchmark) for details. Above results are generated on .NET 10 with AMD Ryzen 9 7950X3D CPU, with GFNI and AVX2 enabled.
+<div style="display: flex; align-items: flex-start;">
+  <img src="assets/benchmark_simpleencode_net10.png" width="500" alt="Encode Performance per payload"/>
+  <img src="assets/benchmark_simpledecode_net10.png" width="500" alt="Decode Performance per payload"/>
+</div>
 
-Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. FeatherQR was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
 
 Create Standard QR, Micro QR, and rMQR images with a few lines of code.
 
@@ -42,11 +46,9 @@ Create Standard QR, Micro QR, and rMQR images with a few lines of code.
 
 See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these styles.
 
-## Playground
+## Migration
 
-Try FeatherQR in your browser, no install required: **[FeatherQR Playground](https://guitarrapc.github.io/FeatherQR/)**
-
-The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files. Source lives in [src/FeatherQR.Playground](src/FeatherQR.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
+2.0.0 renames the packages and namespaces: `SkiaSharp.QrCode` and `SkiaSharp.QrCode.Image` become `FeatherQR` and `FeatherQR.SkiaSharp`. See the [Migration Guide](docs/migration.md) for the 2.0.0 changes and for older versions.
 
 ## Overview
 
@@ -54,10 +56,11 @@ FeatherQR is a modern, high-performance QR code library. It allocates memory onl
 
 - **Simple API**: One-liner QR code generation with sensible defaults
 - **High Performance**: Optimal speed and minimum memory allocation
+- **Flexible Symbology Support**: Standard QR, Micro QR, and rMQR
+- **GS1 Support**: Full support for GS1 QR Codes and GS1 Digital Link URIs
 - **Highly Customizable**: Gradients, icons, custom shapes, colors, and more
-- **Raster & Vector Output**: PNG, JPEG, WebP, and SVG (scales without quality loss)
 - **Cross-Platform**: Windows, Linux, macOS, iOS, Android, WebAssembly
-- **Zero Dependencies**: The `FeatherQR` core package depends on nothing on .NET 8+ (BCL shims only on .NET Standard); SkiaSharp is pulled in only by `FeatherQR.SkiaSharp`
+- **Zero Dependencies**: The `FeatherQR` core package depends on nothing on .NET 8+ (BCL shims only on .NET Standard)
 - **No System.Drawing**: Avoids GDI+ issues and Windows dependencies
 - **NativeAOT Ready**: Full support for .NET Native AOT compilation
 - **Modern .NET**: .NET Standard 2.0, 2.1, .NET 8+
@@ -90,22 +93,32 @@ FeatherQR supports Standard QR, Micro QR, and rMQR. Examples use Standard QR unl
 
 ## Installation
 
-Pick the package for what you need. All four ship together at the same version.
+There are 4 NuGet packages related to FeatherQR.
 
-| Package | Install when | Namespaces |
-|---|---|---|
-| [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | You want images: PNG, JPEG, WebP, SVG, canvas rendering, or decoding from an `SKBitmap`. Brings `FeatherQR` and SkiaSharp | `FeatherQR`, `FeatherQR.SkiaSharp` |
-| [FeatherQR](https://www.nuget.org/packages/FeatherQR) | You only need module matrices or decoding from your own pixel data, with no image library at all | `FeatherQR` |
-| [FeatherQR.Gs1](https://www.nuget.org/packages/FeatherQR.Gs1) | You handle GS1 data: writing a GS1 QR Code, or a QR code that holds a GS1 Digital Link URI, from `(AI)` text, checking an element string, converting it to and from `(AI)` text or a GS1 Digital Link URI, or reading the text a GS1 QR Code decoded to. Brings `FeatherQR` and no image library | `FeatherQR`, `FeatherQR.Gs1` |
-| [SkiaSharp.QrCode](https://www.nuget.org/packages/SkiaSharp.QrCode) | You are upgrading an existing project and want to keep its install line. An empty package that depends on `FeatherQR.SkiaSharp` | same as `FeatherQR.SkiaSharp` |
+| Package | What |
+|---|---|
+| [FeatherQR](https://www.nuget.org/packages/FeatherQR) | Generates and decodes module matrices with zero dependencies. Whole Standard QR, Micro QR, and rMQR support. |
+| [FeatherQR.Gs1](https://www.nuget.org/packages/FeatherQR.Gs1) | Writing a GS1 QR Code, GS1 Digital Link URI support. Standard QR and rMQR only. |
+| [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | Renders and decodes images with SkiaSharp |
+| [SkiaSharp.QrCode](https://www.nuget.org/packages/SkiaSharp.QrCode) | Empty package that depends on `FeatherQR.SkiaSharp`, for upgrading existing projects |
 
 ```bash
+dotnet add package FeatherQR
+
+# If you need image rendering with SkiaSharp
 dotnet add package FeatherQR.SkiaSharp
+
+# If you need GS1 support
+dotnet add package FeatherQR.Gs1
 ```
 
-SkiaSharp needs a native asset package per platform on Linux and for NativeAOT; see [Platform-Specific Considerations](#platform-specific-considerations).
+`FeatherQR.SkiaSharp` needs a native asset package per platform on Linux and for NativeAOT, see [Platform-Specific Considerations](#platform-specific-considerations).
 
 ## Quick Start
+
+Try [FeatherQR Playground](https://guitarrapc.github.io/FeatherQR/) in your browser, no install required.
+
+The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files.
 
 ### Simplest Example
 
@@ -123,23 +136,16 @@ var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
 
 ### Common Use Cases
 
-Generate QR Code for URL.
+Generate QR Codes for URL, WiFi, and SVG output.
 
 ```csharp
-var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
-File.WriteAllBytes("qrcode.png", pngBytes);
-```
+// QR Code for URL
+File.WriteAllBytes("qrcode.png", QRCodeImageBuilder.GetPngBytes("https://example.com"));
 
-WiFi QR Code.
+// WiFi QR Code
+File.WriteAllBytes("wifi-qr.png", QRCodeImageBuilder.GetPngBytes("WIFI:T:WPA;S:MyNetwork;P:MyPassword;;"));
 
-```csharp
-var wifiString = "WIFI:T:WPA;S:MyNetwork;P:MyPassword;;";
-File.WriteAllBytes("wifi-qr.png", QRCodeImageBuilder.GetPngBytes(wifiString));
-```
-
-SVG (vector) output.
-
-```csharp
+// SVG (vector) output
 File.WriteAllText("qrcode.svg", QRCodeImageBuilder.GetSvgString("https://example.com"));
 ```
 
@@ -155,7 +161,17 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
     .ToByteArray();
 ```
 
-Boost Error Correction if possible. The version (symbol size) is chosen for the level you request; when that version has spare capacity, `WithErrorCorrectionBoost` raises the level as far as the capacity allows - without changing the symbol size. Recommended whenever robustness matters more than an exact ECC level, and especially with icons.
+Save Directly to Stream
+
+```csharp
+using FeatherQR;
+using FeatherQR.SkiaSharp;
+
+using var stream = File.OpenWrite("qrcode.png");
+QRCodeImageBuilder.SavePng("Your content here", stream, QREccLevel.M, size: 512);
+```
+
+Boosting Error Correction is recommended whenever robustness matters more than an exact ECC level, and especially with icons. It raises the level as far as the capacity allows, without changing the symbol size.
 
 ```csharp
 using FeatherQR;
@@ -171,23 +187,9 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var qrData = QRCodeGenerator.Create("https://example.com", QREccLevel.M, new QRCodeGeneratorOptions { BoostEccLevel = true });
 ```
 
-Save Directly to Stream
-
-```csharp
-using FeatherQR;
-using FeatherQR.SkiaSharp;
-
-using var stream = File.OpenWrite("qrcode.png");
-QRCodeImageBuilder.SavePng("Your content here", stream, QREccLevel.M, size: 512);
-```
-
-## Migration
-
-2.0.0 renames the packages and namespaces: `SkiaSharp.QrCode` and `SkiaSharp.QrCode.Image` become `FeatherQR` and `FeatherQR.SkiaSharp`. See the [Migration Guide](docs/migration.md) for the 2.0.0 changes and for older versions.
-
 ## API Overview
 
-Choose an API based on the output you need. Start with an image builder for most applications.
+Start with an image builder for most applications. All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers.
 
 | Task | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
@@ -196,17 +198,14 @@ Choose an API based on the output you need. Start with an image builder for most
 | Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
 | Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 
-All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers. The `FeatherQR.Gs1` package adds GS1 methods to the Standard QR and rMQR generators and reads GS1 data from the decoded text ([GS1 data](#gs1-data)).
 
 ### Image Builders (Recommended)
 
-Image builders provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Every symbology supports custom finder patterns; icons are Standard QR only.
+Image builders provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Every symbology supports custom finder patterns, icons are Standard QR only. See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
 
 ```csharp
 var pngBytes = QRCodeImageBuilder.GetPngBytes("content");
 ```
-
-See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
 
 ### SymbolRenderer (Advanced)
 
@@ -228,7 +227,7 @@ SymbolRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 
 ### Generators (Low-Level)
 
-Generators create module matrices without rendering them. Use them for custom output such as ASCII art or LED displays, or as input to `SymbolRenderer`.
+Generators create module matrices, no rendering. Use them for custom output such as ASCII art or LED displays, or as input to `SymbolRenderer`.
 
 ```csharp
 using FeatherQR;
@@ -237,7 +236,7 @@ var qrData = QRCodeGenerator.Create("content", QREccLevel.M);
 var isDark = qrData[row, col];
 ```
 
-For vector output or draw-call based graphics APIs, `GetModuleRectangles` returns the dark modules as merged rectangles in module coordinates (same coordinate space as the indexer, quiet zone included). The rectangles are disjoint and cover exactly the dark modules, and merging typically halves the element count compared to one rectangle per module. Scale by your pixel-per-module factor, or emit them directly into an SVG path with a module-unit `viewBox`:
+`GetModuleRectangles` returns the dark modules as merged rectangles in module coordinates (same coordinate space as the indexer, quiet zone included), it's useful for vector output or draw-call based graphics APIs. Scale by your pixel-per-module factor, or emit them directly into an SVG path with a module-unit `viewBox`.
 
 ```csharp
 var sb = new StringBuilder();
@@ -247,12 +246,12 @@ foreach (var r in qrData.GetModuleRectangles())
     sb.Append(CultureInfo.InvariantCulture, $"M{r.X},{r.Y}h{r.Width}v{r.Height}h{-r.Width}z");
 sb.Append("\"/></svg>");
 ```
-
-`MicroQRCodeData` and `RmQRCodeData` expose the same members (use `Width`/`Height` instead of `Size` for rMQR). For allocation-free use, size a pooled buffer with `GetModuleRectanglesMaxCount()` and call `TryGetModuleRectangles(Span<ModuleRect>, out int)`.
+> [!TIP]
+> `MicroQRCodeData` and `RmQRCodeData` expose the same members (use `Width`/`Height` instead of `Size` for rMQR). For allocation-free use, size a pooled buffer with `GetModuleRectanglesMaxCount()` and call `TryGetModuleRectangles(Span<ModuleRect>, out int)`.
 
 ### Generator options
 
-Beyond the short calls above, every generator entry point has an overload taking an options struct. This is where new options are added, so it is the form to reach for when you need more than the defaults.
+Every generator entrypoint has an overload taking an options. Use it to customize encoding parameters.
 
 ```csharp
 var qrData = QRCodeGenerator.Create("content", QREccLevel.M, new QRCodeGeneratorOptions
@@ -264,13 +263,29 @@ var qrData = QRCodeGenerator.Create("content", QREccLevel.M, new QRCodeGenerator
 var rmqr = RmQRCodeGenerator.Create("content", RmQREccLevel.M, new RmQRCodeGeneratorOptions
 {
     Height = RmQRHeight.H9,
-    Segmentation = RmQRSegmentation.Optimal,
+    Segmentation = RmQRSegmentation.Single, // Need speed over size
 });
+
+// `Options.Default` and `default(Options)` are the same value, so these are equivalent:
+QRCodeGenerator.Create("content", QREccLevel.M);                                  // short call
+QRCodeGenerator.Create("content", QREccLevel.M, QRCodeGeneratorOptions.Default);  // same result
+
+// use `with` to create variations of an existing options instance
+var house = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, QuietZoneSize = 7 };
+
+var borderless = house with { QuietZoneSize = 0 };   // EciMode stays Utf8, house is unchanged
+var pinned     = house with { Version = 20 };
+
+// starting from the defaults reads the same way
+var opts = QRCodeGeneratorOptions.Default with { QuietZoneSize = 0 };   // reads as "start from defaults, but no quiet zone"
+
+// Conditional modification of an options instance
+var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 };
+if (noQuietZone)
+    options.QuietZoneSize = 0;   // changes this variable only
 ```
 
-`default` is the complete default configuration, so an option you leave out keeps the value the short call would have used.
-
-#### Defaults
+Defaults values for the options.
 
 | Option | `QRCodeGeneratorOptions` | `MicroQRCodeGeneratorOptions` | `RmQRCodeGeneratorOptions` |
 |---|---|---|---|
@@ -282,48 +297,16 @@ var rmqr = RmQRCodeGenerator.Create("content", RmQREccLevel.M, new RmQRCodeGener
 | `MaskPattern` | `null` (automatic, 0-7) | `null` (automatic, 0-3) | — |
 | `FitStrategy` | — | — | `MinimizeArea` |
 | `Height` | — | — | `null` (any height) |
-| `Segmentation` | `Single` | `Single` | `Single` |
+| `Segmentation` | `Optimal` | `Optimal` | `Optimal` |
 | `Fnc1` | `None` | — | `None` |
 | `AllowKanji` | `false` | `false` | `false` |
 
-The quiet zone defaults differ because the specifications do: ISO/IEC 18004 requires 4 modules for Standard QR and 2 for Micro QR, ISO/IEC 23941 requires 2 for rMQR. `0` is a valid setting for all three.
-
-`Options.Default` and `default(Options)` are the same value, so these are equivalent:
-
-```csharp
-QRCodeGenerator.Create("content", QREccLevel.M);                                  // short call
-QRCodeGenerator.Create("content", QREccLevel.M, QRCodeGeneratorOptions.Default);  // same result
-```
-
-#### Changing one option with `with`
-
-The options types are structs, so `with` produces a copy with some members replaced and leaves the original untouched. Useful when a base configuration is shared and one call needs a variation:
-
-```csharp
-var house = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, QuietZoneSize = 7 };
-
-var borderless = house with { QuietZoneSize = 0 };   // EciMode stays Utf8, house is unchanged
-var pinned     = house with { Version = 20 };
-
-// starting from the defaults reads the same way
-var opts = QRCodeGeneratorOptions.Default with { QuietZoneSize = 0 };
-```
-
-A member can also be assigned after construction. Each variable holds its own value, so the assignment changes that one variable and no copy of it:
-
-```csharp
-var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 };
-if (noQuietZone)
-    options.QuietZoneSize = 0;   // changes this variable only
-```
-
-A method that receives the options by value gets its own copy, so an assignment inside it is lost unless the method returns the value or takes it by `ref`.
-
-Value equality comes with the record, and two option sets that behave identically compare equal: writing a default explicitly is the same value as leaving it out, so `new QRCodeGeneratorOptions { QuietZoneSize = 4 } == QRCodeGeneratorOptions.Default`.
+> [!TIP]
+> The quiet zone defaults differ because the specifications, ISO/IEC 18004 requires 4 modules for Standard QR and 2 for Micro QR, ISO/IEC 23941 requires 2 for rMQR. `0` is a valid setting for all three.
 
 #### Version ranges
 
-Standard QR and Micro QR take a *range* of acceptable versions rather than a single one, which is what you want when the symbol has to reach a minimum physical size, or must not exceed one. A pinned version is the degenerate case of the same setting.
+Standard QR and Micro QR take a *range* of acceptable versions rather than a single one, which is what you want when the symbol has to reach a minimum physical size, or must not exceed one. The smallest version in the range that holds the content is used. If none does, `TryGetRequiredBufferSize` returns `false` and the `Create` overloads throw.
 
 ```csharp
 new QRCodeGeneratorOptions { Version = 15 }                              // exactly version 15
@@ -333,13 +316,12 @@ new QRCodeGeneratorOptions { Version = configuredVersion }               // an i
 new QRCodeGeneratorOptions { }                                           // automatic
 ```
 
-The smallest version in the range that holds the content is used; if none does, `TryGetRequiredBufferSize` returns `false` and the `Create` overloads throw. Bounds are inclusive, and are validated when the range is built, so an impossible range is rejected before a generator sees it.
-
-rMQR has no version range: its 32 versions are not ordered by size (R7x43, R9x43 and R7x59 have no min/max relation), so it constrains fit with `FitStrategy` and `Height` instead.
+> [!TIP]
+> rMQR has no version range, its 32 versions are not ordered by size (R7x43, R9x43 and R7x59 have no min/max relation), so it constrains fit with `FitStrategy` and `Height` instead.
 
 #### Mask pattern pinning
 
-The generator normally scores the data mask patterns the specification defines (eight for Standard QR, four for Micro QR) and applies the best one. `MaskPattern` pins a specific pattern instead; any pattern yields a valid, decodable symbol, the automatic choice merely optimizes scan reliability. Pinning is the way to reproduce a symbol produced elsewhere byte-for-byte (the pattern another encoder chose is reported by `QRCodeDecodeInfo.MaskPattern` / `MicroQRCodeDecodeInfo.MaskPattern`), or to exercise a scanner against every pattern.
+The generator normally scores the data mask patterns the specification defines (eight for Standard QR, four for Micro QR) and applies the best one. `MaskPattern` pins a specific pattern instead. Pinning is the way to reproduce a symbol produced elsewhere byte-for-byte, or to exercise a scanner against every pattern.
 
 ```csharp
 // Reproduce a symbol: decode reports the mask, encode accepts it back
@@ -349,62 +331,53 @@ var identical = QRCodeGenerator.Create(text, info.EccLevel, new QRCodeGeneratorO
 // Builder equivalent, Micro QR alike
 var png = new QRCodeImageBuilder("content").WithMaskPattern(3).ToByteArray();
 var micro = new MicroQRCodeImageBuilder("12345").WithErrorCorrection(MicroQREccLevel.L).WithMaskPattern(1).ToByteArray();
+
+// rMQR has a single fixed mask (ISO/IEC 23941), so there is nothing to pin.
+
+// throw. Values outside the symbology's range (0-7 for Standard QR, 0-3 for Micro QR) are rejected.
+QRCodeGenerator.Create(text, info.EccLevel, new QRCodeGeneratorOptions { MaskPattern = 10 });
 ```
-
-`null` (the default) keeps the automatic selection. Values outside the symbology's range (0-7 for Standard QR, 0-3 for Micro QR; the two numberings are unrelated) are rejected when the option is set. rMQR has a single fixed mask (ISO/IEC 23941), so there is nothing to pin.
-
-Because an `int?` converts implicitly, an optional version needs no branch at the call site. That is the job the old `-1` convention did, without the magic number.
 
 #### Mixed-mode segmentation (smaller symbols for mixed content)
 
-`QRSegmentation.Single` encodes the whole content in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode. `QRSegmentation.Optimal`, the default since 2.0.0, splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits, which often drops the symbol by a version or more and can even encode content that no single mode fits at any version. The symbol is never larger than the single-mode one, and whenever splitting would not shrink it the single-mode bit stream is emitted unchanged.
+`QRSegmentation.Optimal`, the default since 2.0.0, splits the content into the Numeric, Alphanumeric, Byte runs that cost the fewest bits, which often drops the symbol by a version. `QRSegmentation.Single` encodes the whole content in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode.
 
 ```csharp
 const string content = "https://example.com/item?id=123456789012345678901234567890";
 
+// Default Optimal (Slower than single-mode up to x1.2)
 var optimal = QRCodeGenerator.Create(content, QREccLevel.M);
 Console.WriteLine(optimal.Version); // 3 - Byte + Numeric
 
+// Single mode
 var single = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Single });
 Console.WriteLine(single.Version);  // 4 - one Byte segment
 
 // 5,500 characters overflow Byte mode at every version (40-L holds 2,953), but fit once split
 var mixed = new string('x', 1000) + new string('1', 4500);
-QRCodeGenerator.Create(mixed, QREccLevel.L);                                                                      // version 40
+QRCodeGenerator.Create(mixed, QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal }); // version 40
 QRCodeGenerator.Create(mixed, QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Single }); // throws: too long
 
 // The image builder takes the same option
 var pngBytes = new QRCodeImageBuilder(content)
     .WithSegmentation(QRSegmentation.Single)
     .ToByteArray();
+
+// Span overloads also respect the segmentation option
+var option = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
+var calculated = TryGetRequiredBufferSize(content, QREccLevel.M, option);
+var moduleBuffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
+QRCodeGenerator.Create(content, QREccLevel.M, moduleBuffer, option);
 ```
 
-Planning allocates nothing for typical content and, on the benchmark labels, costs 0.9 to 1.2 times the single-mode encode. `QRSegmentation.Single` keeps the one-mode stream of the releases before 2.0.0, for callers that depend on those exact bits or on the "too long" exception.
-
-Three notes:
-
-- Size destination buffers with the same `Segmentation` you encode with, `TryGetRequiredBufferSize` honors it, and the two can select different versions.
-- A split the decoder would misread is never emitted: with `Utf8Bom` writing a byte order mark the single-mode stream is kept, and content only such a split could fit reports "does not fit" instead of corrupting.
-- All three symbologies carry the option (`QRSegmentation`, `MicroQRSegmentation`, `RmQRSegmentation`, see the rMQR section below). On Micro QR the plan respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode), and the tiny capacities make even short mixed content win:
-
-```csharp
-var micro = MicroQRCodeGenerator.Create("AB12345678901234567", MicroQREccLevel.L); // M3, where MicroQRSegmentation.Single needs M4
-```
+> [!TIP]
+> v1.x, all content was encoded in single mode by default.
 
 #### Kanji mode for Japanese text
 
-By default Japanese text is written in Byte mode as UTF-8, 24 bits for a kana or a kanji, plus a 12-bit ECI header for wider compatibility. If you want to use Kanji mode, set `AllowKanji` to true. `AllowKanji` writes in Kanji mode, 13 bits a character and no ECI header, so a symbol holds about 1.85 times as many characters (see the Kanji columns of the [Data Capacity Reference](docs/data-capacity.md)).
+By default Japanese text is written in Byte mode as UTF-8, if you want to use Kanji mode set `AllowKanji` to true. A symbol in Kanji mode holds about 1.85 times as many characters (see the Kanji columns of the [Data Capacity Reference](docs/data-capacity.md)).
 
-```csharp
-var utf8  = QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M);                                                  // requires version 2
-var kanji = QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true }); // fit in version 1
-
-var micro = MicroQRCodeGenerator.Create("こんにちは", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { AllowKanji = true }); // M3 instead of M4
-```
-
-It is off by default because not every reader handles Kanji mode.
-
-Readers actually tested.
+It is off by default because not every reader handles Kanji mode, readers actually tested.
 
 | Reader | Kanji Mode Support |
 |--------|------------------|
@@ -414,8 +387,16 @@ Readers actually tested.
 | zxing-cpp | Yes |
 | Denso Wave | Yes |
 
-- Kanji may needed only if you know the readers, such as industrial or Japanese-market scanners, or when you need the capacity.
-- Micro QR has Kanji mode from M3, and `CreateStructuredAppend` follows the same rule for the whole message.
+Sample usage.
+
+```csharp
+// utf8 fit in version 2. 24 bits for a kana or a kanji, plus a 12-bit ECI header for wider compatibility
+var utf8  = QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M);
+// kanji fit in version 1. 13 bits a character and no ECI header
+var kanji = QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true });
+// M3 instead of M4
+var micro = MicroQRCodeGenerator.Create("こんにちは", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { AllowKanji = true });
+```
 
 Here's the list of examples showing which text is written in Kanji mode, with the option set:
 
@@ -443,7 +424,7 @@ QRCodeGenerator.Create("東京タワー333m", QREccLevel.M, kanji with { Segment
 
 #### Structured Append (one message across several symbols)
 
-When a message is too long for the largest symbol you can print, `CreateStructuredAppend` splits it across up to sixteen Standard QR symbols that a reader joins back into one message. The version range says how large a symbol may be: the set uses the fewest symbols within it, all at one version, and text that fits one symbol comes back as that single symbol.
+Structured Append allows splitting a long message across multiple QR symbols. When a message is too long for the largest symbol you can print, `CreateStructuredAppend` splits it across up to sixteen Standard QR symbols that a reader joins back into one message. The version range says how large a symbol may be, the set uses the fewest symbols within it, all at one version, and text that fits one symbol comes back as that single symbol.
 
 ```csharp
 var symbols = QRCodeGenerator.CreateStructuredAppend(longText, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10) });
@@ -454,14 +435,16 @@ Each symbol decodes to its own part of the text, and `QRCodeDecodeInfo.Structure
 
 ### Zero-allocation APIs
 
-All three generators can write a module matrix to a caller-provided `Span<byte>`. All three decoders can read a module span and write text to a caller-provided `Span<char>`. Use these overloads when you want to pool or reuse buffers.
+All three generators can write a module matrix to a caller-provided `Span<byte>`, and all three decoders can read a module span and write text to a caller-provided `Span<char>`. Use these overloads when you want to pool or reuse buffers.
 
-Size the generation buffer with `TryGetRequiredBufferSize`:
+Size the generation buffer with `TryGetRequiredBufferSize`.
 
 ```csharp
 using System.Buffers;
 using FeatherQR;
 
+// false means the content does not fit a QR symbol at this ECC level
+// Invalid arguments (an undefined ECC level, a `Version` and `Height` that disagree, a negative quiet zone) always throw
 if (!QRCodeGenerator.TryGetRequiredBufferSize("content", QREccLevel.M, out var calculated))
     return "Content does not fit a QR symbol at this ECC level.";
 
@@ -476,8 +459,6 @@ finally
     ArrayPool<byte>.Shared.Return(buffer);
 }
 ```
-
-**Sizing is a `Try` operation on all three symbologies, and only a `Try`.** "The content does not fit" is a data-dependent answer, not a defect: Micro QR M1 holds 5 digits and rMQR holds 5–150 bytes, so overflow is an ordinary outcome for any caller handling input it did not choose. Reporting it as an exception would also cost one to two orders of magnitude more than the encode it is reporting on. The same reasoning is why the modern BCL sizes and formats into caller buffers with `Utf8Formatter.TryFormat` and `Base64.EncodeToUtf8` rather than with throwing twins.
 
 The resolved version composes into the encode, so no length error can follow:
 
@@ -498,27 +479,30 @@ finally
 }
 ```
 
-`false` means one thing: the content does not fit. Invalid arguments (an undefined ECC level, a `Version` and `Height` that disagree, a negative quiet zone) still throw, so a caller never renders a configuration mistake as "content too long". This matches how the BCL's configurable `Try` overloads behave (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key).
-
-> **Upgrading from 1.x:** `GetRequiredBufferSize` is gone. It was the throwing sizing method Standard QR and Micro QR released in v1.1.1, deprecated in 1.2.0 and removed in 2.0.0; rMQR never shipped one. Replace `GetRequiredBufferSize(text, ecc, …)` with `TryGetRequiredBufferSize(text, ecc, out var size, …)`; see [docs/migration.md](docs/migration.md).
-
 ### Decoders
 
-Use the decoder that matches the expected symbol type. Each decoder in `FeatherQR` accepts generated data, a byte-per-module matrix, or a grayscale luminance span. `FeatherQR.SkiaSharp` adds decoding from an `SKBitmap`.
+Use the decoder that matches the expected symbol type. Each decoder in `FeatherQR` accepts generated data, a byte-per-module matrix, or a grayscale luminance span.
 
 Image decoding reads screenshots, generated images, scans and camera photographs, including a rotated, mirrored or tilted symbol and one under a shading gradient or a soft-edged shadow. It is less reliable on photographs with glare, damage, blur, a curved surface, a steep tilt or strong lens distortion.
 
 ```csharp
-using SkiaSharp;
 using FeatherQR;
-using FeatherQR.SkiaSharp;
 
 var qrData = QRCodeGenerator.Create("content", QREccLevel.M);
 if (QRCodeDecoder.TryDecode(qrData, out var text))
 {
     Console.WriteLine(text);
 }
+```
 
+`FeatherQR.SkiaSharp` adds decoding from an `SKBitmap`.
+
+```csharp
+using SkiaSharp;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
+
+// Decode from an SKBitmap
 using var bitmap = SKBitmap.Decode("qr.png");
 if (QRCodeImageDecoder.TryDecode(bitmap, out text, out var info))
 {
@@ -530,27 +514,26 @@ if (QRCodeImageDecoder.TryDecode(bitmap, out text, out var info))
     Console.WriteLine($"top-left at ({corners.TopLeft.X}, {corners.TopLeft.Y})");
 }
 ```
-
-The bitmap overloads live in `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`. With C# 14 (the default for net10.0, or `<LangVersion>14</LangVersion>`) they are also reachable on the core decoders, so `QRCodeDecoder.TryDecode(bitmap, out var text)` compiles too; C# 12 and 13 use the class names above.
-
 To decode from any other image source, convert the pixels to 8-bit luminance yourself, compositing transparent pixels against white, and call `TryDecodeImage(luminance, width, height, ...)` on the decoder.
 
-A symbol that carries FNC1, the GS1 mode (first position) or an industry format registered with AIM (second position, with an application indicator), decodes to its data, the element string in first position, with each separator as U+001D, and the decode information reports the mode as `Fnc1` (`Fnc1Mode`): `IsFirstPosition`, `IsSecondPosition` and `ApplicationIndicator`, the 8-bit codeword (00 to 99 as its value, or a letter as its ASCII value plus 100, `null` outside second position). Standard QR and rMQR carry it. Micro QR has no FNC1 mode. The text holds no symbology identifier and no application indicator, so an application that formats GS1 data as `(01)…(17)…` needs the GS1 application identifier table, which the `FeatherQR.Gs1` package provides ([GS1 data](#gs1-data)). Both generators write FNC1 through the `Fnc1` option (`Fnc1Mode.FirstPosition`, or `Fnc1Mode.SecondPosition` with the application indicator), taking as the text what the decoder returns. For GS1 data, `CreateGs1` checks the data and sets the mode itself.
-
 ```csharp
-if (QRCodeDecoder.TryDecode(qrData, out var text, out var info) && info.Fnc1.IsFirstPosition)
+using FeatherQR;
+
+// Example of decoding from a raw luminance array
+byte[] luminance = ...; // 8-bit grayscale pixels
+int width = ...;
+int height = ...;
+if (QRCodeImageDecoder.TryDecodeImage(luminance, width, height, out var text, out var info))
 {
-    // A GS1 element string. AI (01) is fixed length, (10) is variable and so followed by U+001D:
-    // "010952400005910910ABC123\u001D17231120"
-    Console.WriteLine(text.Replace('\u001D', '|'));
+    Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
 }
 ```
 
-The returned decode information includes a status when decoding fails. When an image decode succeeds it also carries `Corners`, the symbol's module-area corners (quiet zone excluded) in the image's continuous pixel coordinates: `TopLeft` is the corner beside the symbol's top-left finder wherever it landed, so the four points draw an outline that follows rotation, reverse their winding for a mirrored capture, and form a general quadrilateral under perspective. Matrix-level decodes have no image and report `Corners.IsEmpty`. See [samples/Dotfiles/DecodeCorners.cs](samples/Dotfiles/DecodeCorners.cs), which decodes a flat, a rotated, a mirrored and a keystoned capture and writes each one with the reported outline drawn on it.
+The returned decode information includes a status when decoding fails. When an image decode succeeds it also carries `Corners`, the symbol's module-area corners (quiet zone excluded) in the image's continuous pixel coordinates. `TopLeft` is the corner beside the symbol's top-left finder wherever it landed, so the four points draw an outline that follows rotation, reverse their winding for a mirrored capture, and form a general quadrilateral under perspective. Matrix-level decodes have no image and report `Corners.IsEmpty`. See [samples/Dotfiles/DecodeCorners.cs](samples/Dotfiles/DecodeCorners.cs), which decodes a flat, a rotated, a mirrored and a keystoned capture and writes each one with the reported outline drawn on it.
 
 ### GS1 data
 
-The `FeatherQR.Gs1` package handles GS1 data: the GS1 application identifier (AI) table, the checks the GS1 General Specifications define, `(AI)` text and GS1 Digital Link URIs. It adds GS1 methods to the Standard QR and rMQR generators.
+The `FeatherQR.Gs1` package handles GS1 data. the GS1 application identifier (AI) table, the checks the GS1 General Specifications define, `(AI)` text and GS1 Digital Link URIs. It adds GS1 methods to the Standard QR and rMQR generators.
 
 ```bash
 dotnet add package FeatherQR.Gs1
@@ -595,7 +578,7 @@ catch (Gs1FormatException ex)
 }
 ```
 
-To read GS1 data, pass the decoded text and its FNC1 mode to `TryRead`, which gives the `(AI)` text from either carrier:
+To read GS1 data, pass the decoded text and its FNC1 mode to `TryRead`, which gives the `(AI)` text from either carrier. `TryRead` checks only what it needs to split the data, so a wrong check digit still reads.
 
 ```csharp
 using SkiaSharp;
@@ -611,9 +594,7 @@ if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info)
 }
 ```
 
-`TryRead` checks only what it needs to split the data, so a wrong check digit still reads. When the data must be valid, pass it to `TryValidate`: the decoded text itself under FNC1 in first position, or the element string `TryFromDigitalLink` gives for a URI. `EnumerateElements` walks the AIs and values of an element string.
-
-The conversions also work on their own, with no symbol:
+Use `TryValidate` when the data must be valid. The decoded text itself under FNC1 in first position, or the element string `TryFromDigitalLink` gives for a URI. `EnumerateElements` walks the AIs and values of an element string. The conversions also work on their own, with no symbol.
 
 ```csharp
 // (AI) text to an element string, with every check: "0109520123456788" + "10ABC123\u001D" + "17251231"
@@ -633,47 +614,17 @@ if (!Gs1ElementString.TryValidate("0109520123456789", out var invalid))
 
 None of these throws for its input. Each returns `false` with a `Gs1Error`, and each has a span form that writes into your buffer and allocates nothing.
 
-- Leave `EciMode` at its default. GS1 does not support ECI in a GS1 QR Code, and with the default the encoder writes no ECI header for GS1 data, which is ASCII.
-- The default quiet zone of Standard QR, 4 modules, is the one GS1 asks for.
-- `RmQRCodeGenerator` has the same methods, but GS1 does not list rMQR as a carrier (General Specifications Release 26.0), so a GS1 scanner may not accept it. Micro QR has no FNC1 mode, and GS1 excludes it.
-- The generator methods are C# 14 extension members (the default for net10.0, or `<LangVersion>14</LangVersion>`). C# 12 and 13 call them on `Gs1QRCodeGenerator` and `Gs1RmQRCodeGenerator`, as in `Gs1QRCodeGenerator.CreateGs1(text, QREccLevel.M)`.
-- The AI table is generated from the GS1 Barcode Syntax Dictionary, and `Gs1ElementString.DictionaryRelease` names the release it came from. An AI newer than that release is refused as `UnknownAi` when data is built, until a newer package brings it.
+> [!NOTE]
+> - Leave `EciMode` at its default. GS1 does not support ECI in a GS1 QR Code, and with the default the encoder writes no ECI header for GS1 data, which is ASCII.
+> - The default quiet zone of Standard QR, 4 modules, is the one GS1 asks for.
+> - `RmQRCodeGenerator` has the same methods, but GS1 does not list rMQR as a carrier (General Specifications Release 26.0), so a GS1 scanner may not accept it. Micro QR has no FNC1 mode, and GS1 excludes it.
+> - The AI table is generated from the GS1 Barcode Syntax Dictionary, and `Gs1ElementString.DictionaryRelease` names the release it came from. An AI newer than that release is refused as `UnknownAi` when data is built, until a newer package brings it.
 
 ## Platform-Specific Considerations
 
-### Linux Support
-
-SkiaSharp requires native dependencies on Linux. You have two options:
-
-#### Option 1: With Font Support (Recommended for text rendering)
-
-Requires `libfontconfig1`:
-
-```bash
-sudo apt update && apt install -y libfontconfig1
-```
-
-```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
-<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
-```
-
-#### Option 2: No Dependencies (QR code only)
-
-If you don't need advanced font operations:
-
-```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
-<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
-```
-
-> **Note**: `NoDependencies` can still draw text but cannot search fonts based on characters or use system fonts.
->
-> See: [SkiaSharp Issue #964](https://github.com/mono/SkiaSharp/issues/964#issuecomment-549385484)
-
 ### NativeAOT Support
 
-FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`, and CI publishes a NativeAOT gate project that roots the whole library and fails on any trim/AOT analysis warning, so this claim is toolchain-verified on every change. You need to include platform-specific native assets:
+FeatherQR fully supports NativeAOT. The library is marked `IsAotCompatible`, and CI publishes a NativeAOT gate project that roots the whole library and fails on any trim/AOT analysis warning. You need to include platform-specific native assets.
 
 ```xml
 <PropertyGroup>
@@ -686,18 +637,38 @@ FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`
 > [!WARNING]
 >  When using `PublishTrimmed`, ensure that your QR code content and rendering logic doesn't rely on reflection or dynamic code that might be trimmed.
 
+### SkiaSharp support
+
+If you are using `FeatherQR.SkiaSharp`, you need to ensure the native dependencies are available.
+
+#### Linux
+
+Option 1: With Font Support (Recommended for text rendering), requires `libfontconfig1`.
+
+```bash
+sudo apt update && apt install -y libfontconfig1
+```
+
+```xml
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
+<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
+```
+
+Option 2: No Dependencies (QR code only), if you don't need advanced font operations.
+
+```xml
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
+<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
+```
+
+> [!TIP]
+> `NoDependencies` can still draw text but cannot search fonts based on characters or use system fonts. See [SkiaSharp Issue #964](https://github.com/mono/SkiaSharp/issues/964#issuecomment-549385484)
+
 #### Windows
 
 ```xml
 <PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
-```
-
-#### Linux
-
-```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
-<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
@@ -707,52 +678,7 @@ FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
-#### x64 instruction set
-
-On x64, a default NativeAOT publish targets the minimum instruction set the OS requires, which has no AVX. .NET then reports AVX2, BMI2 and 256-bit vectors as unavailable even on CPUs that have them, so FeatherQR runs its 128-bit SIMD paths instead of its AVX2 ones. Measured against the JIT on the same machine, a default publish takes 1.0 to 2.0 times as long depending on the operation: about 2 times for a Standard QR encode, and 1.3 to 1.5 times for an image decode.
-
-If every machine your app runs on supports AVX2 (the `x86-64-v3` level: Intel Core since Haswell, AMD since Excavator), target it:
-
-```xml
-<PropertyGroup>
-  <IlcInstructionSet>x86-64-v3</IlcInstructionSet>
-</PropertyGroup>
-```
-
-FeatherQR then runs close to the JIT's speed, 10 % slower at the median. The trade-off is that on a CPU without AVX2, such as some Pentium, Celeron and Atom models, the app exits at startup with "The required instruction sets are not supported by the current CPU." On ARM64 nothing needs setting: the default target loses no SIMD path there. The measurements are in the [design record](.github/docs/specs/qrcode-symbologies.md#nativeaots-instruction-set-target).
-
-## Performance
-
-FeatherQR is designed with performance as a top priority. The library minimizes memory allocations and maximizes throughput for QR code generation.
-
-### Key Performance Characteristics
-
-- **Minimal Memory Allocation**: Memory is only allocated for the final QR code data structure. The generation algorithm avoids intermediate allocations, resulting in minimal GC pressure.
-- **Zero-Copy Rendering**: Direct rendering to SkiaSharp canvas without unnecessary buffer copies.
-- **Optimized Encoding**: Efficient encoding mode selection and bit packing minimize QR code size and generation time.
-- **Native Performance**: Leverages SkiaSharp's native rendering engine for maximum speed.
-
-### Benchmark Results
-
-Benchmark results show FeatherQR outperforming other popular .NET QR code libraries in both speed and memory usage.
-
-- **Fastest Generation**: Outperforms other .NET QR code libraries in most scenarios
-- **Lowest Memory Usage**: Minimal allocations reduce GC overhead
-- **Consistent Performance**: Predictable performance across different QR code sizes and complexity
-
-For detailed benchmark code and results, see the [src/FeatherQR.Benchmark](src/FeatherQR.Benchmark) directory.
-
 ## FAQ
-
-### Why choose FeatherQR?
-
-- **Lightweight core**: `FeatherQR` has no dependencies on .NET 8+, allocates nothing on the hot paths, and is trim and NativeAOT safe. Rendering is a separate package, so a project that needs only module matrices never ships a native library
-- **Performance**: Native-level performance with hardware acceleration support
-- **Cross-Platform**: Runs on Windows, Linux, macOS, iOS, Android, and WebAssembly
-- **Modern .NET Support**: First-class support for .NET 6+ and .NET Core
-- **No GDI+ Dependencies**: Avoids System.Drawing's Windows-specific issues
-- **Rich Graphics API**: Advanced rendering capabilities (gradients, shapes, effects)
-- **Active Development**: Well-maintained with regular updates
 
 ### Can I use this in ASP.NET Core?
 
@@ -772,6 +698,8 @@ app.MapGet("/qr.svg", (string url) =>
 });
 ```
 
+Span-based APIs are supported for efficient memory usage, allowing you to work with slices of memory without additional allocations.
+
 ### Does it support Blazor WebAssembly?
 
 Yes, FeatherQR works in Blazor WebAssembly & Pure WebAssembly.
@@ -781,13 +709,13 @@ Yes, FeatherQR works in Blazor WebAssembly & Pure WebAssembly.
 
 ### What about NativeAOT and trimming?
 
-Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and every change publishes a NativeAOT analysis gate ([tests/FeatherQR.AotAnalysis](tests/FeatherQR.AotAnalysis)) that treats trim/AOT warnings as errors. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets. On x64, a default publish runs slower than the JIT, and [x64 instruction set](#x64-instruction-set) says when to target `x86-64-v3`.
+Yes, fully supported. The library sets `IsAotCompatible`, and every change publishes a NativeAOT analysis gate ([tests/FeatherQR.AotAnalysis](tests/FeatherQR.AotAnalysis)) that treats trim/AOT warnings as errors. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets.
+
+On x64, a default publish runs slower than the JIT, and [x64 SIMD on NativeAOT](#x64-simd-on-nativeaot) advises when to target `x86-64-v3`.
 
 ### Are ISO-8859-2 and other encodings supported?
 
-Encoding: FeatherQR writes ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208) when you ask for it with `AllowKanji` (see [Kanji mode for Japanese text](#kanji-mode-for-japanese-text)). Other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
-
-Decoding reads ISO-8859-1, UTF-8 and Shift_JIS (JIS X 0208) text, and Kanji mode segments from any encoder. Where a symbol declares no encoding, the decoder tells the three apart from the bytes. Other encodings are not read: a symbol that declares one is reported as unsupported, and one that declares nothing is read as one of the three.
+FeatherQR writes/reads ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208). Other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
 
 | Supported | Encoding Mode | Encoding |
 | --- | --- | --- |
@@ -798,15 +726,15 @@ Decoding reads ISO-8859-1, UTF-8 and Shift_JIS (JIS X 0208) text, and Kanji mode
 
 ### Does SVG output require SkiaSharp.Svg or other packages?
 
-No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional dependencies. Note that FeatherQR outputs SVG only; it does not read or render existing SVG files.
+No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional dependencies. Note that FeatherQR outputs SVG only, it does not read or render existing SVG files.
 
 ### Does it read QR codes from images?
 
-Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)): screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. Photographs are where it fails most often: glare, damage, blur, a curved surface, a steep tilt or strong lens distortion. A failed decode reports a status that says where it stopped.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)), screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. Photographs are where it fails most often: glare, damage, blur, a curved surface, a steep tilt or strong lens distortion. A failed decode reports a status that says where it stopped.
 
 ### What QR code style provides the best scan reliability?
 
-For optimal scan reliability, we recommend:
+For optimal scan reliability, we recommend.
 
 - **Use rectangular modules (default)**: Rectangle-shaped modules (`RectangleModuleShape`) provide the lowest error rate when scanning QR codes.
 - **Avoid gaps between modules**: Using smaller module sizes or shapes like `Circle` or `RoundRect` creates gaps between modules, which increases scan error rates.
@@ -827,6 +755,7 @@ var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
     .WithErrorCorrection(QREccLevel.H) // Required for custom shapes
+    .WithErrorCorrectionBoost() // Recommended to boost error correction when possible
     .WithModuleShape(CircleModuleShape.Default);
 
 // When using icons/logos - always use High error correction
@@ -836,14 +765,15 @@ var icon = IconData.FromImage(logo, iconSizePercent: 15);
 var qrCodeWithIcon = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
     .WithErrorCorrection(QREccLevel.H) // Required for icons
+    .WithErrorCorrectionBoost() // Recommended to boost error correction when possible
     .WithIcon(icon);
 
-// Or let the symbol absorb the icon with whatever capacity it has to spare:
+// Or let the symbol absorb the icon with whatever capacity it has to spare,
 // requests M as the floor and raises the level to fill the chosen version.
 var qrCodeBoosted = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
     .WithErrorCorrection(QREccLevel.M)
-    .WithErrorCorrectionBoost()
+    .WithErrorCorrectionBoost() // Recommended to boost error correction when possible
     .WithIcon(icon);
 ```
 
@@ -854,6 +784,20 @@ Following shows how to display a QRCode inside a LINQPad Results pane.
 ```csharp
 Bitmap.FromStream(new MemoryStream(QRCodeImageBuilder.GetPngBytes("WIFI:T:WPA;S:mynetwork;P:mypass;;"))).Dump();
 ```
+
+### x64 SIMD on NativeAOT
+
+On x64, a default NativeAOT publish targets the minimum instruction set the OS requires, which has no AVX. .NET then reports AVX2, BMI2 and 256-bit vectors as unavailable even on CPUs that have them, so FeatherQR runs its 128-bit SIMD paths instead of its AVX2 ones.
+
+Measured against the JIT on the same machine, a default publish takes 1.0 to 2.0 times as long depending on the operation: about 2 times for a Standard QR encode, and 1.3 to 1.5 times for an image decode. If every machine your app runs on supports AVX2 (the `x86-64-v3` level: Intel Core since Haswell, AMD since Excavator), target it by setting the `<IlcInstructionSet>` property as shown below:
+
+```xml
+<PropertyGroup>
+  <IlcInstructionSet>x86-64-v3</IlcInstructionSet>
+</PropertyGroup>
+```
+
+FeatherQR then runs close to the JIT's speed, 10 % slower at the median. The trade-off is that on a CPU without AVX2, such as some Pentium, Celeron and Atom models, the app exits at startup with "The required instruction sets are not supported by the current CPU." On ARM64 nothing needs setting, the default target loses no SIMD path there.
 
 ## Standard QR Specifications
 
@@ -1021,6 +965,8 @@ new QRCodeImageBuilder("abc")
 
 #### Custom Colors
 
+The clear color paints the canvas the symbol does not reach, so it needs a canvas larger than the content: with `WithSize` alone a square symbol fills a square canvas and there is nothing to paint.
+
 ```csharp
 using SkiaSharp;
 using FeatherQR;
@@ -1035,8 +981,6 @@ new QRCodeImageBuilder("https://example.com")
     .WithClearColor(SKColors.Transparent)
     .ToByteArray();
 ```
-
-The clear color paints the canvas the symbol does not reach, so it needs a canvas larger than the content: with `WithSize` alone a square symbol fills a square canvas and there is nothing to paint.
 
 #### Gradient QR code
 
@@ -1311,9 +1255,4 @@ Prerelease versions such as `2.0.0-preview.1` are edited by hand in `Directory.B
 
 MIT
 
-`FeatherQR.Gs1` also carries [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md): its AI table is generated from the GS1 Barcode Syntax Dictionary, which is Apache-2.0.
-
-## Acknowledgments
-
-> - [aloisdeniel/Xam.Forms.QRCode](https://github.com/aloisdeniel/Xam.Forms.QRCode) : Qr Sample with Skia
-> - [codebude/QRCoder](https://github.com/codebude/QRCoder) : QRCode generation algorithms
+`FeatherQR.Gs1` also carries [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), its AI table is generated from the GS1 Barcode Syntax Dictionary, which is Apache-2.0.
