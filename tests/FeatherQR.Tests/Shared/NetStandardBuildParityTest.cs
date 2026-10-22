@@ -131,12 +131,17 @@ public class NetStandardBuildParityTest
     {
         /// <summary>The text read back where it differs from <see cref="Text"/>: the encoder writes a lone surrogate as U+FFFD.</summary>
         public string? Decoded { get; init; }
+
+        /// <summary>
+        /// Whether this host's build allocates on the text too: <see cref="System.Text.Encoding.UTF8"/> allocates in each call that meets a lone
+        /// surrogate. The netstandard build is then held to no more than this host's.
+        /// </summary>
+        public bool AllocatesOnHost { get; init; }
     }
 
-    // Past the encoders' stack budgets for one UTF-8 run (Standard QR's 256 bytes at four a character, rMQR's 160), so that under Single,
-    // or with a byte order mark, the whole text transcodes into a pooled buffer.
+    // Past Standard QR's stack budget for one UTF-8 run (256 bytes at four a character), so that under Single, or with a byte order mark,
+    // the whole text transcodes into a pooled buffer. rMQR's budget of 160 bytes is past its largest symbol's 149.
     private static readonly string LongUtf8Text = string.Concat(Enumerable.Repeat(Utf8Text, 10));
-    private static readonly string RmQRLongUtf8Text = string.Concat(Enumerable.Repeat(Utf8Text, 6));
 
     private static readonly SpanCase[] SpanCaseTable =
     [
@@ -147,7 +152,7 @@ public class NetStandardBuildParityTest
         new("QR UTF-8 long", "QR", LongUtf8Text, "M", ("Segmentation", "Optimal")),
         new("QR UTF-8 long Single", "QR", LongUtf8Text, "M", ("Segmentation", "Single")),
         new("QR UTF-8 long with a byte order mark", "QR", LongUtf8Text, "M", ("Utf8Bom", true)),
-        new("QR lone surrogates", "QR", "a\uD800b\uDC00c\uD83D", "M") { Decoded = "a\uFFFDb\uFFFDc\uFFFD" },
+        new("QR lone surrogates", "QR", "a\uD800b\uDC00c\uD83D", "M") { Decoded = "a\uFFFDb\uFFFDc\uFFFD", AllocatesOnHost = true },
         new("QR ECI UTF-8", "QR", "plain ascii", "M", ("EciMode", "Utf8")),
         new("QR ECI ISO-8859-1", "QR", "Zürich", "M", ("EciMode", "Iso8859_1")),
         new("QR Kanji", "QR", "日本語の漢字モード", "M", ("AllowKanji", true)),
@@ -167,15 +172,14 @@ public class NetStandardBuildParityTest
         new("MicroQR alphanumeric", "MicroQR", "HELLO WORLD 14", "L"),
         new("MicroQR Latin-1", "MicroQR", "Zürich", "L"),
         new("MicroQR UTF-8", "MicroQR", MicroQRUtf8Text, "L"),
-        new("MicroQR lone surrogate", "MicroQR", "a\uD800", "L") { Decoded = "a\uFFFD" },
+        new("MicroQR lone surrogate", "MicroQR", "a\uD800", "L") { Decoded = "a\uFFFD", AllocatesOnHost = true },
         new("MicroQR Kanji", "MicroQR", "日本語", "L", ("AllowKanji", true)),
         new("MicroQR Optimal", "MicroQR", "a1234567890", "L", ("Segmentation", "Optimal")),
         new("MicroQR quiet zone 0", "MicroQR", "HELLO", "L", ("QuietZoneSize", 0)),
         new("MicroQR mask 2", "MicroQR", "12345", "L", ("MaskPattern", 2)),
         new("RmQR ASCII", "RmQR", "HELLO WORLD", "M"),
         new("RmQR UTF-8", "RmQR", Utf8Text, "M"),
-        new("RmQR UTF-8 long Single", "RmQR", RmQRLongUtf8Text, "M", ("Segmentation", "Single")),
-        new("RmQR lone surrogates", "RmQR", "a\uD800b\uDC00c", "M") { Decoded = "a\uFFFDb\uFFFDc" },
+        new("RmQR lone surrogates", "RmQR", "a\uD800b\uDC00c", "M") { Decoded = "a\uFFFDb\uFFFDc", AllocatesOnHost = true },
         new("RmQR ECI UTF-8", "RmQR", "plain ascii", "M", ("EciMode", "Utf8")),
         new("RmQR Kanji", "RmQR", "日本語の漢字", "M", ("AllowKanji", true)),
         new("RmQR FNC1 first position", "RmQR", "0109521234543213\u001d10ABC123", "M", ("Fnc1", Fnc1First())),
@@ -239,24 +243,38 @@ public class NetStandardBuildParityTest
         await Assert.That(actual.Info).IsEqualTo(expected.Info).Because($"{context}: the decode info this host's build gives");
 
 #if !DEBUG
-        var sizing = BindSizing(build, c.Symbology, path);
-        var create = BindSpanCreate(build, c.Symbology, path);
-        var decode = BindDecode(build, c.Symbology, image: false, path);
-        var options = Options(build, c.Symbology, c.Options);
-        var eccLevel = EccLevel(build, c.Symbology, c.EccLevel);
-        var matrix = new byte[expected.BufferSize];
-        var chars = new char[DecodedChars];
-
-        var allocated = new (string Call, long Bytes)[]
+        var allocated = SteadyStateBytes(build, path, c, actual);
+        var limits = c.AllocatesOnHost ? SteadyStateBytes(typeof(QRCodeGenerator).Assembly, typeof(QRCodeGenerator).Assembly.Location, c, expected) : null;
+        for (var i = 0; i < allocated.Length; i++)
         {
-            ("sizing", DecodeAllocationTest.SteadyStateBytes(() => sizing(c.Text, eccLevel, options, out _, out _, out _))),
-            ("encode", DecodeAllocationTest.SteadyStateBytes(() => create(c.Text, eccLevel, matrix, options))),
-            ("matrix decode", DecodeAllocationTest.SteadyStateBytes(() => decode(matrix, expected.Width, expected.Height, chars, out _, null))),
-        };
-        foreach (var (call, bytes) in allocated)
-            await Assert.That(bytes).IsEqualTo(0).Because($"{context}: bytes the {call} allocates once warm");
+            var (call, bytes) = allocated[i];
+            if (limits is null)
+                await Assert.That(bytes).IsEqualTo(0).Because($"{context}: bytes the {call} allocates once warm");
+            else
+                await Assert.That(bytes).IsLessThanOrEqualTo(limits[i].Bytes).Because($"{context}: bytes the {call} allocates once warm, at most this host's build's {limits[i].Bytes}");
+        }
 #endif
     }
+
+#if !DEBUG
+    /// <summary>The bytes sizing, encode and matrix decode of <paramref name="c"/> through <paramref name="assembly"/>'s span API each allocate once warm, a round of calls at a time.</summary>
+    private static (string Call, long Bytes)[] SteadyStateBytes(Assembly assembly, string path, SpanCase c, EncodeOutcome outcome)
+    {
+        var sizing = BindSizing(assembly, c.Symbology, path);
+        var create = BindSpanCreate(assembly, c.Symbology, path);
+        var decode = BindDecode(assembly, c.Symbology, image: false, path);
+        var options = Options(assembly, c.Symbology, c.Options);
+        var eccLevel = EccLevel(assembly, c.Symbology, c.EccLevel);
+        var destination = new byte[outcome.BufferSize];
+        var chars = new char[DecodedChars];
+        return
+        [
+            ("sizing", DecodeAllocationTest.SteadyStateBytes(() => sizing(c.Text, eccLevel, options, out _, out _, out _))),
+            ("encode", DecodeAllocationTest.SteadyStateBytes(() => create(c.Text, eccLevel, destination, options))),
+            ("matrix decode", DecodeAllocationTest.SteadyStateBytes(() => decode(outcome.Matrix, outcome.Width, outcome.Height, chars, out _, null))),
+        ];
+    }
+#endif
 
     /// <summary>
     /// Image decode through each netstandard build's span API reads the text with this host's build's decode info, corners included, and
