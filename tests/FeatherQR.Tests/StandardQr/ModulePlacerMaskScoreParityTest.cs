@@ -19,8 +19,9 @@ namespace FeatherQR.Tests;
 /// </para>
 /// <para>
 /// The early abort is held to its contract: with the bound at or above the score the result is the score, and below it the
-/// result is the score or <see cref="int.MaxValue"/>, never another value. The lane scorers are held to it lane by lane. ARM64's
-/// single-word scorer has no abort. Its transposed tier's abort is held in <see cref="ModulePlacerMaskTransposedParityTest"/>.
+/// result is the score or <see cref="int.MaxValue"/>, never another value. The lane scorers are held to it lane by lane. ARM64 scores
+/// versions 1-11 with the 128-bit lane scorer, held here on NEON's popcount where the suite runs on ARM64. Its transposed tier's abort
+/// is held in <see cref="ModulePlacerMaskTransposedParityTest"/>.
 /// </para>
 /// <para>
 /// Every call gets fresh row buffers: a scorer may use its rows as scratch for the column finder windows.
@@ -142,26 +143,6 @@ public class ModulePlacerMaskScoreParityTest
                 for (var lane = 0; lane < 2; lane++)
                     await Assert.That(scores.GetElement(lane)).IsEqualTo(expected[lane]).Because($"size {size}, {lanes[lane].Name} in lane {lane}");
                 await AssertLaneAbortContract(abort => Score(abort), expected, $"size {size}, from {lanes[0].Name}");
-            }
-        }
-    }
-
-    [Test]
-    public async Task Score64AdvSimd_MatchesTextbook()
-    {
-        if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
-        {
-            Skip.Test("AdvSimd.Arm64 not supported on this machine");
-            return;
-        }
-
-        foreach (var size in SingleWordSizes)
-        {
-            foreach (var (name, matrix) in Matrices(size))
-            {
-                var rows = PackWords(matrix, size, 0);
-                var expected = ModulePlacerMaskPackedParityTest.ReferenceScore(matrix, size);
-                await Assert.That(ModulePlacer.CalculateScore64AdvSimd(rows, new ulong[size], new ulong[64], new ulong[64], size)).IsEqualTo(expected).Because($"size {size}, {name}");
             }
         }
     }

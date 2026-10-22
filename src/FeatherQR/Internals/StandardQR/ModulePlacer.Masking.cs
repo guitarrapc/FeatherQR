@@ -37,7 +37,7 @@ internal static partial class ModulePlacer
         {
             return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
         }
-        // ARM64 NEON (ModulePlacer.Masking.Arm64.cs): two rows per vector, one candidate at a time, for versions 1-11, and the transposed scorer for 12-40, on the 128-bit tier's rules with NEON's popcount, packing and unpack.
+        // ARM64 NEON (ModulePlacer.Masking.Arm64.cs): the 128-bit tier's scorers, two candidates per vector for versions 1-11 and the transposed scorer for 12-40, with NEON's popcount, packing and unpack.
         if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
         {
             return MaskCodeAdvSimd(buffer, size, version, blockedMask, eccLevel);

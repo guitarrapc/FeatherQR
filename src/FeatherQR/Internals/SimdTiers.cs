@@ -220,7 +220,7 @@ internal static class SimdTiers
 
         // ModulePlacer.ExpandBits: message bits to module bytes. The SSSE3 step also finishes what the AVX2 step leaves.
         new("ModulePlacerExpandBits", (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3)),
-        // ModulePlacer.MaskCode: mask scoring and selection. At 12-40 the AVX2 tier's automatic selection also places the interleaved stream (TryMaskCodeFromStream). The 128-bit tier scores every version (12-40 transposed), its popcount SSSE3 on x64 and PackedSimd on WebAssembly. ARM64 scores 12-40 with the same transposed tier on its own popcount, packing and unpack.
+        // ModulePlacer.MaskCode: mask scoring and selection. At 12-40 the AVX2 tier's automatic selection also places the interleaved stream (TryMaskCodeFromStream). The 128-bit tier scores every version (1-11 two candidates a vector, 12-40 transposed), its popcount SSSE3 on x64 and PackedSimd on WebAssembly. ARM64 scores every version with the same 128-bit scorers on its own popcount, packing and unpack.
         new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Ssse3, Isa.Vector128 && Isa.Ssse3), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // QRBinaryEncoder.WriteAlphanumericData: the Alphanumeric payload writer, sixteen characters a step (then one step of eight on x64 and ARM64). The portable writer takes the rest of a run.
         new("QRAlphanumericWriter", (SimdTier.Sse41, Isa.Sse41 && Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),

@@ -5,20 +5,21 @@ using FeatherQR.Internals;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Verifies that the ARM64 NEON mask selection tiers (ModulePlacer.Masking.Arm64.cs:
-/// single-word for versions 1-11, transposed for 12-40) select the same pattern and produce a
-/// byte-identical matrix as the scalar bit-packed kernels. MaskCode dispatches by
-/// hardware capability, so these tests pin BOTH sides explicitly: the scalar kernels
-/// are called directly, and the NEON entry point is called directly (skipped on
-/// machines without AdvSimd.Arm64).
+/// Verifies that the ARM64 mask selection entry point (ModulePlacer.Masking.Arm64.cs: the 128-bit
+/// lane-per-pattern tier for versions 1-11, with NEON row packing and winner unpack, and the transposed
+/// tier for 12-40) selects the same pattern and produces a byte-identical matrix as the scalar
+/// bit-packed kernels. MaskCode dispatches by hardware capability, so these tests pin BOTH sides
+/// explicitly: the scalar kernels are called directly, and the ARM64 entry point is called directly
+/// (skipped on machines without AdvSimd.Arm64).
 /// </summary>
 public class ModulePlacerMaskAdvSimdParityTest
 {
     // Versions covering every SIMD tier and its boundaries:
-    // 1/5/7/10/11 -> single-word (11 = size 61, last one-word version),
+    // 1/4/5/7/8/10/11 -> single-word (a row packs in two 16-module chunks up to size 29, three from 4 = size 33, four from
+    // 8 = size 49; 11 = size 61, last one-word version),
     // 12 -> first transposed, two words a row (size 65), 20/27 -> two-word interior/last (27 = size 125),
     // 28 -> first three-word (size 129), 34/40 -> three-word interior/max.
-    public static IEnumerable<int> Versions => [1, 5, 7, 10, 11, 12, 20, 27, 28, 34, 40];
+    public static IEnumerable<int> Versions => [1, 4, 5, 7, 8, 10, 11, 12, 20, 27, 28, 34, 40];
 
     [Test]
     [MethodDataSource(nameof(Versions))]
