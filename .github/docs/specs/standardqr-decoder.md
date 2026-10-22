@@ -875,6 +875,8 @@ End-to-end numbers are in `src/FeatherQR.Benchmark`. `QRCodeDecodeEndToEnd` cove
   - The reads measured 0.3 to 1.3 % slower in the fastest of twelve alternating runs (version 6 at 4 px/module, 9.75 to 9.88 µs), the failing images within 0.6 %. Without the counters, and with the workspace renting one grid instead of three, the reads were still 0.5 to 1.0 % slower, so neither is the cause. It was not traced further.
 - A workspace passed by `ref` beside spans must not be a `ref struct`. The compiler refuses a `ref ModuleWorkspace` argument next to a stack-allocated span, or next to an `ImageView` built from a local passed by `in` (CS8350), because a ref struct's fields could capture either.
   - The workspace holds only an array and a length, so it is a plain struct.
+- A cross-library comparison on small symbols shows the smallest gap. `SimpleDecode`'s five symbols are all versions 1 to 4. On the corpus `SimpleCorpusDecode` decodes by version range (2026-10-22, Ryzen 9 7950X3D, .NET 10 JIT), CodeGlyphX took 12 to 14 times this decoder's time on matrices at versions 1 to 11 and 21 to 24 times from version 12. On images both other decoders took 12 to 17 times its time up to version 27, and 16 and 20 times from version 28.
+  - ZXing.Net 0.16.11 at its default options did not read 34 of the corpus's 1,600 clean 8 px/module renders, and with `TryHarder` it missed 36. `PureBarcode` read all of them, but it skips the detection the other decoders do. So the image rows replace a sampled pair another decoder cannot read with the next one, which keeps every row on the same images.
 
 ### Measuring and verifying a hot-path change
 

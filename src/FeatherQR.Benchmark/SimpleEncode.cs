@@ -2,7 +2,8 @@ using BenchmarkDotNet.Configs;
 using SkiaSharp;
 
 /// <summary>
-/// Cross-library Standard QR encoding: the shortest call each library offers for "text in, module matrix out", over five representative payloads.
+/// Cross-library Standard QR encoding: the shortest call each library offers for "text in, module matrix out", over five short payloads at ECC L.
+/// They all land in versions 1 to 4. <see cref="SimpleCorpusEncode"/> covers all four levels and the larger versions.
 ///
 /// Comparability: every library selects the same QR version for every payload here (numeric 1, alphanumeric 2, url 3, unicode 4, wifi 3 at ECC L), so each row encodes the same amount of data into the same symbol size.
 /// Two notes on comparability:
