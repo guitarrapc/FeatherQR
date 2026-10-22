@@ -6,8 +6,9 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The 128-bit mask selection tier (ModulePlacer.Masking.Simd.cs, and ModulePlacer.Masking.Transposed.Vector128.cs for versions 12-40)
-/// against the scalar bit-packed kernels, entered directly: the dispatch takes it only on x64 without AVX2 and on WebAssembly, so an x64
-/// machine with AVX2 runs it only here and in ModulePlacerMaskTransposedParityTest. Same pattern, byte-identical matrix.
+/// against the scalar bit-packed kernels, entered directly: the dispatch takes it on x64 without AVX2, on WebAssembly and, for versions
+/// 1-11, on ARM64, so an x64 machine with AVX2 runs it only here and in ModulePlacerMaskTransposedParityTest. Same pattern, byte-identical
+/// matrix. On ARM64 the single-word tier packs rows and unpacks the winner with NEON, which these tests run there.
 /// </summary>
 public class ModulePlacerMaskVector128ParityTest
 {
@@ -78,6 +79,47 @@ public class ModulePlacerMaskVector128ParityTest
         await Assert.That(() => ModulePlacer.MaskCode64Vector128(buffer, size, 1, blockedMask, (QREccLevel)4)).Throws<ArgumentOutOfRangeException>();
         var ok = ModulePlacer.MaskCode64Vector128((byte[])buffer.Clone(), size, 1, blockedMask, QREccLevel.M);
         await Assert.That(ok).IsBetween(0, 7);
+    }
+
+    [Test]
+    public async Task PackRows64Vector128_EveryRow_MatchesModuleByModuleReference()
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+
+        // Every row but the last is packed sixteen modules a chunk, reading past its own end into the next row, and masked to the
+        // symbol's width. The last row is packed to its exact length, so nothing past the matrix is read. An all-dark matrix fails a
+        // missing mask, since every chunk that runs past a row picks up the next row's dark modules, and the dark bytes after the
+        // matrix fail a last row that reads past it. ARM64 packs a chunk with NEON, every other build with a compare and movemask.
+        var random = new Random(23);
+        for (var size = 21; size <= 61; size += 4)
+        {
+            foreach (var darkPercent in new[] { 0, 100, 10, 50, 90 })
+            {
+                var storage = new byte[size * size + 64];
+                storage.AsSpan(size * size).Fill(1);
+                var matrix = storage.AsSpan(0, size * size);
+                for (var i = 0; i < matrix.Length; i++)
+                    matrix[i] = (byte)(random.Next(100) < darkPercent ? 1 : 0);
+
+                var expected = new ulong[size];
+                for (var y = 0; y < size; y++)
+                {
+                    for (var x = 0; x < size; x++)
+                    {
+                        if (matrix[y * size + x] != 0)
+                            expected[y] |= 1ul << x;
+                    }
+                }
+
+                var actual = new ulong[size];
+                ModulePlacer.PackRows64Vector128(matrix, size, actual);
+                await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching).Because($"size {size}, {darkPercent} % dark");
+            }
+        }
     }
 
     [Test]

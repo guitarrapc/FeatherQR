@@ -10,57 +10,37 @@ namespace FeatherQR.Internals.StandardQR;
 /// Vectorized mask pattern selection for ARM64 with AdvSimd (NEON).
 /// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>. It produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskAdvSimdParityTest).
 ///
-/// Two tiers, split at 64 modules as <see cref="MaskCodeAdvSimd"/> does:
-/// - Versions 1-11: a lane-per-row form on 128-bit vectors (Vector128&lt;ulong&gt; = 2 rows per iteration, one ulong per row), one candidate
-///   at a time, where the AVX2 tier scores four candidates per vector.
+/// Two tiers, split at 64 modules as <see cref="MaskCodeAdvSimd"/> does, both on the 128-bit tier's scorers:
+/// - Versions 1-11: the lane-per-pattern scorer (<see cref="MaskCode64Vector128"/> in ModulePlacer.Masking.Simd.cs), two candidates a
+///   vector and four groups a call, with that tier's per-version pre-masked templates, format overlays and checkpoint.
 /// - Versions 12-40: the transposed scorer (the design is in ModulePlacer.Masking.Transposed.cs). It masks and scores with the 128-bit tier's
-///   code (ModulePlacer.Masking.Transposed.Vector128.cs), whose popcount is cnt and uadalp here, and packs rows and applies the winner
-///   with this file's 16-module steps: ARM64 has no movemask for the 128-bit tier's packing, and that tier's unpack takes eight modules a step.
-/// NEON-specific choices:
-/// - The single-word tier's popcount is native (cnt.16b). One uaddlp widens the
-///   per-byte counts to ushort lanes, which accumulate directly in
-///   Vector128&lt;ushort&gt; accumulators (2 instructions per popcount vs 3 for a
-///   full per-qword widen). Worst-case lane sums stay far below ushort range,
-///   and totals reduce once per score via uaddlv. The transposed tier counts
-///   with cnt and uadalp (AddPopCount) and reduces through LaneTotals, at its
-///   checkpoint and at its end.
-/// - Byte&lt;-&gt;bit edges run 16 modules per step in both tiers: packing gathers per-byte bit
-///   weights (cmeq+bic) and reduces with a uaddlp chain. Unpacking broadcasts
-///   the 16-bit delta chunk and replicates bytes with tbl + cmtst (the same
-///   sequence as MicroQRModulePlacer.Unpack16).
+///   code (ModulePlacer.Masking.Transposed.Vector128.cs).
+/// What this file adds to them:
+/// - Byte&lt;-&gt;bit edges of 16 modules a step in both tiers, where the 128-bit tier packs with a compare and movemask, which ARM64 has no
+///   instruction for, and unpacks eight modules a step. Packing gathers per-byte bit weights (cmeq+bic) and reduces with a uaddlp chain.
+///   Unpacking broadcasts the 16-bit delta chunk and replicates bytes with tbl + cmtst (the same sequence as MicroQRModulePlacer.Unpack16).
+///   The single-word tier takes them from inside <see cref="PackRows64Vector128"/> and <see cref="MaskCode64Vector128"/>.
+/// - The popcount both scorers accumulate is cnt and uadalp, in <see cref="AddPopCount"/>.
+///
+/// The single-word tier replaced a lane-per-row form, two rows a vector and one candidate at a time, which took about twice as long on
+/// Apple M2 (Lessons Learned, Performance in specs/standardqr-encoder.md).
 ///
 /// This file only executes under AdvSimd.Arm64.IsSupported, so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
-///
-/// The single-word tier has no early exit. The transposed tier has the 128-bit tier's checkpoint.
 /// </summary>
 internal static partial class ModulePlacer
 {
-    /// <summary>Entry point for the NEON tiers. Caller guarantees AdvSimd.Arm64.IsSupported.</summary>
+    /// <summary>Entry point for the ARM64 tiers. Caller guarantees AdvSimd.Arm64.IsSupported.</summary>
     internal static int MaskCodeAdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
+        // Versions 1-11 take the 128-bit lane-per-pattern tier, which packs and unpacks with this file's NEON edges on ARM64.
         return size <= 64
-            ? MaskCode64AdvSimd(buffer, size, version, blockedMask, eccLevel)
+            ? MaskCode64Vector128(buffer, size, version, blockedMask, eccLevel)
             : MaskCodeTransposedAdvSimd(buffer, size, version, blockedMask, eccLevel);
     }
 
     // ---------------------------------
     // Shared NEON pieces
     // ---------------------------------
-    // Operand-order note: Vector128.AndNot(left, right) computes left & ~right (same helper convention as the Vector256 helper used in the AVX2 file).
-    // The JIT emits bic. Every AndNot in this file is the cross-platform helper.
-
-    /// <summary>
-    /// Per-byte-pair popcount of a 128-bit vector as 8 ushort lanes (cnt.16b + uaddlp).
-    /// Lanes accumulate across calls and reduce once per score via <see cref="SumAcc"/>, so only the total is meaningful.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<ushort> Pop16(Vector128<ulong> v)
-        => AdvSimd.AddPairwiseWidening(AdvSimd.PopCount(v.AsByte()));
-
-    /// <summary>Reduces a ushort popcount accumulator to its total (uaddlv).</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int SumAcc(Vector128<ushort> acc)
-        => (int)AdvSimd.Arm64.AddAcrossWidening(acc).ToScalar();
 
     /// <summary>Per-byte bit weights [1,2,4,...,128] repeated: byte i of a 16-module chunk contributes bit i.</summary>
     private static readonly Vector128<byte> PackBitSel16 = Vector128.Create(
@@ -77,6 +57,7 @@ internal static partial class ModulePlacer
     private static ulong Pack16(Vector128<byte> v)
     {
         var zero = Vector128.Equals(v, Vector128<byte>.Zero);
+        // The cross-platform helper: Vector128.AndNot(left, right) is left & ~right, which the JIT emits as bic.
         var bits = Vector128.AndNot(PackBitSel16, zero);
         var s = AdvSimd.AddPairwiseWidening(AdvSimd.AddPairwiseWidening(AdvSimd.AddPairwiseWidening(bits)));
         return s.GetElement(0) | (s.GetElement(1) << 8);
@@ -218,283 +199,6 @@ internal static partial class ModulePlacer
                 Unsafe.Add(ref rowRef, c) ^= 1;
             }
         }
-    }
-
-    // ---------------------------------
-    // Single-word tier (versions 1-11)
-    // ---------------------------------
-
-    internal static int MaskCode64AdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
-    {
-        Span<ulong> packed = stackalloc ulong[64];
-        Span<ulong> allowed = stackalloc ulong[64];
-        Span<ulong> masked = stackalloc ulong[64];
-        Span<ulong> nmasked = stackalloc ulong[64];
-        Span<ulong> eqScratch = stackalloc ulong[64];
-        Span<ulong> v5Scratch = stackalloc ulong[64];
-        packed = packed[..size];
-        allowed = allowed[..size];
-        masked = masked[..size];
-        nmasked = nmasked[..size];
-
-        for (var y = 0; y < size; y++)
-        {
-            packed[y] = PackRowBits64AdvSimd(buffer.Slice(y * size, size));
-        }
-
-        // Version bits sit in blocked areas, hence identical for every pattern.
-        if (version >= 7)
-        {
-            var versionBits = QRCodeConstants.GetVersionBits(version);
-            for (var x = 0; x < 6; x++)
-            {
-                for (var y = 0; y < 3; y++)
-                {
-                    var bit = (versionBits & (1u << (x * 3 + y))) != 0;
-                    packed[y + size - 11] = WithBit64(packed[y + size - 11], x, bit);
-                    packed[x] = WithBit64(packed[x], y + size - 11, bit);
-                }
-            }
-        }
-
-        // Each allowed row (~blocked) is a contiguous bit slice of the blocked bitmask. A padded copy makes the two 8-byte slice reads always legal.
-        Span<byte> padded = stackalloc byte[blockedMask.Length + 16];
-        padded.Clear();
-        blockedMask.CopyTo(padded);
-        var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
-        for (var y = 0; y < size; y++)
-        {
-            var bitOffset = y * size;
-            var byteOff = bitOffset >> 3;
-            var sh = bitOffset & 7;
-            var u0 = Unsafe.ReadUnaligned<ulong>(ref MemoryMarshal.GetReference(padded.Slice(byteOff)));
-            var u1 = Unsafe.ReadUnaligned<ulong>(ref MemoryMarshal.GetReference(padded.Slice(byteOff + 8)));
-            var blocked = sh == 0 ? u0 : (u0 >> sh) | (u1 << (64 - sh));
-            allowed[y] = ~blocked & rowMask;
-        }
-
-        var templates = _maskTemplates64;
-        var bestPatternIndex = 0;
-        var bestScore = int.MaxValue;
-        for (var patternIndex = 0; patternIndex < 8; patternIndex++)
-        {
-            var tplBase = patternIndex * 12;
-            for (int y = 0, tplRow = 0; y < size; y++)
-            {
-                masked[y] = packed[y] ^ (templates[tplBase + tplRow] & allowed[y]);
-                if (++tplRow == 12) tplRow = 0;
-            }
-            PokeFormatBits64(masked, size, QRCodeConstants.GetFormatBits(eccLevel, patternIndex));
-
-            var score = CalculateScore64AdvSimd(masked, nmasked, eqScratch, v5Scratch, size);
-            if (score < bestScore)
-            {
-                bestPatternIndex = patternIndex;
-                bestScore = score;
-            }
-        }
-
-        // Apply the winner to the byte buffer: unpack the XOR delta 16 modules at a time.
-        {
-            var tplBase = bestPatternIndex * 12;
-            for (int y = 0, tplRow = 0; y < size; y++)
-            {
-                XorUnpackRow64AdvSimd(buffer.Slice(y * size, size), _maskTemplates64[tplBase + tplRow] & allowed[y]);
-                if (++tplRow == 12) tplRow = 0;
-            }
-        }
-
-        return bestPatternIndex;
-    }
-
-    /// <summary>
-    /// Lane-per-row Vector128 penalty scorer for single-word rows, 2 rows per iteration.
-    /// Row-direction rules run with per-lane shifts and native popcount. Column-direction rules materialize eq (vertical run continuation) and v5 (4-deep AND window) arrays with vector passes, then score them with offset loads.
-    /// Scalar tails reuse the scalar expressions.
-    /// Popcounts accumulate in weight-grouped ushort accumulators (rule-1 ones / twos, rule-2 x3, rule-3 x40, balance) and reduce once per score.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    internal static int CalculateScore64AdvSimd(ReadOnlySpan<ulong> rows, Span<ulong> nrows, Span<ulong> eqArr, Span<ulong> v5Arr, int size)
-    {
-        var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
-        var startMaskP3 = (1ul << (size - 10)) - 1;
-        var maskN1 = (1ul << (size - 1)) - 1;
-
-        ref var rowsRef = ref MemoryMarshal.GetReference(rows);
-        ref var nrowsRef = ref MemoryMarshal.GetReference(nrows);
-        ref var eqRef = ref MemoryMarshal.GetReference(eqArr);
-        ref var v5Ref = ref MemoryMarshal.GetReference(v5Arr);
-
-        var score1 = 0;
-        var score2 = 0;
-        var score3 = 0;
-        var blackModules = 0;
-
-        var rowMaskV = Vector128.Create(rowMask);
-        var startMaskV = Vector128.Create(startMaskP3);
-        var maskN1V = Vector128.Create(maskN1);
-
-        var accOnes = Vector128<ushort>.Zero;  // rule-1 weight-1 counts (y5 positions)
-        var accTwos = Vector128<ushort>.Zero;  // rule-1 weight-2 counts (run starts)
-        var accP2 = Vector128<ushort>.Zero;    // rule-2 blocks (x3 at reduce)
-        var accP3 = Vector128<ushort>.Zero;    // rule-3 windows (x40 at reduce)
-        var accBlack = Vector128<ushort>.Zero;
-
-        // nrows = ~rows & rowMask
-        var y0 = 0;
-        for (; y0 + 2 <= size; y0 += 2)
-        {
-            var x = Vector128.LoadUnsafe(ref rowsRef, (nuint)y0);
-            Vector128.AndNot(rowMaskV, x).StoreUnsafe(ref nrowsRef, (nuint)y0);
-        }
-        for (; y0 < size; y0++)
-        {
-            nrows[y0] = ~rows[y0] & rowMask;
-        }
-
-        // Row-direction rules 1 and 3 + balance popcount, 2 rows per iteration.
-        var y = 0;
-        for (; y + 2 <= size; y += 2)
-        {
-            var x = Vector128.LoadUnsafe(ref rowsRef, (nuint)y);
-            var nx = Vector128.LoadUnsafe(ref nrowsRef, (nuint)y);
-
-            accBlack += Pop16(x);
-
-            var y2 = x & Vector128.ShiftRightLogical(x, 1);
-            var y4 = y2 & Vector128.ShiftRightLogical(y2, 2);
-            var y5 = y4 & Vector128.ShiftRightLogical(x, 4);
-            var st = Vector128.AndNot(y5, Vector128.ShiftLeft(y5, 1));
-            var n2 = nx & Vector128.ShiftRightLogical(nx, 1);
-            var n4 = n2 & Vector128.ShiftRightLogical(n2, 2);
-            var n5 = n4 & Vector128.ShiftRightLogical(nx, 4);
-            var nst = Vector128.AndNot(n5, Vector128.ShiftLeft(n5, 1));
-            accOnes += Pop16(y5) + Pop16(n5);
-            accTwos += Pop16(st) + Pop16(nst);
-
-            // Rule 3 from the light run and the core (see CalculateScorePacked): the two windows never share a start, one popcount.
-            var core = x & Vector128.ShiftRightLogical(nx, 1) & Vector128.ShiftRightLogical(y2, 2) & Vector128.ShiftRightLogical(x, 4)
-                     & Vector128.ShiftRightLogical(nx, 5) & Vector128.ShiftRightLogical(x, 6);
-            accP3 += Pop16(((n4 & Vector128.ShiftRightLogical(core, 4)) | (core & Vector128.ShiftRightLogical(n4, 7))) & startMaskV);
-        }
-        for (; y < size; y++)
-        {
-            var x = rows[y];
-            var nx = nrows[y];
-
-            blackModules += PopCount(x);
-            score1 += ScoreRuns64(x) + ScoreRuns64(nx);
-            score3 += MatchFinderRow64(x, nx, startMaskP3);
-        }
-
-        // eqArr[i] = ~(rows[i] ^ rows[i+1]) & rowMask, i in 0..size-2
-        // (vertical run continuation between adjacent rows, reused by rules 1 and 2).
-        var i = 0;
-        for (; i + 2 <= size - 1; i += 2)
-        {
-            var a = Vector128.LoadUnsafe(ref rowsRef, (nuint)i);
-            var b = Vector128.LoadUnsafe(ref rowsRef, (nuint)(i + 1));
-            (~(a ^ b) & rowMaskV).StoreUnsafe(ref eqRef, (nuint)i);
-        }
-        for (; i < size - 1; i++)
-        {
-            eqArr[i] = ~(rows[i] ^ rows[i + 1]) & rowMask;
-        }
-
-        // Rule 2 (2x2 blocks): m = eqh & eq & (eq >> 1) & maskN1 per row pair.
-        // eqArr is masked with rowMask ⊇ maskN1, so reusing it is exact.
-        y = 0;
-        for (; y + 2 <= size - 1; y += 2)
-        {
-            var x = Vector128.LoadUnsafe(ref rowsRef, (nuint)y);
-            var eqv = Vector128.LoadUnsafe(ref eqRef, (nuint)y);
-            var eqh = ~(x ^ Vector128.ShiftRightLogical(x, 1));
-            var m = eqh & eqv & Vector128.ShiftRightLogical(eqv, 1) & maskN1V;
-            accP2 += Pop16(m);
-        }
-        for (; y < size - 1; y++)
-        {
-            var x = rows[y];
-            var eqv = eqArr[y];
-            var eqh = ~(x ^ (x >> 1));
-            var m = eqh & eqv & (eqv >> 1) & maskN1;
-            score2 += 3 * PopCount(m);
-        }
-
-        // Column rule 1: v5Arr[y] = AND of eqArr[y-4..y-1] for y in 4..size-1
-        // (vertical 5-run marker). v5Arr[3] = 0 backs the prev-load at y = 4.
-        v5Arr[3] = 0;
-        y = 4;
-        for (; y + 2 <= size; y += 2)
-        {
-            var e1 = Vector128.LoadUnsafe(ref eqRef, (nuint)(y - 4));
-            var e2 = Vector128.LoadUnsafe(ref eqRef, (nuint)(y - 3));
-            var e3 = Vector128.LoadUnsafe(ref eqRef, (nuint)(y - 2));
-            var e4 = Vector128.LoadUnsafe(ref eqRef, (nuint)(y - 1));
-            (e1 & e2 & e3 & e4).StoreUnsafe(ref v5Ref, (nuint)y);
-        }
-        for (; y < size; y++)
-        {
-            v5Arr[y] = eqArr[y - 4] & eqArr[y - 3] & eqArr[y - 2] & eqArr[y - 1];
-        }
-
-        y = 4;
-        for (; y + 2 <= size; y += 2)
-        {
-            var v5 = Vector128.LoadUnsafe(ref v5Ref, (nuint)y);
-            var prev = Vector128.LoadUnsafe(ref v5Ref, (nuint)(y - 1));
-            accOnes += Pop16(v5);
-            accTwos += Pop16(Vector128.AndNot(v5, prev));
-        }
-        for (; y < size; y++)
-        {
-            var v5 = v5Arr[y];
-            score1 += PopCount(v5) + 2 * PopCount(v5 & ~v5Arr[y - 1]);
-        }
-
-        // Column rule 3 from the same terms, one per row: v5Arr[y] becomes the core from row y down and eqArr[y] the light run
-        // from row y down (both are done with here), so each is built once and read by both windows that use it.
-        var t = 0;
-        for (; t + 2 <= size - 6; t += 2)
-        {
-            (Vector128.LoadUnsafe(ref rowsRef, (nuint)t) & Vector128.LoadUnsafe(ref nrowsRef, (nuint)(t + 1))
-                & Vector128.LoadUnsafe(ref rowsRef, (nuint)(t + 2)) & Vector128.LoadUnsafe(ref rowsRef, (nuint)(t + 3))
-                & Vector128.LoadUnsafe(ref rowsRef, (nuint)(t + 4)) & Vector128.LoadUnsafe(ref nrowsRef, (nuint)(t + 5))
-                & Vector128.LoadUnsafe(ref rowsRef, (nuint)(t + 6))).StoreUnsafe(ref v5Ref, (nuint)t);
-        }
-        for (; t <= size - 7; t++)
-        {
-            v5Arr[t] = rows[t] & nrows[t + 1] & rows[t + 2] & rows[t + 3] & rows[t + 4] & nrows[t + 5] & rows[t + 6];
-        }
-        t = 0;
-        for (; t + 2 <= size - 3; t += 2)
-        {
-            (Vector128.LoadUnsafe(ref nrowsRef, (nuint)t) & Vector128.LoadUnsafe(ref nrowsRef, (nuint)(t + 1))
-                & Vector128.LoadUnsafe(ref nrowsRef, (nuint)(t + 2)) & Vector128.LoadUnsafe(ref nrowsRef, (nuint)(t + 3))).StoreUnsafe(ref eqRef, (nuint)t);
-        }
-        for (; t <= size - 4; t++)
-        {
-            eqArr[t] = nrows[t] & nrows[t + 1] & nrows[t + 2] & nrows[t + 3];
-        }
-
-        var b0 = 0;
-        for (; b0 + 2 <= size - 10; b0 += 2)
-        {
-            var mf = Vector128.LoadUnsafe(ref eqRef, (nuint)b0) & Vector128.LoadUnsafe(ref v5Ref, (nuint)(b0 + 4));
-            var mb = Vector128.LoadUnsafe(ref v5Ref, (nuint)b0) & Vector128.LoadUnsafe(ref eqRef, (nuint)(b0 + 7));
-            accP3 += Pop16(mf | mb); // the two finder-like orientations are disjoint
-        }
-        for (; b0 <= size - 11; b0++)
-        {
-            score3 += 40 * PopCount((eqArr[b0] & v5Arr[b0 + 4]) | (v5Arr[b0] & eqArr[b0 + 7]));
-        }
-
-        score1 += SumAcc(accOnes) + 2 * SumAcc(accTwos);
-        score2 += 3 * SumAcc(accP2);
-        score3 += 40 * SumAcc(accP3);
-        blackModules += SumAcc(accBlack);
-
-        return score1 + score2 + score3 + CalculateBalanceScore(blackModules, size);
     }
 
     // ---------------------------------

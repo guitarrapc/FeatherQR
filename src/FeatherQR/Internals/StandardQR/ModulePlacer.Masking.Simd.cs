@@ -10,15 +10,17 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// 128-bit mask pattern selection for the targets with neither the AVX2 nor the ARM64 tier: x64 without AVX2, and WebAssembly.
+/// 128-bit mask pattern selection for the targets without the AVX2 tier: x64 without AVX2, WebAssembly and, for versions 1-11, ARM64.
 /// Versions 1-11 run the AVX2 tier's lane-per-pattern scorer with two candidates a vector, four groups a call, and versions 12-40 the
 /// transposed scorer (ModulePlacer.Masking.Transposed.Vector128.cs).
 /// </summary>
 /// <remarks>
 /// Popcounts accumulate in 16-bit lanes and reduce to totals only at the checkpoint and the end of a scoring call (a group of two
 /// candidates in the single-word tier, one candidate in the transposed one): WebAssembly's byte popcount and pairwise widening add, the
-/// nibble-table popcount and psadbw with SSSE3, cnt and uadalp on ARM64, a SWAR count of each 16-bit lane elsewhere. ARM64's transposed
-/// tier (ModulePlacer.Masking.Arm64.cs) takes these counts and the rules of ModulePlacer.Masking.Transposed.Vector128.cs.
+/// nibble-table popcount and psadbw with SSSE3, cnt and uadalp on ARM64, a SWAR count of each 16-bit lane elsewhere.
+/// ARM64 enters the single-word tier through <see cref="MaskCodeAdvSimd"/> and runs it with NEON's sixteen-module row packing and
+/// winner unpack (ModulePlacer.Masking.Arm64.cs) in place of the compare and movemask, which ARM64 has no instruction for, and the
+/// eight-module unpack. Its transposed tier takes these counts and the rules of ModulePlacer.Masking.Transposed.Vector128.cs.
 /// </remarks>
 internal static partial class ModulePlacer
 {
@@ -190,22 +192,26 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Apply the winner to the byte buffer.
+        // Apply the winner to the byte buffer: sixteen modules a step on ARM64, eight elsewhere.
         var preScalar = layout.PreScalar;
         var baseIdx = bestPatternIndex * size;
         for (var y = 0; y < size; y++)
         {
-            XorUnpackRow64(buffer.Slice(y * size, size), preScalar[baseIdx + y]);
+            if (AdvSimd.Arm64.IsSupported)
+                XorUnpackRow64AdvSimd(buffer.Slice(y * size, size), preScalar[baseIdx + y]);
+            else
+                XorUnpackRow64(buffer.Slice(y * size, size), preScalar[baseIdx + y]);
         }
 
         return bestPatternIndex;
     }
 
     /// <summary>
-    /// Packs every row into bits, 16 modules a compare and movemask. Rows 0..size-2 may read past their own end into the next row (masked
-    /// off), the last row takes the exact-length packer so nothing is read past the buffer.
+    /// Packs every row into bits, 16 modules a step: a compare and movemask, or on ARM64, which has no movemask instruction, NEON's
+    /// <see cref="Pack16"/>. Rows 0..size-2 may read past their own end into the next row (masked off), the last row takes the
+    /// exact-length packer so nothing is read past the buffer.
     /// </summary>
-    private static void PackRows64Vector128(ReadOnlySpan<byte> buffer, int size, Span<ulong> packed)
+    internal static void PackRows64Vector128(ReadOnlySpan<byte> buffer, int size, Span<ulong> packed)
     {
         ref var b = ref MemoryMarshal.GetReference(buffer);
         var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
@@ -216,11 +222,16 @@ internal static partial class ModulePlacer
             ulong w = 0;
             for (var k = 0; k < chunks; k++)
             {
-                w |= (ulong)(ushort)~Vector128.Equals(Vector128.LoadUnsafe(ref r, (nuint)(16 * k)), Vector128<byte>.Zero).ExtractMostSignificantBits() << (16 * k);
+                var chunk = Vector128.LoadUnsafe(ref r, (nuint)(16 * k));
+                var bits = AdvSimd.Arm64.IsSupported
+                    ? Pack16(chunk)
+                    : (ulong)(ushort)~Vector128.Equals(chunk, Vector128<byte>.Zero).ExtractMostSignificantBits();
+                w |= bits << (16 * k);
             }
             packed[y] = w & rowMask;
         }
-        packed[size - 1] = PackRowBits64(buffer.Slice((size - 1) * size, size));
+        var last = buffer.Slice((size - 1) * size, size);
+        packed[size - 1] = AdvSimd.Arm64.IsSupported ? PackRowBits64AdvSimd(last) : PackRowBits64(last);
     }
 
     /// <summary>
