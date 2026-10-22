@@ -17,13 +17,13 @@ Many existing QR code libraries rely on System.Drawing, which has well-known GDI
 [Benchmark]((src/FeatherQR.Benchmark)) results comparing FeatherQR with other libraries, on .NET 10 with an AMD Ryzen 9 7950X3D CPU.
 
 <div style="display: flex; align-items: flex-start;">
-  <img src="assets/benchmark_simplecorpus_encode_net10.png" width="500" alt="Encode Performance"/>
-  <img src="assets/benchmark_simplecorpus_decode_net10.png" width="500" alt="Decode Performance"/>
+  <img src="assets/benchmark_simplecorpus_encode_net10.png" width="410" alt="Encode Performance"/>
+  <img src="assets/benchmark_simplecorpus_decode_net10.png" width="410" alt="Decode Performance"/>
 </div>
 
 <div style="display: flex; align-items: flex-start;">
-  <img src="assets/benchmark_simpleencode_net10.png" width="500" alt="Encode Performance per payload"/>
-  <img src="assets/benchmark_simpledecode_net10.png" width="500" alt="Decode Performance per payload"/>
+  <img src="assets/benchmark_simpleencode_net10.png" width="410" alt="Encode Performance per payload"/>
+  <img src="assets/benchmark_simpledecode_net10.png" width="410" alt="Decode Performance per payload"/>
 </div>
 
 
@@ -76,18 +76,18 @@ FeatherQR supports Standard QR, Micro QR, and rMQR. Examples use Standard QR unl
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | ✅ | ✅ |
 
 <div style="display: flex; align-items: flex-start;">
-  <img src="assets/benchmark_standardqr_encode.png" width="600" alt="Standard QR Encode"/>
-  <img src="assets/benchmark_standardqr_decode.png" width="600" alt="Standard QR Decode"/>
+  <img src="assets/benchmark_standardqr_encode.png" width="410" alt="Standard QR Encode"/>
+  <img src="assets/benchmark_standardqr_decode.png" width="410" alt="Standard QR Decode"/>
 </div>
 
 <div style="display: flex; align-items: flex-start;">
-  <img src="assets/benchmark_microqr_encode.png" width="600" alt="Micro QR Encode"/>
-  <img src="assets/benchmark_microqr_decode.png" width="600" alt="Micro QR Decode"/>
+  <img src="assets/benchmark_microqr_encode.png" width="410" alt="Micro QR Encode"/>
+  <img src="assets/benchmark_microqr_decode.png" width="410" alt="Micro QR Decode"/>
 </div>
 
 <div style="display: flex; align-items: flex-start;">
-  <img src="assets/benchmark_rmqr_encode.png" width="600" alt="rMQR Encode"/>
-  <img src="assets/benchmark_rmqr_decode.png" width="600" alt="rMQR Decode"/>
+  <img src="assets/benchmark_rmqr_encode.png" width="410" alt="rMQR Encode"/>
+  <img src="assets/benchmark_rmqr_decode.png" width="410" alt="rMQR Decode"/>
 </div>
 
 
