@@ -1,13 +1,24 @@
 #if NET8_0_OR_GREATER
+using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics.X86;
 
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// Runtime CPU properties that the <c>IsSupported</c> flags of the hardware intrinsic classes do not express. net8.0+ only: every consumer is inside a SIMD tier.
+/// Runtime CPU properties that the <c>IsSupported</c> flags of the hardware intrinsic classes do not express. net8.0+ only, since the netstandard builds have no hardware intrinsics to ask.
 /// </summary>
 internal static class HardwareCapabilities
 {
+    /// <summary>
+    /// Whether an instruction backs <see cref="System.Numerics.BitOperations.PopCount(ulong)"/>: x86's popcount, ARM64's or WebAssembly's.
+    /// Elsewhere it is a software routine that a fully optimized loop keeps as a call.
+    /// </summary>
+    internal static bool HasPopCountInstruction
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Popcnt.IsSupported || System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported || OperatingSystem.IsBrowser() || OperatingSystem.IsWasi();
+    }
+
     /// <summary>
     /// PDEP/PEXT are microcoded on AMD before Zen 3 (hundreds of cycles per instruction), which would turn a BMI2 kernel into a large regression there: true only on vendors without that lineage, or AMD family 0x19 (Zen 3) and later.
     /// Implies <see cref="Bmi2.X64.IsSupported"/>, so callers do not repeat that check.

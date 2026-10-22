@@ -269,16 +269,22 @@ internal static partial class ModulePlacer
 
             blackModules += PopCount(x);
 
-            score1 += ScoreRuns64(x) + ScoreRuns64(nx);
-            score3 += MatchFinderRow64(x, nx, startMaskP3);
+            // A dark run and a light run never share a start, so the row's equalities count both colours' runs in one pass.
+            var eqh = ~(x ^ (x >> 1)) & maskN1;
+            var g = eqh & (eqh >> 1);
+            var v5 = g & (g >> 2);
+            score1 += PopCount(v5) + 2 * PopCount(v5 & ~(v5 << 1));
+            // Finder-like windows are rare, and a popcount without the instruction costs a dozen operations, so a row without one skips it.
+            var f = FinderStarts64(x, nx, startMaskP3);
+            if (f != 0)
+            {
+                score3 += 40 * PopCount(f);
+            }
 
             if (y < size - 1)
             {
-                var next = rows[y + 1];
-                var eqv = ~(x ^ next);
-                var eqh = ~(x ^ (x >> 1));
-                var m = eqh & eqv & (eqv >> 1) & maskN1;
-                score2 += 3 * PopCount(m);
+                var eqv = ~(x ^ rows[y + 1]);
+                score2 += 3 * PopCount(eqh & eqv & (eqv >> 1));
             }
 
             if (score1 + score2 + score3 > abortAbove)
@@ -322,8 +328,13 @@ internal static partial class ModulePlacer
         }
         for (var b = 0; b <= size - 11; b++)
         {
-            score3 += 40 * PopCount((nrows[b] & rows[b + 4]) | (rows[b] & nrows[b + 7]));
+            var f = (nrows[b] & rows[b + 4]) | (rows[b] & nrows[b + 7]);
+            if (f == 0)
+            {
+                continue;
+            }
 
+            score3 += 40 * PopCount(f);
             if (score1 + score2 + score3 > abortAbove)
             {
                 return int.MaxValue;
@@ -333,27 +344,14 @@ internal static partial class ModulePlacer
         return score1 + score2 + score3 + CalculateBalanceScore(blackModules, size);
     }
 
-    /// <summary>Penalty-3 row matches in one single-word row, from the shared light run and core (see <see cref="CalculateScorePacked"/>).</summary>
+    /// <summary>Penalty-3 window starts in one single-word row, from the shared light run and core (see <see cref="CalculateScorePacked"/>).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int MatchFinderRow64(ulong x, ulong nx, ulong startMask)
+    private static ulong FinderStarts64(ulong x, ulong nx, ulong startMask)
     {
         var n2 = nx & (nx >> 1);
         var n4 = n2 & (n2 >> 2);
         var core = x & (nx >> 1) & ((x & (x >> 1)) >> 2) & (x >> 4) & (nx >> 5) & (x >> 6);
-        return 40 * PopCount(((n4 & (core >> 4)) | (core & (n4 >> 7))) & startMask);
-    }
-
-    /// <summary>
-    /// Penalty-1 contribution of one color for a single row: sum over runs of length L >= 5 of (3 + (L - 5)). y5 marks every position where 5 consecutive set bits start, so a run of length L contributes popcount L-4 plus 2 per run (isolated via the run's lowest y5 bit), totalling the required L-2.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int ScoreRuns64(ulong x)
-    {
-        var y2 = x & (x >> 1);
-        var y4 = y2 & (y2 >> 2);
-        var y5 = y4 & (x >> 4);
-        var starts = y5 & ~(y5 << 1);
-        return PopCount(y5) + 2 * PopCount(starts);
+        return ((n4 & (core >> 4)) | (core & (n4 >> 7))) & startMask;
     }
 
     /// <summary>
@@ -770,8 +768,12 @@ internal static partial class ModulePlacer
             var nb1 = na1 & (na1 >> 2);
             var k0 = x0 & ShrAcross(n0, n1, 1) & ShrAcross(a0, a1, 2) & ShrAcross(x0, x1, 4) & ShrAcross(n0, n1, 5) & ShrAcross(x0, x1, 6);
             var k1 = x1 & (n1 >> 1) & (a1 >> 2) & (x1 >> 4) & (n1 >> 5) & (x1 >> 6);
-            score += 40 * (PopCount(((nb0 & ShrAcross(k0, k1, 4)) | (k0 & ShrAcross(nb0, nb1, 7))) & s0)
-                + PopCount(((nb1 & (k1 >> 4)) | (k1 & (nb1 >> 7))) & s1));
+            var f0 = ((nb0 & ShrAcross(k0, k1, 4)) | (k0 & ShrAcross(nb0, nb1, 7))) & s0;
+            var f1 = ((nb1 & (k1 >> 4)) | (k1 & (nb1 >> 7))) & s1;
+            if ((f0 | f1) != 0)
+            {
+                score += 40 * (PopCount(f0) + PopCount(f1));
+            }
 
             // Rule 2 with the next row.
             if (y < size - 1)
@@ -848,9 +850,13 @@ internal static partial class ModulePlacer
             var k0 = x0 & ShrAcross(n0, n1, 1) & ShrAcross(a0, a1, 2) & ShrAcross(x0, x1, 4) & ShrAcross(n0, n1, 5) & ShrAcross(x0, x1, 6);
             var k1 = x1 & ShrAcross(n1, n2, 1) & ShrAcross(a1, a2, 2) & ShrAcross(x1, x2, 4) & ShrAcross(n1, n2, 5) & ShrAcross(x1, x2, 6);
             var k2 = x2 & (n2 >> 1) & (a2 >> 2) & (x2 >> 4) & (n2 >> 5) & (x2 >> 6);
-            score += 40 * (PopCount(((nb0 & ShrAcross(k0, k1, 4)) | (k0 & ShrAcross(nb0, nb1, 7))) & s0)
-                + PopCount(((nb1 & ShrAcross(k1, k2, 4)) | (k1 & ShrAcross(nb1, nb2, 7))) & s1)
-                + PopCount(((nb2 & (k2 >> 4)) | (k2 & (nb2 >> 7))) & s2));
+            var f0 = ((nb0 & ShrAcross(k0, k1, 4)) | (k0 & ShrAcross(nb0, nb1, 7))) & s0;
+            var f1 = ((nb1 & ShrAcross(k1, k2, 4)) | (k1 & ShrAcross(nb1, nb2, 7))) & s1;
+            var f2 = ((nb2 & (k2 >> 4)) | (k2 & (nb2 >> 7))) & s2;
+            if ((f0 | f1 | f2) != 0)
+            {
+                score += 40 * (PopCount(f0) + PopCount(f1) + PopCount(f2));
+            }
 
             // Rule 2 with the next row.
             if (y < size - 1)
@@ -913,7 +919,11 @@ internal static partial class ModulePlacer
             for (var b = 0; b <= size - 11; b++)
             {
                 var i = 3 * b;
-                score += 40 * PopCount((words[n + i] & words[r + i + 12]) | (words[r + i] & words[n + i + 21]));
+                var f = (words[n + i] & words[r + i + 12]) | (words[r + i] & words[n + i + 21]);
+                if (f != 0)
+                {
+                    score += 40 * PopCount(f);
+                }
             }
         }
         return score;
@@ -994,14 +1004,16 @@ internal static partial class ModulePlacer
     private static int PopCount(ulong value)
     {
 #if NET8_0_OR_GREATER
-        return System.Numerics.BitOperations.PopCount(value);
-#else
-        // SWAR popcount for targets without System.Numerics.BitOperations.
+        // BitOperations' software popcount stays a call inside the fully optimized scorers. The routine below is inlined instead.
+        if (HardwareCapabilities.HasPopCountInstruction)
+        {
+            return System.Numerics.BitOperations.PopCount(value);
+        }
+#endif
         value -= (value >> 1) & 0x5555555555555555UL;
         value = (value & 0x3333333333333333UL) + ((value >> 2) & 0x3333333333333333UL);
         value = (value + (value >> 4)) & 0x0F0F0F0F0F0F0F0FUL;
         return (int)((value * 0x0101010101010101UL) >> 56);
-#endif
     }
 
     /// <summary>
