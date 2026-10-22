@@ -3,7 +3,10 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+#if NET5_0_OR_GREATER
+// Encoding.Latin1, which the netstandard builds lack.
 using System.Text;
+#endif
 
 using FeatherQR.Internals.BinaryEncoders;
 
@@ -624,39 +627,11 @@ internal ref partial struct QRBinaryEncoder
     /// <returns>Number of bytes written to the buffer.</returns>
     private static int GetUtf8Data(ReadOnlySpan<char> textSpan, bool utf8BOM, Span<byte> buffer)
     {
-        var offset = 0;
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        if (utf8BOM)
-        {
-            var preamble = Encoding.UTF8.GetPreamble();
-            preamble.CopyTo(buffer);
-            offset += preamble.Length;
+        if (!utf8BOM)
+            return CharacterSets.GetUtf8Bytes(textSpan, buffer);
 
-            return offset + Encoding.UTF8.GetBytes(textSpan, buffer.Slice(offset));
-        }
-        else
-        {
-            return Encoding.UTF8.GetBytes(textSpan, buffer);
-        }
-#else
-        if (utf8BOM)
-        {
-            var preamble = Encoding.UTF8.GetPreamble();
-            preamble.CopyTo(buffer);
-            offset += preamble.Length;
-
-            var input = textSpan.ToString();
-            ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
-            utf8bytes.CopyTo(buffer.Slice(offset));
-            return offset + utf8bytes.Length;
-        }
-        else
-        {
-            var input = textSpan.ToString();
-            ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
-            utf8bytes.CopyTo(buffer);
-            return utf8bytes.Length;
-        }
-#endif
+        var bom = CharacterSets.Utf8Bom;
+        bom.CopyTo(buffer);
+        return bom.Length + CharacterSets.GetUtf8Bytes(textSpan, buffer.Slice(bom.Length));
     }
 }

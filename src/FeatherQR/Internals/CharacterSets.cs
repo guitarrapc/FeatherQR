@@ -1,9 +1,10 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// Character-class predicates and alphanumeric encoding values shared by all QR symbologies.
+/// Character-class predicates, alphanumeric encoding values and the UTF-8 transcode shared by all QR symbologies.
 /// The Numeric and Alphanumeric alphabets are defined identically by ISO/IEC 18004 (Standard QR, Micro QR) and ISO/IEC 23941 (rMQR).
 /// </summary>
 internal static class CharacterSets
@@ -15,6 +16,36 @@ internal static class CharacterSets
     /// <returns>True if the character is a digit (0-9).</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNumeric(char c) => c >= '0' && c <= '9';
+
+    /// <summary>The UTF-8 byte order mark. <see cref="Encoding.GetPreamble"/> returns a new array on every call.</summary>
+    internal static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
+
+    /// <summary>
+    /// Writes the UTF-8 of <paramref name="text"/> to <paramref name="destination"/>, which must hold it, and returns its length.
+    /// Transcodes as <see cref="Encoding.UTF8"/> does, lone surrogates replaced, and allocates nothing on any build.
+    /// </summary>
+    internal static int GetUtf8Bytes(ReadOnlySpan<char> text, Span<byte> destination)
+    {
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+        return Encoding.UTF8.GetBytes(text, destination);
+#else
+        // netstandard2.0 has no span overloads, and the pointer overloads would be unsafe code. The array overloads over rented arrays allocate nothing.
+        var chars = System.Buffers.ArrayPool<char>.Shared.Rent(Math.Max(text.Length, 1));
+        var bytes = System.Buffers.ArrayPool<byte>.Shared.Rent(Math.Max(destination.Length, 1));
+        try
+        {
+            text.CopyTo(chars);
+            var length = Encoding.UTF8.GetBytes(chars, 0, text.Length, bytes, 0);
+            bytes.AsSpan(0, length).CopyTo(destination);
+            return length;
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(bytes);
+            System.Buffers.ArrayPool<char>.Shared.Return(chars);
+        }
+#endif
+    }
 
     /// <summary>
     /// ASCII lookup table for alphanumeric character validation and encoding.

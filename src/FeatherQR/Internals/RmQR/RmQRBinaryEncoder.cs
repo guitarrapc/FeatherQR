@@ -3,7 +3,6 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -396,7 +395,7 @@ internal static partial class RmQRBinaryEncoder
         if (byteCount <= StackByteBudget)
         {
             Span<byte> utf8 = stackalloc byte[StackByteBudget];
-            var length = GetUtf8Bytes(text, utf8);
+            var length = CharacterSets.GetUtf8Bytes(text, utf8);
             WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, utf8.Slice(0, length));
         }
         else
@@ -405,7 +404,7 @@ internal static partial class RmQRBinaryEncoder
             var rented = ArrayPool<byte>.Shared.Rent(maxByteCount);
             try
             {
-                var length = GetUtf8Bytes(text, rented);
+                var length = CharacterSets.GetUtf8Bytes(text, rented);
                 WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, rented.AsSpan(0, length));
             }
             finally
@@ -435,19 +434,6 @@ internal static partial class RmQRBinaryEncoder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteEciHeader(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, EciMode eciMode)
         => Append(ref dest, ref acc, ref accBits, ref bytePos, (ModeEci << EciDesignatorBits) | (int)eciMode, EciHeaderBits);
-
-    private static int GetUtf8Bytes(ReadOnlySpan<char> text, Span<byte> destination)
-    {
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        return Encoding.UTF8.GetBytes(text, destination);
-#else
-        // netstandard2.0 has no span overload, so this path is the documented
-        // exception to the allocation-free contract on that TFM.
-        var bytes = Encoding.UTF8.GetBytes(text.ToString());
-        bytes.CopyTo(destination);
-        return bytes.Length;
-#endif
-    }
 
     // ---------------------------------------------------------------
     // Group / value helpers

@@ -118,7 +118,7 @@ internal static partial class RmQRBinaryEncoder
     {
         if (expectedBytes <= scratch.Length)
         {
-            var length = GetUtf8Bytes(chars, scratch);
+            var length = CharacterSets.GetUtf8Bytes(chars, scratch);
             if (length != expectedBytes)
                 throw new ArgumentException($"Segment plan budgeted {expectedBytes} UTF-8 bytes but the run encodes to {length}.");
             WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, scratch.Slice(0, length));
@@ -129,7 +129,7 @@ internal static partial class RmQRBinaryEncoder
         var rented = ArrayPool<byte>.Shared.Rent(chars.Length * 3);
         try
         {
-            var length = GetUtf8Bytes(chars, rented);
+            var length = CharacterSets.GetUtf8Bytes(chars, rented);
             if (length != expectedBytes)
                 throw new ArgumentException($"Segment plan budgeted {expectedBytes} UTF-8 bytes but the run encodes to {length}.");
             WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, rented.AsSpan(0, length));

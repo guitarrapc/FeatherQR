@@ -68,11 +68,11 @@ public class NetStandardBuildParityTest
         // q = 33 both clear it.
         var (texts, quietZones, eccLevel, host) = symbology switch
         {
-            "QR" => (new[] { "HELLO WORLD", new string('A', 40), "https://example.com/item?id=123456789012345678901234567890", "HELLO WORLD 1234567890123456789012345678901234567890", new string('7', 300), new string('z', 500), new string('z', 1200) },
+            "QR" => (new[] { "HELLO WORLD", new string('A', 40), "https://example.com/item?id=123456789012345678901234567890", "HELLO WORLD 1234567890123456789012345678901234567890", new string('7', 300), new string('z', 500), new string('z', 1200), Utf8Text },
                 new[] { 0, 1, 2, 4, 7, 16, 17, 25, 32, 33 }, (int)QREccLevel.M, (Func<string, int, bool, byte[]>)HostQR),
-            "MicroQR" => (new[] { "12345", "HELLO", "a1234567890", "0123456789012345678901234567890" },
+            "MicroQR" => (new[] { "12345", "HELLO", "a1234567890", "0123456789012345678901234567890", MicroQRUtf8Text },
                 new[] { 0, 1, 2, 4, 5, 8, 9, 16, 17, 25, 32, 33 }, (int)MicroQREccLevel.L, HostMicroQR),
-            _ => (new[] { "HELLO WORLD", "1234567890123", "HELLO WORLD 1234567890123456789012345678901234567890", new string('k', 120) },
+            _ => (new[] { "HELLO WORLD", "1234567890123", "HELLO WORLD 1234567890123456789012345678901234567890", new string('k', 120), Utf8Text },
                 new[] { 0, 1, 2, 4, 5, 8, 9, 16, 17, 32, 33 }, (int)RmQREccLevel.M, (Func<string, int, bool, byte[]>)HostRmQR),
         };
         await Assert.That(texts.Count(text => host(text, 0, true).Length < host(text, 0, false).Length)).IsGreaterThan(0)
@@ -113,6 +113,53 @@ public class NetStandardBuildParityTest
         }
     }
 
+    // Outside ISO-8859-1, so every symbology writes it as UTF-8: two-, three- and four-byte sequences, the last a surrogate pair.
+    private const string Utf8Text = "Zürich こんにちは 🎉";
+    private const string MicroQRUtf8Text = "日本";
+
+#if !DEBUG
+    /// <summary>
+    /// UTF-8 text through each netstandard build's span API allocates nothing once warm, with and without a byte order mark for Standard QR, and writes this host's matrix.
+    /// netstandard2.0 has no span overloads on <see cref="System.Text.Encoding"/>, so it is the build where a transcode could allocate.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Cases))]
+    public async Task SpanCreate_Utf8_AllocatesNothing(string targetFramework, string symbology)
+    {
+        var (build, path) = await LoadBuild(targetFramework);
+        var create = BindSpanCreate(build, symbology, path);
+        var optionsType = build.GetType($"FeatherQR.{symbology}CodeGeneratorOptions", throwOnError: true)!;
+
+        foreach (var bom in symbology == "QR" ? new[] { false, true } : [false])
+        {
+            var text = symbology == "MicroQR" ? MicroQRUtf8Text : Utf8Text;
+            var expected = symbology switch
+            {
+                "QR" => HostQR(text, bom),
+                "MicroQR" => HostMicroQR(text),
+                _ => HostRmQR(text),
+            };
+            var options = Activator.CreateInstance(optionsType)!;
+            if (bom)
+                optionsType.GetProperty("Utf8Bom")!.SetValue(options, true);
+            var eccLevel = symbology switch { "QR" => (int)QREccLevel.M, "MicroQR" => (int)MicroQREccLevel.L, _ => (int)RmQREccLevel.M };
+            var destination = new byte[expected.Length];
+
+            // Warm up the JIT, the array pool and the lazily built tables.
+            for (var i = 0; i < 3; i++)
+                create(text, eccLevel, destination, options);
+
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            var written = create(text, eccLevel, destination, options);
+            var after = GC.GetAllocatedBytesForCurrentThread();
+
+            var context = $"{targetFramework} {symbology}{(bom ? " with a byte order mark" : "")}";
+            await Assert.That(destination.AsSpan(0, written).SequenceEqual(expected)).IsTrue().Because($"{context}: the matrix this host's build writes");
+            await Assert.That(after - before).IsEqualTo(0).Because($"{context}: allocated bytes once warm");
+        }
+    }
+#endif
+
     /// <summary>The core's build for <paramref name="targetFramework"/>, loaded once into a load context of its own. A stale build skips the case.</summary>
     private static async Task<(Assembly Build, string Path)> LoadBuild(string targetFramework)
     {
@@ -128,6 +175,28 @@ public class NetStandardBuildParityTest
         var options = new QRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = optimal ? QRSegmentation.Optimal : QRSegmentation.Single };
         var matrix = new byte[Sizing.Required(text.AsSpan(), QREccLevel.M, options).BufferSize];
         QRCodeGenerator.Create(text.AsSpan(), QREccLevel.M, matrix, options);
+        return matrix;
+    }
+
+    private static byte[] HostQR(string text, bool utf8Bom)
+    {
+        var options = new QRCodeGeneratorOptions { Utf8Bom = utf8Bom };
+        var matrix = new byte[Sizing.Required(text.AsSpan(), QREccLevel.M, options).BufferSize];
+        QRCodeGenerator.Create(text.AsSpan(), QREccLevel.M, matrix, options);
+        return matrix;
+    }
+
+    private static byte[] HostMicroQR(string text)
+    {
+        var matrix = new byte[Sizing.Required(text.AsSpan(), MicroQREccLevel.L).BufferSize];
+        MicroQRCodeGenerator.Create(text.AsSpan(), MicroQREccLevel.L, matrix);
+        return matrix;
+    }
+
+    private static byte[] HostRmQR(string text)
+    {
+        var matrix = new byte[Sizing.Required(text.AsSpan(), RmQREccLevel.M).BufferSize];
+        RmQRCodeGenerator.Create(text.AsSpan(), RmQREccLevel.M, matrix);
         return matrix;
     }
 
