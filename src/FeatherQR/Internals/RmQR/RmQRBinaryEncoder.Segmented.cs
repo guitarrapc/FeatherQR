@@ -49,7 +49,7 @@ internal static partial class RmQRBinaryEncoder
 
         // Hoisted out of the loop on purpose: a stackalloc inside it would accumulate per iteration.
         // Byte-mode capacity tops out at 150 bytes, so any run of a plan that passed the bit check above transcodes into this budget.
-        Span<byte> utf8 = stackalloc byte[StackByteBudget];
+        Span<byte> utf8 = stackalloc byte[Utf8StackBytes];
         var expectedStart = 0;
 
         // The count widths once for the version, not a mode lookup per run: a Kanji plan of interleaved text has a run every few characters.

@@ -45,13 +45,6 @@ internal static class CharacterSets
 #endif
     }
 
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-    // An Encoder keeps its replacement fallback from call to call, where Encoding.UTF8 allocates one in each call that meets a lone surrogate.
-    // A thread's own, since an Encoder is not safe to share.
-    [ThreadStatic]
-    private static Encoder? utf8Counter;
-#endif
-
     /// <summary>
     /// The length of the UTF-8 of <paramref name="text"/>, counted as <see cref="Encoding.UTF8"/> counts it, a lone surrogate as the three bytes
     /// of U+FFFD. Allocates nothing once this thread has counted a lone surrogate.
@@ -59,7 +52,8 @@ internal static class CharacterSets
     internal static int GetUtf8ByteCount(ReadOnlySpan<char> text)
     {
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        return (utf8Counter ??= Encoding.UTF8.GetEncoder()).GetByteCount(text, flush: true);
+        // Encoding.UTF8 allocates a fallback buffer in each call that meets a lone surrogate. This one keeps the thread's.
+        return ThreadBufferFallback.Utf8.GetByteCount(text);
 #else
         // netstandard2.0's Encoder has no span overloads, the pointer overloads would be unsafe code, and a pooled copy counted slower on
         // non-ASCII text, so the count is the one EncodeUtf8 writes. Refs, not the span indexer, which is slow on the portable span
@@ -147,7 +141,7 @@ internal static class CharacterSets
                 }
                 else
                 {
-                    // lone surrogate -> U+FFFD, matching Encoding.UTF8 replacement
+                    // A lone surrogate becomes U+FFFD, as Encoding.UTF8 writes it.
                     utf8[n++] = 0xEF;
                     utf8[n++] = 0xBF;
                     utf8[n++] = 0xBD;
@@ -213,7 +207,7 @@ internal static class CharacterSets
                 }
                 else
                 {
-                    // lone surrogate -> U+FFFD, matching Encoding.UTF8 replacement
+                    // A lone surrogate becomes U+FFFD, as Encoding.UTF8 writes it.
                     Unsafe.Add(ref dst, n++) = 0xEF;
                     Unsafe.Add(ref dst, n++) = 0xBF;
                     Unsafe.Add(ref dst, n++) = 0xBD;

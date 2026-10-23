@@ -42,6 +42,14 @@ internal static partial class RmQRBinaryEncoder
     // rMQR byte-mode capacity tops out at 150 bytes (R17x139-M), so any content that passed version selection transcodes into this budget (the branch is on the analyzer's exact UTF-8 byte count, not a per-char worst case). The pool path only exists for callers that bypass selection.
     private const int StackByteBudget = 160;
 
+#if NET8_0_OR_GREATER
+    private const int Utf8StackBytes = StackByteBudget;
+#else
+    // The netstandard builds' transcode reads through refs only into a destination of three bytes a char, and a run within the budget
+    // holds no more chars than bytes.
+    private const int Utf8StackBytes = StackByteBudget * 3;
+#endif
+
     /// <summary>
     /// Writes the data codewords for <paramref name="text"/> into <paramref name="destination"/> and returns the number of codewords written (always the version × ECC data codeword count).
     /// The caller guarantees the content fits (see <see cref="RmQRVersionSelector"/>).
@@ -394,7 +402,7 @@ internal static partial class RmQRBinaryEncoder
 
         if (byteCount <= StackByteBudget)
         {
-            Span<byte> utf8 = stackalloc byte[StackByteBudget];
+            Span<byte> utf8 = stackalloc byte[Utf8StackBytes];
             var length = CharacterSets.GetUtf8Bytes(text, utf8);
             WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, utf8.Slice(0, length));
         }

@@ -7,8 +7,8 @@ namespace FeatherQR.Tests;
 /// same symbol.
 /// </summary>
 /// <remarks>
-/// The allocation checks are Release only, and run alone, as <see cref="DecodeAllocationTest"/>'s do. The netstandard builds are held to
-/// the same by <see cref="NetStandardBuildParityTest"/>.
+/// The allocation checks are Release only, and run alone, as <see cref="DecodeAllocationTest"/>'s do. <see cref="NetStandardBuildParityTest"/>
+/// holds the netstandard builds to no allocation on both kinds of text, and reads a forced ISO-8859-1 back there as each char's low byte.
 /// </remarks>
 [NotInParallel]
 public class ReplacedCharacterAllocationTest
@@ -42,6 +42,8 @@ public class ReplacedCharacterAllocationTest
         // Past the stack budget for one run, so the run transcodes into a pooled buffer
         yield return () => new("a long run, Single", string.Concat(Enumerable.Repeat("こんにちは\uD800", 20)), new() { Segmentation = QRSegmentation.Single }, string.Concat(Enumerable.Repeat("こんにちは\uFFFD", 20)));
         yield return () => new("forced ISO-8859-1", "aあb\uD800", new() { EciMode = EciMode.Iso8859_1 }, "a?b?");
+        // A best-fit Latin-1 encoder writes 'ž' as 'z' and 'ｑ' as 'q', but the Structured Append parity counts '?' for each.
+        yield return () => new("forced ISO-8859-1, letters with an ASCII look-alike", "ažbｑ", new() { EciMode = EciMode.Iso8859_1 }, "a?b?");
         yield return () => new("forced ISO-8859-1, a long run", new string('あ', 300), new() { EciMode = EciMode.Iso8859_1 }, new string('?', 300));
     }
 
@@ -77,6 +79,39 @@ public class ReplacedCharacterAllocationTest
             .Because("bytes the encode allocates once warm");
 #endif
     }
+
+#if !DEBUG
+    /// <summary>
+    /// The fallback buffers kept for replaced characters cost nothing to text that holds none, even on a thread's first sizing and encode.
+    /// </summary>
+    /// <remarks>
+    /// The calls on this thread first build the process's lookup tables, so the new thread's calls meet nothing built once a process.
+    /// Its first calls are measured, since a cost a thread pays once would not show in later ones.
+    /// </remarks>
+    [Test]
+    [Arguments("hello world")] // Byte, no ECI
+    [Arguments("Zürich")] // Byte, ISO-8859-1
+    [Arguments("こんにちは")] // Byte, UTF-8
+    [Arguments("a😀b")] // Byte, UTF-8, a surrogate pair
+    public async Task StandardQR_AThreadsFirstEncodeAllocatesNothingWithoutAReplacedCharacter(string text)
+    {
+        var size = Sizing.Required(text, QREccLevel.M, default(QRCodeGeneratorOptions));
+        var matrix = new byte[size.BufferSize];
+        QRCodeGenerator.Create(text, QREccLevel.M, matrix);
+
+        var allocated = -1L;
+        var thread = new Thread(() =>
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out _);
+            QRCodeGenerator.Create(text, QREccLevel.M, matrix);
+            allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        });
+        thread.Start();
+        thread.Join();
+        await Assert.That(allocated).IsEqualTo(0L);
+    }
+#endif
 
     [Test]
     [MethodDataSource(nameof(MicroQRCases))]

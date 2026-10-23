@@ -181,7 +181,7 @@ public class DecodeAllocationTest
 
     /// <summary>
     /// A Byte segment read as UTF-8 that UTF-8 does not hold, under ECI 26 or behind a byte order mark: the reader writes a U+FFFD for each
-    /// ill-formed part, where the runtime's decoder would allocate in each call. No encoder here writes one, so the stream is written by hand.
+    /// ill-formed part, where a count of the chars by <see cref="System.Text.Encoding.UTF8"/> would allocate in each call. No encoder here writes one, so the stream is written by hand.
     /// </summary>
     [Test]
     [Arguments(true, new byte[] { 0x61, 0xC3, 0x28, 0xED, 0xA0, 0x80, 0xFF, 0xE3, 0x81 })]

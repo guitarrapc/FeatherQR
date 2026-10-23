@@ -411,8 +411,8 @@ internal static class SegmentDecoders
     /// <see cref="OperationStatus.InvalidData"/>.
     /// </summary>
     /// <remarks>
-    /// The runtime's decoder allocates in each call that meets bytes UTF-8 does not hold, and .NET Framework's replaces other spans of them,
-    /// so the netstandard builds read UTF-8 here. A destination that runs out returns <see cref="OperationStatus.DestinationTooSmall"/>.
+    /// The runtime's count of chars allocates in each call that meets bytes UTF-8 does not hold, and .NET Framework's decoder allocates too
+    /// and replaces other spans of them, so the netstandard builds read UTF-8 here. A destination that runs out returns <see cref="OperationStatus.DestinationTooSmall"/>.
     /// </remarks>
     private static OperationStatus DecodeUtf8(ReadOnlySpan<byte> source, Span<char> destination, out int charsWritten, bool replaceInvalidSequences)
     {

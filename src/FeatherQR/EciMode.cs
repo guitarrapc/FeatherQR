@@ -61,6 +61,7 @@ public enum EciMode
     /// <remarks>
     /// The ECI header costs 12 bits in Standard QR and 11 in rMQR.
     /// Emoji, CJK and Cyrillic cannot be encoded. Use <see cref="Utf8"/> for those.
+    /// Asked for over such text, Standard QR writes each UTF-16 code unit outside ISO-8859-1, two for an emoji, as '?' in apps that target .NET 8 or later, and as its low byte in apps that load the netstandard builds, such as those for .NET Framework, .NET Core, .NET 5 to 7, Xamarin and Unity, so the symbol differs between them. rMQR refuses such text with an <see cref="System.ArgumentException"/>.
     /// </remarks>
     Iso8859_1 = 3,
     /// <summary>

@@ -3,10 +3,6 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if NET5_0_OR_GREATER
-// Encoding.Latin1, which the netstandard builds lack.
-using System.Text;
-#endif
 
 using FeatherQR.Internals.BinaryEncoders;
 
@@ -273,7 +269,7 @@ internal ref partial struct QRBinaryEncoder
     {
         if (eci is EciMode.Default or EciMode.Iso8859_1)
         {
-            // ISO-8859-1 is a pure narrowing cast for chars <= 0xFF (validated upstream by TextAnalyzer)
+            // Default is declared only over ASCII, whose Latin-1 bytes are the same.
             WriteLatin1Data(textSpan);
             return;
         }
@@ -544,28 +540,21 @@ internal ref partial struct QRBinaryEncoder
             KanjiCells.ThrowCharacterWithoutCell(chars);
     }
 
-#if NET5_0_OR_GREATER
-    // An Encoder keeps its replacement fallback from call to call, where Encoding.Latin1 allocates one in each call that meets a char above
-    // U+00FF, which text forced to ISO-8859-1 can hold. A thread's own, since an Encoder is not safe to share.
-    [ThreadStatic]
-    private static Encoder? latin1Encoder;
-#endif
-
     /// <summary>
     /// Writes ISO-8859-1 (Latin-1) byte data directly from chars.
     /// </summary>
     /// <remarks>
-    /// A char above U+00FF reaches it only under a forced ISO-8859-1. .NET 8 and later write the encoder's replacement byte for it, and the netstandard builds its low byte.
+    /// A char above U+00FF reaches it only under a forced ISO-8859-1. .NET 8 and later write '?' for it, which the Structured Append parity counts, and the netstandard builds its low byte.
     /// </remarks>
     private void WriteLatin1Data(ReadOnlySpan<char> textSpan)
     {
-#if NET5_0_OR_GREATER
-        // The encoder narrows chars with SIMD, then bulk-write 8 bytes per store
-        var encoder = latin1Encoder ??= Encoding.Latin1.GetEncoder();
+#if NET8_0_OR_GREATER
+        // The runtime narrows chars with SIMD, and WriteByteData then writes 8 bytes a store. It avoids Encoding.Latin1, which allocates in
+        // each call that meets a char above U+00FF and writes a letter with an ASCII look-alike as that letter.
         if (textSpan.Length <= StackAllocThreshold)
         {
             Span<byte> latin1 = stackalloc byte[textSpan.Length];
-            encoder.GetBytes(textSpan, latin1, flush: true);
+            ThreadBufferFallback.Latin1.GetBytes(textSpan, latin1);
             WriteByteData(latin1);
         }
         else
@@ -573,7 +562,7 @@ internal ref partial struct QRBinaryEncoder
             var buffer = ArrayPool<byte>.Shared.Rent(textSpan.Length);
             try
             {
-                var bytesWritten = encoder.GetBytes(textSpan, buffer, flush: true);
+                var bytesWritten = ThreadBufferFallback.Latin1.GetBytes(textSpan, buffer);
                 WriteByteData(buffer.AsSpan(0, bytesWritten));
             }
             finally

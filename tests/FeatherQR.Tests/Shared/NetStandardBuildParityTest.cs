@@ -57,6 +57,77 @@ public class NetStandardBuildParityTest
             .Because($"{targetFramework}: only the netstandard2.0 build keeps the pooled core copied into the cleared destination; the others move the core in place");
     }
 
+    /// <summary>
+    /// The netstandard builds read a Byte segment's UTF-8 with their own decoder, since their runtime's count of chars allocates in each call
+    /// that meets a bad byte, and so does .NET Framework's decode, which replaces an encoded surrogate with two U+FFFD where the host
+    /// writes three. The text checks here load the builds on .NET 8 and 10, where a runtime decode straight into the destination, with no
+    /// count first, reads as the host's build and allocates nothing, so those checks would pass on it. What tells the two apart is the
+    /// segment reader's call to the build's own decoder, no runtime encoding or decoder reached from the reader, and no runtime encoding,
+    /// encoder or decoder kept beside them.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Frameworks))]
+    public async Task Utf8Decode_IsTheBuildsOwn(string targetFramework)
+    {
+        var (build, _) = await LoadBuild(targetFramework);
+        var decoders = build.GetType("FeatherQR.Internals.BinaryDecoders.SegmentDecoders", throwOnError: true)!;
+        var reader = decoders.GetMethod("DecodeBytePayload", BindingFlags.Public | BindingFlags.Static)!;
+        var own = decoders.GetMethods(BindingFlags.NonPublic | BindingFlags.Static).Where(m => m.Name == "DecodeUtf8").ToArray();
+        var runtimeCalls = Reached(own.Append(reader), build)
+            .Where(m => typeof(System.Text.Encoding).IsAssignableFrom(m.DeclaringType) || typeof(System.Text.Decoder).IsAssignableFrom(m.DeclaringType))
+            .Select(m => $"{m.DeclaringType!.Name}.{m.Name}");
+        var keptDecoders = decoders.GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)
+            .Where(f => typeof(System.Text.Encoding).IsAssignableFrom(f.FieldType) || typeof(System.Text.Encoder).IsAssignableFrom(f.FieldType) || typeof(System.Text.Decoder).IsAssignableFrom(f.FieldType))
+            .Select(f => f.Name);
+
+        await Assert.That(Callees(reader).Select(m => m.Name)).Contains("DecodeUtf8").Because($"{targetFramework}: the segment reader decodes UTF-8 with the build's own loop");
+        await Assert.That(string.Join(",", runtimeCalls)).IsEmpty().Because($"{targetFramework}: nothing the reader reaches in the build calls a runtime encoding or decoder");
+        await Assert.That(string.Join(",", keptDecoders)).IsEmpty().Because($"{targetFramework}: no runtime encoding, encoder or decoder is kept for the reader");
+    }
+
+    // Walks only the build's own methods. A runtime method is what the walk looks for, so its body is never read.
+    private static IEnumerable<MethodBase> Reached(IEnumerable<MethodBase> roots, Assembly build)
+    {
+        var seen = new HashSet<MethodBase>(roots);
+        var pending = new Queue<MethodBase>(seen);
+        while (pending.TryDequeue(out var method))
+        {
+            foreach (var callee in Callees(method))
+            {
+                yield return callee;
+                if (callee.DeclaringType?.Assembly == build && seen.Add(callee))
+                    pending.Enqueue(callee);
+            }
+        }
+    }
+
+    // This scans bytes and does not decode IL, so a byte that only looks like a call can add a method. It cannot drop a real one: each
+    // token resolves in its method's generic context, and a delegate's target is read through ldftn and ldvirtftn.
+    private static IEnumerable<MethodBase> Callees(MethodBase method)
+    {
+        var il = method.GetMethodBody()?.GetILAsByteArray() ?? [];
+        var typeArguments = method.DeclaringType is { IsGenericType: true } type ? type.GetGenericArguments() : null;
+        var methodArguments = method.IsGenericMethod ? method.GetGenericArguments() : null;
+        for (var i = 0; i + 5 <= il.Length; i++)
+        {
+            var at = il[i] == OpCodes.Call.Value || il[i] == OpCodes.Callvirt.Value || il[i] == OpCodes.Newobj.Value ? i + 1
+                : il[i] == 0xFE && i + 6 <= il.Length && (il[i + 1] == (byte)OpCodes.Ldftn.Value || il[i + 1] == (byte)OpCodes.Ldvirtftn.Value) ? i + 2
+                : -1;
+            if (at < 0)
+                continue;
+            MethodBase? callee = null;
+            try
+            {
+                callee = method.Module.ResolveMethod(BitConverter.ToInt32(il, at), typeArguments, methodArguments);
+            }
+            catch (Exception e) when (e is ArgumentException or BadImageFormatException)
+            {
+            }
+            if (callee is not null)
+                yield return callee;
+        }
+    }
+
     [Test]
     [MethodDataSource(nameof(Cases))]
     public async Task SpanCreate_DirtyDestination_MatchesThisHostsBuild(string targetFramework, string symbology)
@@ -123,9 +194,11 @@ public class NetStandardBuildParityTest
 
     /// <summary>
     /// A text and the options that steer it onto one path. A netstandard build has code of its own for the UTF-8 transcode both ways, since
-    /// netstandard2.0's <see cref="System.Text.Encoding"/> has no span overloads, for Standard QR's pooled quiet-zone and FNC1 cores on
-    /// netstandard2.0, and for the scalar form of every vectorized step. Kanji, ECI, a pinned mask and version 40 are paths of their own on
-    /// every build.
+    /// its runtime's <see cref="System.Text.Encoding.UTF8"/> allocates in each call that meets a lone surrogate and in each count of chars
+    /// that meets a bad byte, .NET Framework's decoder allocates and replaces bad bytes otherwise, and netstandard2.0's
+    /// <see cref="System.Text.Encoding"/> has no span overloads. netstandard2.0 counts UTF-8 with code of its own too. A netstandard build
+    /// also has code of its own for Standard QR's pooled quiet-zone and FNC1 cores on netstandard2.0, and for the scalar form of every
+    /// vectorized step. Kanji, ECI, a pinned mask and version 40 are paths of their own on every build.
     /// </summary>
     private sealed record SpanCase(string Name, string Symbology, string Text, string EccLevel, params (string Property, object Value)[] Options)
     {
@@ -146,8 +219,8 @@ public class NetStandardBuildParityTest
         new("QR UTF-8 long", "QR", LongUtf8Text, "M", ("Segmentation", "Optimal")),
         new("QR UTF-8 long Single", "QR", LongUtf8Text, "M", ("Segmentation", "Single")),
         new("QR UTF-8 long with a byte order mark", "QR", LongUtf8Text, "M", ("Utf8Bom", true)),
-        // The netstandard builds count and write UTF-8 with loops of their own, which must read a lone surrogate, a reversed pair and a lone
-        // high surrogate at the end as the .NET builds' encoders do.
+        // netstandard2.0 counts UTF-8 with a loop of its own, and both netstandard builds write it with one. Each must read a lone surrogate,
+        // a reversed pair and a lone high surrogate at the end as the .NET builds' encoders do.
         new("QR lone surrogates", "QR", "a\uD800b\uDC00c\uD83D", "M") { Decoded = "a\uFFFDb\uFFFDc\uFFFD" },
         new("QR reversed pair", "QR", "\uDE00\uD83Dx", "M") { Decoded = "\uFFFD\uFFFDx" },
         new("QR lone surrogate Single", "QR", "a\uD800b", "M", ("Segmentation", "Single")) { Decoded = "a\uFFFDb" },
@@ -182,6 +255,13 @@ public class NetStandardBuildParityTest
         new("MicroQR mask 2", "MicroQR", "12345", "L", ("MaskPattern", 2)),
         new("RmQR ASCII", "RmQR", "HELLO WORLD", "M"),
         new("RmQR UTF-8", "RmQR", Utf8Text, "M"),
+        // These runs hold more chars than a third of rMQR's 160-byte budget, and the netstandard builds transcode them through refs into a
+        // buffer of three bytes a char. The indexer loop would write the same bytes, so these hold the refs' output on long runs at each
+        // site, and the buffer's size only its speed.
+        new("RmQR UTF-8 long", "RmQR", "12345678901234567890" + new string('k', 80) + "あ", "M"),
+        new("RmQR UTF-8 long Single", "RmQR", new string('k', 100) + "あ", "M", ("Segmentation", "Single")),
+        new("RmQR UTF-8 long FNC1", "RmQR", "0109521234543213\u001d10" + new string('k', 80) + "あ", "M", ("Fnc1", Fnc1First())),
+        new("RmQR UTF-8 long FNC1 Single", "RmQR", "0109521234543213\u001d10" + new string('k', 80) + "あ", "M", ("Fnc1", Fnc1First()), ("Segmentation", "Single")),
         new("RmQR lone surrogates", "RmQR", "a\uD800b\uDC00c", "M") { Decoded = "a\uFFFDb\uFFFDc" },
         new("RmQR lone surrogate Single", "RmQR", "a\uD800b", "M", ("Segmentation", "Single")) { Decoded = "a\uFFFDb" },
         new("RmQR lone surrogate FNC1", "RmQR", "0109521234543213\u001d10AB\uD800C", "M", ("Fnc1", Fnc1First())) { Decoded = "0109521234543213\u001d10AB\uFFFDC" },
@@ -253,6 +333,83 @@ public class NetStandardBuildParityTest
 #endif
     }
 
+    // The host's build writes Latin-1 and counts UTF-8 through encodings of its own, and netstandard2.1 counts UTF-8 through one.
+    public static IEnumerable<Func<string>> ProviderFrameworks() => [() => $"net{Environment.Version.Major}.0", () => "netstandard2.1"];
+
+    /// <summary>
+    /// A build's encodings do not follow an encoding provider the process registers. One that answers ISO-8859-1 and UTF-8 with ASCII
+    /// answers on this thread alone, and a fresh copy of the build is loaded, so its encodings are made under it here. Through ASCII the
+    /// Latin-1 writer would write 'ü' as '?', and the UTF-8 count would throw, since ASCII cannot hold the U+FFFD it replaces with.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(ProviderFrameworks))]
+    public async Task Encodings_IgnoreTheProcessEncodingProviders(string targetFramework)
+    {
+        var path = CoreAssemblyDependencyTest.FindCoreBuild(targetFramework);
+        await Assert.That(path).IsNotNull().Because($"no FeatherQR.dll for {targetFramework} under src/FeatherQR/bin; build the solution first");
+        CoreAssemblyDependencyTest.SkipIfStale(path!);
+        AsciiProvider.RegisterOnce();
+
+        EncodeOutcome latin1, utf8;
+        AsciiProvider.OnThisThread = true;
+        try
+        {
+            var build = new AssemblyLoadContext($"FeatherQR {targetFramework} under a provider").LoadFromStream(new MemoryStream(File.ReadAllBytes(path!)));
+            latin1 = Encode(build, path!, new SpanCase("forced ISO-8859-1", "QR", "Zürich", "M", ("EciMode", "Iso8859_1")));
+            utf8 = Encode(build, path!, new SpanCase("UTF-8", "QR", "Zürich こんにちは", "M"));
+        }
+        finally
+        {
+            AsciiProvider.OnThisThread = false;
+        }
+
+        await Assert.That(latin1.Text).IsEqualTo("Zürich").Because($"{targetFramework}: the Latin-1 writer's encoding is the runtime's ISO-8859-1");
+        await Assert.That(utf8.Text).IsEqualTo("Zürich こんにちは").Because($"{targetFramework}: the UTF-8 count's encoding is the runtime's UTF-8");
+    }
+
+    /// <summary>Answers ISO-8859-1 and UTF-8 with ASCII on a thread that asks it to, and leaves every other thread to the runtime.</summary>
+    private sealed class AsciiProvider : System.Text.EncodingProvider
+    {
+        [ThreadStatic]
+        internal static bool OnThisThread;
+
+        private static int registered;
+
+        internal static void RegisterOnce()
+        {
+            if (Interlocked.Exchange(ref registered, 1) == 0)
+                System.Text.Encoding.RegisterProvider(new AsciiProvider());
+        }
+
+        public override System.Text.Encoding? GetEncoding(int codepage) => OnThisThread && codepage is 28591 or 65001 ? System.Text.Encoding.ASCII : null;
+
+        public override System.Text.Encoding? GetEncoding(string name) => null;
+    }
+
+    /// <summary>
+    /// Under a forced ISO-8859-1 the netstandard builds write a char above U+00FF as its low byte, where .NET 8 and later write '?'
+    /// (<see cref="ReplacedCharacterAllocationTest"/>). The symbols differ, so this case is not held to the host's matrix as
+    /// the span cases are, but to what its own build reads back.
+    /// </summary>
+    /// <remarks>Runs alone, as <see cref="DecodeAllocationTest"/> does: a test running beside it can empty the array pool's shared stacks.</remarks>
+    [Test]
+    [NotInParallel]
+    [MethodDataSource(nameof(Frameworks))]
+    public async Task SpanCreate_ForcedIso8859_1_WritesTheLowByteAndAllocatesNothing(string targetFramework)
+    {
+        var (build, path) = await LoadBuild(targetFramework);
+        // U+3042's low byte is 'B', and U+D800's is zero.
+        var c = new SpanCase("forced ISO-8859-1", "QR", "a" + (char)0x3042 + "b" + (char)0xD800, "M", ("EciMode", "Iso8859_1"));
+
+        var outcome = Encode(build, path, c);
+        await Assert.That(outcome.Text).IsEqualTo("aBb" + (char)0).Because($"{targetFramework}: reads each char's low byte back");
+
+#if !DEBUG
+        foreach (var (call, bytes) in SteadyStateBytes(build, path, c, outcome))
+            await Assert.That(bytes).IsEqualTo(0).Because($"{targetFramework}: bytes the {call} allocates once warm");
+#endif
+    }
+
 #if !DEBUG
     /// <summary>The bytes sizing, encode and matrix decode of <paramref name="c"/> through <paramref name="assembly"/>'s span API each allocate once warm, a round of calls at a time.</summary>
     private static (string Call, long Bytes)[] SteadyStateBytes(Assembly assembly, string path, SpanCase c, EncodeOutcome outcome)
@@ -307,8 +464,8 @@ public class NetStandardBuildParityTest
     }
 
     /// <summary>
-    /// A Byte segment the decoder reads as UTF-8, under ECI 26 or behind a byte order mark, whose bytes UTF-8 does not hold. No encoder
-    /// here writes one, so the stream is written by hand. The netstandard builds read UTF-8 through code of their own.
+    /// A Byte segment the decoder reads as UTF-8, under ECI 26 or behind a byte order mark: bytes UTF-8 does not hold, and two well-formed
+    /// controls. No encoder here writes the ill-formed ones, so the stream is written by hand. The netstandard builds read UTF-8 through code of their own.
     /// </summary>
     private sealed record Utf8StreamCase(string Name, bool Eci26, byte[] Payload);
 
@@ -330,14 +487,15 @@ public class NetStandardBuildParityTest
     private static readonly byte[] Utf8EdgeBytes =
         [0x00, 0x61, 0x7F, 0x80, 0x8F, 0x90, 0x9F, 0xA0, 0xBF, 0xC0, 0xC1, 0xC2, 0xDF, 0xE0, 0xE1, 0xEC, 0xED, 0xEE, 0xEF, 0xF0, 0xF1, 0xF3, 0xF4, 0xF5, 0xFF];
 
-    // Valid UTF-8 for the segments drawn whole: ASCII runs of any length beside chars of two, three and four bytes
+    // The other half of the segments is cut from valid UTF-8 made of ASCII runs of any length beside chars of two, three and four bytes.
     private static readonly string[] Utf8Pieces = ["a", "HELLO WORLD 12345", "https://example.com/", "é", "こんにちは", "😀"];
 
     /// <summary>
     /// Random Byte segments read through each netstandard build's own UTF-8 decoder give this host's build's text and decode info, which
     /// are <c>Utf8.ToUtf16</c>'s: under ECI 26 and behind a byte order mark with replacement, and with no ECI as UTF-8 only where the
-    /// bytes are well formed, else as Shift_JIS or ISO-8859-1. Half the segments are bytes drawn at each range's bounds, half valid UTF-8,
-    /// each into a destination of room to spare, of its text's length and of one char less.
+    /// bytes are well formed, else as Shift_JIS or ISO-8859-1. Half the segments are bytes drawn at each range's bounds, half valid UTF-8
+    /// cut to at most 45 bytes, which can end inside a sequence, each into a destination of room to spare, of its text's length and of
+    /// one char less.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(Frameworks))]
@@ -401,8 +559,9 @@ public class NetStandardBuildParityTest
     private static readonly string[] TextPieces = ["a", "HELLO WORLD 12345", "https://example.com/", "é", "こんにちは", "😀", "\uD800", "\uDC00"];
 
     /// <summary>
-    /// Random text through each netstandard build's own UTF-8 count and transcode sizes and writes this host's build's symbol: Standard QR
-    /// under ECI UTF-8 in both segmentations, and Micro QR, whose payloads the transcode writes on every build.
+    /// Random text through each netstandard build's UTF-8 count and transcode sizes and writes this host's build's symbol: Standard QR
+    /// under ECI UTF-8 in both segmentations, and Micro QR, whose payloads the transcode writes on every build. Both builds transcode with
+    /// a loop of their own, and netstandard2.0 counts with one.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(Frameworks))]
@@ -443,7 +602,7 @@ public class NetStandardBuildParityTest
         select (Func<(string, string)>)(() => (framework, c.Name));
 
     /// <summary>
-    /// Matrix decode of a Byte segment read as UTF-8 that UTF-8 does not hold gives this host's build's text and decode info through each
+    /// Matrix decode of a Byte segment read as UTF-8, ill-formed or one of the two controls, gives this host's build's text and decode info through each
     /// netstandard build's span API, and allocates nothing once warm.
     /// </summary>
     /// <remarks>Runs alone, as <see cref="DecodeAllocationTest"/> does: a test running beside it can empty the array pool's shared stacks.</remarks>

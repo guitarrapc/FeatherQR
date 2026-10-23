@@ -17,10 +17,12 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The decoder has two implementations of that rule: a hand-written validator followed by the
-/// framework's transcoder, and on net8.0 and later the framework's one-pass transcoder deciding
-/// validity itself. The oracle below uses neither (<see cref="Rune.DecodeFromUtf8"/> one scalar at a
-/// time), so both are held to the same answer.
+/// The decoder has two implementations of that rule, each a one-pass transcode that decides
+/// validity where the text fits: the framework's on net8.0 and later, and the library's own loop
+/// on the netstandard builds. A destination too short for the text falls back to a validator both
+/// builds share. The oracle below uses neither (<see cref="Rune.DecodeFromUtf8"/> one scalar at a
+/// time). This test runs the host's, and NetStandardBuildParityTest holds the netstandard builds'
+/// to the host's answers.
 /// </para>
 /// <para>
 /// <see cref="SegmentDecoders.ResolvesToUtf8WhenUnspecified"/> and

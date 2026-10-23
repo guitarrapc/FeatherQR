@@ -550,6 +550,38 @@ public class StructuredAppendStreamTest
     }
 
     [Test]
+    public async Task ForcedLatin1_WritesACharAboveFFAsTheQuestionMarkTheParityCounts()
+    {
+        // The parity counts each char above U+00FF as '?'. Letters a best-fit Latin-1 encoder would write as ASCII ('ž' as 'z', 'ｑ' as 'q')
+        // are such chars, so the set must be the set of the text with '?' in their place, to the module, and its parity the XOR of the
+        // bytes it carries. Each letter comes an odd number of times, so a letter written otherwise would not cancel out of that XOR, and
+        // the versions are capped so the text is a set with a header.
+        var text = Repeat("Zuži ｑあ ", 301 * 8);
+        var latin1 = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10), EciMode = EciMode.Iso8859_1 };
+        var set = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, latin1);
+        var replaced = text.Replace('ž', '?').Replace('ｑ', '?').Replace('あ', '?');
+        var twin = QRCodeGenerator.CreateStructuredAppend(replaced, QREccLevel.L, latin1);
+
+        await Assert.That(set.Length).IsGreaterThan(1);
+        await Assert.That(set.Length).IsEqualTo(twin.Length);
+        for (var i = 0; i < set.Length; i++)
+            await Assert.That(set[i].GetRawData().AsSpan().SequenceEqual(twin[i].GetRawData())).IsTrue().Because($"symbol {i}");
+        var parts = new StringBuilder();
+        byte parity = 0;
+        foreach (var symbol in set)
+        {
+            await Assert.That(QRCodeDecoder.TryDecode(symbol, out var part, out var info)).IsTrue();
+            parts.Append(part);
+            parity = info.StructuredAppend.Parity;
+        }
+        await Assert.That(parts.ToString()).IsEqualTo(replaced);
+        byte carried = 0;
+        foreach (var b in Encoding.Latin1.GetBytes(parts.ToString()))
+            carried ^= b;
+        await Assert.That(parity).IsEqualTo(carried);
+    }
+
+    [Test]
     public async Task MarkUnderAForcedLatin1_IsAnOrdinaryCharacter()
     {
         // The charset is declared, so the decoder drops nothing, and the mark is written as the
