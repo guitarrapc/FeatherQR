@@ -131,12 +131,6 @@ public class NetStandardBuildParityTest
     {
         /// <summary>The text read back where it differs from <see cref="Text"/>: the encoder writes a lone surrogate as U+FFFD.</summary>
         public string? Decoded { get; init; }
-
-        /// <summary>
-        /// Whether this host's build allocates on the text too: <see cref="System.Text.Encoding.UTF8"/> allocates in each call that meets a lone
-        /// surrogate. The netstandard build is then held to no more than this host's.
-        /// </summary>
-        public bool AllocatesOnHost { get; init; }
     }
 
     // Past Standard QR's stack budget for one UTF-8 run (256 bytes at four a character), so that under Single, or with a byte order mark,
@@ -152,7 +146,16 @@ public class NetStandardBuildParityTest
         new("QR UTF-8 long", "QR", LongUtf8Text, "M", ("Segmentation", "Optimal")),
         new("QR UTF-8 long Single", "QR", LongUtf8Text, "M", ("Segmentation", "Single")),
         new("QR UTF-8 long with a byte order mark", "QR", LongUtf8Text, "M", ("Utf8Bom", true)),
-        new("QR lone surrogates", "QR", "a\uD800b\uDC00c\uD83D", "M") { Decoded = "a\uFFFDb\uFFFDc\uFFFD", AllocatesOnHost = true },
+        // The netstandard builds count and write UTF-8 with loops of their own, which must read a lone surrogate, a reversed pair and a lone
+        // high surrogate at the end as the .NET builds' encoders do.
+        new("QR lone surrogates", "QR", "a\uD800b\uDC00c\uD83D", "M") { Decoded = "a\uFFFDb\uFFFDc\uFFFD" },
+        new("QR reversed pair", "QR", "\uDE00\uD83Dx", "M") { Decoded = "\uFFFD\uFFFDx" },
+        new("QR lone surrogate Single", "QR", "a\uD800b", "M", ("Segmentation", "Single")) { Decoded = "a\uFFFDb" },
+        new("QR lone surrogate with a byte order mark", "QR", "a\uD800b", "M", ("Utf8Bom", true)) { Decoded = "a\uFFFDb" },
+        new("QR lone surrogate ECI UTF-8", "QR", "a\uD800b", "M", ("EciMode", "Utf8")) { Decoded = "a\uFFFDb" },
+        new("QR lone surrogate beside Kanji", "QR", "\u65E5\u672C\uD800\u8A9E", "M", ("AllowKanji", true)) { Decoded = "\u65E5\u672C\uFFFD\u8A9E" },
+        new("QR lone surrogate FNC1", "QR", "0109521234543213\u001d10AB\uD800C", "M", ("Fnc1", Fnc1First())) { Decoded = "0109521234543213\u001d10AB\uFFFDC" },
+        new("QR lone surrogates long Single", "QR", string.Concat(Enumerable.Repeat("\u3053\u3093\u306B\u3061\u306F\uD800", 20)), "M", ("Segmentation", "Single")) { Decoded = string.Concat(Enumerable.Repeat("\u3053\u3093\u306B\u3061\u306F\uFFFD", 20)) },
         new("QR ECI UTF-8", "QR", "plain ascii", "M", ("EciMode", "Utf8")),
         new("QR ECI ISO-8859-1", "QR", "Zürich", "M", ("EciMode", "Iso8859_1")),
         new("QR Kanji", "QR", "日本語の漢字モード", "M", ("AllowKanji", true)),
@@ -172,14 +175,16 @@ public class NetStandardBuildParityTest
         new("MicroQR alphanumeric", "MicroQR", "HELLO WORLD 14", "L"),
         new("MicroQR Latin-1", "MicroQR", "Zürich", "L"),
         new("MicroQR UTF-8", "MicroQR", MicroQRUtf8Text, "L"),
-        new("MicroQR lone surrogate", "MicroQR", "a\uD800", "L") { Decoded = "a\uFFFD", AllocatesOnHost = true },
+        new("MicroQR lone surrogate", "MicroQR", "a\uD800", "L") { Decoded = "a\uFFFD" },
         new("MicroQR Kanji", "MicroQR", "日本語", "L", ("AllowKanji", true)),
         new("MicroQR Optimal", "MicroQR", "a1234567890", "L", ("Segmentation", "Optimal")),
         new("MicroQR quiet zone 0", "MicroQR", "HELLO", "L", ("QuietZoneSize", 0)),
         new("MicroQR mask 2", "MicroQR", "12345", "L", ("MaskPattern", 2)),
         new("RmQR ASCII", "RmQR", "HELLO WORLD", "M"),
         new("RmQR UTF-8", "RmQR", Utf8Text, "M"),
-        new("RmQR lone surrogates", "RmQR", "a\uD800b\uDC00c", "M") { Decoded = "a\uFFFDb\uFFFDc", AllocatesOnHost = true },
+        new("RmQR lone surrogates", "RmQR", "a\uD800b\uDC00c", "M") { Decoded = "a\uFFFDb\uFFFDc" },
+        new("RmQR lone surrogate Single", "RmQR", "a\uD800b", "M", ("Segmentation", "Single")) { Decoded = "a\uFFFDb" },
+        new("RmQR lone surrogate FNC1", "RmQR", "0109521234543213\u001d10AB\uD800C", "M", ("Fnc1", Fnc1First())) { Decoded = "0109521234543213\u001d10AB\uFFFDC" },
         new("RmQR ECI UTF-8", "RmQR", "plain ascii", "M", ("EciMode", "Utf8")),
         new("RmQR Kanji", "RmQR", "日本語の漢字", "M", ("AllowKanji", true)),
         new("RmQR FNC1 first position", "RmQR", "0109521234543213\u001d10ABC123", "M", ("Fnc1", Fnc1First())),
@@ -243,16 +248,8 @@ public class NetStandardBuildParityTest
         await Assert.That(actual.Info).IsEqualTo(expected.Info).Because($"{context}: the decode info this host's build gives");
 
 #if !DEBUG
-        var allocated = SteadyStateBytes(build, path, c, actual);
-        var limits = c.AllocatesOnHost ? SteadyStateBytes(typeof(QRCodeGenerator).Assembly, typeof(QRCodeGenerator).Assembly.Location, c, expected) : null;
-        for (var i = 0; i < allocated.Length; i++)
-        {
-            var (call, bytes) = allocated[i];
-            if (limits is null)
-                await Assert.That(bytes).IsEqualTo(0).Because($"{context}: bytes the {call} allocates once warm");
-            else
-                await Assert.That(bytes).IsLessThanOrEqualTo(limits[i].Bytes).Because($"{context}: bytes the {call} allocates once warm, at most this host's build's {limits[i].Bytes}");
-        }
+        foreach (var (call, bytes) in SteadyStateBytes(build, path, c, actual))
+            await Assert.That(bytes).IsEqualTo(0).Because($"{context}: bytes the {call} allocates once warm");
 #endif
     }
 

@@ -1,3 +1,8 @@
+#if NET8_0_OR_GREATER
+// OperationStatus and Utf8, for the transcode that replaces without allocating.
+using System.Buffers;
+using System.Text.Unicode;
+#endif
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -26,12 +31,60 @@ internal static class CharacterSets
     /// </summary>
     internal static int GetUtf8Bytes(ReadOnlySpan<char> text, Span<byte> destination)
     {
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        return Encoding.UTF8.GetBytes(text, destination);
+#if NET8_0_OR_GREATER
+        // Encoding.UTF8 allocates in each call that meets a lone surrogate. Utf8 writes the replacement itself.
+        if (Utf8.FromUtf16(text, destination, out _, out var written, replaceInvalidSequences: true) != OperationStatus.Done)
+            throw new ArgumentException("The destination is too short for the UTF-8 of the text.", nameof(destination));
+        return written;
 #else
-        // netstandard2.0 has no span overloads, and the pointer overloads would be unsafe code. The array overloads need pooled arrays, and a
-        // long text's caller already holds one of the same size, so whether the second rent allocates would depend on the pool and on other threads.
+        // The netstandard builds' Encoding allocates in each call that meets a lone surrogate, netstandard2.0 has no span overloads, and the
+        // pointer overloads would be unsafe code.
         return EncodeUtf8(text, destination);
+#endif
+    }
+
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+    // An Encoder keeps its replacement fallback from call to call, where Encoding.UTF8 allocates one in each call that meets a lone surrogate.
+    // A thread's own, since an Encoder is not safe to share.
+    [ThreadStatic]
+    private static Encoder? utf8Counter;
+#endif
+
+    /// <summary>
+    /// The length of the UTF-8 of <paramref name="text"/>, counted as <see cref="Encoding.UTF8"/> counts it, a lone surrogate as the three bytes
+    /// of U+FFFD. Allocates nothing once this thread has counted a lone surrogate.
+    /// </summary>
+    internal static int GetUtf8ByteCount(ReadOnlySpan<char> text)
+    {
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+        return (utf8Counter ??= Encoding.UTF8.GetEncoder()).GetByteCount(text, flush: true);
+#else
+        // netstandard2.0's Encoder has no span overloads, the pointer overloads would be unsafe code, and a pooled copy counted slower on
+        // non-ASCII text, so the count is the one EncodeUtf8 writes.
+        var n = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            int c = text[i];
+            if (c < 0x80)
+            {
+                n += 1;
+            }
+            else if (c < 0x800)
+            {
+                n += 2;
+            }
+            else if (c is >= 0xD800 and <= 0xDBFF && i + 1 < text.Length && text[i + 1] is >= (char)0xDC00 and <= (char)0xDFFF)
+            {
+                n += 4;
+                i++;
+            }
+            else
+            {
+                // Every other char, a lone surrogate as U+FFFD among them
+                n += 3;
+            }
+        }
+        return n;
 #endif
     }
 
