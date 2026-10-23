@@ -179,6 +179,25 @@ public class DecodeAllocationTest
         await Assert.That(SteadyStateBytes(() => DecodeMatrix(symbology, modules, width, height, destination, out _, out _))).IsEqualTo(0L);
     }
 
+    /// <summary>
+    /// A Byte segment read as UTF-8 that UTF-8 does not hold, under ECI 26 or behind a byte order mark: the reader writes a U+FFFD for each
+    /// ill-formed part, where the runtime's decoder would allocate in each call. No encoder here writes one, so the stream is written by hand.
+    /// </summary>
+    [Test]
+    [Arguments(true, new byte[] { 0x61, 0xC3, 0x28, 0xED, 0xA0, 0x80, 0xFF, 0xE3, 0x81 })]
+    [Arguments(false, new byte[] { 0xEF, 0xBB, 0xBF, 0x61, 0xC3, 0x28 })]
+    public async Task Matrix_BadUtf8_ReadsWithoutAllocating(bool eci26, byte[] payload)
+    {
+        var modules = KanjiSymbolBuilder.StandardQr(NetStandardBuildParityTest.DataStream(eci26, payload, dataCodewords: 19), version: 1, QREccLevel.L, mask: 0);
+        var destination = Destination(Symbology.StandardQR);
+
+        var success = DecodeMatrix(Symbology.StandardQR, modules, 21, 21, destination, out var charsWritten, out var status);
+        await Assert.That(success).IsTrue().Because(status.ToString());
+        await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo(System.Text.Encoding.UTF8.GetString(eci26 ? payload : payload[3..]));
+
+        await Assert.That(SteadyStateBytes(() => DecodeMatrix(Symbology.StandardQR, modules, 21, 21, destination, out _, out _))).IsEqualTo(0L);
+    }
+
     #endregion
 
     #region Image level: the scenes

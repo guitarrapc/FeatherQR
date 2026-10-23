@@ -2,12 +2,6 @@
 // OperationStatus, for the one-pass UTF-8 transcode.
 using System.Buffers;
 using System.Text.Unicode;
-#elif !NETSTANDARD2_1_OR_GREATER
-// ArrayPool is only reached from the netstandard2.0 branch of DecodeUtf8.
-using System.Buffers;
-#endif
-#if !NET8_0_OR_GREATER
-using System.Text;
 #endif
 using System.Runtime.CompilerServices;
 using FeatherQR.Internals.BinaryEncoders;
@@ -303,7 +297,7 @@ internal static class SegmentDecoders
         }
 
         if (useUtf8)
-            return DecodeUtf8(byteBuffer, bytes.Length == count ? 0 : 3, bytes.Length, destination, ref charsWritten);
+            return DecodeUtf8(bytes, destination, ref charsWritten);
 #endif
 
         // Undeclared and not UTF-8: encoders that write Shift_JIS here leave the ECI header out
@@ -426,38 +420,89 @@ internal static class SegmentDecoders
     }
 
 #if !NET8_0_OR_GREATER
-    // Two passes (count, then transcode), but net8.0 and later transcode once in DecodeBytePayload.
-    private static DecodeStatus DecodeUtf8(byte[] byteBuffer, int offset, int byteCount, Span<char> destination, ref int charsWritten)
+    /// <summary>
+    /// UTF-8 to UTF-16 as <c>Utf8.ToUtf16</c> reads it on .NET 8 and later with replacement: one U+FFFD for each maximal subpart of an
+    /// ill-formed sequence (The Unicode Standard, 3.9, Table 3-7 for the well-formed ones).
+    /// </summary>
+    /// <remarks>
+    /// The runtime's decoder allocates in each call that meets bytes UTF-8 does not hold, and .NET Framework's replaces other spans of them,
+    /// so the netstandard builds read UTF-8 here. A destination that runs out returns <see cref="DecodeStatus.DestinationTooSmall"/>, with
+    /// what was written before it left in place.
+    /// </remarks>
+    private static DecodeStatus DecodeUtf8(ReadOnlySpan<byte> bytes, Span<char> destination, ref int charsWritten)
     {
-        if (byteCount == 0)
-            return DecodeStatus.Success;
+        var written = charsWritten;
+        var i = 0;
+        while (i < bytes.Length)
+        {
+            int lead = bytes[i];
+            int scalar;
+            if (lead < 0x80)
+            {
+                scalar = lead;
+                i++;
+            }
+            else
+            {
+                // The sequence's length, and the range its second byte must fall in. No sequence starts at 80..C1 or F5..FF.
+                int length = 0, low = 0x80, high = 0xBF;
+                if (lead is >= 0xC2 and <= 0xDF)
+                {
+                    length = 2;
+                }
+                else if (lead is >= 0xE0 and <= 0xEF)
+                {
+                    length = 3;
+                    if (lead == 0xE0)
+                        low = 0xA0;
+                    else if (lead == 0xED)
+                        high = 0x9F;
+                }
+                else if (lead is >= 0xF0 and <= 0xF4)
+                {
+                    length = 4;
+                    if (lead == 0xF0)
+                        low = 0x90;
+                    else if (lead == 0xF4)
+                        high = 0x8F;
+                }
 
-#if NETSTANDARD2_1_OR_GREATER
-        var bytes = byteBuffer.AsSpan(offset, byteCount);
-        if (destination.Length - charsWritten < Encoding.UTF8.GetCharCount(bytes))
-            return DecodeStatus.DestinationTooSmall;
-        charsWritten += Encoding.UTF8.GetChars(bytes, destination.Slice(charsWritten));
+                scalar = length == 0 ? -1 : lead & (0x7F >> length);
+                var end = i + 1;
+                for (var k = 1; k < length; k++)
+                {
+                    // A byte out of range ends the maximal subpart before it, and is read again as a lead
+                    if (end >= bytes.Length || bytes[end] < low || bytes[end] > high)
+                    {
+                        scalar = -1;
+                        break;
+                    }
+                    scalar = (scalar << 6) | (bytes[end] & 0x3F);
+                    end++;
+                    low = 0x80;
+                    high = 0xBF;
+                }
+                i = end;
+            }
+
+            if (scalar < 0)
+                scalar = 0xFFFD;
+            if (scalar < 0x10000)
+            {
+                if (written >= destination.Length)
+                    return DecodeStatus.DestinationTooSmall;
+                destination[written++] = (char)scalar;
+            }
+            else
+            {
+                if (written + 2 > destination.Length)
+                    return DecodeStatus.DestinationTooSmall;
+                destination[written++] = (char)(0xD7C0 + (scalar >> 10));
+                destination[written++] = (char)(0xDC00 | (scalar & 0x3FF));
+            }
+        }
+        charsWritten = written;
         return DecodeStatus.Success;
-#else
-        // netstandard2.0 has no span-based Encoding APIs, but byteBuffer is already an
-        // array, so only the char side needs a temporary rented array.
-        var charCount = Encoding.UTF8.GetCharCount(byteBuffer, offset, byteCount);
-        if (destination.Length - charsWritten < charCount)
-            return DecodeStatus.DestinationTooSmall;
-
-        var rentedChars = ArrayPool<char>.Shared.Rent(charCount);
-        try
-        {
-            var written = Encoding.UTF8.GetChars(byteBuffer, offset, byteCount, rentedChars, 0);
-            rentedChars.AsSpan(0, written).CopyTo(destination.Slice(charsWritten));
-            charsWritten += written;
-            return DecodeStatus.Success;
-        }
-        finally
-        {
-            ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
-        }
-#endif
     }
 #endif
 

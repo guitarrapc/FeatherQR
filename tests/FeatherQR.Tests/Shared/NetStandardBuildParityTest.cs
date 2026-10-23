@@ -306,6 +306,124 @@ public class NetStandardBuildParityTest
 #endif
     }
 
+    /// <summary>
+    /// A Byte segment the decoder reads as UTF-8, under ECI 26 or behind a byte order mark, whose bytes UTF-8 does not hold. No encoder
+    /// here writes one, so the stream is written by hand. The netstandard builds read UTF-8 through code of their own.
+    /// </summary>
+    private sealed record Utf8StreamCase(string Name, bool Eci26, byte[] Payload);
+
+    private static readonly Utf8StreamCase[] Utf8StreamCaseTable =
+    [
+        new("ECI UTF-8, valid", true, [0x61, 0xC3, 0xA9]),
+        new("ECI UTF-8, a bad continuation", true, [0x61, 0xC3, 0x28, 0x62]),
+        new("ECI UTF-8, bytes UTF-8 never holds", true, [0xFF, 0xFE, 0x61]),
+        new("ECI UTF-8, a sequence cut at the end", true, [0x61, 0xE3, 0x81]),
+        new("ECI UTF-8, an encoded surrogate", true, [0xED, 0xA0, 0x80, 0x61]),
+        new("ECI UTF-8, an overlong form", true, [0xC0, 0xAF, 0x61]),
+        new("ECI UTF-8, a four-byte sequence", true, [0x61, 0xF0, 0x9F, 0x98, 0x80]),
+        new("ECI UTF-8, past U+10FFFF", true, [0xF4, 0x90, 0x80, 0x80, 0x61]),
+        new("a byte order mark before bad bytes", false, [0xEF, 0xBB, 0xBF, 0x61, 0xC3, 0x28]),
+    ];
+
+    // Each lead byte's bounds and the bytes either side of each continuation range, so that random draws cut, overrun and complete
+    // sequences of every length.
+    private static readonly byte[] Utf8EdgeBytes =
+        [0x00, 0x61, 0x7F, 0x80, 0x8F, 0x90, 0x9F, 0xA0, 0xBF, 0xC0, 0xC1, 0xC2, 0xDF, 0xE0, 0xE1, 0xEC, 0xED, 0xEE, 0xEF, 0xF0, 0xF1, 0xF3, 0xF4, 0xF5, 0xFF];
+
+    /// <summary>
+    /// Random Byte segments under ECI 26 read through each netstandard build's own UTF-8 decoder give this host's build's text, which is
+    /// <c>Utf8.ToUtf16</c>'s with replacement.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Frameworks))]
+    public async Task SpanDecode_RandomUtf8_ReadsAsThisHostsBuild(string targetFramework)
+    {
+        var (build, path) = await LoadBuild(targetFramework);
+        var host = typeof(QRCodeGenerator).Assembly;
+        var hostDecode = BindDecode(host, "QR", image: false, host.Location);
+        var buildDecode = BindDecode(build, "QR", image: false, path);
+        var random = new Random(26);
+        string? mismatch = null;
+        for (var round = 0; round < 2000 && mismatch is null; round++)
+        {
+            var payload = new byte[random.Next(0, 49)];
+            for (var i = 0; i < payload.Length; i++)
+                payload[i] = Utf8EdgeBytes[random.Next(Utf8EdgeBytes.Length)];
+            var matrix = KanjiSymbolBuilder.StandardQr(DataStream(true, payload, Version3LDataCodewords), version: 3, QREccLevel.L, mask: 0);
+
+            var expected = Decode(hostDecode, matrix, 29, 29).Text;
+            var actual = Decode(buildDecode, matrix, 29, 29).Text;
+            if (expected != System.Text.Encoding.UTF8.GetString(payload))
+                mismatch = $"round {round}, {Convert.ToHexString(payload)}: this host's build does not read Encoding.UTF8's text";
+            else if (actual != expected)
+                mismatch = $"round {round}, {Convert.ToHexString(payload)}: reads other text than this host's build";
+        }
+
+        await Assert.That(mismatch).IsNull().Because($"{targetFramework}: random Byte segments under ECI 26");
+    }
+
+    public static IEnumerable<Func<(string TargetFramework, string Case)>> Utf8StreamCases() =>
+        from framework in Frameworks().Select(f => f())
+        from c in Utf8StreamCaseTable
+        select (Func<(string, string)>)(() => (framework, c.Name));
+
+    /// <summary>
+    /// Matrix decode of a Byte segment read as UTF-8 that UTF-8 does not hold gives this host's build's text and decode info through each
+    /// netstandard build's span API, and allocates nothing once warm.
+    /// </summary>
+    /// <remarks>Runs alone, as <see cref="DecodeAllocationTest"/> does: a test running beside it can empty the array pool's shared stacks.</remarks>
+    [Test]
+    [NotInParallel]
+    [MethodDataSource(nameof(Utf8StreamCases))]
+    public async Task SpanDecode_BadUtf8_MatchesThisHostsBuildAndAllocatesNothing(string targetFramework, string caseName)
+    {
+        var c = Utf8StreamCaseTable.Single(x => x.Name == caseName);
+        var (build, path) = await LoadBuild(targetFramework);
+        var context = $"{targetFramework} {caseName}";
+        var matrix = KanjiSymbolBuilder.StandardQr(DataStream(c.Eci26, c.Payload, Version1LDataCodewords), version: 1, QREccLevel.L, mask: 0);
+
+        var host = typeof(QRCodeGenerator).Assembly;
+        var expected = Decode(BindDecode(host, "QR", image: false, host.Location), matrix, 21, 21);
+        var bytes = c.Eci26 ? c.Payload : c.Payload[3..];
+        await Assert.That(expected.Text).IsEqualTo(System.Text.Encoding.UTF8.GetString(bytes)).Because($"{caseName}: this host's build reads the bytes as Encoding.UTF8 does");
+
+        var actual = Decode(BindDecode(build, "QR", image: false, path), matrix, 21, 21);
+        await Assert.That(actual.Text).IsEqualTo(expected.Text).Because($"{context}: the text this host's build reads");
+        await Assert.That(actual.Info).IsEqualTo(expected.Info).Because($"{context}: the decode info this host's build gives");
+
+#if !DEBUG
+        var decode = BindDecode(build, "QR", image: false, path);
+        var chars = new char[DecodedChars];
+        await Assert.That(DecodeAllocationTest.SteadyStateBytes(() => decode(matrix, 21, 21, chars, out _, null))).IsEqualTo(0)
+            .Because($"{context}: bytes the matrix decode allocates once warm");
+#endif
+    }
+
+    private const int Version1LDataCodewords = 19;
+    private const int Version3LDataCodewords = 55;
+
+    /// <summary>The data codewords of a symbol holding one Byte segment of <paramref name="payload"/>, under ECI 26 or none, with a count indicator of 8 bits (versions 1 to 9).</summary>
+    internal static byte[] DataStream(bool eci26, byte[] payload, int dataCodewords)
+    {
+        var bits = new System.Text.StringBuilder();
+        if (eci26)
+            bits.Append("0111").Append("00011010");
+        bits.Append("0100").Append(Convert.ToString(payload.Length, 2).PadLeft(8, '0'));
+        foreach (var b in payload)
+            bits.Append(Convert.ToString(b, 2).PadLeft(8, '0'));
+        bits.Append("0000");
+        while (bits.Length % 8 != 0)
+            bits.Append('0');
+
+        var data = new byte[dataCodewords];
+        var i = 0;
+        for (; i < bits.Length / 8; i++)
+            data[i] = Convert.ToByte(bits.ToString(i * 8, 8), 2);
+        for (var pad = 0; i < data.Length; i++, pad++)
+            data[i] = pad % 2 == 0 ? (byte)0xEC : (byte)0x11;
+        return data;
+    }
+
     private sealed record EncodeOutcome(bool Fits, int BufferSize, int Width, int Height, byte[] Matrix, string? Text, string? Info);
 
     /// <summary>Sizes, writes and decodes <paramref name="c"/> through <paramref name="assembly"/>'s span API.</summary>
