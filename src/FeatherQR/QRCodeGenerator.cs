@@ -80,7 +80,7 @@ public static partial class QRCodeGenerator
         // 8. Return QRCodeData (quiet zone handled by QRCodeData class)
 
         ValidateQuietZoneSize(quietZoneSize);
-        ValidateEciMode(eciMode);
+        ValidateEciMode(textSpan, eciMode);
         ValidateEccLevel(eccLevel);
 
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji);
@@ -121,7 +121,7 @@ public static partial class QRCodeGenerator
     private static int CreateAutomatic(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, bool utf8BOM, EciMode eciMode, bool allowKanji, int quietZoneSize, int maskPattern)
     {
         ValidateQuietZoneSize(quietZoneSize);
-        ValidateEciMode(eciMode);
+        ValidateEciMode(textSpan, eciMode);
         ValidateEccLevel(eccLevel);
 
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji);
@@ -230,7 +230,7 @@ public static partial class QRCodeGenerator
     /// <param name="eccLevel">How much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, or a quiet zone outside 0 to 10,000.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
@@ -268,7 +268,7 @@ public static partial class QRCodeGenerator
     /// <param name="destination">Where to write the matrix. Needs <see cref="QRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <returns>The number of bytes written.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, or a quiet zone outside 0 to 10,000.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static int Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default)
@@ -295,6 +295,7 @@ public static partial class QRCodeGenerator
     /// <param name="size">The size on success, <c>default</c> when the content does not fit.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings.</param>
     /// <returns><c>true</c> when the content fits.</returns>
+    /// <exception cref="ArgumentException">Thrown when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for a quiet zone outside 0 to 10,000, or an undefined level, ECI or segmentation.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = default)
     {
@@ -303,7 +304,7 @@ public static partial class QRCodeGenerator
 
         size = default;
         ValidateQuietZoneSize(options.QuietZoneSize);
-        ValidateEciMode(options.EciMode);
+        ValidateEciMode(text, options.EciMode);
         ValidateEccLevel(eccLevel);
 
         var analysisResult = TextAnalyzer.Analyze(text, options.EciMode, allowKanji: AllowsKanji(in options));
@@ -322,7 +323,7 @@ public static partial class QRCodeGenerator
         size = default;
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
-        ValidateEciMode(options.EciMode);
+        ValidateEciMode(text, options.EciMode);
         ValidateEccLevel(eccLevel);
 
         var optimal = options.Segmentation != QRSegmentation.Single;
@@ -371,7 +372,7 @@ public static partial class QRCodeGenerator
     /// <param name="eccLevel">How much damage each QR code should survive, the same level for every symbol of the set.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. The version range bounds the size of every symbol.</param>
     /// <returns>The symbols in set order: one when the text fits a single symbol, otherwise two to sixteen.</returns>
-    /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, which includes a run of U+FEFF that no symbol holds together with the character ahead of it (no symbol after the first may begin with that character), when the options contradict each other, or when they carry an FNC1 mode.</exception>
+    /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, which includes a run of U+FEFF that no symbol holds together with the character ahead of it (no symbol after the first may begin with that character), when the options contradict each other, when they carry an FNC1 mode, or when they declare <see cref="EciMode.Iso8859_1"/> over content that is not Latin-1.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, or a quiet zone outside 0 to 10,000.</exception>
     public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
         => CreateStructuredAppend(textSpan, eccLevel, in options, planTogether: true);
@@ -390,7 +391,7 @@ public static partial class QRCodeGenerator
         ValidateQuietZoneSize(options.QuietZoneSize);
         if (options.Segmentation != QRSegmentation.Single)
             ValidateOptimalEntry(options.Segmentation);
-        ValidateEciMode(options.EciMode);
+        ValidateEciMode(textSpan, options.EciMode);
         ValidateEccLevel(eccLevel);
         if (options.Fnc1.IsActive)
             throw new ArgumentException("A Structured Append set cannot carry FNC1: no reader is known to read FNC1 across a set. Write the content as one symbol, or without FNC1.", nameof(options));
@@ -919,7 +920,7 @@ public static partial class QRCodeGenerator
     private static QRConfiguration ResolveConfiguration(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
         ValidateQuietZoneSize(options.QuietZoneSize);
-        ValidateEciMode(options.EciMode);
+        ValidateEciMode(textSpan, options.EciMode);
         ValidateEccLevel(eccLevel);
 
         var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options));
@@ -964,11 +965,14 @@ public static partial class QRCodeGenerator
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
     }
 
-    private static void ValidateEciMode(EciMode eciMode)
+    private static void ValidateEciMode(ReadOnlySpan<char> text, EciMode eciMode)
     {
         // An undefined value would otherwise reach the header of Numeric or Alphanumeric text as written
         if (eciMode is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8))
             throw new ArgumentOutOfRangeException(nameof(eciMode), $"Unsupported ECI mode for QR: {eciMode}");
+        // Written anyway, such text would read back as another text.
+        if (eciMode == EciMode.Iso8859_1 && !CharacterSets.IsValidISO88591(text))
+            throw new ArgumentException("The content contains characters that cannot be represented by ISO-8859-1. Use EciMode.Utf8 or EciMode.Default.", nameof(eciMode));
     }
 
     private static void ValidateEccLevel(QREccLevel eccLevel)
@@ -1407,7 +1411,7 @@ public static partial class QRCodeGenerator
         // error first for the same broken arguments.
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
-        ValidateEciMode(options.EciMode);
+        ValidateEciMode(textSpan, options.EciMode);
         ValidateEccLevel(eccLevel);
         if (options.Segmentation == QRSegmentation.Single)
             return CreateFnc1(textSpan, eccLevel, in options);
@@ -1505,7 +1509,7 @@ public static partial class QRCodeGenerator
     {
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
-        ValidateEciMode(options.EciMode);
+        ValidateEciMode(textSpan, options.EciMode);
         ValidateEccLevel(eccLevel);
         if (options.Segmentation == QRSegmentation.Single)
             return CreateFnc1To(textSpan, eccLevel, destination, in options);

@@ -79,8 +79,8 @@ public class StructuredAppendParityTest
     {
         foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
         {
-            // Independent reference: encode the bytes, then XOR them. For forced Latin-1,
-            // the writer replaces each unrepresentable UTF-16 code unit with '?'.
+            // Independent reference: encode the bytes, then XOR them. Under Latin-1 the parity counts '?' for each UTF-16 code unit
+            // above U+00FF, which the generators refuse to write, so the reference does too.
             var bytes = charset == EciMode.Utf8 ? Encoding.UTF8.GetBytes(payload) : Latin1Bytes(payload);
             byte expected = 0;
             foreach (var b in bytes)

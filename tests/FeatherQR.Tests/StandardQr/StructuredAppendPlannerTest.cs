@@ -440,7 +440,7 @@ public class StructuredAppendPlannerTest
     [Test]
     public async Task Parity_Latin1_CountsTheLastCharacterItHolds()
     {
-        // U+00FF is ISO-8859-1's last character and its own byte. One past it is what the writer replaces.
+        // U+00FF is ISO-8859-1's last character and its own byte. One past it the parity counts '?'.
         var text = (char)0xFF + "abc" + (char)0x100;
         var expected = (byte)(0xFF ^ 'a' ^ 'b' ^ 'c' ^ '?');
 

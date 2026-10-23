@@ -750,7 +750,8 @@ internal static partial class StructuredAppendPlanner
 
         if (charset != EciMode.Utf8)
         {
-            // One byte per character. A forced ISO-8859-1 charset can still meet a pair, which is not split.
+            // Each character is one byte. The end is kept off a pair, as LongestChunkEnd promises, though the public entries pass no
+            // surrogate under these charsets.
             var end = Math.Min(n, bytes);
             if (end < n && char.IsLowSurrogate(window[end]) && char.IsHighSurrogate(window[end - 1]))
                 end--;

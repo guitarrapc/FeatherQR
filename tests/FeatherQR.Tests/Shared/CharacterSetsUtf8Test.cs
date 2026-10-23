@@ -59,25 +59,19 @@ public class CharacterSetsUtf8Test
     /// <summary>
     /// A call that throws can leave the thread's fallback buffer in the middle of a replacement: here a destination too short for a
     /// replacement after the first. The next call on the thread gets that buffer, so it must start clean and write U+FFFD for each lone
-    /// surrogate, as the runtime's UTF-8 does, and '?' for each char above U+00FF, as the library's Latin-1 does.
+    /// surrogate, as the runtime's UTF-8 does.
     /// </summary>
     [Test]
     public async Task FallbackBuffer_AfterACallThatThrew_StartsClean()
     {
         var high = (char)0xD800;
-        var kana = (char)0x3042;
-        var utf8Threw = Throws(() => ThreadBufferFallback.Utf8.GetBytes(new string(high, 3).AsSpan(), new byte[4]));
+        var threw = Throws(() => ThreadBufferFallback.Utf8.GetBytes(new string(high, 3).AsSpan(), new byte[4]));
         var utf8 = new byte[16];
-        var utf8Text = "a" + high + "b";
-        var utf8Written = ThreadBufferFallback.Utf8.GetBytes(utf8Text.AsSpan(), utf8);
+        var text = "a" + high + "b";
+        var written = ThreadBufferFallback.Utf8.GetBytes(text.AsSpan(), utf8);
 
-        var latin1Threw = Throws(() => ThreadBufferFallback.Latin1.GetBytes(new string(kana, 3).AsSpan(), new byte[2]));
-        var latin1 = new byte[16];
-        var latin1Written = ThreadBufferFallback.Latin1.GetBytes(("a" + kana + "b").AsSpan(), latin1);
-
-        await Assert.That(utf8Threw && latin1Threw).IsTrue().Because("each short destination throws inside a replacement");
-        await Assert.That(Convert.ToHexString(utf8, 0, utf8Written)).IsEqualTo(Convert.ToHexString(Encoding.UTF8.GetBytes(utf8Text)));
-        await Assert.That(Convert.ToHexString(latin1, 0, latin1Written)).IsEqualTo("613F62");
+        await Assert.That(threw).IsTrue().Because("the short destination throws inside a replacement");
+        await Assert.That(Convert.ToHexString(utf8, 0, written)).IsEqualTo(Convert.ToHexString(Encoding.UTF8.GetBytes(text)));
     }
 
     private static bool Throws(Action call)

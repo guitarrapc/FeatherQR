@@ -1,14 +1,13 @@
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Sizing and span encode allocate nothing on text whose charset replaces some of its characters: a lone surrogate under UTF-8, written
-/// as U+FFFD, and a char above U+00FF under a forced ISO-8859-1, written as '?' on .NET 8 and later. The runtime's encoders allocate in
-/// each call that meets such a char. Each case also pins what a reader gets back, so the encoders the library keeps instead write the
-/// same symbol.
+/// Sizing and span encode allocate nothing on text whose charset replaces some of its characters, a lone surrogate under UTF-8, written
+/// as U+FFFD. The runtime's encoders allocate in each call that meets one. Each case also pins what a reader gets back, so the library's
+/// own UTF-8 code writes the same symbol.
 /// </summary>
 /// <remarks>
 /// The allocation checks are Release only, and run alone, as <see cref="DecodeAllocationTest"/>'s do. <see cref="NetStandardBuildParityTest"/>
-/// holds the netstandard builds to no allocation on both kinds of text, and reads a forced ISO-8859-1 back there as each char's low byte.
+/// holds the netstandard builds to no allocation on such text.
 /// </remarks>
 [NotInParallel]
 public class ReplacedCharacterAllocationTest
@@ -41,10 +40,6 @@ public class ReplacedCharacterAllocationTest
         yield return () => new("FNC1 in the first position", Gtin + "\u001d10AB\uD800C", new() { Fnc1 = Fnc1Mode.FirstPosition }, Gtin + "\u001d10AB\uFFFDC");
         // Past the stack budget for one run, so the run transcodes into a pooled buffer
         yield return () => new("a long run, Single", string.Concat(Enumerable.Repeat("こんにちは\uD800", 20)), new() { Segmentation = QRSegmentation.Single }, string.Concat(Enumerable.Repeat("こんにちは\uFFFD", 20)));
-        yield return () => new("forced ISO-8859-1", "aあb\uD800", new() { EciMode = EciMode.Iso8859_1 }, "a?b?");
-        // A best-fit Latin-1 encoder writes 'ž' as 'z' and 'ｑ' as 'q', but the Structured Append parity counts '?' for each.
-        yield return () => new("forced ISO-8859-1, letters with an ASCII look-alike", "ažbｑ", new() { EciMode = EciMode.Iso8859_1 }, "a?b?");
-        yield return () => new("forced ISO-8859-1, a long run", new string('あ', 300), new() { EciMode = EciMode.Iso8859_1 }, new string('?', 300));
     }
 
     public static IEnumerable<Func<MicroQRCase>> MicroQRCases()
@@ -82,7 +77,7 @@ public class ReplacedCharacterAllocationTest
 
 #if !DEBUG
     /// <summary>
-    /// The fallback buffers kept for replaced characters cost nothing to text that holds none, even on a thread's first sizing and encode.
+    /// The fallback buffer kept for replaced characters costs nothing to text that holds none, even on a thread's first sizing and encode.
     /// </summary>
     /// <remarks>
     /// The calls on this thread first build the process's lookup tables, so the new thread's calls meet nothing built once a process.

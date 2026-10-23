@@ -212,7 +212,8 @@ public class StructuredAppendLaneWalkTest
         var laneEnds = new int[8 * StructuredAppendPlanner.MaxSymbols];
         var counts = new int[8];
         var limit = StructuredAppendPlanner.MaxSymbols;
-        // Under a declared ISO-8859-1 the mark is a byte like any other and a run may open at it, in the lanes as in the scalar walk.
+        // The walk is given the mark under a declared ISO-8859-1 too, which the public entries refuse. There the mark is a byte like any
+        // other and a run may open at it, in the lanes as in the scalar walk.
         foreach (var charset in new[] { EciMode.Utf8, EciMode.Iso8859_1 })
             foreach (var spacing in new[] { 13, 40 })
                 foreach (var shift in new[] { 0, 1, 2, 3, 4, 5, 6, 7 })

@@ -2,10 +2,9 @@
 // OperationStatus and Utf8, for the transcode that replaces without allocating.
 using System.Buffers;
 using System.Text.Unicode;
-#else
-using System.Runtime.InteropServices;
 #endif
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace FeatherQR.Internals;
@@ -376,16 +375,34 @@ internal static class CharacterSets
     /// </summary>
     /// <param name="textSpan">The char span to check for ISO-8859-1-only characters.</param>
     /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsValidISO88591(ReadOnlySpan<char> textSpan)
     {
-        if (textSpan.Length == 0) return true;
-
-        // TODO: Can be simd
-
-        foreach (char c in textSpan)
+        // Four chars a ulong, sixteen ORed together, so the high bytes are tested once a block. The mask is the same in every 16-bit lane,
+        // so byte order does not matter. A vector loop would read a hardware flag, which only a kernel's own files may do. The offsets
+        // step a char reference, since a byte offset in an int would wrap past 2^30 chars.
+        const ulong HighBytes = 0xFF00FF00FF00FF00UL;
+        ref var start = ref MemoryMarshal.GetReference(textSpan);
+        var length = textSpan.Length;
+        var i = 0;
+        for (; i <= length - 16; i += 16)
         {
-            if (c > 0xFF) return false;
+            ref var block = ref Unsafe.As<char, byte>(ref Unsafe.Add(ref start, i));
+            var bits = Unsafe.ReadUnaligned<ulong>(ref block)
+                | Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref block, 8))
+                | Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref block, 16))
+                | Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref block, 24));
+            if ((bits & HighBytes) != 0)
+                return false;
+        }
+        for (; i <= length - 4; i += 4)
+        {
+            if ((Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref start, i))) & HighBytes) != 0)
+                return false;
+        }
+        for (; i < length; i++)
+        {
+            if (Unsafe.Add(ref start, i) > 0xFF)
+                return false;
         }
         return true;
     }

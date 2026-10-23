@@ -113,16 +113,14 @@ public class ArgumentErrorPrecedenceTest
         // rMQR's order, which Standard QR shares: quiet zone, segmentation, ECI, then level
         var eci = new QRCodeGeneratorOptions { EciMode = (EciMode)77 };
 
-        await AssertArgument("eciMode", () => QRCodeGenerator.Create("1", (QREccLevel)9, eci));
-        await AssertArgument("eciMode", () => QRCodeGenerator.Create("1", (QREccLevel)9, eci with { Version = QRVersionRange.AtLeast(2) }));
-        await AssertArgument("eciMode", () => QRCodeGenerator.Create("1", (QREccLevel)9, eci with { BoostEccLevel = true }));
-        await AssertArgument("eciMode", () => QRCodeGenerator.Create("1", (QREccLevel)9, eci with { Segmentation = QRSegmentation.Optimal }));
-        await AssertArgument("eciMode", () => QRCodeGenerator.TryGetRequiredBufferSize("1", (QREccLevel)9, out _, eci));
-        await AssertArgument("eciMode", () => QRCodeGenerator.CreateStructuredAppend("1", (QREccLevel)9, eci));
+        foreach (var (route, call) in PlannedRoutes("1", (QREccLevel)9, eci).Concat(SingleRoutes("1", (QREccLevel)9, eci)))
+            await AssertRefusal(route, typeof(ArgumentOutOfRangeException), "eciMode", call);
         await AssertArgument("eciMode", () => RmQRCodeGenerator.Create("1", (RmQREccLevel)9, new RmQRCodeGeneratorOptions { EciMode = (EciMode)77 }));
 
-        await AssertQuietZone(() => QRCodeGenerator.Create("1", QREccLevel.M, eci with { QuietZoneSize = -1 }));
-        await AssertArgument("segmentation", () => QRCodeGenerator.Create("1", QREccLevel.M, eci with { Segmentation = (QRSegmentation)7 }));
+        foreach (var (route, call) in PlannedRoutes("1", QREccLevel.M, eci with { QuietZoneSize = -1 }).Concat(SingleRoutes("1", QREccLevel.M, eci with { QuietZoneSize = -1 })))
+            await AssertRefusal(route, typeof(ArgumentOutOfRangeException), "quietZoneSize", call);
+        foreach (var (route, call) in PlannedRoutes("1", QREccLevel.M, eci with { Segmentation = (QRSegmentation)7 }))
+            await AssertRefusal(route, typeof(ArgumentOutOfRangeException), "segmentation", call);
         await AssertArgument("segmentation", () => RmQRCodeGenerator.Create("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = (EciMode)77, Segmentation = (RmQRSegmentation)7 }));
     }
 
@@ -134,7 +132,67 @@ public class ArgumentErrorPrecedenceTest
         await AssertArgument("eciMode", () => RmQRCodeGenerator.Create(new string('A', 500), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, EciMode = (EciMode)77 }));
     }
 
+    [Test]
+    public async Task ForcedLatin1OverOtherText_WinsOverAnUndefinedEccLevel()
+    {
+        // The refusal is the ECI step's, so it keeps the ECI's place: after the quiet zone and the segmentation, before the level.
+        var text = "a" + (char)0x3042;
+        var iso = new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 };
+
+        foreach (var (route, call) in PlannedRoutes(text, (QREccLevel)9, iso).Concat(SingleRoutes(text, (QREccLevel)9, iso)))
+            await AssertRefusal(route, typeof(ArgumentException), "eciMode", call);
+        await AssertRefusal("rMQR Create", typeof(ArgumentException), "eciMode", () => RmQRCodeGenerator.Create(text, (RmQREccLevel)9, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 }));
+
+        foreach (var (route, call) in PlannedRoutes(text, QREccLevel.M, iso with { QuietZoneSize = -1 }).Concat(SingleRoutes(text, QREccLevel.M, iso with { QuietZoneSize = -1 })))
+            await AssertRefusal(route, typeof(ArgumentOutOfRangeException), "quietZoneSize", call);
+        foreach (var (route, call) in PlannedRoutes(text, QREccLevel.M, iso with { Segmentation = (QRSegmentation)7 }))
+            await AssertRefusal(route, typeof(ArgumentOutOfRangeException), "segmentation", call);
+    }
+
+    // Each of these entry points validates in its own code, so each needs the order. They keep the options' segmentation, so an
+    // undefined one reaches their checks.
+    private static IEnumerable<(string Route, Action Call)> PlannedRoutes(string text, QREccLevel level, QRCodeGeneratorOptions options) =>
+    [
+        ("Create", () => QRCodeGenerator.Create(text, level, options)),
+        ("Create into a destination", () => QRCodeGenerator.Create(text.AsSpan(), level, new byte[10_000], options)),
+        ("TryGetRequiredBufferSize", () => QRCodeGenerator.TryGetRequiredBufferSize(text, level, out _, options)),
+        ("CreateStructuredAppend", () => QRCodeGenerator.CreateStructuredAppend(text, level, options)),
+    ];
+
+    // Only Single takes these routes, and it is always defined, so they check no segmentation. The helper sets it in place of the
+    // options' segmentation. With any version and no boost, each entry point validates in its own code. A narrowed range or a boost
+    // sends both Create overloads through one shared step instead.
+    private static IEnumerable<(string Route, Action Call)> SingleRoutes(string text, QREccLevel level, QRCodeGeneratorOptions options)
+    {
+        var single = options with { Segmentation = QRSegmentation.Single };
+        return
+        [
+            ("Create, Single", () => QRCodeGenerator.Create(text, level, single)),
+            ("TryGetRequiredBufferSize, Single", () => QRCodeGenerator.TryGetRequiredBufferSize(text, level, out _, single)),
+            ("Create into a destination, Single", () => QRCodeGenerator.Create(text.AsSpan(), level, new byte[10_000], single)),
+            ("Create, Single, a narrowed range", () => QRCodeGenerator.Create(text, level, single with { Version = QRVersionRange.AtLeast(2) })),
+            ("Create, Single, a boost", () => QRCodeGenerator.Create(text, level, single with { BoostEccLevel = true })),
+            ("Create into a destination, Single, a narrowed range", () => QRCodeGenerator.Create(text.AsSpan(), level, new byte[10_000], single with { Version = QRVersionRange.AtLeast(2) })),
+        ];
+    }
+
     private static async Task AssertQuietZone(Action call) => await AssertArgument("quietZoneSize", call);
+
+    // The type is compared exactly, since ArgumentOutOfRangeException derives from ArgumentException, the type of the charset refusal.
+    private static async Task AssertRefusal(string route, Type type, string paramName, Action call)
+    {
+        Exception? error = null;
+        try
+        {
+            call();
+        }
+        catch (Exception e)
+        {
+            error = e;
+        }
+        await Assert.That(error?.GetType()).IsEqualTo(type).Because($"through {route}");
+        await Assert.That((error as ArgumentException)?.ParamName).IsEqualTo(paramName).Because($"through {route}");
+    }
 
     /// <summary>The message of the <see cref="ArgumentOutOfRangeException"/> <paramref name="call"/> throws, once it names <paramref name="paramName"/>.</summary>
     private static async Task<string> AssertArgument(string paramName, Action call)

@@ -333,13 +333,13 @@ public class NetStandardBuildParityTest
 #endif
     }
 
-    // The host's build writes Latin-1 and counts UTF-8 through encodings of its own, and netstandard2.1 counts UTF-8 through one.
+    // Both builds count UTF-8 through an encoding of their own.
     public static IEnumerable<Func<string>> ProviderFrameworks() => [() => $"net{Environment.Version.Major}.0", () => "netstandard2.1"];
 
     /// <summary>
-    /// A build's encodings do not follow an encoding provider the process registers. One that answers ISO-8859-1 and UTF-8 with ASCII
-    /// answers on this thread alone, and a fresh copy of the build is loaded, so its encodings are made under it here. Through ASCII the
-    /// Latin-1 writer would write 'ü' as '?', and the UTF-8 count would throw, since ASCII cannot hold the U+FFFD it replaces with.
+    /// A build's encoding does not follow an encoding provider the process registers. One that answers UTF-8 with ASCII answers on this
+    /// thread alone, and a fresh copy of the build is loaded, so its encoding is made under it here. Through ASCII the UTF-8 count would
+    /// throw, since ASCII cannot hold the U+FFFD it replaces with.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(ProviderFrameworks))]
@@ -350,12 +350,11 @@ public class NetStandardBuildParityTest
         CoreAssemblyDependencyTest.SkipIfStale(path!);
         AsciiProvider.RegisterOnce();
 
-        EncodeOutcome latin1, utf8;
+        EncodeOutcome utf8;
         AsciiProvider.OnThisThread = true;
         try
         {
             var build = new AssemblyLoadContext($"FeatherQR {targetFramework} under a provider").LoadFromStream(new MemoryStream(File.ReadAllBytes(path!)));
-            latin1 = Encode(build, path!, new SpanCase("forced ISO-8859-1", "QR", "Zürich", "M", ("EciMode", "Iso8859_1")));
             utf8 = Encode(build, path!, new SpanCase("UTF-8", "QR", "Zürich こんにちは", "M"));
         }
         finally
@@ -363,11 +362,10 @@ public class NetStandardBuildParityTest
             AsciiProvider.OnThisThread = false;
         }
 
-        await Assert.That(latin1.Text).IsEqualTo("Zürich").Because($"{targetFramework}: the Latin-1 writer's encoding is the runtime's ISO-8859-1");
         await Assert.That(utf8.Text).IsEqualTo("Zürich こんにちは").Because($"{targetFramework}: the UTF-8 count's encoding is the runtime's UTF-8");
     }
 
-    /// <summary>Answers ISO-8859-1 and UTF-8 with ASCII on a thread that asks it to, and leaves every other thread to the runtime.</summary>
+    /// <summary>Answers UTF-8 with ASCII on a thread that asks it to, and leaves every other thread to the runtime.</summary>
     private sealed class AsciiProvider : System.Text.EncodingProvider
     {
         [ThreadStatic]
@@ -381,33 +379,43 @@ public class NetStandardBuildParityTest
                 System.Text.Encoding.RegisterProvider(new AsciiProvider());
         }
 
-        public override System.Text.Encoding? GetEncoding(int codepage) => OnThisThread && codepage is 28591 or 65001 ? System.Text.Encoding.ASCII : null;
+        public override System.Text.Encoding? GetEncoding(int codepage) => OnThisThread && codepage == 65001 ? System.Text.Encoding.ASCII : null;
 
         public override System.Text.Encoding? GetEncoding(string name) => null;
     }
 
     /// <summary>
-    /// Under a forced ISO-8859-1 the netstandard builds write a char above U+00FF as its low byte, where .NET 8 and later write '?'
-    /// (<see cref="ReplacedCharacterAllocationTest"/>). The symbols differ, so this case is not held to the host's matrix as
-    /// the span cases are, but to what its own build reads back.
+    /// The netstandard builds refuse a forced ISO-8859-1 over text it cannot hold, as the host's build does
+    /// (<see cref="ForcedIso8859_1Test"/>). Their Latin-1 writer narrows each char without a check, so a build that let such text through
+    /// would write each char's low byte.
     /// </summary>
-    /// <remarks>Runs alone, as <see cref="DecodeAllocationTest"/> does: a test running beside it can empty the array pool's shared stacks.</remarks>
     [Test]
-    [NotInParallel]
     [MethodDataSource(nameof(Frameworks))]
-    public async Task SpanCreate_ForcedIso8859_1_WritesTheLowByteAndAllocatesNothing(string targetFramework)
+    public async Task ForcedIso8859_1_OverTextItCannotHold_IsRefused(string targetFramework)
     {
         var (build, path) = await LoadBuild(targetFramework);
-        // U+3042's low byte is 'B', and U+D800's is zero.
-        var c = new SpanCase("forced ISO-8859-1", "QR", "a" + (char)0x3042 + "b" + (char)0xD800, "M", ("EciMode", "Iso8859_1"));
+        var options = Options(build, "QR", [("EciMode", "Iso8859_1")]);
+        var eccLevel = EccLevel(build, "QR", "M");
+        var text = "a" + (char)0x3042 + "b";
 
-        var outcome = Encode(build, path, c);
-        await Assert.That(outcome.Text).IsEqualTo("aBb" + (char)0).Because($"{targetFramework}: reads each char's low byte back");
+        await Assert.That(RefusedFor(() => BindSizing(build, "QR", path)(text, eccLevel, options, out _, out _, out _))).IsEqualTo("eciMode")
+            .Because($"{targetFramework}: sizing refuses the charset");
+        await Assert.That(RefusedFor(() => BindSpanCreate(build, "QR", path)(text, eccLevel, new byte[10_000], options))).IsEqualTo("eciMode")
+            .Because($"{targetFramework}: the encode refuses the charset");
+    }
 
-#if !DEBUG
-        foreach (var (call, bytes) in SteadyStateBytes(build, path, c, outcome))
-            await Assert.That(bytes).IsEqualTo(0).Because($"{targetFramework}: bytes the {call} allocates once warm");
-#endif
+    // The parameter an argument error names, or null when the call returns.
+    private static string? RefusedFor(Action call)
+    {
+        try
+        {
+            call();
+            return null;
+        }
+        catch (ArgumentException e)
+        {
+            return e.ParamName;
+        }
     }
 
 #if !DEBUG

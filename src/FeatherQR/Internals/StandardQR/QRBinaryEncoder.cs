@@ -3,6 +3,10 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+#if NET5_0_OR_GREATER
+// The netstandard builds lack Encoding.Latin1.
+using System.Text;
+#endif
 
 using FeatherQR.Internals.BinaryEncoders;
 
@@ -544,17 +548,16 @@ internal ref partial struct QRBinaryEncoder
     /// Writes ISO-8859-1 (Latin-1) byte data directly from chars.
     /// </summary>
     /// <remarks>
-    /// A char above U+00FF reaches it only under a forced ISO-8859-1. .NET 8 and later write '?' for it, which the Structured Append parity counts, and the netstandard builds its low byte.
+    /// Chars are pre-validated as ISO-8859-1 (&lt;= 0xFF), so each byte is its char's value.
     /// </remarks>
     private void WriteLatin1Data(ReadOnlySpan<char> textSpan)
     {
-#if NET8_0_OR_GREATER
-        // The runtime narrows chars with SIMD, and WriteByteData then writes 8 bytes a store. It avoids Encoding.Latin1, which allocates in
-        // each call that meets a char above U+00FF and writes a letter with an ASCII look-alike as that letter.
+#if NET5_0_OR_GREATER
+        // Encoding.Latin1 narrows chars with SIMD, and WriteByteData then writes 8 bytes a store.
         if (textSpan.Length <= StackAllocThreshold)
         {
             Span<byte> latin1 = stackalloc byte[textSpan.Length];
-            ThreadBufferFallback.Latin1.GetBytes(textSpan, latin1);
+            Encoding.Latin1.GetBytes(textSpan, latin1);
             WriteByteData(latin1);
         }
         else
@@ -562,7 +565,7 @@ internal ref partial struct QRBinaryEncoder
             var buffer = ArrayPool<byte>.Shared.Rent(textSpan.Length);
             try
             {
-                var bytesWritten = ThreadBufferFallback.Latin1.GetBytes(textSpan, buffer);
+                var bytesWritten = Encoding.Latin1.GetBytes(textSpan, buffer);
                 WriteByteData(buffer.AsSpan(0, bytesWritten));
             }
             finally
