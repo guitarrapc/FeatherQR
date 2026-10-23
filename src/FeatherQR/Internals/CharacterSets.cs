@@ -2,6 +2,8 @@
 // OperationStatus and Utf8, for the transcode that replaces without allocating.
 using System.Buffers;
 using System.Text.Unicode;
+#else
+using System.Runtime.InteropServices;
 #endif
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -60,20 +62,35 @@ internal static class CharacterSets
         return (utf8Counter ??= Encoding.UTF8.GetEncoder()).GetByteCount(text, flush: true);
 #else
         // netstandard2.0's Encoder has no span overloads, the pointer overloads would be unsafe code, and a pooled copy counted slower on
-        // non-ASCII text, so the count is the one EncodeUtf8 writes.
+        // non-ASCII text, so the count is the one EncodeUtf8 writes. Refs, not the span indexer, which is slow on the portable span
+        // .NET Framework runs.
+        ref var start = ref MemoryMarshal.GetReference(text);
+        var length = text.Length;
         var n = 0;
-        for (var i = 0; i < text.Length; i++)
+        var i = 0;
+        while (i < length)
         {
-            int c = text[i];
+            int c = Unsafe.Add(ref start, i);
             if (c < 0x80)
             {
-                n += 1;
+                // Four ASCII chars at a time. Tried from an ASCII char only, since from any other it would fail at every one.
+                if (i + 4 <= length && (Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref start, i))) & 0xFF80FF80FF80FF80UL) == 0)
+                {
+                    n += 4;
+                    i += 4;
+                }
+                else
+                {
+                    n++;
+                    i++;
+                }
+                continue;
             }
-            else if (c < 0x800)
+            if (c < 0x800)
             {
                 n += 2;
             }
-            else if (c is >= 0xD800 and <= 0xDBFF && i + 1 < text.Length && text[i + 1] is >= (char)0xDC00 and <= (char)0xDFFF)
+            else if (c is >= 0xD800 and <= 0xDBFF && i + 1 < length && Unsafe.Add(ref start, i + 1) is >= (char)0xDC00 and <= (char)0xDFFF)
             {
                 n += 4;
                 i++;
@@ -83,6 +100,7 @@ internal static class CharacterSets
                 // Every other char, a lone surrogate as U+FFFD among them
                 n += 3;
             }
+            i++;
         }
         return n;
 #endif
@@ -94,6 +112,13 @@ internal static class CharacterSets
     /// </summary>
     internal static int EncodeUtf8(ReadOnlySpan<char> text, Span<byte> utf8)
     {
+#if !NET8_0_OR_GREATER
+        // Three bytes a char hold any text's UTF-8, so the netstandard builds write it through refs then: the span indexers are slow on the
+        // portable span .NET Framework runs. The narrowing reads the chars as a little-endian machine lays them out. .NET 8 and later keep
+        // this loop, where the other form wrote Micro QR's payloads no faster.
+        if (BitConverter.IsLittleEndian && utf8.Length / 3 >= text.Length)
+            return EncodeUtf8ThroughRefs(text, utf8);
+#endif
         var n = 0;
         for (var i = 0; i < text.Length; i++)
         {
@@ -137,6 +162,74 @@ internal static class CharacterSets
         }
         return n;
     }
+
+#if !NET8_0_OR_GREATER
+    /// <summary><see cref="EncodeUtf8"/> through refs, into a destination of three bytes a char, on a little-endian machine.</summary>
+    private static int EncodeUtf8ThroughRefs(ReadOnlySpan<char> text, Span<byte> utf8)
+    {
+        ref var src = ref MemoryMarshal.GetReference(text);
+        ref var dst = ref MemoryMarshal.GetReference(utf8);
+        var length = text.Length;
+        var n = 0;
+        var i = 0;
+        while (i < length)
+        {
+            int c = Unsafe.Add(ref src, i);
+            if (c < 0x80)
+            {
+                // Four ASCII chars at a time, narrowed to four bytes. Tried from an ASCII char only, since from any other it would fail at every one.
+                if (i + 4 <= length)
+                {
+                    var word = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref src, i)));
+                    if ((word & 0xFF80FF80FF80FF80UL) == 0)
+                    {
+                        var pairs = word | (word >> 8);
+                        Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, n), (uint)((pairs & 0xFFFF) | ((pairs >> 16) & 0xFFFF0000)));
+                        n += 4;
+                        i += 4;
+                        continue;
+                    }
+                }
+                Unsafe.Add(ref dst, n++) = (byte)c;
+                i++;
+                continue;
+            }
+
+            if (c < 0x800)
+            {
+                Unsafe.Add(ref dst, n++) = (byte)(0xC0 | (c >> 6));
+                Unsafe.Add(ref dst, n++) = (byte)(0x80 | (c & 0x3F));
+            }
+            else if (c is >= 0xD800 and <= 0xDFFF)
+            {
+                if (c <= 0xDBFF && i + 1 < length && Unsafe.Add(ref src, i + 1) is >= (char)0xDC00 and <= (char)0xDFFF)
+                {
+                    var cp = 0x10000 + ((c - 0xD800) << 10) + (Unsafe.Add(ref src, i + 1) - 0xDC00);
+                    i++;
+                    Unsafe.Add(ref dst, n++) = (byte)(0xF0 | (cp >> 18));
+                    Unsafe.Add(ref dst, n++) = (byte)(0x80 | ((cp >> 12) & 0x3F));
+                    Unsafe.Add(ref dst, n++) = (byte)(0x80 | ((cp >> 6) & 0x3F));
+                    Unsafe.Add(ref dst, n++) = (byte)(0x80 | (cp & 0x3F));
+                }
+                else
+                {
+                    // lone surrogate -> U+FFFD, matching Encoding.UTF8 replacement
+                    Unsafe.Add(ref dst, n++) = 0xEF;
+                    Unsafe.Add(ref dst, n++) = 0xBF;
+                    Unsafe.Add(ref dst, n++) = 0xBD;
+                }
+            }
+            else
+            {
+                Unsafe.Add(ref dst, n++) = (byte)(0xE0 | (c >> 12));
+                Unsafe.Add(ref dst, n++) = (byte)(0x80 | ((c >> 6) & 0x3F));
+                Unsafe.Add(ref dst, n++) = (byte)(0x80 | (c & 0x3F));
+            }
+            i++;
+        }
+        return n;
+    }
+#endif
 
     /// <summary>
     /// ASCII lookup table for alphanumeric character validation and encoding.

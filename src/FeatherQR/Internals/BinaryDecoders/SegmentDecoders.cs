@@ -1,7 +1,9 @@
-#if NET8_0_OR_GREATER
 // OperationStatus, for the one-pass UTF-8 transcode.
 using System.Buffers;
+#if NET8_0_OR_GREATER
 using System.Text.Unicode;
+#else
+using System.Runtime.InteropServices;
 #endif
 using System.Runtime.CompilerServices;
 using FeatherQR.Internals.BinaryEncoders;
@@ -255,7 +257,6 @@ internal static class SegmentDecoders
         if (charset == ByteSegmentCharset.ShiftJis)
             return DecodeShiftJis(bytes, destination, ref charsWritten);
 
-#if NET8_0_OR_GREATER
         // A UTF-8 BOM (the encoder writes one under Utf8Bom) is consumed, not decoded,
         // but an explicit ECI ISO-8859-1 declaration wins over it: there, EF BB BF is the
         // legitimate Latin-1 text "ï»¿".
@@ -265,7 +266,11 @@ internal static class SegmentDecoders
 
             // One pass: the transcoder validates as it writes. A declared charset or a BOM
             // substitutes what is invalid. Undeclared, an invalid sequence means ISO-8859-1.
+#if NET8_0_OR_GREATER
             var status = Utf8.ToUtf16(hasBom ? bytes.Slice(3) : bytes, destination.Slice(charsWritten), out _, out var written, replaceInvalidSequences: hasBom || charset == ByteSegmentCharset.Utf8);
+#else
+            var status = DecodeUtf8(hasBom ? bytes.Slice(3) : bytes, destination.Slice(charsWritten), out var written, replaceInvalidSequences: hasBom || charset == ByteSegmentCharset.Utf8);
+#endif
             if (status == OperationStatus.Done)
             {
                 charsWritten += written;
@@ -279,26 +284,6 @@ internal static class SegmentDecoders
                 && (hasBom || charset == ByteSegmentCharset.Utf8 || IsValidUtf8(bytes) || !GuessesShiftJis(bytes, fnc1)))
                 return DecodeStatus.DestinationTooSmall;
         }
-#else
-        // A UTF-8 BOM (the encoder writes one under Utf8Bom) is consumed, not decoded,
-        // but an explicit ECI ISO-8859-1 declaration wins over it: there, EF BB BF is the
-        // legitimate Latin-1 text "ï»¿".
-        var useUtf8 = charset switch
-        {
-            ByteSegmentCharset.Utf8 => true,
-            ByteSegmentCharset.Iso8859_1 => false,
-            _ => IsValidUtf8(bytes),
-        };
-        if (charset != ByteSegmentCharset.Iso8859_1
-            && bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-        {
-            useUtf8 = true;
-            bytes = bytes.Slice(3);
-        }
-
-        if (useUtf8)
-            return DecodeUtf8(bytes, destination, ref charsWritten);
-#endif
 
         // Undeclared and not UTF-8: encoders that write Shift_JIS here leave the ECI header out
         if (charset == ByteSegmentCharset.Unspecified && GuessesShiftJis(bytes, fnc1))
@@ -421,88 +406,139 @@ internal static class SegmentDecoders
 
 #if !NET8_0_OR_GREATER
     /// <summary>
-    /// UTF-8 to UTF-16 as <c>Utf8.ToUtf16</c> reads it on .NET 8 and later with replacement: one U+FFFD for each maximal subpart of an
-    /// ill-formed sequence (The Unicode Standard, 3.9, Table 3-7 for the well-formed ones).
+    /// UTF-8 to UTF-16 as <c>Utf8.ToUtf16</c> reads it on .NET 8 and later. Replacing, it writes one U+FFFD for each maximal subpart of an
+    /// ill-formed sequence (The Unicode Standard, 3.9, Table 3-7 for the well-formed ones). Not replacing, it stops there with
+    /// <see cref="OperationStatus.InvalidData"/>.
     /// </summary>
     /// <remarks>
     /// The runtime's decoder allocates in each call that meets bytes UTF-8 does not hold, and .NET Framework's replaces other spans of them,
-    /// so the netstandard builds read UTF-8 here. A destination that runs out returns <see cref="DecodeStatus.DestinationTooSmall"/>, with
-    /// what was written before it left in place.
+    /// so the netstandard builds read UTF-8 here. A destination that runs out returns <see cref="OperationStatus.DestinationTooSmall"/>.
     /// </remarks>
-    private static DecodeStatus DecodeUtf8(ReadOnlySpan<byte> bytes, Span<char> destination, ref int charsWritten)
+    private static OperationStatus DecodeUtf8(ReadOnlySpan<byte> source, Span<char> destination, out int charsWritten, bool replaceInvalidSequences)
     {
-        var written = charsWritten;
+        // Refs, not the span indexers, which are slow on the portable span .NET Framework runs.
+        ref var src = ref MemoryMarshal.GetReference(source);
+        ref var dst = ref MemoryMarshal.GetReference(destination);
+        var length = source.Length;
+        var room = destination.Length;
         var i = 0;
-        while (i < bytes.Length)
+        var written = 0;
+        while (i < length)
         {
-            int lead = bytes[i];
-            int scalar;
+            int lead = Unsafe.Add(ref src, i);
             if (lead < 0x80)
             {
-                scalar = lead;
-                i++;
-            }
-            else
-            {
-                // The sequence's length, and the range its second byte must fall in. No sequence starts at 80..C1 or F5..FF.
-                int length = 0, low = 0x80, high = 0xBF;
-                if (lead is >= 0xC2 and <= 0xDF)
+                // Eight ASCII bytes at a time. Tried from an ASCII byte only, since from a lead byte it would fail at every sequence.
+                // The widening lays the chars out as a little-endian machine does.
+                if (BitConverter.IsLittleEndian && i + 8 <= length && room - written >= 8)
                 {
-                    length = 2;
-                }
-                else if (lead is >= 0xE0 and <= 0xEF)
-                {
-                    length = 3;
-                    if (lead == 0xE0)
-                        low = 0xA0;
-                    else if (lead == 0xED)
-                        high = 0x9F;
-                }
-                else if (lead is >= 0xF0 and <= 0xF4)
-                {
-                    length = 4;
-                    if (lead == 0xF0)
-                        low = 0x90;
-                    else if (lead == 0xF4)
-                        high = 0x8F;
-                }
-
-                scalar = length == 0 ? -1 : lead & (0x7F >> length);
-                var end = i + 1;
-                for (var k = 1; k < length; k++)
-                {
-                    // A byte out of range ends the maximal subpart before it, and is read again as a lead
-                    if (end >= bytes.Length || bytes[end] < low || bytes[end] > high)
+                    var word = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref src, i));
+                    if ((word & 0x8080808080808080UL) == 0)
                     {
-                        scalar = -1;
-                        break;
+                        ref var at = ref Unsafe.As<char, byte>(ref Unsafe.Add(ref dst, written));
+                        Unsafe.WriteUnaligned(ref at, WidenAscii4((uint)word));
+                        Unsafe.WriteUnaligned(ref Unsafe.Add(ref at, 8), WidenAscii4((uint)(word >> 32)));
+                        i += 8;
+                        written += 8;
+                        continue;
                     }
-                    scalar = (scalar << 6) | (bytes[end] & 0x3F);
-                    end++;
-                    low = 0x80;
-                    high = 0xBF;
                 }
-                i = end;
+                if (written == room)
+                {
+                    charsWritten = written;
+                    return OperationStatus.DestinationTooSmall;
+                }
+                Unsafe.Add(ref dst, written++) = (char)lead;
+                i++;
+                continue;
+            }
+
+            // The sequence's length, and the range its second byte must fall in. No sequence starts at 80..C1 or F5..FF.
+            int count = 0, low = 0x80, high = 0xBF;
+            if (lead is >= 0xC2 and <= 0xDF)
+            {
+                count = 2;
+            }
+            else if (lead is >= 0xE0 and <= 0xEF)
+            {
+                count = 3;
+                if (lead == 0xE0)
+                    low = 0xA0;
+                else if (lead == 0xED)
+                    high = 0x9F;
+            }
+            else if (lead is >= 0xF0 and <= 0xF4)
+            {
+                count = 4;
+                if (lead == 0xF0)
+                    low = 0x90;
+                else if (lead == 0xF4)
+                    high = 0x8F;
+            }
+
+            var scalar = count == 0 ? -1 : lead & (0x7F >> count);
+            var end = i + 1;
+            for (var k = 1; k < count; k++)
+            {
+                // A byte out of range ends the maximal subpart before it, and is read again as a lead
+                if (end >= length)
+                {
+                    scalar = -1;
+                    break;
+                }
+                int next = Unsafe.Add(ref src, end);
+                if (next < low || next > high)
+                {
+                    scalar = -1;
+                    break;
+                }
+                scalar = (scalar << 6) | (next & 0x3F);
+                end++;
+                low = 0x80;
+                high = 0xBF;
             }
 
             if (scalar < 0)
+            {
+                if (!replaceInvalidSequences)
+                {
+                    charsWritten = written;
+                    return OperationStatus.InvalidData;
+                }
                 scalar = 0xFFFD;
+            }
             if (scalar < 0x10000)
             {
-                if (written >= destination.Length)
-                    return DecodeStatus.DestinationTooSmall;
-                destination[written++] = (char)scalar;
+                if (written == room)
+                {
+                    charsWritten = written;
+                    return OperationStatus.DestinationTooSmall;
+                }
+                Unsafe.Add(ref dst, written++) = (char)scalar;
             }
             else
             {
-                if (written + 2 > destination.Length)
-                    return DecodeStatus.DestinationTooSmall;
-                destination[written++] = (char)(0xD7C0 + (scalar >> 10));
-                destination[written++] = (char)(0xDC00 | (scalar & 0x3FF));
+                if (room - written < 2)
+                {
+                    charsWritten = written;
+                    return OperationStatus.DestinationTooSmall;
+                }
+                Unsafe.Add(ref dst, written++) = (char)(0xD7C0 + (scalar >> 10));
+                Unsafe.Add(ref dst, written++) = (char)(0xDC00 | (scalar & 0x3FF));
             }
+            i = end;
         }
         charsWritten = written;
-        return DecodeStatus.Success;
+        return OperationStatus.Done;
+    }
+
+    /// <summary>Four bytes, lowest first, to four 16-bit lanes, lowest first.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong WidenAscii4(uint four)
+    {
+        ulong lanes = four;
+        lanes = (lanes | (lanes << 16)) & 0x0000FFFF0000FFFFUL;
+        return (lanes | (lanes << 8)) & 0x00FF00FF00FF00FFUL;
     }
 #endif
 

@@ -330,9 +330,14 @@ public class NetStandardBuildParityTest
     private static readonly byte[] Utf8EdgeBytes =
         [0x00, 0x61, 0x7F, 0x80, 0x8F, 0x90, 0x9F, 0xA0, 0xBF, 0xC0, 0xC1, 0xC2, 0xDF, 0xE0, 0xE1, 0xEC, 0xED, 0xEE, 0xEF, 0xF0, 0xF1, 0xF3, 0xF4, 0xF5, 0xFF];
 
+    // Valid UTF-8 for the segments drawn whole: ASCII runs of any length beside chars of two, three and four bytes
+    private static readonly string[] Utf8Pieces = ["a", "HELLO WORLD 12345", "https://example.com/", "é", "こんにちは", "😀"];
+
     /// <summary>
-    /// Random Byte segments under ECI 26 read through each netstandard build's own UTF-8 decoder give this host's build's text, which is
-    /// <c>Utf8.ToUtf16</c>'s with replacement.
+    /// Random Byte segments read through each netstandard build's own UTF-8 decoder give this host's build's text and decode info, which
+    /// are <c>Utf8.ToUtf16</c>'s: under ECI 26 and behind a byte order mark with replacement, and with no ECI as UTF-8 only where the
+    /// bytes are well formed, else as Shift_JIS or ISO-8859-1. Half the segments are bytes drawn at each range's bounds, half valid UTF-8,
+    /// each into a destination of room to spare, of its text's length and of one char less.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(Frameworks))]
@@ -344,22 +349,92 @@ public class NetStandardBuildParityTest
         var buildDecode = BindDecode(build, "QR", image: false, path);
         var random = new Random(26);
         string? mismatch = null;
-        for (var round = 0; round < 2000 && mismatch is null; round++)
+        for (var round = 0; round < 6000 && mismatch is null; round++)
         {
-            var payload = new byte[random.Next(0, 49)];
-            for (var i = 0; i < payload.Length; i++)
-                payload[i] = Utf8EdgeBytes[random.Next(Utf8EdgeBytes.Length)];
-            var matrix = KanjiSymbolBuilder.StandardQr(DataStream(true, payload, Version3LDataCodewords), version: 3, QREccLevel.L, mask: 0);
+            byte[] payload;
+            if (round % 2 == 0)
+            {
+                payload = new byte[random.Next(0, 46)];
+                for (var i = 0; i < payload.Length; i++)
+                    payload[i] = Utf8EdgeBytes[random.Next(Utf8EdgeBytes.Length)];
+            }
+            else
+            {
+                var text = new System.Text.StringBuilder();
+                while (text.Length < 40 && random.Next(8) != 0)
+                    text.Append(Utf8Pieces[random.Next(Utf8Pieces.Length)]);
+                var bytes = System.Text.Encoding.UTF8.GetBytes(text.ToString());
+                payload = bytes.AsSpan(0, Math.Min(bytes.Length, 45)).ToArray();
+            }
 
-            var expected = Decode(hostDecode, matrix, 29, 29).Text;
-            var actual = Decode(buildDecode, matrix, 29, 29).Text;
-            if (expected != System.Text.Encoding.UTF8.GetString(payload))
-                mismatch = $"round {round}, {Convert.ToHexString(payload)}: this host's build does not read Encoding.UTF8's text";
-            else if (actual != expected)
-                mismatch = $"round {round}, {Convert.ToHexString(payload)}: reads other text than this host's build";
+            // ECI 26, no ECI, or no ECI behind a byte order mark
+            var mode = round / 2 % 3;
+            byte[] stream = mode == 2 ? [0xEF, 0xBB, 0xBF, .. payload] : payload;
+            var matrix = KanjiSymbolBuilder.StandardQr(DataStream(mode == 0, stream, Version3LDataCodewords), version: 3, QREccLevel.L, mask: 0);
+
+            var expected = Decode(hostDecode, matrix, 29, 29);
+            if (mode != 1 && expected.Text != System.Text.Encoding.UTF8.GetString(payload))
+            {
+                mismatch = $"round {round}, {Convert.ToHexString(stream)}: this host's build does not read Encoding.UTF8's text";
+                break;
+            }
+            // A segment with no ECI can read as Shift_JIS and fail on a pair without a cell: it has no text to size a destination by
+            var rooms = expected.Text is null ? [DecodedChars] : new[] { DecodedChars, expected.Text.Length, expected.Text.Length - 1 };
+            foreach (var room in rooms)
+            {
+                if (room < 0)
+                    continue;
+                var hostRead = Decode(hostDecode, matrix, 29, 29, room);
+                var buildRead = Decode(buildDecode, matrix, 29, 29, room);
+                if (buildRead != hostRead)
+                {
+                    mismatch = $"round {round}, {Convert.ToHexString(stream)}, room {room}: reads {buildRead}, this host's build {hostRead}";
+                    break;
+                }
+            }
         }
 
-        await Assert.That(mismatch).IsNull().Because($"{targetFramework}: random Byte segments under ECI 26");
+        await Assert.That(mismatch).IsNull().Because($"{targetFramework}: random Byte segments, with ECI 26, without and behind a byte order mark");
+    }
+
+    // Text for the UTF-8 count and transcode: ASCII runs of any length beside chars of two, three and four bytes, and lone surrogates
+    private static readonly string[] TextPieces = ["a", "HELLO WORLD 12345", "https://example.com/", "é", "こんにちは", "😀", "\uD800", "\uDC00"];
+
+    /// <summary>
+    /// Random text through each netstandard build's own UTF-8 count and transcode sizes and writes this host's build's symbol: Standard QR
+    /// under ECI UTF-8 in both segmentations, and Micro QR, whose payloads the transcode writes on every build.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Frameworks))]
+    public async Task SpanCreate_RandomUtf8_WritesThisHostsMatrix(string targetFramework)
+    {
+        var (build, path) = await LoadBuild(targetFramework);
+        var host = typeof(QRCodeGenerator).Assembly;
+        var random = new Random(8);
+        string? mismatch = null;
+        var shapes = new (string Symbology, string EccLevel, int MaxLength, (string Property, object Value)[] Options)[]
+        {
+            ("QR", "M", 60, [("EciMode", "Utf8")]),
+            ("QR", "M", 60, [("EciMode", "Utf8"), ("Segmentation", "Single")]),
+            ("MicroQR", "L", 4, []),
+        };
+        foreach (var (symbology, eccLevel, maxLength, options) in shapes)
+        {
+            for (var round = 0; round < 500 && mismatch is null; round++)
+            {
+                var text = new System.Text.StringBuilder();
+                while (text.Length < maxLength && random.Next(6) != 0)
+                    text.Append(TextPieces[random.Next(TextPieces.Length)]);
+                var c = new SpanCase($"{symbology} random {round}", symbology, text.ToString(0, Math.Min(text.Length, maxLength)), eccLevel, options);
+
+                var expected = Encode(host, host.Location, c);
+                var actual = Encode(build, path, c);
+                if (actual.Fits != expected.Fits || !actual.Matrix.AsSpan().SequenceEqual(expected.Matrix))
+                    mismatch = $"{c.Name}, \"{c.Text}\": a symbol other than this host's build's";
+            }
+        }
+
+        await Assert.That(mismatch).IsNull().Because($"{targetFramework}: random text through the UTF-8 count and transcode");
     }
 
     public static IEnumerable<Func<(string TargetFramework, string Case)>> Utf8StreamCases() =>
@@ -448,9 +523,9 @@ public class NetStandardBuildParityTest
     private static (string? Text, string? Info) DecodeImage(Assembly assembly, string path, string symbology, byte[] luminance, int width, int height)
         => Decode(BindDecode(assembly, symbology, image: true, path), luminance, width, height);
 
-    private static (string? Text, string? Info) Decode(SpanDecode decode, byte[] input, int width, int height)
+    private static (string? Text, string? Info) Decode(SpanDecode decode, byte[] input, int width, int height, int destinationLength = DecodedChars)
     {
-        var chars = new char[DecodedChars];
+        var chars = new char[destinationLength];
         var info = new object?[1];
         var decoded = decode(input, width, height, chars, out var written, info);
         return (decoded ? new string(chars, 0, written) : null, info[0]?.ToString());
