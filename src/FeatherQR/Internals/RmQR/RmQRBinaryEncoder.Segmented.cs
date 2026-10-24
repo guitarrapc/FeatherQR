@@ -49,7 +49,7 @@ internal static partial class RmQRBinaryEncoder
 
         // Hoisted out of the loop on purpose: a stackalloc inside it would accumulate per iteration.
         // Byte-mode capacity tops out at 150 bytes, so any run of a plan that passed the bit check above transcodes into this budget.
-        Span<byte> utf8 = stackalloc byte[StackByteBudget];
+        Span<byte> utf8 = stackalloc byte[Utf8StackBytes];
         var expectedStart = 0;
 
         // The count widths once for the version, not a mode lookup per run: a Kanji plan of interleaved text has a run every few characters.
@@ -118,7 +118,7 @@ internal static partial class RmQRBinaryEncoder
     {
         if (expectedBytes <= scratch.Length)
         {
-            var length = GetUtf8Bytes(chars, scratch);
+            var length = CharacterSets.GetUtf8Bytes(chars, scratch);
             if (length != expectedBytes)
                 throw new ArgumentException($"Segment plan budgeted {expectedBytes} UTF-8 bytes but the run encodes to {length}.");
             WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, scratch.Slice(0, length));
@@ -129,7 +129,7 @@ internal static partial class RmQRBinaryEncoder
         var rented = ArrayPool<byte>.Shared.Rent(chars.Length * 3);
         try
         {
-            var length = GetUtf8Bytes(chars, rented);
+            var length = CharacterSets.GetUtf8Bytes(chars, rented);
             if (length != expectedBytes)
                 throw new ArgumentException($"Segment plan budgeted {expectedBytes} UTF-8 bytes but the run encodes to {length}.");
             WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, rented.AsSpan(0, length));

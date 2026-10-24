@@ -1,7 +1,3 @@
-#if !NETSTANDARD2_1_OR_GREATER && !NET5_0_OR_GREATER
-// ArrayPool is only reached from the netstandard2.0 branch of ByteUnitCount.
-using System.Buffers;
-#endif
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -902,30 +898,11 @@ internal static partial class ModeSegmenter
 
     /// <summary>Encoded byte count of a Byte-mode run, i.e. the value its count indicator carries.</summary>
     /// <remarks>
-    /// Deliberately asks <see cref="Encoding.UTF8"/> rather than reusing the dynamic program's own per-character model: comparing the two is what would catch an error in that model, so they have to stay independent computations.
+    /// Deliberately counts apart from the dynamic program's own per-character model: comparing the two is what would catch an error in that model, so they have to stay independent computations.
+    /// It counts with the runtime's UTF-8 encoder, except on netstandard2.0, which counts with <see cref="CharacterSets.GetUtf8ByteCount"/>'s own loop. <c>NetStandardBuildParityTest</c> holds that loop to the .NET builds' answers.
     /// </remarks>
     public static int ByteUnitCount(ReadOnlySpan<char> text, EciMode charset)
-    {
-        if (charset != EciMode.Utf8)
-            return text.Length;
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        return Encoding.UTF8.GetByteCount(text);
-#else
-        // netstandard2.0 has no span overload, and the pointer overload would mean
-        // unsafe code, which the library keeps to one alignment hint. Rent
-        // rather than ToString(), so planning stays allocation-free on every target.
-        var rented = ArrayPool<char>.Shared.Rent(Math.Max(text.Length, 1));
-        try
-        {
-            text.CopyTo(rented);
-            return Encoding.UTF8.GetByteCount(rented, 0, text.Length);
-        }
-        finally
-        {
-            ArrayPool<char>.Shared.Return(rented, clearArray: false);
-        }
-#endif
-    }
+        => charset != EciMode.Utf8 ? text.Length : CharacterSets.GetUtf8ByteCount(text);
 
     /// <summary>
     /// The longest run of digits and the longest run of characters in the alphanumeric alphabet, in one pass.

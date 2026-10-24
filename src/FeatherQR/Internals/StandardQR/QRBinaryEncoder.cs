@@ -3,7 +3,10 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+#if NET5_0_OR_GREATER
+// The netstandard builds lack Encoding.Latin1.
 using System.Text;
+#endif
 
 using FeatherQR.Internals.BinaryEncoders;
 
@@ -270,7 +273,7 @@ internal ref partial struct QRBinaryEncoder
     {
         if (eci is EciMode.Default or EciMode.Iso8859_1)
         {
-            // ISO-8859-1 is a pure narrowing cast for chars <= 0xFF (validated upstream by TextAnalyzer)
+            // Default is declared only over ASCII, whose Latin-1 bytes are the same.
             WriteLatin1Data(textSpan);
             return;
         }
@@ -545,12 +548,12 @@ internal ref partial struct QRBinaryEncoder
     /// Writes ISO-8859-1 (Latin-1) byte data directly from chars.
     /// </summary>
     /// <remarks>
-    /// Chars are pre-validated as ISO-8859-1 (&lt;= 0xFF), so encoding is a narrowing cast.
+    /// Chars are pre-validated as ISO-8859-1 (&lt;= 0xFF), so each byte is its char's value.
     /// </remarks>
     private void WriteLatin1Data(ReadOnlySpan<char> textSpan)
     {
 #if NET5_0_OR_GREATER
-        // Encoding.Latin1 narrows chars with SIMD, then bulk-write 8 bytes per store
+        // Encoding.Latin1 narrows chars with SIMD, and WriteByteData then writes 8 bytes a store.
         if (textSpan.Length <= StackAllocThreshold)
         {
             Span<byte> latin1 = stackalloc byte[textSpan.Length];
@@ -624,39 +627,11 @@ internal ref partial struct QRBinaryEncoder
     /// <returns>Number of bytes written to the buffer.</returns>
     private static int GetUtf8Data(ReadOnlySpan<char> textSpan, bool utf8BOM, Span<byte> buffer)
     {
-        var offset = 0;
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        if (utf8BOM)
-        {
-            var preamble = Encoding.UTF8.GetPreamble();
-            preamble.CopyTo(buffer);
-            offset += preamble.Length;
+        if (!utf8BOM)
+            return CharacterSets.GetUtf8Bytes(textSpan, buffer);
 
-            return offset + Encoding.UTF8.GetBytes(textSpan, buffer.Slice(offset));
-        }
-        else
-        {
-            return Encoding.UTF8.GetBytes(textSpan, buffer);
-        }
-#else
-        if (utf8BOM)
-        {
-            var preamble = Encoding.UTF8.GetPreamble();
-            preamble.CopyTo(buffer);
-            offset += preamble.Length;
-
-            var input = textSpan.ToString();
-            ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
-            utf8bytes.CopyTo(buffer.Slice(offset));
-            return offset + utf8bytes.Length;
-        }
-        else
-        {
-            var input = textSpan.ToString();
-            ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
-            utf8bytes.CopyTo(buffer);
-            return utf8bytes.Length;
-        }
-#endif
+        var bom = CharacterSets.Utf8Bom;
+        bom.CopyTo(buffer);
+        return bom.Length + CharacterSets.GetUtf8Bytes(textSpan, buffer.Slice(bom.Length));
     }
 }

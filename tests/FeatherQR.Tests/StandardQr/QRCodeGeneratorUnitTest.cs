@@ -834,6 +834,28 @@ public class QRCodeGeneratorUnitTest
 
         await Assert.That(after - before).IsEqualTo(0);
     }
+
+    // UTF-8 takes the transcode, and a byte order mark the preamble, neither of which the ASCII text above reaches.
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Create_SpanDestination_Utf8_DoesNotAllocate(bool utf8Bom)
+    {
+        var text = "Zürich こんにちは 🎉";
+        var options = new QRCodeGeneratorOptions { Utf8Bom = utf8Bom };
+        var buffer = new byte[Sizing.Required(text.AsSpan(), QREccLevel.M, options).BufferSize];
+
+        for (var i = 0; i < 3; i++)
+        {
+            Create(text.AsSpan(), QREccLevel.M, buffer.AsSpan(), options);
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        Create(text.AsSpan(), QREccLevel.M, buffer.AsSpan(), options);
+        var after = GC.GetAllocatedBytesForCurrentThread();
+
+        await Assert.That(after - before).IsEqualTo(0);
+    }
 #endif
 
     [Test]

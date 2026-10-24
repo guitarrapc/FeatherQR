@@ -70,7 +70,8 @@ internal static partial class StructuredAppendPlanner
         return (byte)parity;
     }
 
-    // Match the Byte writer: modern targets replace each unrepresentable code unit, while the downlevel writer narrows it. Only the low byte contributes to the result.
+    // Only text ISO-8859-1 holds reaches a Latin-1 parity, since the generators refuse a forced ISO-8859-1 over other text. The '?' above
+    // U+00FF keeps this form and the ARM64 vector form agreeing on any input.
     private static int Latin1ParityValue(char c)
 #if NET5_0_OR_GREATER
         => c <= 0xFF ? c : '?';

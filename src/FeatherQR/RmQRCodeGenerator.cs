@@ -54,7 +54,7 @@ public static partial class RmQRCodeGenerator
     /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the content does not fit, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     public static RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
     {
@@ -127,7 +127,7 @@ public static partial class RmQRCodeGenerator
     /// <param name="destination">Where to write the matrix. Needs <see cref="RmQRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <returns>The number of bytes written.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
     public static int Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default)
     {
         var quietZoneSize = options.QuietZoneSize;

@@ -207,7 +207,7 @@ internal static partial class TextAnalyzer
     /// Bytes a Byte-mode segment carries, which is what its character count indicator declares.
     /// </summary>
     /// <remarks>
-    /// Only UTF-8 has to be counted. Latin-1 is one byte per <c>char</c>, out-of-range ones included, since the writer narrows each and the encoder replaces each, so the length is the count and no pass over the text is needed. Which of the two the charset resolves to is the classification pass's answer, so that needs no pass either.
+    /// Only UTF-8 has to be counted. Latin-1 is one byte per <c>char</c>, since the generators refuse a forced ISO-8859-1 over text it cannot hold, so the length is the count and no pass over the text is needed. Which of the two the charset resolves to is the classification pass's answer, so that needs no pass either.
     /// Pinned against <see cref="Encoding"/> and against the bytes the writer emits, per charset and content class, by <c>TextAnalyzerByteCountTest</c>.
     /// </remarks>
     private static int CalculateByteCount(ReadOnlySpan<char> text, EciMode eciMode, bool hasNonIso88591)

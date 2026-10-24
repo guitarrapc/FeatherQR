@@ -1,9 +1,16 @@
+#if NET8_0_OR_GREATER
+// OperationStatus and Utf8, for the transcode that replaces without allocating.
+using System.Buffers;
+using System.Text.Unicode;
+#endif
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// Character-class predicates and alphanumeric encoding values shared by all QR symbologies.
+/// Character-class predicates, alphanumeric encoding values and the UTF-8 transcode shared by all QR symbologies.
 /// The Numeric and Alphanumeric alphabets are defined identically by ISO/IEC 18004 (Standard QR, Micro QR) and ISO/IEC 23941 (rMQR).
 /// </summary>
 internal static class CharacterSets
@@ -15,6 +22,207 @@ internal static class CharacterSets
     /// <returns>True if the character is a digit (0-9).</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNumeric(char c) => c >= '0' && c <= '9';
+
+    /// <summary>The UTF-8 byte order mark. <see cref="Encoding.GetPreamble"/> returns a new array on every call.</summary>
+    internal static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
+
+    /// <summary>
+    /// Writes the UTF-8 of <paramref name="text"/> to <paramref name="destination"/>, which must hold it, and returns its length.
+    /// Transcodes as <see cref="Encoding.UTF8"/> does, lone surrogates replaced, and allocates nothing on any build.
+    /// </summary>
+    internal static int GetUtf8Bytes(ReadOnlySpan<char> text, Span<byte> destination)
+    {
+#if NET8_0_OR_GREATER
+        // Encoding.UTF8 allocates in each call that meets a lone surrogate. Utf8 writes the replacement itself.
+        if (Utf8.FromUtf16(text, destination, out _, out var written, replaceInvalidSequences: true) != OperationStatus.Done)
+            throw new ArgumentException("The destination is too short for the UTF-8 of the text.", nameof(destination));
+        return written;
+#else
+        // The netstandard builds' Encoding allocates in each call that meets a lone surrogate, netstandard2.0 has no span overloads, and the
+        // pointer overloads would be unsafe code.
+        return EncodeUtf8(text, destination);
+#endif
+    }
+
+    /// <summary>
+    /// The length of the UTF-8 of <paramref name="text"/>, counted as <see cref="Encoding.UTF8"/> counts it, a lone surrogate as the three bytes
+    /// of U+FFFD. Allocates nothing once this thread has counted a lone surrogate.
+    /// </summary>
+    internal static int GetUtf8ByteCount(ReadOnlySpan<char> text)
+    {
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+        // Encoding.UTF8 allocates a fallback buffer in each call that meets a lone surrogate. This one keeps the thread's.
+        return ThreadBufferFallback.Utf8.GetByteCount(text);
+#else
+        // netstandard2.0's Encoder has no span overloads, the pointer overloads would be unsafe code, and a pooled copy counted slower on
+        // non-ASCII text, so the count is the one EncodeUtf8 writes. Refs, not the span indexer, which is slow on the portable span
+        // .NET Framework runs.
+        ref var start = ref MemoryMarshal.GetReference(text);
+        var length = text.Length;
+        var n = 0;
+        var i = 0;
+        while (i < length)
+        {
+            int c = Unsafe.Add(ref start, i);
+            if (c < 0x80)
+            {
+                // Four ASCII chars at a time. Tried from an ASCII char only, since from any other it would fail at every one.
+                if (i + 4 <= length && (Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref start, i))) & 0xFF80FF80FF80FF80UL) == 0)
+                {
+                    n += 4;
+                    i += 4;
+                }
+                else
+                {
+                    n++;
+                    i++;
+                }
+                continue;
+            }
+            if (c < 0x800)
+            {
+                n += 2;
+            }
+            else if (c is >= 0xD800 and <= 0xDBFF && i + 1 < length && Unsafe.Add(ref start, i + 1) is >= (char)0xDC00 and <= (char)0xDFFF)
+            {
+                n += 4;
+                i++;
+            }
+            else
+            {
+                // Every other char, a lone surrogate as U+FFFD among them
+                n += 3;
+            }
+            i++;
+        }
+        return n;
+#endif
+    }
+
+    /// <summary>
+    /// Writes the UTF-8 of <paramref name="text"/> by hand, as <see cref="Encoding.UTF8"/> writes it with a lone surrogate replaced by U+FFFD, and returns its length.
+    /// Micro QR writes its payloads with it on every build: they are at most 15 bytes, where <see cref="Encoding"/>'s fixed dispatch cost dominates.
+    /// </summary>
+    internal static int EncodeUtf8(ReadOnlySpan<char> text, Span<byte> utf8)
+    {
+#if !NET8_0_OR_GREATER
+        // Three bytes a char hold any text's UTF-8, so the netstandard builds write it through refs then: the span indexers are slow on the
+        // portable span .NET Framework runs. The narrowing reads the chars as a little-endian machine lays them out. .NET 8 and later keep
+        // this loop, where the other form wrote Micro QR's payloads no faster.
+        if (BitConverter.IsLittleEndian && utf8.Length / 3 >= text.Length)
+            return EncodeUtf8ThroughRefs(text, utf8);
+#endif
+        var n = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            int c = text[i];
+            if (c < 0x80)
+            {
+                utf8[n++] = (byte)c;
+            }
+            else if (c < 0x800)
+            {
+                utf8[n++] = (byte)(0xC0 | (c >> 6));
+                utf8[n++] = (byte)(0x80 | (c & 0x3F));
+            }
+            else if (c is >= 0xD800 and <= 0xDFFF)
+            {
+                // surrogate range: a valid high+low pair encodes a supplementary
+                // code point (U+10000..U+10FFFF) as 4 bytes
+                if (c <= 0xDBFF && i + 1 < text.Length && text[i + 1] is >= (char)0xDC00 and <= (char)0xDFFF)
+                {
+                    var cp = 0x10000 + ((c - 0xD800) << 10) + (text[i + 1] - 0xDC00);
+                    i++;
+                    utf8[n++] = (byte)(0xF0 | (cp >> 18));
+                    utf8[n++] = (byte)(0x80 | ((cp >> 12) & 0x3F));
+                    utf8[n++] = (byte)(0x80 | ((cp >> 6) & 0x3F));
+                    utf8[n++] = (byte)(0x80 | (cp & 0x3F));
+                }
+                else
+                {
+                    // A lone surrogate becomes U+FFFD, as Encoding.UTF8 writes it.
+                    utf8[n++] = 0xEF;
+                    utf8[n++] = 0xBF;
+                    utf8[n++] = 0xBD;
+                }
+            }
+            else
+            {
+                utf8[n++] = (byte)(0xE0 | (c >> 12));
+                utf8[n++] = (byte)(0x80 | ((c >> 6) & 0x3F));
+                utf8[n++] = (byte)(0x80 | (c & 0x3F));
+            }
+        }
+        return n;
+    }
+
+#if !NET8_0_OR_GREATER
+    /// <summary><see cref="EncodeUtf8"/> through refs, into a destination of three bytes a char, on a little-endian machine.</summary>
+    private static int EncodeUtf8ThroughRefs(ReadOnlySpan<char> text, Span<byte> utf8)
+    {
+        ref var src = ref MemoryMarshal.GetReference(text);
+        ref var dst = ref MemoryMarshal.GetReference(utf8);
+        var length = text.Length;
+        var n = 0;
+        var i = 0;
+        while (i < length)
+        {
+            int c = Unsafe.Add(ref src, i);
+            if (c < 0x80)
+            {
+                // Four ASCII chars at a time, narrowed to four bytes. Tried from an ASCII char only, since from any other it would fail at every one.
+                if (i + 4 <= length)
+                {
+                    var word = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref src, i)));
+                    if ((word & 0xFF80FF80FF80FF80UL) == 0)
+                    {
+                        var pairs = word | (word >> 8);
+                        Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, n), (uint)((pairs & 0xFFFF) | ((pairs >> 16) & 0xFFFF0000)));
+                        n += 4;
+                        i += 4;
+                        continue;
+                    }
+                }
+                Unsafe.Add(ref dst, n++) = (byte)c;
+                i++;
+                continue;
+            }
+
+            if (c < 0x800)
+            {
+                Unsafe.Add(ref dst, n++) = (byte)(0xC0 | (c >> 6));
+                Unsafe.Add(ref dst, n++) = (byte)(0x80 | (c & 0x3F));
+            }
+            else if (c is >= 0xD800 and <= 0xDFFF)
+            {
+                if (c <= 0xDBFF && i + 1 < length && Unsafe.Add(ref src, i + 1) is >= (char)0xDC00 and <= (char)0xDFFF)
+                {
+                    var cp = 0x10000 + ((c - 0xD800) << 10) + (Unsafe.Add(ref src, i + 1) - 0xDC00);
+                    i++;
+                    Unsafe.Add(ref dst, n++) = (byte)(0xF0 | (cp >> 18));
+                    Unsafe.Add(ref dst, n++) = (byte)(0x80 | ((cp >> 12) & 0x3F));
+                    Unsafe.Add(ref dst, n++) = (byte)(0x80 | ((cp >> 6) & 0x3F));
+                    Unsafe.Add(ref dst, n++) = (byte)(0x80 | (cp & 0x3F));
+                }
+                else
+                {
+                    // A lone surrogate becomes U+FFFD, as Encoding.UTF8 writes it.
+                    Unsafe.Add(ref dst, n++) = 0xEF;
+                    Unsafe.Add(ref dst, n++) = 0xBF;
+                    Unsafe.Add(ref dst, n++) = 0xBD;
+                }
+            }
+            else
+            {
+                Unsafe.Add(ref dst, n++) = (byte)(0xE0 | (c >> 12));
+                Unsafe.Add(ref dst, n++) = (byte)(0x80 | ((c >> 6) & 0x3F));
+                Unsafe.Add(ref dst, n++) = (byte)(0x80 | (c & 0x3F));
+            }
+            i++;
+        }
+        return n;
+    }
+#endif
 
     /// <summary>
     /// ASCII lookup table for alphanumeric character validation and encoding.
@@ -167,16 +375,34 @@ internal static class CharacterSets
     /// </summary>
     /// <param name="textSpan">The char span to check for ISO-8859-1-only characters.</param>
     /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsValidISO88591(ReadOnlySpan<char> textSpan)
     {
-        if (textSpan.Length == 0) return true;
-
-        // TODO: Can be simd
-
-        foreach (char c in textSpan)
+        // Four chars a ulong, sixteen ORed together, so the high bytes are tested once a block. The mask is the same in every 16-bit lane,
+        // so byte order does not matter. A vector loop would read a hardware flag, which only a kernel's own files may do. The offsets
+        // step a char reference, since a byte offset in an int would wrap past 2^30 chars.
+        const ulong HighBytes = 0xFF00FF00FF00FF00UL;
+        ref var start = ref MemoryMarshal.GetReference(textSpan);
+        var length = textSpan.Length;
+        var i = 0;
+        for (; i <= length - 16; i += 16)
         {
-            if (c > 0xFF) return false;
+            ref var block = ref Unsafe.As<char, byte>(ref Unsafe.Add(ref start, i));
+            var bits = Unsafe.ReadUnaligned<ulong>(ref block)
+                | Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref block, 8))
+                | Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref block, 16))
+                | Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref block, 24));
+            if ((bits & HighBytes) != 0)
+                return false;
+        }
+        for (; i <= length - 4; i += 4)
+        {
+            if ((Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref start, i))) & HighBytes) != 0)
+                return false;
+        }
+        for (; i < length; i++)
+        {
+            if (Unsafe.Add(ref start, i) > 0xFF)
+                return false;
         }
         return true;
     }

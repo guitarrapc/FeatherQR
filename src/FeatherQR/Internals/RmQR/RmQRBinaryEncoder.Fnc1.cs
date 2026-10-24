@@ -116,7 +116,7 @@ internal static partial class RmQRBinaryEncoder
             WriteEciHeader(ref dest, ref acc, ref accBits, ref bytePos, charset);
         WriteFnc1Header(ref dest, ref acc, ref accBits, ref bytePos, fnc1);
 
-        Span<byte> utf8 = stackalloc byte[StackByteBudget];
+        Span<byte> utf8 = stackalloc byte[Utf8StackBytes];
         var expectedStart = 0;
 
         var numericCountBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
@@ -221,8 +221,8 @@ internal static partial class RmQRBinaryEncoder
     {
         if (byteCount <= StackByteBudget)
         {
-            Span<byte> utf8 = stackalloc byte[StackByteBudget];
-            var length = GetUtf8Bytes(text, utf8);
+            Span<byte> utf8 = stackalloc byte[Utf8StackBytes];
+            var length = CharacterSets.GetUtf8Bytes(text, utf8);
             WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, utf8.Slice(0, length));
             return;
         }
@@ -230,7 +230,7 @@ internal static partial class RmQRBinaryEncoder
         var rented = ArrayPool<byte>.Shared.Rent(text.Length * 3);
         try
         {
-            var length = GetUtf8Bytes(text, rented);
+            var length = CharacterSets.GetUtf8Bytes(text, rented);
             WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, rented.AsSpan(0, length));
         }
         finally

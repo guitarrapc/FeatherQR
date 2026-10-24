@@ -419,9 +419,10 @@ public class TryGetRequiredBufferSizeTest
             new string('a', 17), new string('a', 18),
         ];
 
+        // A forced ISO-8859-1 over text it cannot hold is refused on both sides, which ForcedIso8859_1Test holds.
         foreach (var content in contents)
             foreach (var ecc in Enum.GetValues<QREccLevel>())
-                foreach (var eciMode in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+                foreach (var eciMode in content.All(c => c <= 0xFF) ? new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 } : new[] { EciMode.Default, EciMode.Utf8 })
                     foreach (var utf8BOM in new[] { false, true })
                         yield return (content, ecc, utf8BOM, eciMode);
     }

@@ -3,7 +3,6 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -42,6 +41,14 @@ internal static partial class RmQRBinaryEncoder
 
     // rMQR byte-mode capacity tops out at 150 bytes (R17x139-M), so any content that passed version selection transcodes into this budget (the branch is on the analyzer's exact UTF-8 byte count, not a per-char worst case). The pool path only exists for callers that bypass selection.
     private const int StackByteBudget = 160;
+
+#if NET8_0_OR_GREATER
+    private const int Utf8StackBytes = StackByteBudget;
+#else
+    // The netstandard builds' transcode reads through refs only into a destination of three bytes a char, and a run within the budget
+    // holds no more chars than bytes.
+    private const int Utf8StackBytes = StackByteBudget * 3;
+#endif
 
     /// <summary>
     /// Writes the data codewords for <paramref name="text"/> into <paramref name="destination"/> and returns the number of codewords written (always the version × ECC data codeword count).
@@ -395,8 +402,8 @@ internal static partial class RmQRBinaryEncoder
 
         if (byteCount <= StackByteBudget)
         {
-            Span<byte> utf8 = stackalloc byte[StackByteBudget];
-            var length = GetUtf8Bytes(text, utf8);
+            Span<byte> utf8 = stackalloc byte[Utf8StackBytes];
+            var length = CharacterSets.GetUtf8Bytes(text, utf8);
             WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, utf8.Slice(0, length));
         }
         else
@@ -405,7 +412,7 @@ internal static partial class RmQRBinaryEncoder
             var rented = ArrayPool<byte>.Shared.Rent(maxByteCount);
             try
             {
-                var length = GetUtf8Bytes(text, rented);
+                var length = CharacterSets.GetUtf8Bytes(text, rented);
                 WriteBytes(ref dest, ref acc, ref accBits, ref bytePos, rented.AsSpan(0, length));
             }
             finally
@@ -435,19 +442,6 @@ internal static partial class RmQRBinaryEncoder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteEciHeader(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, EciMode eciMode)
         => Append(ref dest, ref acc, ref accBits, ref bytePos, (ModeEci << EciDesignatorBits) | (int)eciMode, EciHeaderBits);
-
-    private static int GetUtf8Bytes(ReadOnlySpan<char> text, Span<byte> destination)
-    {
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        return Encoding.UTF8.GetBytes(text, destination);
-#else
-        // netstandard2.0 has no span overload, so this path is the documented
-        // exception to the allocation-free contract on that TFM.
-        var bytes = Encoding.UTF8.GetBytes(text.ToString());
-        bytes.CopyTo(destination);
-        return bytes.Length;
-#endif
-    }
 
     // ---------------------------------------------------------------
     // Group / value helpers

@@ -56,10 +56,10 @@ public class TextAnalyzerByteCountTest
     [MethodDataSource(nameof(Texts))]
     public async Task DataLength_ForcedLatin1_IsOneBytePerChar(string name, string text)
     {
-        // A forced charset is a caller constraint the content need not satisfy, and Latin-1
-        // stays one byte per char either way: the writer narrows each char, and the encoder
-        // replaces each char it cannot represent with one byte of its own, a surrogate pair
-        // counting as the two chars it is rather than the one scalar it spells.
+        // The generators refuse a forced ISO-8859-1 over text it cannot hold before they analyze it, so only Latin-1 text reaches
+        // this count.
+        if (!text.All(c => c <= 0xFF))
+            return;
         var result = TextAnalyzer.Analyze(text, EciMode.Iso8859_1);
         if (result.EncodingMode != EncodingMode.Byte)
             return;
@@ -85,13 +85,19 @@ public class TextAnalyzerByteCountTest
 
     [Test]
     [MethodDataSource(nameof(Texts))]
-    public async Task Encode_ForcedLatin1_IsWellFormed_EvenOverContentItCannotRepresent(string name, string text)
+    public async Task Encode_ForcedLatin1_RoundTripsOrRefusesTheContent(string name, string text)
     {
-        // The text is not preserved, which is the caller's choice, but the symbol still has to
-        // be one a reader can take apart, so the count and the bytes written must agree.
-        var symbol = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
+        // A count that disagreed with the bytes written would leave the reader taking the wrong number of payload bytes, which the
+        // round trip catches. Text ISO-8859-1 cannot hold is refused instead of written.
+        var options = new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 };
+        if (!text.All(c => c <= 0xFF))
+        {
+            await Assert.That(() => QRCodeGenerator.Create(text, QREccLevel.M, options)).Throws<ArgumentException>().Because(name);
+            return;
+        }
+        var symbol = QRCodeGenerator.Create(text, QREccLevel.M, options);
 
         await Assert.That(QRCodeDecoder.TryDecode(symbol, out var decoded, out var info)).IsTrue().Because($"{name}: {info.Status}");
-        await Assert.That(decoded.Length).IsEqualTo(text.Length).Because($"{name}: one byte per char, so one char back per char in");
+        await Assert.That(decoded).IsEqualTo(text).Because(name);
     }
 }
