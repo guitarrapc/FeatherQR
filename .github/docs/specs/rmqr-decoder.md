@@ -18,7 +18,7 @@ The decoder takes the version from the physical dimensions and reads both format
 
 ### Image level
 
-The input is an `SKBitmap`, or a grayscale luminance span with its width and height (`TryDecodeImage`). An allocation-free variant writes to a span destination. When the version is unknown, size it with `GetMaxDecodedLength(RmQRVersion.R17x139)`.
+The input is an `SKBitmap`, or a grayscale luminance span with its width and height (`TryDecodeImage`). An allocation-free variant writes to a span destination. When the version is unknown, size it with `GetMaxDecodedLength(RmQRVersion.R17x139)`. An encoded image read from a stream (`Decode`, `DecodeAsync`) is decoded into a bitmap first.
 
 The same path runs in each [shared image decode pass](qrcode-symbologies.md#image-decode-passes): the global threshold, the inverted image, the regional binarization of each polarity, and a sweep at the grey-level midpoint for a polarity whose global pass found no finder. Each pass runs these steps:
 

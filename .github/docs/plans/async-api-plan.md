@@ -11,7 +11,8 @@ The maintainer decided on 2026-10-15 that 2.0.0 ships an async API, for callers 
 - The design is decided: A1 to A14 below, all ruled on 2026-10-25.
 - Phase 1, the output, is done (2026-10-25): the fourteen async writes.
 - Phase 2, the input, is done (2026-10-25): the result types, the stream reads with their limits and their synchronous twins, and the call for several symbols.
-- Phase 3, cancellation between symbols, is done (2026-10-25). Phase 4, the docs, is next.
+- Phase 3, cancellation between symbols, is done (2026-10-25).
+- Phase 4, the docs, is done (2026-10-25). Every phase is done. The plan folds into the specs at the 2.0.0 freeze.
 - The call for several symbols in one image (Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md)) returns the result type an async read must return, since an async method cannot have `out` parameters. That type is ruled (A4), and the call's names are settled in that Phase 3.
 
 ## Goals
@@ -390,7 +391,7 @@ Notes for the build, not decisions:
 | 1 | Done 2026-10-25. Output: the async twins A8 rules, cancellation before the render and during the write, and the move off a context A14 rules | Tests with a stream that refuses synchronous writes, P2, P3 and P9, the approved API listing |
 | 2 | Done 2026-10-25. Input: the result types, `DecodeAsync` for the three symbologies and `DecodeSymbolsAsync` with the call for several symbols ([image-decode-followups-plan.md](image-decode-followups-plan.md), Phase 3), the limits A11 rules, the synchronous twins (A10), and the move off a context | Tests with a stream that refuses synchronous reads and one that hands bytes over a few at a time, a stream over each limit and one that is not an image refused before any pixel is allocated, a default result whose `Success` is false, P4 to P6 and P9 |
 | 3 | Done 2026-10-25. Cancellation between the symbols of a read for every symbol (A5) | A cancelled read for every symbol stops at the next check, P7 and P8 |
-| 4 | `docs/`, the README, the API page and the specs | The feature documented |
+| 4 | Done 2026-10-25. `docs/`, the README, the API page and the specs | The feature documented |
 
 ## What has to stay true
 
@@ -477,7 +478,7 @@ What was done:
 - The result types `QRCodeDecodeResult`, `MicroQRCodeDecodeResult` and `RmQRCodeDecodeResult` in the core, each its `Text`, its `Info` and a `Success` that is false for a default value (A4).
 - The call for several symbols, under its draft names: `DecodeImageSymbols` on luminance in an array form and a span form, and `DecodeSymbols(SKBitmap)`. The internal entry writes the result type, so the span form writes into the caller's room as it is, and the array form gives the entry a room that doubles where the caller's room would fill, so the image is read once.
 - The stream reads on the SkiaSharp decoders: `DecodeAsync(Stream)` on the three, `DecodeSymbolsAsync(Stream)` for Standard QR, and their synchronous twins `Decode(Stream)` and `DecodeSymbols(Stream)` (A10). Arguments are checked before a task is returned. The stream is read to its end, then the call moves off a caller's context (A14), decodes the image under the limits and reads the bitmap.
-- The limits (A11): 256 MiB of encoded bytes and 268,435,456 pixels (16,384 × 16,384). The pixel limit holds the 200-megapixel sensors of current phones, 16,320 × 12,240, and a 151-megapixel medium-format back, 14,204 × 10,652 ([Pop Photo](https://www.popphoto.com/phase-one-150-megapixel-camera-review/)). A 200-megapixel phone's JPEG was reported at 50 to 60 MB by an owner ([Samsung Community](https://eu.community.samsung.com/t5/galaxy-s24-series/dimensioni-foto/td-p/11433474)) and is put at about 120 MB by a [file-size estimator](https://miniwebtool.com/it/stimatore-dimensioni-file-foto/), so the byte limit holds it twice over. At the pixel limit a colour bitmap takes 1 GiB, four times the byte limit. A stream over either throws `InvalidDataException`, as does one that holds no image, the pixels checked from the header before any pixel is allocated.
+- The limits (A11): 256 MiB of encoded bytes and 268,435,456 pixels (16,384 × 16,384). The pixel limit holds the 200-megapixel sensors of current phones ([Samsung](https://news.samsung.com/us/samsung-introduces-the-200-megapixel-image-sensor-for-the-ultimate-high-resolution-experience-in-flagship-smartphones/)) and a 151-megapixel medium-format back, 14,204 × 10,652 ([Pop Photo](https://www.popphoto.com/phase-one-150-megapixel-camera-review/)). A 200-megapixel phone's JPEG was reported at 50 to 60 MB by an owner ([Samsung Community](https://eu.community.samsung.com/t5/galaxy-s24-series/dimensioni-foto/td-p/11433474)) and is put at about 120 MB by a [file-size estimator](https://miniwebtool.com/it/stimatore-dimensioni-file-foto/), so the byte limit holds it twice over. At the pixel limit a colour bitmap takes 1 GiB, four times the byte limit. A stream over either throws `InvalidDataException`, as does one that holds no image, the pixels checked from the header before any pixel is allocated.
 - The approved API listings gained the three types, the two core calls and the nine SkiaSharp calls and nothing else, and the Playground's API page was regenerated.
 - Tests: `ImageStreamDecodeTest`, 80 cases, holds every stream read to what `SKBitmap.Decode(Stream)` and `TryDecode` give, on PNG, JPEG and blank images of the three symbologies, through a stream that refuses synchronous reads, one that hands over 7 bytes a read, one that can seek, an exposed `MemoryStream` read from its position and one that hides its array. The synchronous twins are read through a stream that refuses async reads. It covers a header declaring 40,000 × 40,000 pixels and one a row over the limit, a seekable stream over the byte limit refused with no read, a stream that never ends stopped one byte past 256 MiB, argument errors before a task exists, cancellation before the call and during a read, and the decode off a synchronization context and a task scheduler and not with neither. `DecodeImageSymbolsTest`, 10 cases, covers the array form past its first room, the span form with room for all, one and none, argument errors, and a default result. Four planted faults each turned their tests red: no move off the context, an exposed `MemoryStream` read from its start, no token handed to the reads, and a synchronous twin made by blocking on the async read. The two limits were not removed as faults, since their tests would then allocate without bound, and the pixel test asserts the declared size in the message for that reason.
 - `QRCodeImageStreamDecode` in the benchmark project, the bitmap pair its baseline.
@@ -533,3 +534,21 @@ Lessons:
 - The test written for the reading-start check assumed a blank image never reaches a try. It does, once a reading, which a planted fault showed when the test passed without the check. Its premise was rewritten, and it now holds the check before each try to readings that find no symbol.
 
 Left for later: Phase 4, the docs.
+
+### Phase 4: the docs (2026-10-25)
+
+Done, at the maintainer's request.
+
+What was done:
+
+- README: a section, Async and stream I/O, with the web API calls, how the calls behave and the `PipeWriter` pattern, a paragraph and an example for the read for every symbol under Decoders, the async save beside the stream save, the stream read in the Micro QR and rMQR examples, and the ASP.NET Core and image questions of the FAQ. The luminance example called `TryDecodeImage` on `QRCodeImageDecoder`, which has no such member, and now calls it on `QRCodeDecoder`. Every new example was compiled and run in a scratch web app.
+- `docs/migration.md`: two sections in 2.0.0, the async writes and stream reads, with the move from `SKBitmap.Decode(stream)` and what differs, and several symbols in one image.
+- [qrcode-symbologies.md](../specs/qrcode-symbologies.md): the reads' naming rule and the async I/O rules under Public API direction, the result types' constructors and the token overload under Package seam, the stream reads outside the allocation contract, and scope rows for several symbols, the async API and the stream read limits.
+- The decoder specs name the stream read as an input, and [standardqr-decoder.md](../specs/standardqr-decoder.md) and the spec map give the public calls for several symbols, the room that grows and the token.
+- The API page was regenerated with each phase.
+
+Lessons:
+
+- The pixel count the limit was set against had been written as 16,320 × 12,240. No source states it: it was worked back from 200 megapixels. The specs and Phase 2's record now give the sensor's 200 million pixels, which Samsung's announcement states.
+
+Left for later: the plan folds into the specs at the 2.0.0 freeze. The names of the calls for several symbols wait on their ruling and the Playground's support for them on Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md).

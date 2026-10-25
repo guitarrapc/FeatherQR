@@ -431,6 +431,33 @@ Behavior change, not source or binary breaking: code that branches on `Unsupport
 - **A misplaced or repeated indicator is `InvalidBitstream`.** FNC1 belongs once before the first data segment, with an ECI or Structured Append header on either side. zxing-cpp accepts a late first-position indicator and this library does not, because the mode changes how every Alphanumeric segment reads.
 - **Writing FNC1 is additive.** `QRCodeGeneratorOptions.Fnc1` and `RmQRCodeGeneratorOptions.Fnc1` take `Fnc1Mode.FirstPosition`, `Fnc1Mode.SecondPosition(int)` (00 to 99) or `Fnc1Mode.SecondPosition(char)` (A to Z, a to z), and default to `Fnc1Mode.None`. The content is the text the decoder returns, with U+001D as the separator and no identifier or indicator. The generator does not check that it is valid GS1 data, which the `FeatherQR.Gs1` package does. The indicator costs 4 bits in first position and 12 in second in Standard QR, 3 and 11 in rMQR, and a literal `%` in an Alphanumeric segment costs two characters, so size a buffer with the same options. `CreateStructuredAppend` refuses the option.
 
+### Async writes and stream reads
+
+Additive. Every method that writes an image to a `Stream` has an `...Async` twin: `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The image decoders read an encoded image from a `Stream`: `DecodeAsync` and `Decode` on the three, and `DecodeSymbolsAsync` and `DecodeSymbols` for every Standard QR code. A stream read returns a result type, `QRCodeDecodeResult` (`MicroQRCodeDecodeResult`, `RmQRCodeDecodeResult`), with `Text`, `Info` and `Success`. The README's [Async and stream I/O](../README.md#async-and-stream-io) describes how the calls behave.
+
+Code that decoded a stream into a bitmap itself can hand the stream over instead:
+
+```csharp
+// Before
+using var bitmap = SKBitmap.Decode(stream);
+if (bitmap is not null && QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info))
+    Console.WriteLine(text);
+
+// After
+var result = await QRCodeImageDecoder.DecodeAsync(stream, cancellationToken);
+if (result.Success)
+    Console.WriteLine(result.Text);
+```
+
+- **The result is the same.** The stream read decodes the image as `SKBitmap.Decode(stream)` does and reads it as `TryDecode` reads that bitmap.
+- **The stream stays open.** `SKBitmap.Decode(stream)` disposes the stream it is given. The stream read leaves it open, read to its end.
+- **A stream that holds no image throws** `InvalidDataException`, where `SKBitmap.Decode` returned `null`. So does a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384). Decode a larger image into an `SKBitmap` yourself and call `TryDecode`.
+- **`Success` is `false` for a default value.** `DecodeStatus.Success` is 0, so a default result's status reads as a success, and `Success` is what tells a read from an unwritten entry.
+
+### Several symbols in one image
+
+Additive. `QRCodeDecoder.DecodeImageSymbols` reads every Standard QR code of a grayscale image, as an array or into a span you provide, and `QRCodeImageDecoder.DecodeSymbols` reads them from an `SKBitmap` or a stream, with `DecodeSymbolsAsync` beside it. Each symbol is returned once with its corners, and only the symbols that decode: one whose content cannot be given as text is left out, and so is one that lies inside a symbol already read. The span form stops once the span is full, and a full span does not say whether the image held more. Micro QR and rMQR read one symbol a call.
+
 ### A failed matrix decode reports no characters written
 
 Behavior change, not source or binary breaking. The matrix span overloads, `QRCodeDecoder.TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)` and its Micro QR and rMQR counterparts, now set `charsWritten` to 0 whenever they return `false`, as the image overloads already did. Before, a symbol of several segments that failed partway through its bit stream reported the characters its earlier segments had written. The usual cause was a destination too short for a later segment; a Kanji character with no mapping after other text was another.

@@ -169,6 +169,9 @@ using FeatherQR.SkiaSharp;
 
 using var stream = File.OpenWrite("qrcode.png");
 QRCodeImageBuilder.SavePng("Your content here", stream, QREccLevel.M, size: 512);
+
+// Or asynchronously, where the thread must not wait on the write
+await QRCodeImageBuilder.SavePngAsync("Your content here", stream, QREccLevel.M, size: 512);
 ```
 
 Boosting Error Correction is recommended whenever robustness matters more than an exact ECC level, and especially with icons. It raises the level as far as the capacity allows, without changing the symbol size.
@@ -197,6 +200,8 @@ Start with an image builder for most applications. All generators and decoders a
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
 | Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
 | Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
+
+Every method that writes an image to a `Stream` has an `...Async` twin, and the decoders read an encoded image from a `Stream`, asynchronously or not. See [Async and stream I/O](#async-and-stream-io).
 
 
 ### Image Builders (Recommended)
@@ -523,13 +528,83 @@ using FeatherQR;
 byte[] luminance = ...; // 8-bit grayscale pixels
 int width = ...;
 int height = ...;
-if (QRCodeImageDecoder.TryDecodeImage(luminance, width, height, out var text, out var info))
+if (QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info))
 {
     Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
 }
 ```
 
 The returned decode information includes a status when decoding fails. When an image decode succeeds it also carries `Corners`, the symbol's module-area corners (quiet zone excluded) in the image's continuous pixel coordinates. `TopLeft` is the corner beside the symbol's top-left finder wherever it landed, so the four points draw an outline that follows rotation, reverse their winding for a mirrored capture, and form a general quadrilateral under perspective. Matrix-level decodes have no image and report `Corners.IsEmpty`. See [samples/Dotfiles/DecodeCorners.cs](samples/Dotfiles/DecodeCorners.cs), which decodes a flat, a rotated, a mirrored and a keystoned capture and writes each one with the reported outline drawn on it.
+
+To read every QR code of an image at once, call `DecodeSymbols` on an `SKBitmap` or a stream, or `DecodeImageSymbols` on luminance. Each symbol is returned once, with its corners, and only symbols that decode are returned: a symbol whose content cannot be given as text is left out, and so is one inside a symbol already read. The span overload of `DecodeImageSymbols` writes into a room you provide and stops once it is full, so a caller who expects a number of symbols pays for no more. Micro QR and rMQR read one symbol a call.
+
+```csharp
+using SkiaSharp;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
+
+using var sheet = SKBitmap.Decode("sheet.jpg");
+foreach (var result in QRCodeImageDecoder.DecodeSymbols(sheet))
+{
+    var corner = result.Info.Corners.TopLeft;
+    Console.WriteLine($"{result.Text} at ({corner.X}, {corner.Y})");
+}
+```
+
+### Async and stream I/O
+
+Every method that writes an image to a `Stream` has an `...Async` twin: `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The decoders read an encoded image, a PNG, JPEG or WebP among others, from a `Stream`: `DecodeAsync` on the three, `DecodeSymbolsAsync` for every Standard QR code, and `Decode` and `DecodeSymbols` where the thread may wait.
+
+Use the async calls where a thread must not wait on I/O. ASP.NET Core refuses synchronous I/O on a request or a response by default, so `SavePng(content, Response.Body)` and `SKBitmap.Decode(Request.Body)` throw there.
+
+```csharp
+using FeatherQR;
+using FeatherQR.SkiaSharp;
+
+app.MapGet("/qr", async (string text, HttpResponse response, CancellationToken cancellationToken) =>
+{
+    response.ContentType = "image/png";
+    await QRCodeImageBuilder.SavePngAsync(text, response.Body, cancellationToken: cancellationToken);
+});
+
+app.MapPost("/scan", async (HttpRequest request, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await QRCodeDecoder.DecodeAsync(request.Body, cancellationToken);
+        return result.Success
+            ? Results.Ok(result.Text)
+            : Results.UnprocessableEntity(result.Info.Status.ToString());
+    }
+    catch (InvalidDataException)
+    {
+        // The body is not an image, or is over a limit
+        return Results.BadRequest();
+    }
+});
+```
+
+With C# 14 the stream reads are reachable as `QRCodeDecoder.DecodeAsync(stream)`, as above. On older language versions call them on `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`.
+
+How the calls behave:
+
+- **The computation is synchronous, the I/O asynchronous.** The image is rendered and encoded whole, or read whole and then decoded, and the stream is never written or read synchronously.
+- **A UI thread stays free.** Called on a thread with a `SynchronizationContext`, as in WinUI, WPF or MAUI, the call renders or decodes on the thread pool, so the app awaits it on the UI thread as it is. Without one, as on an ASP.NET Core request, it does not move.
+- **Cancellation.** The token stops a call before it renders or decodes and during the I/O, and a read for every symbol between the symbols it tries, never inside one symbol's read. A write stopped part way leaves part of the image in the stream.
+- **Errors.** A `null` stream, or one that cannot write or read, throws at the call. Everything else, a layout that does not fit or an image that cannot be decoded, comes through the task.
+- **Writes** write nothing when the render fails, and do not flush the stream, as the synchronous ones do not.
+- **Reads** leave the stream open, where `SKBitmap.Decode(stream)` disposes it, and read it from its position to its end. A `MemoryStream` whose buffer is exposed is read in place.
+- **Limits.** A read refuses a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), with `InvalidDataException`, before any pixel is allocated, and a stream that holds no image throws it too. A larger image can be decoded into an `SKBitmap` and read with `TryDecode`.
+- **Results.** A read for one symbol returns a `QRCodeDecodeResult` (`MicroQRCodeDecodeResult`, `RmQRCodeDecodeResult`) in every case. On a failure `Success` is `false`, `Text` is empty and `Info.Status` says why.
+- **Pixels as encoded.** The EXIF orientation is not applied, as `SKBitmap.Decode` does not apply it.
+
+A `PipeWriter`, such as `Response.BodyWriter`, takes the buffer-writer overloads as they are, and the caller flushes:
+
+```csharp
+response.ContentType = "image/png";
+new QRCodeImageBuilder(text).SaveTo(response.BodyWriter);
+await response.BodyWriter.FlushAsync(cancellationToken);
+```
 
 ### GS1 data
 
@@ -682,10 +757,16 @@ Option 2: No Dependencies (QR code only), if you don't need advanced font operat
 
 ### Can I use this in ASP.NET Core?
 
-Yes, FeatherQR works great in ASP.NET Core. FeatherQR also supports `IBufferWriter` for efficient memory usage.
+Yes. ASP.NET Core refuses synchronous I/O on a response by default, so write the image with an async call, or return its bytes:
 
 ```csharp
-app.MapGet("/qr", (string url) =>
+app.MapGet("/qr", async (string url, HttpResponse response, CancellationToken cancellationToken) =>
+{
+    response.ContentType = "image/png";
+    await QRCodeImageBuilder.SavePngAsync(url, response.Body, cancellationToken: cancellationToken);
+});
+
+app.MapGet("/qr.png", (string url) =>
 {
     var pngBytes = QRCodeImageBuilder.GetPngBytes(url);
     return Results.File(pngBytes, "image/png");
@@ -698,7 +779,7 @@ app.MapGet("/qr.svg", (string url) =>
 });
 ```
 
-Span-based APIs are supported for efficient memory usage, allowing you to work with slices of memory without additional allocations.
+To read an uploaded image, see [Async and stream I/O](#async-and-stream-io). Span-based APIs are supported for efficient memory usage, allowing you to work with slices of memory without additional allocations.
 
 ### Does it support Blazor WebAssembly?
 
@@ -730,7 +811,7 @@ No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional
 
 ### Does it read QR codes from images?
 
-Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)), screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. Photographs are where it fails most often: glare, damage, blur, a curved surface, a steep tilt or strong lens distortion. A failed decode reports a status that says where it stopped.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)), screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. It reads an `SKBitmap`, a luminance span or an encoded image in a stream, one symbol a call or every Standard QR code of the image at once. Photographs are where it fails most often: glare, damage, blur, a curved surface, a steep tilt or strong lens distortion. A failed decode reports a status that says where it stopped.
 
 ### What QR code style provides the best scan reliability?
 
@@ -1139,6 +1220,10 @@ if (MicroQRCodeDecoder.TryDecode(micro, out var text, out var info))
 // Decode an image with the Micro QR decoder
 using var bitmap = SKBitmap.Decode("microqr.png");
 var ok = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
+
+// Or straight from a stream
+await using var file = File.OpenRead("microqr.png");
+var result = await MicroQRCodeDecoder.DecodeAsync(file);
 ```
 
 Runnable examples: [ConsoleApp patterns 24–26](samples/ConsoleApp).
@@ -1228,6 +1313,10 @@ if (RmQRCodeDecoder.TryDecode(rmqr, out var text, out var info))
 // Decode an image with the rMQR decoder
 using var bitmap = SKBitmap.Decode("rmqr.png");
 var found = RmQRCodeDecoder.TryDecode(bitmap, out var scanned, out var scanInfo);
+
+// Or straight from a stream
+await using var file = File.OpenRead("rmqr.png");
+var result = await RmQRCodeDecoder.DecodeAsync(file);
 ```
 
 Runnable examples: [ConsoleApp patterns 27–29](samples/ConsoleApp).
