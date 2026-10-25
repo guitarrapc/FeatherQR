@@ -140,6 +140,44 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     }
 
     /// <summary>
+    /// Encodes the content and writes a PNG to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SavePng(string, Stream, RmQREccLevel, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the image is written.</returns>
+    public static Task SavePngAsync(string content, Stream output, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, CancellationToken cancellationToken = default)
+    {
+        return new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToAsync(output, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renders the rMQR code and writes a PNG to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SavePng(RmQRCodeData, Stream, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="rmQrCodeData">The rMQR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the image is written.</returns>
+    public static Task SavePngAsync(RmQRCodeData rmQrCodeData, Stream output, int size = DefaultWidth, CancellationToken cancellationToken = default)
+    {
+        return new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .SaveToAsync(output, cancellationToken);
+    }
+
+    /// <summary>
     /// Encodes the content and returns an SVG document as UTF-8 bytes.
     /// </summary>
     /// <param name="content">The text or URL to encode.</param>
@@ -195,6 +233,44 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
         new RmQRCodeImageBuilder(rmQrCodeData)
             .WithWidth(size)
             .SaveToSvg(output);
+    }
+
+    /// <summary>
+    /// Encodes the content and writes an SVG document to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SaveSvg(string, Stream, RmQREccLevel, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToSvgAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the document is written.</returns>
+    public static Task SaveSvgAsync(string content, Stream output, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, CancellationToken cancellationToken = default)
+    {
+        return new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvgAsync(output, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renders the rMQR code and writes an SVG document to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SaveSvg(RmQRCodeData, Stream, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToSvgAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="rmQrCodeData">The rMQR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the document is written.</returns>
+    public static Task SaveSvgAsync(RmQRCodeData rmQrCodeData, Stream output, int size = DefaultWidth, CancellationToken cancellationToken = default)
+    {
+        return new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .SaveToSvgAsync(output, cancellationToken);
     }
 
     /// <summary>

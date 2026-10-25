@@ -8,7 +8,8 @@ The maintainer decided on 2026-10-15 that 2.0.0 ships an async API, for callers 
 
 - The analysis is done: where generation and reading block, by setting, measured on x64 (2026-10-15).
 - The goals are set (2026-10-25), from the decisions as ruled.
-- The design is decided: A1 to A14 below, all ruled on 2026-10-25. Phase 1, the output, is next.
+- The design is decided: A1 to A14 below, all ruled on 2026-10-25.
+- Phase 1, the output, is done (2026-10-25): the fourteen async writes. Phase 2, the input, is next.
 - The call for several symbols in one image (Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md)) returns the result type an async read must return, since an async method cannot have `out` parameters. That type is ruled (A4), and the call's names are settled in that Phase 3.
 
 ## Goals
@@ -374,9 +375,9 @@ Notes for the build, not decisions:
 - A stream read rents its buffer from the pool, and whether it decodes straight into one grey channel, a quarter of the 48 MB a 12-megapixel photograph takes as colour, is measured then.
 - An exposable `MemoryStream` is decoded in place, with the token checked up front. A stream that can seek has its remaining length checked against the limit before it is read, and the buffer is rented to that size. A stream that cannot seek is read to at most one byte past the limit.
 - Nothing an async write renders reaches the stream when the render fails. The PNG is encoded whole before it is written, as now, and the async SVG renders into pooled memory before it is written, where the synchronous one streams. A write cancelled part way leaves part of the image behind.
-- Whether the async writes flush the stream at the end is decided then.
+- The async writes do not flush the stream, since the synchronous ones do not (Phase 1).
 - Every `await` takes `ConfigureAwait(false)`.
-- How an async call moves to the pool under a context is chosen then, with no allocation on the targets that allow it.
+- An async call moves to the pool under a context through an awaiter of the library's own, which completes at once with neither a context nor a scheduler of the caller's, and otherwise queues the rest of the call to the pool (Phase 1).
 - The tests use a stream that refuses synchronous reads and writes, and one that hands its bytes over a few at a time.
 
 ## Phases
@@ -384,7 +385,7 @@ Notes for the build, not decisions:
 | Phase | Work | Output |
 |---|---|---|
 | 0 | The decisions above | The maintainer's rulings, given on 2026-10-25 |
-| 1 | Output: the async twins A8 rules, cancellation before the render and during the write, and the move off a context A14 rules | Tests with a stream that refuses synchronous writes, P2, P3 and P9, the approved API listing |
+| 1 | Done 2026-10-25. Output: the async twins A8 rules, cancellation before the render and during the write, and the move off a context A14 rules | Tests with a stream that refuses synchronous writes, P2, P3 and P9, the approved API listing |
 | 2 | Input: the result types, `DecodeAsync` for the three symbologies and `DecodeSymbolsAsync` with the call for several symbols ([image-decode-followups-plan.md](image-decode-followups-plan.md), Phase 3), the limits A11 rules, the synchronous twins (A10), and the move off a context | Tests with a stream that refuses synchronous reads and one that hands bytes over a few at a time, a stream over each limit and one that is not an image refused before any pixel is allocated, a default result whose `Success` is false, P4 to P6 and P9 |
 | 3 | Cancellation between the symbols of a read for every symbol (A5) | A cancelled read for every symbol stops at the next check, P7 and P8 |
 | 4 | `docs/`, the README, the API page and the specs | The feature documented |
@@ -428,3 +429,39 @@ Done, at the maintainer's request: each write written out as a caller would use 
 ### All decisions ruled (2026-10-25)
 
 Done, at the maintainer's request. A1 to A3 and A5 to A11 were ruled as recommended, after A4 and A12 to A14 earlier the same day. A11 puts limits on the stream reads, so A10's synchronous twins ship. The goals now state the design as ruled, and Phase 1, the output, is next.
+
+### Phase 1: the output (2026-10-25)
+
+Done, at the maintainer's request.
+
+What was done:
+
+- The fourteen async writes: `SaveToAsync` and `SaveToSvgAsync` on `SymbolImageBuilderBase<TSelf>`, and `SavePngAsync` and `SaveSvgAsync`, for data and for text, on each of the three builders. The approved API listing gained these fourteen and nothing else, and the Playground's API page was regenerated.
+- A call checks its arguments before it returns a task, as the synchronous call checks them, and the rest happens in the task: the generation, the layout, the render and the write.
+- Under a synchronization context or a task scheduler of the caller's own the call moves to the pool before it renders (A14), through an awaiter of the library's own that completes at once when there is neither.
+- A PNG is encoded into a pooled buffer of its size, and the native image and its encoding are released before the write. An SVG document is rendered into a pooled buffer that doubles as it grows. Each is then sent in one async write, through the memory overload on every target but netstandard2.0, which has only the array overload.
+- The token is checked before the render and after it, and handed to the write.
+- The writes do not flush the stream. A probe counted the synchronous `SaveTo` and `SaveToSvg` on a stream of its own, and neither flushed it.
+- `SymbolImageAsyncWriteTest`, 54 cases: the bytes of each twin through a stream that refuses synchronous writes and flushes (20 calls across the three symbologies, a JPEG and a 2,048 px PNG among them), a token canceled before the call and during the write, argument errors thrown before a task exists, a layout and an icon that fail the render with nothing written, and the thread the render runs on under a single-threaded synchronization context, under an exclusive task scheduler and with neither. Five planted faults each turned their tests red: no move off the context, a synchronous SVG write, no token handed to the write, a null stream reported through the task, and no check of the token.
+- `QRCodeImageAsyncWrite` in the benchmark project, each shape's synchronous call its baseline.
+
+Measured with BenchmarkDotNet in process, .NET 10.0.9, x64, Ryzen 9 7950X3D, writing to a `MemoryStream`:
+
+| Shape | Sync | Async | Ratio | Allocated, sync / async |
+|---|---|---|---|---|
+| PNG of the URL, 512 px | 4,709 μs | 4,924 μs | 1.05 | 3.17 / 3.24 KB |
+| PNG of version 40, 1,024 px | 22.48 ms | 22.27 ms | 0.99 | 3.17 / 3.29 KB |
+| SVG of the URL | 516 μs | 534 μs | 1.04 | 5.86 / 5.92 KB |
+| SVG of version 40 | 18,023 μs | 18,486 μs | 1.03 | 6.02 / 6.09 KB |
+
+P2 and P3 hold: at most 5 % more time, and at most about 120 bytes more allocated. The version 40 PNG first read 1.08, with nine times the synchronous call's deviation, and a rerun of the pair read 0.99, which the table gives. P1 and P9 are the tests above. The full suite passes on net10.0 (34,986 passed, 402 skipped) and net8.0 (34,892 passed, 402 skipped).
+
+Lessons:
+
+- The synchronous `SaveToSvg` writes in small pieces: 5,523 writes for the URL's 16,218-byte document and 196,373 for version 40's 578,239 bytes, counted on a stream of its own. The async write sends each document in one write.
+- The synchronous `SaveToSvg` leaves part of a document in the stream when an icon is refused while the symbol is drawn, which the test of the async write checks as its premise. The async write leaves nothing.
+- A stream that overrides only the memory overload of `WriteAsync` serves a call of the array overload with a synchronous write (a probe on .NET 10), so the memory overload is the one that reaches a stream that writes only asynchronously.
+- A test that waited for a write to begin hung for 30 minutes when a planted fault failed the call before it wrote. It waits for the call as well now.
+- Restoring a planted fault with a file copy kept the backup's timestamp, so the next full run tested the fault's build: 13 failures, the fault's exact set. The timestamps were refreshed, and both frameworks pass.
+
+Left for later: no test host runs the netstandard builds of the SkiaSharp package, so the netstandard2.0 array write is compiled and listed but not run. `docs/`, the README and the specs are Phase 4.

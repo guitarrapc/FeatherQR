@@ -134,6 +134,44 @@ public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCode
     }
 
     /// <summary>
+    /// Encodes the content and writes a PNG to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SavePng(string, Stream, MicroQREccLevel, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image side length in pixels.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the image is written.</returns>
+    public static Task SavePngAsync(string content, Stream output, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512, CancellationToken cancellationToken = default)
+    {
+        return new MicroQRCodeImageBuilder(content)
+            .WithSize(size, size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToAsync(output, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renders the Micro QR code and writes a PNG to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SavePng(MicroQRCodeData, Stream, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Image side length in pixels.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the image is written.</returns>
+    public static Task SavePngAsync(MicroQRCodeData microQrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = default)
+    {
+        return new MicroQRCodeImageBuilder(microQrCodeData)
+            .WithSize(size, size)
+            .SaveToAsync(output, cancellationToken);
+    }
+
+    /// <summary>
     /// Encodes the content and returns an SVG document as UTF-8 bytes.
     /// </summary>
     /// <param name="content">The text or URL to encode.</param>
@@ -189,6 +227,44 @@ public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCode
         new MicroQRCodeImageBuilder(microQrCodeData)
             .WithSize(size, size)
             .SaveToSvg(output);
+    }
+
+    /// <summary>
+    /// Encodes the content and writes an SVG document to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SaveSvg(string, Stream, MicroQREccLevel, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToSvgAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the document is written.</returns>
+    public static Task SaveSvgAsync(string content, Stream output, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512, CancellationToken cancellationToken = default)
+    {
+        return new MicroQRCodeImageBuilder(content)
+            .WithSize(size, size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvgAsync(output, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renders the Micro QR code and writes an SVG document to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SaveSvg(MicroQRCodeData, Stream, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToSvgAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the document is written.</returns>
+    public static Task SaveSvgAsync(MicroQRCodeData microQrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = default)
+    {
+        return new MicroQRCodeImageBuilder(microQrCodeData)
+            .WithSize(size, size)
+            .SaveToSvgAsync(output, cancellationToken);
     }
 
     /// <summary>

@@ -297,6 +297,35 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     }
 
     /// <summary>
+    /// Renders the symbol and writes the encoded image to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The image is rendered and encoded whole, then written through the stream's asynchronous writes alone, so a stream that refuses synchronous writes, such as a server's response body, takes it.
+    /// Nothing reaches the stream when the render fails. The stream is not flushed, as <see cref="SaveTo(Stream)"/> does not flush it.
+    /// </para>
+    /// <para>
+    /// Called on a thread with a synchronization context, such as a UI thread, the call renders on the thread pool, so the caller can await it where it is.
+    /// </para>
+    /// </remarks>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write. A write stopped part way leaves part of the image in the stream.</param>
+    /// <returns>A task that completes once the image is written.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
+    /// <exception cref="InvalidOperationException">Faults the task when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
+    /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
+    public Task SaveToAsync(Stream output, CancellationToken cancellationToken = default)
+    {
+        if (output is null)
+            throw new ArgumentNullException(nameof(output));
+        if (!output.CanWrite)
+            throw new ArgumentException("Output stream must be writable", nameof(output));
+
+        return SaveToCoreAsync(output, cancellationToken);
+    }
+
+    /// <summary>
     /// Renders the symbol as an SVG document and writes it to a stream.
     /// </summary>
     /// <remarks>
@@ -336,6 +365,36 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
 
         using var stream = new BufferWriterStream(writer);
         RenderSvg(stream);
+    }
+
+    /// <summary>
+    /// Renders the symbol as an SVG document and writes it to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Renders exactly as <see cref="SaveToSvg(Stream)"/>.
+    /// The document is rendered whole into a pooled buffer, then written through the stream's asynchronous writes alone, so a stream that refuses synchronous writes, such as a server's response body, takes it.
+    /// Nothing reaches the stream when the render fails, where the synchronous form has already written part of the document. The stream is not flushed.
+    /// </para>
+    /// <para>
+    /// Called on a thread with a synchronization context, such as a UI thread, the call renders on the thread pool, so the caller can await it where it is.
+    /// </para>
+    /// </remarks>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write. A write stopped part way leaves part of the document in the stream.</param>
+    /// <returns>A task that completes once the document is written.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
+    /// <exception cref="InvalidOperationException">Faults the task when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
+    /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
+    public Task SaveToSvgAsync(Stream output, CancellationToken cancellationToken = default)
+    {
+        if (output is null)
+            throw new ArgumentNullException(nameof(output));
+        if (!output.CanWrite)
+            throw new ArgumentException("Output stream must be writable", nameof(output));
+
+        return SaveToSvgCoreAsync(output, cancellationToken);
     }
 
     /// <summary>
@@ -407,6 +466,61 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
         using (var canvas = SKSvgCanvas.Create(SKRect.Create(0, 0, info.Width, info.Height), injector))
         {
             RenderContent(canvas, symbol, info, contentRect);
+        }
+    }
+
+    private async Task SaveToCoreAsync(Stream output, CancellationToken cancellationToken)
+    {
+        await CallerContext.Leave();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using var encoded = EncodeToBuffer();
+        cancellationToken.ThrowIfCancellationRequested();
+        await encoded.WriteToAsync(output, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task SaveToSvgCoreAsync(Stream output, CancellationToken cancellationToken)
+    {
+        await CallerContext.Leave();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using var document = RenderSvgToBuffer();
+        cancellationToken.ThrowIfCancellationRequested();
+        await document.WriteToAsync(output, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Encodes the image into a buffer of its size.
+    /// The native image and its encoding are released here, before the caller awaits the write.
+    /// </summary>
+    private PooledBufferWriter EncodeToBuffer()
+    {
+        using var image = GenerateImage();
+        using var data = image.Encode(_format, _quality);
+
+        var encoded = data.AsSpan();
+        var buffer = new PooledBufferWriter(encoded.Length);
+        encoded.CopyTo(buffer.GetSpan(encoded.Length));
+        buffer.Advance(encoded.Length);
+        return buffer;
+    }
+
+    /// <summary>
+    /// Renders the SVG document into a buffer, so that a render that fails part way writes nothing.
+    /// </summary>
+    private PooledBufferWriter RenderSvgToBuffer()
+    {
+        var document = new PooledBufferWriter();
+        try
+        {
+            using var stream = new BufferWriterStream(document);
+            RenderSvg(stream);
+            return document;
+        }
+        catch
+        {
+            document.Dispose();
+            throw;
         }
     }
 
