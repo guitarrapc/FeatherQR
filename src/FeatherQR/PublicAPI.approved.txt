@@ -1,5 +1,5 @@
 // FeatherQR
-// 37 exported types
+// 40 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR
@@ -73,6 +73,13 @@ namespace FeatherQR
         public SymbolCorners Corners { get; }
         public int ErrorsCorrected { get; }
         public int MaskPattern { get; }
+    }
+
+    public readonly struct MicroQRCodeDecodeResult : IEquatable<MicroQRCodeDecodeResult>
+    {
+        public MicroQRCodeDecodeInfo Info { get; }
+        public bool Success { get; }
+        public string Text { get; }
     }
 
     public static class MicroQRCodeDecoder
@@ -191,14 +198,23 @@ namespace FeatherQR
         public int Version { get; }
     }
 
+    public readonly struct QRCodeDecodeResult : IEquatable<QRCodeDecodeResult>
+    {
+        public QRCodeDecodeInfo Info { get; }
+        public bool Success { get; }
+        public string Text { get; }
+    }
+
     public static class QRCodeDecoder
     {
+        public static QRCodeDecodeResult[] DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height);
         public static bool TryDecode(QRCodeData data, out string text);
         public static bool TryDecode(QRCodeData data, out string text, out QRCodeDecodeInfo info);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out QRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out QRCodeDecodeInfo info);
+        public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> destination);
         public static int GetMaxDecodedLength(int version);
     }
 
@@ -299,6 +315,13 @@ namespace FeatherQR
         public RmQRVersion Version { get; }
         public SymbolCorners Corners { get; }
         public int ErrorsCorrected { get; }
+    }
+
+    public readonly struct RmQRCodeDecodeResult : IEquatable<RmQRCodeDecodeResult>
+    {
+        public RmQRCodeDecodeInfo Info { get; }
+        public bool Success { get; }
+        public string Text { get; }
     }
 
     public static class RmQRCodeDecoder

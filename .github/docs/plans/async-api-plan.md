@@ -9,7 +9,8 @@ The maintainer decided on 2026-10-15 that 2.0.0 ships an async API, for callers 
 - The analysis is done: where generation and reading block, by setting, measured on x64 (2026-10-15).
 - The goals are set (2026-10-25), from the decisions as ruled.
 - The design is decided: A1 to A14 below, all ruled on 2026-10-25.
-- Phase 1, the output, is done (2026-10-25): the fourteen async writes. Phase 2, the input, is next.
+- Phase 1, the output, is done (2026-10-25): the fourteen async writes.
+- Phase 2, the input, is done (2026-10-25): the result types, the stream reads with their limits and their synchronous twins, and the call for several symbols. Phase 3, cancellation between symbols, is next.
 - The call for several symbols in one image (Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md)) returns the result type an async read must return, since an async method cannot have `out` parameters. That type is ruled (A4), and the call's names are settled in that Phase 3.
 
 ## Goals
@@ -30,7 +31,7 @@ A UI awaits an async call on its own thread as it is. The call frees the thread 
 - An `...Async` twin for each of the fourteen methods that write to a `Stream` (A8). The image is rendered and encoded synchronously, and the write alone is asynchronous.
 - `DecodeAsync(Stream)` on the three image decoders and `DecodeSymbolsAsync(Stream)` for Standard QR (A3). The stream is read to its end asynchronously, then decoded and read synchronously.
 - A result type a symbology, its text, its decode info and whether it read (A4).
-- Fixed limits on a stream read, on the encoded bytes and on the pixels its header declares (A11), and the synchronous twins of the stream reads, which carry the limits too (A10).
+- Fixed limits on a stream read, 256 MiB of encoded bytes and 268,435,456 pixels (16,384 × 16,384) declared by its header (A11), and the synchronous twins of the stream reads, which carry the limits too (A10).
 - The token checked before a render or a decode starts, during the I/O, and between the symbols of a read for every symbol (A5).
 - An async call made on a UI thread, under a `SynchronizationContext`, moves to the pool before it renders or decodes, so that a UI awaits it as it is. An ASP.NET Core request has no context and takes no extra hop (A14).
 - The docs show a `PipeWriter`, such as `Response.BodyWriter`, written through `SaveTo(IBufferWriter<byte>)` and flushed by the caller (A1).
@@ -372,8 +373,8 @@ The I/O is all in the SkiaSharp package. The core and the GS1 package take and r
 
 Notes for the build, not decisions:
 
-- A stream read rents its buffer from the pool, and whether it decodes straight into one grey channel, a quarter of the 48 MB a 12-megapixel photograph takes as colour, is measured then.
-- An exposable `MemoryStream` is decoded in place, with the token checked up front. A stream that can seek has its remaining length checked against the limit before it is read, and the buffer is rented to that size. A stream that cannot seek is read to at most one byte past the limit.
+- A stream read rents its buffer from the pool, and decodes the image as `SKBitmap.Decode` does and reads it as `TryDecode` reads that bitmap, so it reads what the bitmap call reads (Phase 2). Decoding straight into one grey channel, a quarter of the 48 MB a 12-megapixel photograph takes as colour, was left out: it would put Skia's grey in place of the library's own luminance conversion, which would need a sweep of its own.
+- An exposable `MemoryStream` is decoded in place, with the token checked up front. A stream that can seek has its remaining length checked against the limit before it is read, and the buffer is rented to that size. A stream that cannot seek is read to at most one byte past the limit (Phase 2).
 - Nothing an async write renders reaches the stream when the render fails. The PNG is encoded whole before it is written, as now, and the async SVG renders into pooled memory before it is written, where the synchronous one streams. A write cancelled part way leaves part of the image behind.
 - The async writes do not flush the stream, since the synchronous ones do not (Phase 1).
 - Every `await` takes `ConfigureAwait(false)`.
@@ -386,7 +387,7 @@ Notes for the build, not decisions:
 |---|---|---|
 | 0 | The decisions above | The maintainer's rulings, given on 2026-10-25 |
 | 1 | Done 2026-10-25. Output: the async twins A8 rules, cancellation before the render and during the write, and the move off a context A14 rules | Tests with a stream that refuses synchronous writes, P2, P3 and P9, the approved API listing |
-| 2 | Input: the result types, `DecodeAsync` for the three symbologies and `DecodeSymbolsAsync` with the call for several symbols ([image-decode-followups-plan.md](image-decode-followups-plan.md), Phase 3), the limits A11 rules, the synchronous twins (A10), and the move off a context | Tests with a stream that refuses synchronous reads and one that hands bytes over a few at a time, a stream over each limit and one that is not an image refused before any pixel is allocated, a default result whose `Success` is false, P4 to P6 and P9 |
+| 2 | Done 2026-10-25. Input: the result types, `DecodeAsync` for the three symbologies and `DecodeSymbolsAsync` with the call for several symbols ([image-decode-followups-plan.md](image-decode-followups-plan.md), Phase 3), the limits A11 rules, the synchronous twins (A10), and the move off a context | Tests with a stream that refuses synchronous reads and one that hands bytes over a few at a time, a stream over each limit and one that is not an image refused before any pixel is allocated, a default result whose `Success` is false, P4 to P6 and P9 |
 | 3 | Cancellation between the symbols of a read for every symbol (A5) | A cancelled read for every symbol stops at the next check, P7 and P8 |
 | 4 | `docs/`, the README, the API page and the specs | The feature documented |
 
@@ -465,3 +466,37 @@ Lessons:
 - Restoring a planted fault with a file copy kept the backup's timestamp, so the next full run tested the fault's build: 13 failures, the fault's exact set. The timestamps were refreshed, and both frameworks pass.
 
 Left for later: no test host runs the netstandard builds of the SkiaSharp package, so the netstandard2.0 array write is compiled and listed but not run. `docs/`, the README and the specs are Phase 4.
+
+### Phase 2: the input (2026-10-25)
+
+Done, at the maintainer's request.
+
+What was done:
+
+- The result types `QRCodeDecodeResult`, `MicroQRCodeDecodeResult` and `RmQRCodeDecodeResult` in the core, each its `Text`, its `Info` and a `Success` that is false for a default value (A4).
+- The call for several symbols, under its draft names: `DecodeImageSymbols` on luminance in an array form and a span form, and `DecodeSymbols(SKBitmap)`. The internal entry writes the result type, so the span form writes into the caller's room as it is, and the array form gives the entry a room that doubles where the caller's room would fill, so the image is read once.
+- The stream reads on the SkiaSharp decoders: `DecodeAsync(Stream)` on the three, `DecodeSymbolsAsync(Stream)` for Standard QR, and their synchronous twins `Decode(Stream)` and `DecodeSymbols(Stream)` (A10). Arguments are checked before a task is returned. The stream is read to its end, then the call moves off a caller's context (A14), decodes the image under the limits and reads the bitmap.
+- The limits (A11): 256 MiB of encoded bytes and 268,435,456 pixels (16,384 × 16,384). The pixel limit holds the 200-megapixel sensors of current phones, 16,320 × 12,240, and a 151-megapixel medium-format back, 14,204 × 10,652 ([Pop Photo](https://www.popphoto.com/phase-one-150-megapixel-camera-review/)). A 200-megapixel phone's JPEG was reported at 50 to 60 MB by an owner ([Samsung Community](https://eu.community.samsung.com/t5/galaxy-s24-series/dimensioni-foto/td-p/11433474)) and is put at about 120 MB by a [file-size estimator](https://miniwebtool.com/it/stimatore-dimensioni-file-foto/), so the byte limit holds it twice over. At the pixel limit a colour bitmap takes 1 GiB, four times the byte limit. A stream over either throws `InvalidDataException`, as does one that holds no image, the pixels checked from the header before any pixel is allocated.
+- The approved API listings gained the three types, the two core calls and the nine SkiaSharp calls and nothing else, and the Playground's API page was regenerated.
+- Tests: `ImageStreamDecodeTest`, 80 cases, holds every stream read to what `SKBitmap.Decode(Stream)` and `TryDecode` give, on PNG, JPEG and blank images of the three symbologies, through a stream that refuses synchronous reads, one that hands over 7 bytes a read, one that can seek, an exposed `MemoryStream` read from its position and one that hides its array. The synchronous twins are read through a stream that refuses async reads. It covers a header declaring 40,000 × 40,000 pixels and one a row over the limit, a seekable stream over the byte limit refused with no read, a stream that never ends stopped one byte past 256 MiB, argument errors before a task exists, cancellation before the call and during a read, and the decode off a synchronization context and a task scheduler and not with neither. `DecodeImageSymbolsTest`, 10 cases, covers the array form past its first room, the span form with room for all, one and none, argument errors, and a default result. Four planted faults each turned their tests red: no move off the context, an exposed `MemoryStream` read from its start, no token handed to the reads, and a synchronous twin made by blocking on the async read. The two limits were not removed as faults, since their tests would then allocate without bound, and the pixel test asserts the declared size in the message for that reason.
+- `QRCodeImageStreamDecode` in the benchmark project, the bitmap pair its baseline.
+
+Measured with BenchmarkDotNet in process, .NET 10.0.9, x64, Ryzen 9 7950X3D, on a 4032 × 3024 JPEG the benchmark makes:
+
+| Shape | Bitmap pair | Stream read | Ratio | Allocated, pair / read |
+|---|---|---|---|---|
+| Exposed `MemoryStream`, async | 59.26 ms | 58.65 ms | 0.99 | 2.93 / 1.42 KB |
+| Exposed `MemoryStream`, synchronous twin | 59.26 ms | 58.64 ms | 0.99 | 2.93 / 1.05 KB |
+| `MemoryStream` over an array, async | 58.83 ms | 57.80 ms | 0.98 | 3,334 / 1,445 B |
+| 512 px PNG of the URL, async | 474 μs | 492 μs | 1.04 | 2,978 / 1,084 B |
+
+On `lots/image007` of BoofCV's set (4032 × 3024, 1,162,360 bytes), timed in a scratch probe, the median of 21 calls after 5: the pair 79.0 ms, the synchronous twin on an exposed stream 78.0, `DecodeAsync` on it 78.4, on a `MemoryStream` over the array 81.4 and on a stream that cannot seek, 64 KB a read, 80.4, every one with the pair's result. P4 holds, at most 4 % more time. P5 holds by construction: the read holds the encoded bytes, none for an exposed `MemoryStream`, while the bitmap decodes, and returns them before the luminance is made, and the bitmap and the luminance are the pair's. The peak was not measured. P6 and P9 are the tests above. The full suite passes on net10.0 (35,076 passed, 402 skipped) and net8.0 (34,982 passed, 402 skipped).
+
+Lessons:
+
+- `SKBitmap.Decode(Stream)` disposes the stream it is given: a probe found it unreadable afterwards, and the benchmark's first baseline failed for reusing one. The stream reads leave it open.
+- A stream that overrides only the memory overload of `ReadAsync` serves the array overload with a synchronous read (a probe on .NET 10), as for the writes.
+- Skia reports a PNG header's size without its pixels, so a header with one row of data is enough to test the pixel limit. A test of the limit that asserts only the exception type passes for the wrong reason when the decode fails some other way, so it asserts the size in the message.
+- A test that compared the limits' constants with the documented numbers was replaced by tests of the behaviour at those numbers.
+
+Left for later: the netstandard2.0 reads are compiled and listed but run by no test host, as the writes are. The Playground and `docs/` for the call for several symbols, and its names, are Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md).

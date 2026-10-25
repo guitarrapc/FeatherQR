@@ -117,6 +117,8 @@ namespace FeatherQR.SkiaSharp
 
     public static class MicroQRCodeImageDecoder
     {
+        public static MicroQRCodeDecodeResult Decode(Stream image);
+        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info);
     }
@@ -166,6 +168,11 @@ namespace FeatherQR.SkiaSharp
 
     public static class QRCodeImageDecoder
     {
+        public static QRCodeDecodeResult Decode(Stream image);
+        public static QRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
+        public static QRCodeDecodeResult[] DecodeSymbols(Stream image);
+        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info);
     }
@@ -221,6 +228,8 @@ namespace FeatherQR.SkiaSharp
 
     public static class RmQRCodeImageDecoder
     {
+        public static RmQRCodeDecodeResult Decode(Stream image);
+        public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
     }

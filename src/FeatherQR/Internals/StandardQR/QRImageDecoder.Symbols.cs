@@ -6,29 +6,27 @@ using static FeatherQR.Internals.ImageDecoders.AttemptStatus;
 
 namespace FeatherQR.Internals.StandardQR;
 
-/// <summary>One symbol read from an image: its text, and what the decode found, its corners in the image among it.</summary>
-internal readonly struct DecodedSymbol(string text, QRCodeDecodeInfo info)
-{
-    public string Text { get; } = text;
-
-    public QRCodeDecodeInfo Info { get; } = info;
-}
-
 internal static partial class QRImageDecoder
 {
     /// <summary>The candidates a reading's list has room for, every row scanned: 1,365 symbols' finders.</summary>
     private const int MaxSymbolCandidates = 4096;
 
+    /// <summary>The room the array form starts with, doubled each time it fills.</summary>
+    private const int GrowingRoom = 8;
+
     /// <summary>How many times the passes are run over one image at most.</summary>
     private const int MaxSymbolRounds = 2;
 
-    /// <summary>What one call of <see cref="DecodeSymbols"/> carries through its passes.</summary>
+    /// <summary>What one call of <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult})"/> carries through its passes.</summary>
     private ref struct SymbolSearch
     {
-        /// <summary>The caller's room, the first <see cref="Count"/> of it read.</summary>
-        public Span<DecodedSymbol> Symbols;
+        /// <summary>The room, the first <see cref="Count"/> of it read.</summary>
+        public Span<QRCodeDecodeResult> Symbols;
 
         public int Count;
+
+        /// <summary>The array form's room, which grows where the caller's room fills: <c>null</c> for the caller's room.</summary>
+        public QRCodeDecodeResult[]? Growing;
 
         /// <summary>The text buffer every decode writes into.</summary>
         public Span<char> Chars;
@@ -40,9 +38,22 @@ internal static partial class QRImageDecoder
 
         public bool LeftOut;
 
-        public readonly bool IsFull => Count == Symbols.Length;
+        public readonly bool IsFull => Growing is null && Count == Symbols.Length;
 
-        public readonly ReadOnlySpan<DecodedSymbol> Read => Symbols.Slice(0, Count);
+        public readonly ReadOnlySpan<QRCodeDecodeResult> Read => Symbols.Slice(0, Count);
+
+        public void Add(QRCodeDecodeResult symbol)
+        {
+            if (Count == Symbols.Length)
+            {
+                // Only the array form gets here: the passes stop before a symbol the caller's room has no space for
+                var grown = new QRCodeDecodeResult[Symbols.Length * 2];
+                Symbols.CopyTo(grown);
+                Growing = grown;
+                Symbols = grown;
+            }
+            Symbols[Count++] = symbol;
+        }
 
     }
 
@@ -56,7 +67,7 @@ internal static partial class QRImageDecoder
     /// <param name="left">The finders the round's passes gave up on, each once, in the pixels of the image. Those inside a symbol of <paramref name="read"/> are taken out.</param>
     /// <param name="leftOut">Whether the passes gave up on more than <paramref name="left"/> holds.</param>
     /// <param name="read">The symbols read so far.</param>
-    internal static bool IsWorthAnotherRound(Span<FinderPattern> left, bool leftOut, ReadOnlySpan<DecodedSymbol> read)
+    internal static bool IsWorthAnotherRound(Span<FinderPattern> left, bool leftOut, ReadOnlySpan<QRCodeDecodeResult> read)
     {
         if (leftOut)
             return true;
@@ -85,9 +96,30 @@ internal static partial class QRImageDecoder
     /// </para>
     /// </remarks>
     /// <returns>How many symbols were written.</returns>
-    internal static int DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<DecodedSymbol> symbols)
+    internal static int DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> symbols)
     {
-        if (symbols.IsEmpty || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
+        if (symbols.IsEmpty)
+            return 0;
+        return DecodeSymbolsCore(luminance, width, height, symbols, growing: null, out _);
+    }
+
+    /// <summary>
+    /// Decodes every QR code of a grayscale image, as <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult})"/> does with room for all of them.
+    /// </summary>
+    /// <remarks>
+    /// The room grows as it fills instead of ending the passes, so the image is read once however many symbols it holds.
+    /// </remarks>
+    internal static QRCodeDecodeResult[] DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height)
+    {
+        var room = new QRCodeDecodeResult[GrowingRoom];
+        var count = DecodeSymbolsCore(luminance, width, height, room, room, out var grown);
+        return count == grown.Length ? grown : grown.AsSpan(0, count).ToArray();
+    }
+
+    private static int DecodeSymbolsCore(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> symbols, QRCodeDecodeResult[]? growing, out QRCodeDecodeResult[] grown)
+    {
+        grown = growing ?? [];
+        if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
             return 0;
         luminance = luminance.Slice(0, pixelCount);
 
@@ -97,7 +129,7 @@ internal static partial class QRImageDecoder
         try
         {
             Span<FinderPattern> left = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var search = new SymbolSearch { Symbols = symbols, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
+            var search = new SymbolSearch { Symbols = symbols, Growing = growing, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
             for (var round = 0; round < MaxSymbolRounds; round++)
             {
                 var before = search.Count;
@@ -107,6 +139,7 @@ internal static partial class QRImageDecoder
                 if (search.Count == before || search.IsFull || !IsWorthAnotherRound(search.Left.Slice(0, search.LeftCount), search.LeftOut, search.Read))
                     break;
             }
+            grown = search.Growing ?? [];
             return search.Count;
         }
         finally
@@ -214,7 +247,7 @@ internal static partial class QRImageDecoder
     /// The stages read the head of the list, as many candidates as the one-symbol search holds. When they give up on a head with more of the list behind it, that head leaves the list and the stages go on with the next, so symbols that do not read cannot hide the ones scanned after them.
     /// </para>
     /// <para>
-    /// <paramref name="scale"/> is how many pixels of the image given to <see cref="DecodeSymbols"/> one pixel of this reading is, along each axis. The symbols are kept in that image's pixels.
+    /// <paramref name="scale"/> is how many pixels of the image given to <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult})"/> one pixel of this reading is, along each axis. The symbols are kept in that image's pixels.
     /// </para>
     /// </remarks>
     private static void DecodeSymbolsOfReading(ref SymbolSearch search, scoped ReadOnlySpan<byte> luminance, scoped ReadOnlySpan<byte> source, bool negative, scoped ReadOnlySpan<int> histogram, int width, int height, int scale)
@@ -245,7 +278,7 @@ internal static partial class QRImageDecoder
                         var before = candidateCount;
                         RemoveCandidatesInside(candidates, ref candidateCount, read.Corners, scale);
                         if (!IsReadAlready(search.Read, read.Corners))
-                            search.Symbols[search.Count++] = new DecodedSymbol(search.Chars.Slice(0, charsWritten).ToString(), read);
+                            search.Add(new QRCodeDecodeResult(search.Chars.Slice(0, charsWritten).ToString(), read));
                         if (candidateCount == before)
                             break;
                         continue;
@@ -323,7 +356,7 @@ internal static partial class QRImageDecoder
     /// Rows the strided scan skipped are scanned once a reading, into the whole list, and the candidates they add inside a symbol already read leave it at once.
     /// <paramref name="tried"/> is the triple whose decode gave a verdict on its content, at whichever stage, for a caller that takes its finders out of the list, and empty otherwise.
     /// </remarks>
-    private static DecodeStatus DecodeNextSymbol(in ImageView image, Span<FinderPattern> candidates, ref int candidateCount, ref bool everyRowScanned, ReadOnlySpan<DecodedSymbol> read, int scale, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out SelectedTriple tried)
+    private static DecodeStatus DecodeNextSymbol(in ImageView image, Span<FinderPattern> candidates, ref int candidateCount, ref bool everyRowScanned, ReadOnlySpan<QRCodeDecodeResult> read, int scale, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out SelectedTriple tried)
     {
         var corners = new VerdictCorners();
         var status = DecodeNextSymbolStages(ref corners, image, candidates, ref candidateCount, ref everyRowScanned, read, scale, ref modules, destination, out charsWritten, out info, out var inferred);
@@ -352,7 +385,7 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>The stages of <see cref="DecodeNextSymbol"/>. <paramref name="inferred"/> is the triple the inferred stage settled on, when that stage reported.</summary>
-    private static DecodeStatus DecodeNextSymbolStages(ref VerdictCorners corners, in ImageView image, Span<FinderPattern> candidates, ref int candidateCount, ref bool everyRowScanned, ReadOnlySpan<DecodedSymbol> read, int scale, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out SelectedTriple inferred)
+    private static DecodeStatus DecodeNextSymbolStages(ref VerdictCorners corners, in ImageView image, Span<FinderPattern> candidates, ref int candidateCount, ref bool everyRowScanned, ReadOnlySpan<QRCodeDecodeResult> read, int scale, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out SelectedTriple inferred)
     {
         charsWritten = 0;
         inferred = default;
@@ -442,7 +475,7 @@ internal static partial class QRImageDecoder
     /// <remarks>
     /// A second reading of a symbol, by another pass, is that symbol again. Symbols beside each other, and one drawn inside another, differ by more at some corner, so neither is dropped for the other.
     /// </remarks>
-    internal static bool IsReadAlready(ReadOnlySpan<DecodedSymbol> symbols, in SymbolCorners corners)
+    internal static bool IsReadAlready(ReadOnlySpan<QRCodeDecodeResult> symbols, in SymbolCorners corners)
     {
         var near = Math.Min(DistanceSquared(corners.TopLeft, corners.TopRight), DistanceSquared(corners.TopLeft, corners.BottomLeft)) / 16f;
         foreach (var symbol in symbols)
@@ -460,7 +493,7 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>Takes the candidates inside the outline of any of <paramref name="symbols"/> out of the list, the others keeping their order. True when any left.</summary>
-    private static bool RemoveCandidatesOfSymbols(Span<FinderPattern> candidates, ref int candidateCount, ReadOnlySpan<DecodedSymbol> symbols, int scale)
+    private static bool RemoveCandidatesOfSymbols(Span<FinderPattern> candidates, ref int candidateCount, ReadOnlySpan<QRCodeDecodeResult> symbols, int scale)
     {
         var before = candidateCount;
         foreach (var symbol in symbols)

@@ -12,15 +12,21 @@ internal sealed class PooledBufferWriter : IBufferWriter<byte>, IDisposable
 {
     private const int DefaultCapacity = 16 * 1024;
 
+    private readonly int _maxCapacity;
     private byte[]? _buffer;
     private int _written;
 
-    public PooledBufferWriter(int capacity = DefaultCapacity)
+    /// <param name="capacity">The room to start with.</param>
+    /// <param name="maxCapacity">The most room growth asks for beyond what a write needs.</param>
+    public PooledBufferWriter(int capacity = DefaultCapacity, int maxCapacity = int.MaxValue)
     {
+        _maxCapacity = maxCapacity;
         _buffer = ArrayPool<byte>.Shared.Rent(Math.Max(capacity, 1));
     }
 
     public int WrittenCount => _written;
+
+    public ReadOnlySpan<byte> WrittenSpan => Buffer.AsSpan(0, _written);
 
     public void Advance(int count)
     {
@@ -62,7 +68,7 @@ internal sealed class PooledBufferWriter : IBufferWriter<byte>, IDisposable
             return buffer;
 
         // Doubling holds the copying of a document written a little at a time to less than twice its size
-        var size = Math.Max(needed, 2L * buffer.Length);
+        var size = Math.Max(needed, Math.Min(2L * buffer.Length, _maxCapacity));
         var grown = ArrayPool<byte>.Shared.Rent((int)Math.Min(size, int.MaxValue));
         buffer.AsSpan(0, _written).CopyTo(grown);
         _buffer = grown;

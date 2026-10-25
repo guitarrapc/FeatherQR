@@ -6,8 +6,8 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Decodes Micro QR codes from SkiaSharp bitmaps.
-/// Extends <see cref="MicroQRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>MicroQRCodeDecoder.TryDecode(bitmap, ...)</c>. On older language versions call them on this class.
+/// Decodes Micro QR codes from SkiaSharp bitmaps, and from encoded images read from a stream.
+/// Extends <see cref="MicroQRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>MicroQRCodeDecoder.TryDecode(bitmap, ...)</c> and <c>MicroQRCodeDecoder.DecodeAsync(stream)</c>. On older language versions call them on this class.
 /// </summary>
 public static class MicroQRCodeImageDecoder
 {
@@ -65,5 +65,56 @@ public static class MicroQRCodeImageDecoder
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
             }
         }
+        /// <summary>
+        /// Reads an image from a stream asynchronously, and finds and decodes a Micro QR code in it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The stream is read to its end through its asynchronous reads alone, so a stream that refuses synchronous reads, such as a server's request body, gives it.
+        /// The image is then decoded as <see cref="SKBitmap.Decode(Stream)"/> decodes it, in its pixels as encoded with no EXIF orientation applied, and read as <see cref="TryDecode(SKBitmap, out string, out MicroQRCodeDecodeInfo)"/> reads that bitmap.
+        /// Called on a thread with a synchronization context, such as a UI thread, the call decodes on the thread pool, so the caller can await it where it is.
+        /// </para>
+        /// <para>
+        /// A stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), is refused before any pixel is allocated.
+        /// A larger image can be decoded into an <see cref="SKBitmap"/> and read with <see cref="TryDecode(SKBitmap, out string, out MicroQRCodeDecodeInfo)"/>.
+        /// </para>
+        /// </remarks>
+        /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
+        /// <param name="cancellationToken">Stops the call before the decode and during the reads.</param>
+        /// <returns>The result in every case. On a failure <see cref="MicroQRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="MicroQRCodeDecodeInfo.Status"/> says why.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
+        /// <exception cref="InvalidDataException">Faults the task when the stream holds no image that can be decoded, or one past the limits.</exception>
+        /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
+        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = default)
+        {
+            EncodedImage.ThrowIfUnreadable(image);
+            return EncodedImage.ReadAsync(image, ReadOne, cancellationToken);
+        }
+
+        /// <summary>
+        /// Reads an image from a stream, and finds and decodes a Micro QR code in it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The synchronous twin of <see cref="DecodeAsync(Stream, CancellationToken)"/>: the stream is read to its end through its synchronous reads, and the image is decoded and read as there, under the same limits.
+        /// </para>
+        /// </remarks>
+        /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
+        /// <returns>The result in every case. On a failure <see cref="MicroQRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="MicroQRCodeDecodeInfo.Status"/> says why.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
+        /// <exception cref="InvalidDataException">Thrown when the stream holds no image that can be decoded, or one past the limits.</exception>
+        public static MicroQRCodeDecodeResult Decode(Stream image)
+        {
+            EncodedImage.ThrowIfUnreadable(image);
+            return EncodedImage.Read(image, ReadOne);
+        }
+    }
+
+    private static MicroQRCodeDecodeResult ReadOne(SKBitmap bitmap)
+    {
+        MicroQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+        return new MicroQRCodeDecodeResult(text, info);
     }
 }

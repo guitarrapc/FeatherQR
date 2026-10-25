@@ -6,7 +6,7 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The entry that returns every symbol of an image in one call (<see cref="QRImageDecoder.DecodeSymbols"/>): each drawn symbol once, with its own corners, whichever pass reads it, and nothing that is not drawn.
+/// The entry that returns every symbol of an image in one call (<see cref="QRImageDecoder.DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult})"/>): each drawn symbol once, with its own corners, whichever pass reads it, and nothing that is not drawn.
 /// Its first result is what the one-symbol call reads of the same image, unless a pass of that call ends on a verdict or on candidates it gives up on.
 /// </summary>
 public class SeveralSymbolsDecodeTest
@@ -16,15 +16,15 @@ public class SeveralSymbolsDecodeTest
 
     private sealed record Drawn(string Text, (float X, float Y)[] Corners, float ModulePixels);
 
-    private static DecodedSymbol[] Read(byte[] luminance, int width, int height, int room = 128)
+    private static QRCodeDecodeResult[] Read(byte[] luminance, int width, int height, int room = 128)
     {
-        var symbols = new DecodedSymbol[room];
+        var symbols = new QRCodeDecodeResult[room];
         var count = QRImageDecoder.DecodeSymbols(luminance, width, height, symbols);
         return symbols.AsSpan(0, count).ToArray();
     }
 
     /// <summary>Every drawn symbol is a result once, with its text and its corners in the drawn order, and there is no other result.</summary>
-    private static async Task AssertReadsEach(DecodedSymbol[] read, IReadOnlyList<Drawn> drawn)
+    private static async Task AssertReadsEach(QRCodeDecodeResult[] read, IReadOnlyList<Drawn> drawn)
     {
         foreach (var symbol in drawn)
         {
@@ -44,7 +44,7 @@ public class SeveralSymbolsDecodeTest
     }
 
     /// <summary>The first result is the one-symbol call's read of the same image, to the last field.</summary>
-    private static async Task AssertFirstIsTheOneSymbolRead(DecodedSymbol[] read, byte[] luminance, int width, int height)
+    private static async Task AssertFirstIsTheOneSymbolRead(QRCodeDecodeResult[] read, byte[] luminance, int width, int height)
     {
         var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
         await Assert.That(success).IsEqualTo(read.Length > 0);
@@ -868,7 +868,7 @@ public class SeveralSymbolsDecodeTest
         await Assert.That(differing).IsEmpty().Because(string.Join("; ", differing));
     }
 
-    private static DecodedSymbol At(float left, float top, float side)
+    private static QRCodeDecodeResult At(float left, float top, float side)
         => new("", new QRCodeDecodeInfo(DecodeStatus.Success, 1, QREccLevel.M, 0, 0).WithCorners(new SymbolCorners(new ImagePoint(left, top), new ImagePoint(left + side, top), new ImagePoint(left + side, top + side), new ImagePoint(left, top + side))));
 
     /// <summary>
@@ -884,7 +884,7 @@ public class SeveralSymbolsDecodeTest
     [Arguments(58f, 58f, 168f, false)]
     public async Task ReadAlready_IsTheSameSymbolAndNoOther(float left, float top, float side, bool expected)
     {
-        DecodedSymbol[] held = [At(300f, 300f, 84f), At(100f, 100f, 84f)];
+        QRCodeDecodeResult[] held = [At(300f, 300f, 84f), At(100f, 100f, 84f)];
 
         await Assert.That(QRImageDecoder.IsReadAlready(held, At(left, top, side).Info.Corners)).IsEqualTo(expected);
     }
@@ -897,7 +897,7 @@ public class SeveralSymbolsDecodeTest
     [Arguments(3)]
     public async Task ReadAlready_NeedsEveryCornerNear(int moved)
     {
-        DecodedSymbol[] held = [At(100f, 100f, 84f)];
+        QRCodeDecodeResult[] held = [At(100f, 100f, 84f)];
         ImagePoint[] corners = [new(100f, 100f), new(184f, 100f), new(184f, 184f), new(100f, 184f)];
         corners[moved] = new ImagePoint(corners[moved].X + 30f, corners[moved].Y + 30f);
 
@@ -913,7 +913,7 @@ public class SeveralSymbolsDecodeTest
     [Test]
     public async Task AnotherRound_OnlyWhenAReadChangedAListThatStillHoldsATriple()
     {
-        DecodedSymbol[] read = [At(100f, 100f, 84f)];
+        QRCodeDecodeResult[] read = [At(100f, 100f, 84f)];
         FinderPattern[] inside = [Candidate(114f, 114f), Candidate(170f, 114f), Candidate(114f, 170f)];
         FinderPattern[] outside = [Candidate(314f, 114f), Candidate(370f, 114f), Candidate(314f, 170f)];
 
