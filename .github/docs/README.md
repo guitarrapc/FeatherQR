@@ -36,7 +36,7 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 
 | Document | Covers |
 |---|---|
-| [async-api-plan.md](plans/async-api-plan.md) | The 2.0.0 async API, decided on 2026-10-15: its goals, the API in full and its performance targets, where generation and reading block a caller's thread, by setting and measured, true async against a pipe, and the decisions waiting on the maintainer's rulings |
+| [async-api-plan.md](plans/async-api-plan.md) | The 2.0.0 async API, decided on 2026-10-15: its goals, the API in full and its performance targets, where generation and reading block a caller's thread, by setting and measured, true async against a pipe, and the decisions as ruled on 2026-10-25 |
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
 | [image-decode-followups-plan.md](plans/image-decode-followups-plan.md) | What the folded photograph plan's measurements still argue for: reading several symbols in one image, measured before any API. Its first work, timing the photograph stages on WebAssembly, is done and found no fault (2026-10-13). The second has its ceiling measured and an internal entry that reaches it in one call (2026-10-14), and its public call was ruled for 2.0.0 (2026-10-15) |
 
