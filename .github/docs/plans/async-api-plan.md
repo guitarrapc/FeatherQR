@@ -10,7 +10,8 @@ The maintainer decided on 2026-10-15 that 2.0.0 ships an async API, for callers 
 - The goals are set (2026-10-25), from the decisions as ruled.
 - The design is decided: A1 to A14 below, all ruled on 2026-10-25.
 - Phase 1, the output, is done (2026-10-25): the fourteen async writes.
-- Phase 2, the input, is done (2026-10-25): the result types, the stream reads with their limits and their synchronous twins, and the call for several symbols. Phase 3, cancellation between symbols, is next.
+- Phase 2, the input, is done (2026-10-25): the result types, the stream reads with their limits and their synchronous twins, and the call for several symbols.
+- Phase 3, cancellation between symbols, is done (2026-10-25). Phase 4, the docs, is next.
 - The call for several symbols in one image (Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md)) returns the result type an async read must return, since an async method cannot have `out` parameters. That type is ruled (A4), and the call's names are settled in that Phase 3.
 
 ## Goals
@@ -388,7 +389,7 @@ Notes for the build, not decisions:
 | 0 | The decisions above | The maintainer's rulings, given on 2026-10-25 |
 | 1 | Done 2026-10-25. Output: the async twins A8 rules, cancellation before the render and during the write, and the move off a context A14 rules | Tests with a stream that refuses synchronous writes, P2, P3 and P9, the approved API listing |
 | 2 | Done 2026-10-25. Input: the result types, `DecodeAsync` for the three symbologies and `DecodeSymbolsAsync` with the call for several symbols ([image-decode-followups-plan.md](image-decode-followups-plan.md), Phase 3), the limits A11 rules, the synchronous twins (A10), and the move off a context | Tests with a stream that refuses synchronous reads and one that hands bytes over a few at a time, a stream over each limit and one that is not an image refused before any pixel is allocated, a default result whose `Success` is false, P4 to P6 and P9 |
-| 3 | Cancellation between the symbols of a read for every symbol (A5) | A cancelled read for every symbol stops at the next check, P7 and P8 |
+| 3 | Done 2026-10-25. Cancellation between the symbols of a read for every symbol (A5) | A cancelled read for every symbol stops at the next check, P7 and P8 |
 | 4 | `docs/`, the README, the API page and the specs | The feature documented |
 
 ## What has to stay true
@@ -500,3 +501,35 @@ Lessons:
 - A test that compared the limits' constants with the documented numbers was replaced by tests of the behaviour at those numbers.
 
 Left for later: the netstandard2.0 reads are compiled and listed but run by no test host, as the writes are. The Playground and `docs/` for the call for several symbols, and its names, are Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md).
+
+### Phase 3: cancellation between symbols (2026-10-25)
+
+Done, at the maintainer's request.
+
+What was done:
+
+- The internal entry for every symbol takes a token and checks it before each symbol it tries, in each reading's loop, never inside one symbol's read (A5). Every reading enters that loop once at least, so an image where nothing reads sees the token too. The public synchronous calls pass no token, and the one-symbol reads are not touched: the change is in the entry's own code alone.
+- `DecodeSymbolsAsync(Stream)` hands its token through the read of the bitmap to the search, which the docs now say.
+- A check at the start of each reading, before its row scan, was tried and taken out: the longest stretch past a cancel was the same with it, 4.05 to 6.99 ms on the seven sheets, as without it, 4.23 to 6.07.
+- `SeveralSymbolsCancellationTest`, 5 cases: a span form canceled from another thread once the first symbol is in the room stops with some of the 48 symbols read and not all (10 runs out of 10), a token canceled before the call on a sheet and on a blank image, the token reaching the search through the bitmap read, and the stream read handing its token to the read. Three planted faults each turned their tests red: no check before a try, the bitmap read dropping the token, and the stream read dropping it.
+
+Measured with a scratch probe that sees the internal entry, .NET 10.0.9, x64, Ryzen 9 7950X3D, on the seven sheets of 60 codes in BoofCV's `lots`, converted to grey by Skia: each read canceled at every half millisecond of its run from a thread that spins to the moment, and the time from the cancel to the exception taken. The time includes that thread's wake-up, so it bounds the stretch between two checks from above.
+
+| Sheet | Read | Cancels | Longest past a cancel | Median |
+|---|---|---|---|---|
+| `image001` | 46.7 ms | 94 | 5.48 ms | 0.31 ms |
+| `image002` | 34.0 ms | 69 | 4.37 ms | 0.56 ms |
+| `image003` | 49.3 ms | 99 | 4.43 ms | 0.40 ms |
+| `image004` | 32.7 ms | 66 | 4.23 ms | 0.48 ms |
+| `image005` | 42.0 ms | 84 | 6.07 ms | 0.69 ms |
+| `image006` | 44.4 ms | 89 | 4.79 ms | 0.34 ms |
+| `image007` | 97.1 ms | 195 | 5.93 ms | 1.11 ms |
+
+P7 holds, at most 6.07 ms against 10, so no check was added between passes. P8 holds: the one-symbol reads run the code they ran, and the allocation tests pass in Release. The full suite passes on net10.0 (35,081 passed, 402 skipped) and net8.0 (34,987 passed, 402 skipped).
+
+Lessons:
+
+- The longest stretch comes early, a cancel at the very start most often: the first reading scans every row of the full image before its first try.
+- The test written for the reading-start check assumed a blank image never reaches a try. It does, once a reading, which a planted fault showed when the test passed without the check. Its premise was rewritten, and it now holds the check before each try to readings that find no symbol.
+
+Left for later: Phase 4, the docs.

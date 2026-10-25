@@ -112,7 +112,7 @@ public static class MicroQRCodeImageDecoder
         }
     }
 
-    private static MicroQRCodeDecodeResult ReadOne(SKBitmap bitmap)
+    private static MicroQRCodeDecodeResult ReadOne(SKBitmap bitmap, CancellationToken _)
     {
         MicroQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
         return new MicroQRCodeDecodeResult(text, info);

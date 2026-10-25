@@ -17,7 +17,7 @@ internal static partial class QRImageDecoder
     /// <summary>How many times the passes are run over one image at most.</summary>
     private const int MaxSymbolRounds = 2;
 
-    /// <summary>What one call of <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult})"/> carries through its passes.</summary>
+    /// <summary>What one call of <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult}, CancellationToken)"/> carries through its passes.</summary>
     private ref struct SymbolSearch
     {
         /// <summary>The room, the first <see cref="Count"/> of it read.</summary>
@@ -27,6 +27,9 @@ internal static partial class QRImageDecoder
 
         /// <summary>The array form's room, which grows where the caller's room fills: <c>null</c> for the caller's room.</summary>
         public QRCodeDecodeResult[]? Growing;
+
+        /// <summary>Checked before each symbol is tried, never inside one symbol's read.</summary>
+        public CancellationToken Token;
 
         /// <summary>The text buffer every decode writes into.</summary>
         public Span<char> Chars;
@@ -96,27 +99,29 @@ internal static partial class QRImageDecoder
     /// </para>
     /// </remarks>
     /// <returns>How many symbols were written.</returns>
-    internal static int DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> symbols)
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check, the symbols read so far left in <paramref name="symbols"/>.</exception>
+    internal static int DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> symbols, CancellationToken cancellationToken = default)
     {
         if (symbols.IsEmpty)
             return 0;
-        return DecodeSymbolsCore(luminance, width, height, symbols, growing: null, out _);
+        return DecodeSymbolsCore(luminance, width, height, symbols, growing: null, cancellationToken, out _);
     }
 
     /// <summary>
-    /// Decodes every QR code of a grayscale image, as <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult})"/> does with room for all of them.
+    /// Decodes every QR code of a grayscale image, as <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult}, CancellationToken)"/> does with room for all of them.
     /// </summary>
     /// <remarks>
     /// The room grows as it fills instead of ending the passes, so the image is read once however many symbols it holds.
     /// </remarks>
-    internal static QRCodeDecodeResult[] DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height)
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check.</exception>
+    internal static QRCodeDecodeResult[] DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, CancellationToken cancellationToken = default)
     {
         var room = new QRCodeDecodeResult[GrowingRoom];
-        var count = DecodeSymbolsCore(luminance, width, height, room, room, out var grown);
+        var count = DecodeSymbolsCore(luminance, width, height, room, room, cancellationToken, out var grown);
         return count == grown.Length ? grown : grown.AsSpan(0, count).ToArray();
     }
 
-    private static int DecodeSymbolsCore(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> symbols, QRCodeDecodeResult[]? growing, out QRCodeDecodeResult[] grown)
+    private static int DecodeSymbolsCore(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> symbols, QRCodeDecodeResult[]? growing, CancellationToken cancellationToken, out QRCodeDecodeResult[] grown)
     {
         grown = growing ?? [];
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
@@ -129,7 +134,7 @@ internal static partial class QRImageDecoder
         try
         {
             Span<FinderPattern> left = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var search = new SymbolSearch { Symbols = symbols, Growing = growing, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
+            var search = new SymbolSearch { Symbols = symbols, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
             for (var round = 0; round < MaxSymbolRounds; round++)
             {
                 var before = search.Count;
@@ -247,7 +252,7 @@ internal static partial class QRImageDecoder
     /// The stages read the head of the list, as many candidates as the one-symbol search holds. When they give up on a head with more of the list behind it, that head leaves the list and the stages go on with the next, so symbols that do not read cannot hide the ones scanned after them.
     /// </para>
     /// <para>
-    /// <paramref name="scale"/> is how many pixels of the image given to <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult})"/> one pixel of this reading is, along each axis. The symbols are kept in that image's pixels.
+    /// <paramref name="scale"/> is how many pixels of the image given to <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult}, CancellationToken)"/> one pixel of this reading is, along each axis. The symbols are kept in that image's pixels.
     /// </para>
     /// </remarks>
     private static void DecodeSymbolsOfReading(ref SymbolSearch search, scoped ReadOnlySpan<byte> luminance, scoped ReadOnlySpan<byte> source, bool negative, scoped ReadOnlySpan<int> histogram, int width, int height, int scale)
@@ -270,6 +275,8 @@ internal static partial class QRImageDecoder
             {
                 while (!search.IsFull)
                 {
+                    // Every reading enters this loop once at least, so an image where nothing reads still sees the token
+                    search.Token.ThrowIfCancellationRequested();
                     var status = DecodeNextSymbol(image, candidates, ref candidateCount, ref everyRowScanned, search.Read, scale, ref modules, search.Chars, out var charsWritten, out var info, out var tried);
                     if (status == DecodeStatus.Success)
                     {

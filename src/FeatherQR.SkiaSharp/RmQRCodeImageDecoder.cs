@@ -112,7 +112,7 @@ public static class RmQRCodeImageDecoder
         }
     }
 
-    private static RmQRCodeDecodeResult ReadOne(SKBitmap bitmap)
+    private static RmQRCodeDecodeResult ReadOne(SKBitmap bitmap, CancellationToken _)
     {
         RmQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
         return new RmQRCodeDecodeResult(text, info);

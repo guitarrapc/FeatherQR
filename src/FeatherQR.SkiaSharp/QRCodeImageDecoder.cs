@@ -2,6 +2,7 @@ using System.Buffers;
 using FeatherQR.SkiaSharp.Internals;
 using SkiaSharp;
 using FeatherQR.Internals.ImageDecoders;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.SkiaSharp;
 
@@ -125,22 +126,7 @@ public static class QRCodeImageDecoder
             if (bitmap is null)
                 throw new ArgumentNullException(nameof(bitmap));
 
-            var width = bitmap.Width;
-            var height = bitmap.Height;
-            if (width < 21 || height < 21 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
-                return [];
-
-            var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
-            try
-            {
-                var luminance = rented.AsSpan(0, pixelCount);
-                BitmapLuminanceConverter.Convert(bitmap, luminance);
-                return QRCodeDecoder.DecodeImageSymbols(luminance, width, height);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-            }
+            return DecodeEverySymbol(bitmap, CancellationToken.None);
         }
 
         /// <summary>
@@ -148,9 +134,10 @@ public static class QRCodeImageDecoder
         /// </summary>
         /// <remarks>
         /// Reads the stream as <see cref="DecodeAsync(Stream, CancellationToken)"/> does, under the same limits, and the bitmap as <see cref="DecodeSymbols(SKBitmap)"/> does.
+        /// The token is also checked before each symbol the search tries, never inside one symbol's read, so a cancel stops the search at its next try.
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
-        /// <param name="cancellationToken">Stops the call before the decode and during the reads.</param>
+        /// <param name="cancellationToken">Stops the call before the decode, during the reads, and between the symbols the search tries.</param>
         /// <returns>The symbols read, an empty array when there is none.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
@@ -159,7 +146,7 @@ public static class QRCodeImageDecoder
         public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = default)
         {
             EncodedImage.ThrowIfUnreadable(image);
-            return EncodedImage.ReadAsync(image, ReadEvery, cancellationToken);
+            return EncodedImage.ReadAsync(image, DecodeEverySymbol, cancellationToken);
         }
 
         /// <summary>
@@ -176,15 +163,34 @@ public static class QRCodeImageDecoder
         public static QRCodeDecodeResult[] DecodeSymbols(Stream image)
         {
             EncodedImage.ThrowIfUnreadable(image);
-            return EncodedImage.Read(image, ReadEvery);
+            return EncodedImage.Read(image, DecodeEverySymbol);
         }
     }
 
-    private static QRCodeDecodeResult ReadOne(SKBitmap bitmap)
+    private static QRCodeDecodeResult ReadOne(SKBitmap bitmap, CancellationToken _)
     {
         QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
         return new QRCodeDecodeResult(text, info);
     }
 
-    private static QRCodeDecodeResult[] ReadEvery(SKBitmap bitmap) => QRCodeDecoder.DecodeSymbols(bitmap);
+    /// <summary>Every QR code in a bitmap, the token checked between the symbols the search tries.</summary>
+    internal static QRCodeDecodeResult[] DecodeEverySymbol(SKBitmap bitmap, CancellationToken cancellationToken)
+    {
+        var width = bitmap.Width;
+        var height = bitmap.Height;
+        if (width < 21 || height < 21 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
+            return [];
+
+        var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
+        try
+        {
+            var luminance = rented.AsSpan(0, pixelCount);
+            BitmapLuminanceConverter.Convert(bitmap, luminance);
+            return QRImageDecoder.DecodeSymbols(luminance, width, height, cancellationToken);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
 }

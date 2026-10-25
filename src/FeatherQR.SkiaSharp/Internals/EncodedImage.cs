@@ -39,18 +39,18 @@ internal sealed class EncodedImage : IDisposable
             throw new ArgumentException("Image stream must be readable", nameof(image));
     }
 
-    /// <summary>Reads the stream to its end, decodes the image and hands the bitmap to <paramref name="read"/>.</summary>
-    public static TResult Read<TResult>(Stream image, Func<SKBitmap, TResult> read)
+    /// <summary>Reads the stream to its end, decodes the image and hands the bitmap to <paramref name="read"/>, with no token.</summary>
+    public static TResult Read<TResult>(Stream image, Func<SKBitmap, CancellationToken, TResult> read)
     {
         SKBitmap bitmap;
         using (var encoded = ReadToEnd(image))
             bitmap = Decode(encoded.Bytes);
         using (bitmap)
-            return read(bitmap);
+            return read(bitmap, CancellationToken.None);
     }
 
-    /// <summary>Reads the stream to its end through its async reads, then decodes the image and hands the bitmap to <paramref name="read"/>, off the caller's context.</summary>
-    public static async Task<TResult> ReadAsync<TResult>(Stream image, Func<SKBitmap, TResult> read, CancellationToken cancellationToken)
+    /// <summary>Reads the stream to its end through its async reads, then decodes the image and hands the bitmap and the token to <paramref name="read"/>, off the caller's context.</summary>
+    public static async Task<TResult> ReadAsync<TResult>(Stream image, Func<SKBitmap, CancellationToken, TResult> read, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -63,7 +63,7 @@ internal sealed class EncodedImage : IDisposable
             bitmap = Decode(encoded.Bytes);
         }
         using (bitmap)
-            return read(bitmap);
+            return read(bitmap, cancellationToken);
     }
 
     private static EncodedImage ReadToEnd(Stream stream)

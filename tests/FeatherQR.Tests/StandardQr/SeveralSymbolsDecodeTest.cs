@@ -6,7 +6,7 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The entry that returns every symbol of an image in one call (<see cref="QRImageDecoder.DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult})"/>): each drawn symbol once, with its own corners, whichever pass reads it, and nothing that is not drawn.
+/// The entry that returns every symbol of an image in one call (<see cref="QRImageDecoder.DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult}, CancellationToken)"/>): each drawn symbol once, with its own corners, whichever pass reads it, and nothing that is not drawn.
 /// Its first result is what the one-symbol call reads of the same image, unless a pass of that call ends on a verdict or on candidates it gives up on.
 /// </summary>
 public class SeveralSymbolsDecodeTest
