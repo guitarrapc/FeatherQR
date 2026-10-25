@@ -71,6 +71,7 @@ public static class MicroQRCodeImageDecoder
         /// <remarks>
         /// <para>
         /// The stream is read to its end through its asynchronous reads alone, so a stream that refuses synchronous reads, such as a server's request body, gives it.
+        /// A <see cref="MemoryStream"/> whose buffer is exposed is read in place instead, from its position to its end, with no call to its reads.
         /// The image is then decoded as <see cref="SKBitmap.Decode(Stream)"/> decodes it, in its pixels as encoded with no EXIF orientation applied, and read as <see cref="TryDecode(SKBitmap, out string, out MicroQRCodeDecodeInfo)"/> reads that bitmap.
         /// Called on a thread with a synchronization context, such as a UI thread, the call decodes on the thread pool, so the caller can await it where it is.
         /// </para>
@@ -97,7 +98,7 @@ public static class MicroQRCodeImageDecoder
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The synchronous twin of <see cref="DecodeAsync(Stream, CancellationToken)"/>: the stream is read to its end through its synchronous reads, and the image is decoded and read as there, under the same limits.
+        /// The synchronous twin of <see cref="DecodeAsync(Stream, CancellationToken)"/>: the stream is read to its end through its synchronous reads, or in place as there, and the image is decoded and read as there, under the same limits.
         /// </para>
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>

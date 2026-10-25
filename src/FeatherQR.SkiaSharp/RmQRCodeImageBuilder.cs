@@ -83,10 +83,11 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// Encodes the content and returns an image in the format you choose.
     /// </summary>
     /// <param name="content">The text or URL to encode.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, int quality = 100)
     {
         return new RmQRCodeImageBuilder(content)
@@ -100,9 +101,10 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// Renders the rMQR code and returns an image in the format you choose.
     /// </summary>
     /// <param name="rmQrCodeData">The rMQR code to draw.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static byte[] GetImageBytes(RmQRCodeData rmQrCodeData, SKEncodedImageFormat format, int size = DefaultWidth, int quality = 100)
     {
         return new RmQRCodeImageBuilder(rmQrCodeData)
@@ -355,10 +357,11 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// </summary>
     /// <param name="content">The text or URL to encode.</param>
     /// <param name="writer">Destination buffer writer.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, int quality = 100)
     {
         new RmQRCodeImageBuilder(content)
@@ -373,9 +376,10 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// </summary>
     /// <param name="rmQrCodeData">The rMQR code to draw.</param>
     /// <param name="writer">Destination buffer writer.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static void WriteImage(RmQRCodeData rmQrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = DefaultWidth, int quality = 100)
     {
         new RmQRCodeImageBuilder(rmQrCodeData)

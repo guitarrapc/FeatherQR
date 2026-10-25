@@ -109,7 +109,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Sets the encoded image format and quality.
     /// PNG at 100 by default.
     /// </summary>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP, and saving the image in another format throws <see cref="NotSupportedException"/>.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the quality is outside 0 to 100.</exception>
     public TSelf WithFormat(SKEncodedImageFormat format, int quality = 100)
@@ -263,6 +263,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>.</exception>
     public void SaveTo(Stream output)
     {
         if (output is null)
@@ -271,7 +272,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
             throw new ArgumentException("Output stream must be writable", nameof(output));
 
         using var image = GenerateImage();
-        using var data = image.Encode(_format, _quality);
+        using var data = Encode(image);
 
         // write to stream
         data.SaveTo(output);
@@ -283,13 +284,14 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <param name="writer">Where to write.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <c>null</c>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>.</exception>
     public void SaveTo(IBufferWriter<byte> writer)
     {
         if (writer is null)
             throw new ArgumentNullException(nameof(writer));
 
         using var image = GenerateImage();
-        using var data = image.Encode(_format, _quality);
+        using var data = Encode(image);
 
         // Write in writer-provided segments. A single GetSpan for the whole payload
         // would force segmented writers (e.g. PipeWriter) into one contiguous buffer.
@@ -314,6 +316,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
     /// <exception cref="InvalidOperationException">Faults the task when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
+    /// <exception cref="NotSupportedException">Faults the task when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>.</exception>
     /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
     public Task SaveToAsync(Stream output, CancellationToken cancellationToken = default)
     {
@@ -415,10 +418,11 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Renders the symbol and returns the encoded image bytes.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>.</exception>
     public byte[] ToByteArray()
     {
         using var image = GenerateImage();
-        using var data = image.Encode(_format, _quality);
+        using var data = Encode(image);
         return data.ToArray();
     }
 
@@ -489,6 +493,10 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
         await document.WriteToAsync(output, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Encodes the rendered image in the format the builder was given.</summary>
+    private SKData Encode(SKImage image)
+        => image.Encode(_format, _quality) ?? throw new NotSupportedException($"Skia has no encoder for {_format}.");
+
     /// <summary>
     /// Encodes the image into a buffer of its size.
     /// The native image and its encoding are released here, before the caller awaits the write.
@@ -496,7 +504,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     private PooledBufferWriter EncodeToBuffer()
     {
         using var image = GenerateImage();
-        using var data = image.Encode(_format, _quality);
+        using var data = Encode(image);
 
         var encoded = data.AsSpan();
         var buffer = new PooledBufferWriter(encoded.Length);

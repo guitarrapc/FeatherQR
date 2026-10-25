@@ -452,11 +452,11 @@ if (result.Success)
 - **The result is the same.** The stream read decodes the image as `SKBitmap.Decode(stream)` does and reads it as `TryDecode` reads that bitmap.
 - **The stream stays open.** `SKBitmap.Decode(stream)` disposes the stream it is given. The stream read leaves it open, read to its end.
 - **A stream that holds no image throws** `InvalidDataException`, where `SKBitmap.Decode` returned `null`. So does a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384). Decode a larger image into an `SKBitmap` yourself and call `TryDecode`.
-- **`Success` is `false` for a default value.** `DecodeStatus.Success` is 0, so a default result's status reads as a success, and `Success` is what tells a read from an unwritten entry.
+- **`Success` is `false` for a default value.** `DecodeStatus.Success` is 0, so a default result's status reads as a success, where `Success` does not.
 
 ### Several symbols in one image
 
-Additive. `QRCodeDecoder.DecodeImageSymbols` reads every Standard QR code of a grayscale image, as an array or into a span you provide, and `QRCodeImageDecoder.DecodeSymbols` reads them from an `SKBitmap` or a stream, with `DecodeSymbolsAsync` beside it. Each symbol is returned once with its corners, and only the symbols that decode: one whose content cannot be given as text is left out, and so is one that lies inside a symbol already read. The span form stops once the span is full, and a full span does not say whether the image held more. Micro QR and rMQR read one symbol a call.
+Additive. `QRCodeDecoder.DecodeImageSymbols` reads every Standard QR code of a grayscale image, as an array or into a span you provide, and `QRCodeImageDecoder.DecodeSymbols` reads them from an `SKBitmap` or a stream, with `DecodeSymbolsAsync` beside it. Each symbol is returned once with its corners, and only the symbols that decode: one whose content cannot be given as text is left out, and so is one that lies inside a symbol already read. The span form returns how many symbols it wrote from the start of the span, and leaves the entries past them as they were, so a span used again still holds the symbols of the call before past that count. It stops once the span is full, and a full span does not say whether the image held more. Micro QR and rMQR read one symbol a call.
 
 ### A failed matrix decode reports no characters written
 

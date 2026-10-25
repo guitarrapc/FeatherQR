@@ -15,7 +15,7 @@ public readonly record struct QRCodeDecodeResult
         Info = info;
     }
 
-    /// <summary>The decoded text, or an empty string when decoding failed.</summary>
+    /// <summary>The decoded text, or an empty string when decoding failed. <c>null</c> in a default value, which no read returns.</summary>
     public string Text { get; }
 
     /// <summary>What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image.</summary>

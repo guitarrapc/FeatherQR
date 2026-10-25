@@ -131,7 +131,7 @@ internal sealed class EncodedImage : IDisposable
     }
 
     /// <summary>
-    /// An exposed <see cref="MemoryStream"/>'s bytes from its position on, read in place with no copy. The stream is left at its end, as a read to the end leaves it.
+    /// An exposed <see cref="MemoryStream"/>'s bytes from its position on, read in place with no copy. The stream is left where a read to its end leaves it.
     /// </summary>
     private static bool TryBorrow(Stream stream, [NotNullWhen(true)] out EncodedImage? image)
     {
@@ -144,7 +144,9 @@ internal sealed class EncodedImage : IDisposable
         if (bytes.Count > MaxEncodedBytes)
             throw TooManyBytes();
 
-        memory.Position = memory.Length;
+        // A read at a position past the end reads nothing and leaves the position there
+        if (memory.Position < memory.Length)
+            memory.Position = memory.Length;
         image = new EncodedImage(bytes);
         return true;
     }
@@ -194,19 +196,29 @@ internal sealed class EncodedImage : IDisposable
 #endif
 
     /// <summary>Decodes the image as <see cref="SKBitmap.Decode(ReadOnlySpan{byte})"/> does, once its header shows it within the pixel limit.</summary>
-    private static SKBitmap Decode(ReadOnlySpan<byte> encoded)
+    private static unsafe SKBitmap Decode(ReadOnlySpan<byte> encoded)
     {
         if (encoded.IsEmpty)
-            throw NotAnImage();
+            throw NothingLeft();
 
-        var info = SKBitmap.DecodeBounds(encoded);
-        if (info.Width <= 0 || info.Height <= 0)
-            throw NotAnImage();
-        if ((long)info.Width * info.Height > MaxPixels)
-            throw new InvalidDataException($"The image is {info.Width} × {info.Height} pixels, more than the {MaxPixels:N0} a stream read decodes.");
+        // One codec gives the bounds and the pixels. DecodeBounds and Decode would each parse the file, and for an icon file of many images the parse is most of the cost
+        fixed (byte* bytes = encoded)
+        {
+            using var data = SKData.Create((IntPtr)bytes, encoded.Length);
+            using var codec = SKCodec.Create(data) ?? throw NotAnImage();
+            var info = codec.Info;
+            if (info.Width <= 0 || info.Height <= 0)
+                throw NotAnImage();
+            if (IsOverPixelLimit(info.Width, info.Height))
+                throw new InvalidDataException($"The image is {info.Width} × {info.Height} pixels, more than the {MaxPixels:N0} a stream read decodes.");
 
-        return SKBitmap.Decode(encoded) ?? throw NotAnImage();
+            return SKBitmap.Decode(codec) ?? throw NotAnImage();
+        }
     }
+
+    internal static bool IsOverPixelLimit(int width, int height) => (long)width * height > MaxPixels;
+
+    private static InvalidDataException NothingLeft() => new("The stream has nothing left to read from its position.");
 
     private static InvalidDataException NotAnImage() => new("The stream does not hold an image that can be decoded.");
 

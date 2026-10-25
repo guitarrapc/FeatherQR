@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FeatherQR.Internals.StandardQR;
 using FeatherQR.SkiaSharp;
 using FeatherQR.SkiaSharp.Internals;
@@ -19,6 +20,24 @@ public class SeveralSymbolsCancellationTest
         // Premise: with no cancel the sheet reads whole
         await Assert.That(QRCodeDecoder.DecodeImageSymbols(luminance, sheet.Width, sheet.Height).Length).IsEqualTo(texts.Length);
 
+        // The cancel comes from another thread, which a busy machine can leave waiting until the last symbol is read.
+        // Such a try proves nothing, so tries go on until one cancels in time, and a search that never stops between symbols runs out of time
+        var clock = Stopwatch.StartNew();
+        var tries = 0;
+        while (true)
+        {
+            tries++;
+            var (caught, written) = CancelOnceTheFirstSymbolIsRead(luminance, sheet.Width, sheet.Height);
+            await Assert.That(caught is null or OperationCanceledException).IsTrue();
+            if (caught is OperationCanceledException && written > 0 && written < texts.Length)
+                break;
+            if (clock.Elapsed > TimeSpan.FromSeconds(20))
+                Assert.Fail($"None of {tries} tries stopped between the symbols of the sheet.");
+        }
+    }
+
+    private static (Exception? Caught, int Written) CancelOnceTheFirstSymbolIsRead(byte[] luminance, int width, int height)
+    {
         var room = new QRCodeDecodeResult[64];
         using var cancellation = new CancellationTokenSource();
         using var started = new ManualResetEventSlim();
@@ -37,7 +56,7 @@ public class SeveralSymbolsCancellationTest
         Exception? caught = null;
         try
         {
-            QRImageDecoder.DecodeSymbols(luminance, sheet.Width, sheet.Height, room, cancellation.Token);
+            QRImageDecoder.DecodeSymbols(luminance, width, height, room, cancellation.Token);
         }
         catch (Exception e)
         {
@@ -46,10 +65,7 @@ public class SeveralSymbolsCancellationTest
         Volatile.Write(ref done, true);
         watcher.Join();
 
-        var written = room.Count(static r => r.Text is not null);
-        await Assert.That(caught is OperationCanceledException).IsTrue();
-        await Assert.That(written).IsGreaterThan(0);
-        await Assert.That(written).IsLessThan(texts.Length);
+        return (caught, room.Count(static r => r.Text is not null));
     }
 
     [Test]

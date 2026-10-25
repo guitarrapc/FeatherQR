@@ -30,7 +30,6 @@ public class SymbolImageAsyncWriteTest
     {
         yield return () => new("QR SaveTo", s => QR().SaveTo(s), (s, t) => QR().SaveToAsync(s, t));
         yield return () => new("QR SaveTo, JPEG", s => QR().WithFormat(SKEncodedImageFormat.Jpeg, 80).SaveTo(s), (s, t) => QR().WithFormat(SKEncodedImageFormat.Jpeg, 80).SaveToAsync(s, t));
-        // Spans several chunks of the async write
         yield return () => new("QR SaveTo, 2048 px", s => QR().WithSize(2048, 2048).SaveTo(s), (s, t) => QR().WithSize(2048, 2048).SaveToAsync(s, t));
         yield return () => new("QR SaveToSvg", s => QR().SaveToSvg(s), (s, t) => QR().SaveToSvgAsync(s, t));
         yield return () => new("Micro SaveTo", s => Micro().SaveTo(s), (s, t) => Micro().SaveToAsync(s, t));
@@ -66,7 +65,28 @@ public class SymbolImageAsyncWriteTest
         await c.Async(stream, CancellationToken.None);
 
         await Assert.That(stream.WriteCalls).IsGreaterThan(0);
+        await Assert.That(stream.FlushCalls).IsEqualTo(0);
         await Assert.That(stream.Written).IsEquivalentTo(expected.ToArray(), CollectionOrdering.Matching);
+    }
+
+    [Test]
+    [Arguments(SKEncodedImageFormat.Gif)]
+    [Arguments(SKEncodedImageFormat.Bmp)]
+    [Arguments(SKEncodedImageFormat.Avif)]
+    public async Task FormatWithNoEncoder_ThrowsNotSupported(SKEncodedImageFormat format)
+    {
+        // Premise: Skia has no encoder for the format, which it says by returning no data
+        using (var image = QR().ToImage())
+            await Assert.That(image.Encode(format, 100)).IsNull();
+        var builder = QR().WithFormat(format);
+        var stream = new AsyncOnlyStream();
+
+        Assert.Throws<NotSupportedException>(() => builder.SaveTo(new MemoryStream()));
+        Assert.Throws<NotSupportedException>(() => builder.SaveTo(new System.Buffers.ArrayBufferWriter<byte>()));
+        Assert.Throws<NotSupportedException>(() => builder.ToByteArray());
+        Assert.Throws<NotSupportedException>(() => QRCodeImageBuilder.GetImageBytes(Content, format));
+        await Assert.That(await Caught(builder.SaveToAsync(stream)) is NotSupportedException).IsTrue();
+        await Assert.That(stream.WriteCalls).IsEqualTo(0);
     }
 
     [Test]
@@ -149,7 +169,7 @@ public class SymbolImageAsyncWriteTest
     [Arguments(true)]
     public async Task Async_LayoutThatCannotFit_FaultsTheTaskAndWritesNothing(bool svg)
     {
-        // A 40-character URL at level M is version 3, 37 modules with the quiet zone, which 10 px modules cannot fit into 64 px
+        // A 39-character URL at level M is version 3, 37 modules with the quiet zone, which 10 px modules cannot fit into 64 px
         var builder = QR().WithSize(64, 64).WithModulePixelSize(10);
         var stream = new AsyncOnlyStream();
 
@@ -267,7 +287,8 @@ public class SymbolImageAsyncWriteTest
     }
 
     /// <summary>
-    /// Refuses synchronous writes and flushes, as a server's response body does by default, and records what its async writes saw.
+    /// Refuses synchronous writes and flushes, as a server's response body does by default, and records what its async writes and flushes saw.
+    /// Its async write is the memory overload alone, so an async write through the array overload falls to the synchronous write.
     /// </summary>
     private sealed class AsyncOnlyStream : Stream
     {
@@ -275,6 +296,7 @@ public class SymbolImageAsyncWriteTest
 
         public Func<CancellationToken, Task>? OnWrite { get; init; }
         public int WriteCalls { get; private set; }
+        public int FlushCalls { get; private set; }
         public CancellationToken FirstToken { get; private set; }
         public byte[] Written => _written.ToArray();
 
@@ -292,10 +314,11 @@ public class SymbolImageAsyncWriteTest
         public override void Write(ReadOnlySpan<byte> buffer) => throw new InvalidOperationException("Synchronous writes are refused.");
         public override void WriteByte(byte value) => throw new InvalidOperationException("Synchronous writes are refused.");
         public override void Flush() => throw new InvalidOperationException("Synchronous flushes are refused.");
-        public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-            => WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+        public override Task FlushAsync(CancellationToken cancellationToken)
+        {
+            FlushCalls++;
+            return Task.CompletedTask;
+        }
 
         public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {

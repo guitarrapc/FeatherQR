@@ -161,7 +161,7 @@ Reference tests: [QRCodeDecoderImageTest](../../../tests/FeatherQR.Tests/Standar
 
 ### Image level, every symbol
 
-Internal, with no public call. The passes and the path above are run without a read ending them.
+Public since 2.0.0 through `QRCodeDecoder.DecodeImageSymbols`, in an array form and a span form, and `DecodeSymbols` on an `SKBitmap` or a stream. The passes and the path above are run without a read ending them.
 
 | Spec reference | Topic | Implementation |
 |---|---|---|

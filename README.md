@@ -171,7 +171,8 @@ using var stream = File.OpenWrite("qrcode.png");
 QRCodeImageBuilder.SavePng("Your content here", stream, QREccLevel.M, size: 512);
 
 // Or asynchronously, where the thread must not wait on the write
-await QRCodeImageBuilder.SavePngAsync("Your content here", stream, QREccLevel.M, size: 512);
+await using var asyncStream = File.OpenWrite("qrcode-async.png");
+await QRCodeImageBuilder.SavePngAsync("Your content here", asyncStream, QREccLevel.M, size: 512);
 ```
 
 Boosting Error Correction is recommended whenever robustness matters more than an exact ECC level, and especially with icons. It raises the level as far as the capacity allows, without changing the symbol size.
@@ -591,7 +592,7 @@ How the calls behave:
 - **The computation is synchronous, the I/O asynchronous.** The image is rendered and encoded whole, or read whole and then decoded, and the stream is never written or read synchronously.
 - **A UI thread stays free.** Called on a thread with a `SynchronizationContext`, as in WinUI, WPF or MAUI, the call renders or decodes on the thread pool, so the app awaits it on the UI thread as it is. Without one, as on an ASP.NET Core request, it does not move.
 - **Cancellation.** The token stops a call before it renders or decodes and during the I/O, and a read for every symbol between the symbols it tries, never inside one symbol's read. A write stopped part way leaves part of the image in the stream.
-- **Errors.** A `null` stream, or one that cannot write or read, throws at the call. Everything else, a layout that does not fit or an image that cannot be decoded, comes through the task.
+- **Errors.** A `null` stream, or one that cannot write or read, throws at the call, and so do the static `SavePngAsync` and `SaveSvgAsync` on empty content, `null` data or a size that is not positive. Everything else, a layout that does not fit or an image that cannot be decoded, comes through the task.
 - **Writes** write nothing when the render fails, and do not flush the stream, as the synchronous ones do not.
 - **Reads** leave the stream open, where `SKBitmap.Decode(stream)` disposes it, and read it from its position to its end. A `MemoryStream` whose buffer is exposed is read in place.
 - **Limits.** A read refuses a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), with `InvalidDataException`, before any pixel is allocated, and a stream that holds no image throws it too. A larger image can be decoded into an `SKBitmap` and read with `TryDecode`.

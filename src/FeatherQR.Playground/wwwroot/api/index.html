@@ -666,7 +666,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.MicroQRCodeDecodeResult" data-name="featherqr.microqrcodedecoderesult" data-text="featherqr.microqrcodedecoderesult public readonly struct microqrcodedecoderesult : iequatable&lt;microqrcodedecoderesult&gt; one micro qr code read from an image: its text, and what the decode found. a read that can fail, such as one from a stream, returns a result in every case: success is false, text is empty and info carries the reason. property public microqrcodedecodeinfo info { get; } what the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image.  property public bool success { get; } whether a micro qr code was read. false for a failed read, and for a default value.  property public string text { get; } the decoded text, or an empty string when decoding failed. ">
+        <article class="type" id="FeatherQR.MicroQRCodeDecodeResult" data-name="featherqr.microqrcodedecoderesult" data-text="featherqr.microqrcodedecoderesult public readonly struct microqrcodedecoderesult : iequatable&lt;microqrcodedecoderesult&gt; one micro qr code read from an image: its text, and what the decode found. a read that can fail, such as one from a stream, returns a result in every case: success is false, text is empty and info carries the reason. property public microqrcodedecodeinfo info { get; } what the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image.  property public bool success { get; } whether a micro qr code was read. false for a failed read, and for a default value.  property public string text { get; } the decoded text, or an empty string when decoding failed. null in a default value, which no read returns. ">
           <h3><a class="anchor" href="#FeatherQR.MicroQRCodeDecodeResult" aria-label="Link to FeatherQR.MicroQRCodeDecodeResult">#</a><span class="kind">struct</span> <span class="name">MicroQRCodeDecodeResult</span></h3>
           <pre class="sig"><code>public readonly struct MicroQRCodeDecodeResult : IEquatable&lt;MicroQRCodeDecodeResult&gt;</code></pre>
           <p class="doc">One Micro QR code read from an image: its text, and what the decode found.</p>
@@ -685,10 +685,10 @@
               <pre class="sig"><code>public bool Success { get; }</code></pre>
               <p class="doc">Whether a Micro QR code was read. false for a failed read, and for a default value.</p>
             </div>
-            <div class="member" data-text="property public string text { get; } the decoded text, or an empty string when decoding failed. ">
+            <div class="member" data-text="property public string text { get; } the decoded text, or an empty string when decoding failed. null in a default value, which no read returns. ">
               <h4><span class="kind">property</span> <span class="name">Text</span></h4>
               <pre class="sig"><code>public string Text { get; }</code></pre>
-              <p class="doc">The decoded text, or an empty string when decoding failed.</p>
+              <p class="doc">The decoded text, or an empty string when decoding failed. null in a default value, which no read returns.</p>
             </div>
           </div>
         </article>
@@ -1190,7 +1190,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.QRCodeDecodeResult" data-name="featherqr.qrcodedecoderesult" data-text="featherqr.qrcodedecoderesult public readonly struct qrcodedecoderesult : iequatable&lt;qrcodedecoderesult&gt; one qr code read from an image: its text, and what the decode found. a read that can fail, such as one from a stream, returns a result in every case: success is false, text is empty and info carries the reason. the reads for several symbols return only the symbols they read. property public qrcodedecodeinfo info { get; } what the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image.  property public bool success { get; } whether a qr code was read. false for a failed read, and for a default value.  property public string text { get; } the decoded text, or an empty string when decoding failed. ">
+        <article class="type" id="FeatherQR.QRCodeDecodeResult" data-name="featherqr.qrcodedecoderesult" data-text="featherqr.qrcodedecoderesult public readonly struct qrcodedecoderesult : iequatable&lt;qrcodedecoderesult&gt; one qr code read from an image: its text, and what the decode found. a read that can fail, such as one from a stream, returns a result in every case: success is false, text is empty and info carries the reason. the reads for several symbols return only the symbols they read. property public qrcodedecodeinfo info { get; } what the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image.  property public bool success { get; } whether a qr code was read. false for a failed read, and for a default value.  property public string text { get; } the decoded text, or an empty string when decoding failed. null in a default value, which no read returns. ">
           <h3><a class="anchor" href="#FeatherQR.QRCodeDecodeResult" aria-label="Link to FeatherQR.QRCodeDecodeResult">#</a><span class="kind">struct</span> <span class="name">QRCodeDecodeResult</span></h3>
           <pre class="sig"><code>public readonly struct QRCodeDecodeResult : IEquatable&lt;QRCodeDecodeResult&gt;</code></pre>
           <p class="doc">One QR code read from an image: its text, and what the decode found.</p>
@@ -1209,10 +1209,10 @@
               <pre class="sig"><code>public bool Success { get; }</code></pre>
               <p class="doc">Whether a QR code was read. false for a failed read, and for a default value.</p>
             </div>
-            <div class="member" data-text="property public string text { get; } the decoded text, or an empty string when decoding failed. ">
+            <div class="member" data-text="property public string text { get; } the decoded text, or an empty string when decoding failed. null in a default value, which no read returns. ">
               <h4><span class="kind">property</span> <span class="name">Text</span></h4>
               <pre class="sig"><code>public string Text { get; }</code></pre>
-              <p class="doc">The decoded text, or an empty string when decoding failed.</p>
+              <p class="doc">The decoded text, or an empty string when decoding failed. null in a default value, which no read returns.</p>
             </div>
           </div>
         </article>
@@ -1722,7 +1722,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.RmQRCodeDecodeResult" data-name="featherqr.rmqrcodedecoderesult" data-text="featherqr.rmqrcodedecoderesult public readonly struct rmqrcodedecoderesult : iequatable&lt;rmqrcodedecoderesult&gt; one rmqr code read from an image: its text, and what the decode found. a read that can fail, such as one from a stream, returns a result in every case: success is false, text is empty and info carries the reason. property public rmqrcodedecodeinfo info { get; } what the attempt found: status, version, level and corrections, and on success where the symbol sits in the image.  property public bool success { get; } whether an rmqr code was read. false for a failed read, and for a default value.  property public string text { get; } the decoded text, or an empty string when decoding failed. ">
+        <article class="type" id="FeatherQR.RmQRCodeDecodeResult" data-name="featherqr.rmqrcodedecoderesult" data-text="featherqr.rmqrcodedecoderesult public readonly struct rmqrcodedecoderesult : iequatable&lt;rmqrcodedecoderesult&gt; one rmqr code read from an image: its text, and what the decode found. a read that can fail, such as one from a stream, returns a result in every case: success is false, text is empty and info carries the reason. property public rmqrcodedecodeinfo info { get; } what the attempt found: status, version, level and corrections, and on success where the symbol sits in the image.  property public bool success { get; } whether an rmqr code was read. false for a failed read, and for a default value.  property public string text { get; } the decoded text, or an empty string when decoding failed. null in a default value, which no read returns. ">
           <h3><a class="anchor" href="#FeatherQR.RmQRCodeDecodeResult" aria-label="Link to FeatherQR.RmQRCodeDecodeResult">#</a><span class="kind">struct</span> <span class="name">RmQRCodeDecodeResult</span></h3>
           <pre class="sig"><code>public readonly struct RmQRCodeDecodeResult : IEquatable&lt;RmQRCodeDecodeResult&gt;</code></pre>
           <p class="doc">One rMQR code read from an image: its text, and what the decode found.</p>
@@ -1741,10 +1741,10 @@
               <pre class="sig"><code>public bool Success { get; }</code></pre>
               <p class="doc">Whether an rMQR code was read. false for a failed read, and for a default value.</p>
             </div>
-            <div class="member" data-text="property public string text { get; } the decoded text, or an empty string when decoding failed. ">
+            <div class="member" data-text="property public string text { get; } the decoded text, or an empty string when decoding failed. null in a default value, which no read returns. ">
               <h4><span class="kind">property</span> <span class="name">Text</span></h4>
               <pre class="sig"><code>public string Text { get; }</code></pre>
-              <p class="doc">The decoded text, or an empty string when decoding failed.</p>
+              <p class="doc">The decoded text, or an empty string when decoding failed. null in a default value, which no read returns.</p>
             </div>
           </div>
         </article>

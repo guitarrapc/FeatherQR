@@ -13,6 +13,7 @@ The maintainer decided on 2026-10-15 that 2.0.0 ships an async API, for callers 
 - Phase 2, the input, is done (2026-10-25): the result types, the stream reads with their limits and their synchronous twins, and the call for several symbols.
 - Phase 3, cancellation between symbols, is done (2026-10-25).
 - Phase 4, the docs, is done (2026-10-25). Every phase is done. The plan folds into the specs at the 2.0.0 freeze.
+- A review of the branch (2026-10-26) fixed what it found in the code, the tests and the docs, and left three design questions to the maintainer.
 - The call for several symbols in one image (Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md)) returns the result type an async read must return, since an async method cannot have `out` parameters. That type is ruled (A4), and the call's names are settled in that Phase 3.
 
 ## Goals
@@ -283,7 +284,7 @@ Measured in the build against the costs below (2026-10-15, x64). 10 % is the pro
 | P4 | `DecodeAsync` on a `MemoryStream` takes at most 10 % more than decoding into an `SKBitmap` and calling `TryDecode` | The 12-megapixel photograph, 51 ms to decode and 6.3 to 7.4 ms to read |
 | P5 | A stream read holds at its peak no more than that pair holds, plus the encoded bytes | The same photograph, 48 MB of colour and 12 MB of luminance, less if it decodes straight to grey |
 | P6 | An image over the pixel limit is refused before any pixel is allocated | The 1-bit PNG of A11, 194,447 bytes that decode to 1.6 GB of grey |
-| P7 | Once the image is decoded, the longest stretch of a read for every symbol between two checks of the token is 10 ms at most on x64 | The seven sheets of 60 codes, 33 to 100 ms a sheet |
+| P7 | Once the image is decoded, the longest stretch of a read for every symbol between two checks of the token is 10 ms at most on x64, on images the size of the sheets. The stretch grows with the image, since the steps that pass over the whole image, a reading's row scan before its first try among them, run between two checks | The seven sheets of 60 codes, 33 to 100 ms a sheet |
 | P8 | The synchronous calls keep their instructions on the report shapes and allocate what they allocate now | As in What has to stay true |
 | P9 | An async call made under a `SynchronizationContext` renders or decodes on a pool thread, and one made with none takes no extra hop | A single-threaded context in the tests, and the thread the computation runs on |
 
@@ -552,3 +553,26 @@ Lessons:
 - The pixel count the limit was set against had been written as 16,320 × 12,240. No source states it: it was worked back from 200 megapixels. The specs and Phase 2's record now give the sensor's 200 million pixels, which Samsung's announcement states.
 
 Left for later: the plan folds into the specs at the 2.0.0 freeze. The names of the calls for several symbols wait on their ruling and the Playground's support for them on Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md).
+
+### Review of the branch (2026-10-26)
+
+Done, at the maintainer's request. Four reviewers read the branch for the caller's view of the async and synchronous calls, blocking on async work, security, correctness and the tests and docs. Their claims were merged into 27, and three verifiers tried to refute each one. Two fell: a context of the base `SynchronizationContext` type moves the call, as the docs say a context does, and the token is not checked after the image decode, which A5 rules.
+
+What was fixed in the code:
+
+- A stream read takes the bounds and the pixels from one Skia codec. `SKBitmap.DecodeBounds` and `SKBitmap.Decode` each made a codec over the bytes, so the file was parsed twice. On an icon file of 65,535 images of 1 × 1 pixels (6,684,576 bytes) the two took 393 ms and the one codec 195 ms. `SKBitmap.Decode` over a span is itself a codec over the pinned bytes, and on the 613 images under the tests' fixtures, `docs/images` and `samples` the one codec gave the same bitmaps (SkiaSharp 4.148.0, scratch probe).
+- A format Skia cannot encode threw `NullReferenceException` from every raster output, the async write by faulting its task. SkiaSharp 4.148.0 encodes PNG, JPEG and WebP and returns no data for the other formats. The outputs now throw `NotSupportedException`, the async write by faulting its task, and the docs say which formats encode.
+- A stream with nothing left from its position says so, where the message said it held no image.
+- An exposed `MemoryStream` positioned past its end is left there, as a read leaves it, instead of moved back to its end.
+
+What was fixed in the tests: the read context tests block the context's one thread on the task, so a decode sent back to it would hang them. The test streams override only the memory overloads of the async I/O. Both limits are held at their boundary. An exposed `MemoryStream` over part of an array, a call that throws where it should fault its task, and a flush are each caught. The cancel test for several symbols failed 3 of 8 suite runs on 4 processors in a verifier's run, since its cancel comes from another thread, and it now tries until a cancel lands between the symbols. Eleven planted faults each turned tests red, nine of them faults the tests had let pass.
+
+What was fixed in the docs: P7 is scoped to the images it was measured on. The README's Errors bullet names the static helpers' argument checks, and its stream example writes one image a file. The migration guide says that a span used again keeps the entries past the count. The specs name the array overloads on netstandard2.0, the content that faults the task, the stream reads' allocations and the public calls for several symbols. The XML docs say an exposed `MemoryStream` is read in place and a default result has a null text.
+
+The full suite passes on net10.0 (35,245 passed, 401 skipped) and net8.0 (35,151 passed, 401 skipped).
+
+Left to the maintainer:
+
+- Under a synchronization context the async writes read the builder after the call has returned, so a builder changed before the await renders as changed, and an icon bitmap disposed before the await ended the process with an access violation in three verifiers' runs. With no context the render runs inside the call. The read of an exposed `MemoryStream` reads its buffer after the call has returned in the same way.
+- The pixel limit holds the bitmap to 1 GiB, but Skia decodes a cut PNG as a success, so a body of 47 bytes declaring 16,384 × 16,384 pixels drove the peak memory to about 1.5 GiB, and to about 3 GiB for an interlaced image of 16 bits a channel, in the verifiers' runs (Windows, .NET 10).
+- The static async helpers take the token after their optional parameters, so `SavePngAsync(content, stream, token)` does not compile and `SavePngAsync(content, stream, default)` binds `default` to the level.
