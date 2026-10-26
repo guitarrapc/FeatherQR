@@ -53,7 +53,40 @@ A UI awaits an async call on its own thread as it is. The call frees the thread 
 
 ### The API
 
-The calls the recommendations give, in the SkiaSharp package unless marked.
+The calls as they ship (2026-10-26), in the SkiaSharp package unless marked. With C# 14 the reads are reachable as `QRCodeDecoder.DecodeAsync(...)` through the decoders' `extension(QRCodeDecoder)` blocks, and on older language versions as `QRCodeImageDecoder.DecodeAsync(...)`. Micro QR and rMQR write and read through their own builders and decoders in the same way, with their level type and default size.
+
+Writes to a stream, a synchronous call and its async twin (A8):
+
+| Synchronous | Asynchronous |
+|---|---|
+| `builder.SaveTo(Stream)` | `builder.SaveToAsync(Stream, CancellationToken = default)` |
+| `builder.SaveToSvg(Stream)` | `builder.SaveToSvgAsync(Stream, CancellationToken = default)` |
+| `QRCodeImageBuilder.SavePng(string content, Stream, QREccLevel eccLevel = M, int size = 512)` | `QRCodeImageBuilder.SavePngAsync(string content, Stream, QREccLevel eccLevel = M, int size = 512, CancellationToken = default)` |
+| `QRCodeImageBuilder.SavePng(QRCodeData, Stream, int size = 512)` | `QRCodeImageBuilder.SavePngAsync(QRCodeData, Stream, int size = 512, CancellationToken = default)` |
+| `SaveSvg`, in the same two forms | `SaveSvgAsync`, in the same two forms |
+
+Fourteen pairs: the builder's two, and the four static helpers of each of the three builders. The calls with no stream stay synchronous alone (A7): `SaveTo(IBufferWriter<byte>)`, `SaveToSvg(IBufferWriter<byte>)`, `ToByteArray`, `ToSvgString`, `ToImage` and `ToBitmap` on a builder, and the static `GetPngBytes`, `GetImageBytes`, `GetSvgBytes`, `GetSvgString`, `WritePng`, `WriteImage` and `WriteSvg`. A `PipeWriter` takes the buffer-writer forms, and the caller flushes it (A1).
+
+Reads from a stream, which return the result type (A3, A10, A11):
+
+| Synchronous | Asynchronous |
+|---|---|
+| `QRCodeDecoder.Decode(Stream)` | `QRCodeDecoder.DecodeAsync(Stream, CancellationToken = default)` |
+| `QRCodeDecoder.Decode(Stream, ImageStreamReadLimits?)` | `QRCodeDecoder.DecodeAsync(Stream, ImageStreamReadLimits?, CancellationToken = default)` |
+| `QRCodeDecoder.DecodeSymbols(Stream)` | `QRCodeDecoder.DecodeSymbolsAsync(Stream, CancellationToken = default)` |
+| `QRCodeDecoder.DecodeSymbols(Stream, ImageStreamReadLimits?)` | `QRCodeDecoder.DecodeSymbolsAsync(Stream, ImageStreamReadLimits?, CancellationToken = default)` |
+| `MicroQRCodeDecoder.Decode(Stream)`, and with limits | `MicroQRCodeDecoder.DecodeAsync(Stream, CancellationToken = default)`, and with limits |
+| `RmQRCodeDecoder.Decode(Stream)`, and with limits | `RmQRCodeDecoder.DecodeAsync(Stream, CancellationToken = default)`, and with limits |
+
+Reads from memory, synchronous alone, since no I/O waits (A13):
+
+| Input | One symbol | Every Standard QR symbol |
+|---|---|---|
+| `SKBitmap` | `TryDecode(bitmap, out text)`, `TryDecode(bitmap, out text, out info)` | `DecodeSymbols(bitmap)` |
+| A luminance span (FeatherQR) | `TryDecodeImage(luminance, width, height, out text, out info)`, and a form into a `Span<char>` | `DecodeImageSymbols(luminance, width, height)` as an array, and `DecodeImageSymbols(luminance, width, height, Span<QRCodeDecodeResult>)`, which returns the count |
+| A module matrix or `QRCodeData` (FeatherQR) | `TryDecode(...)` | none |
+
+The types the reads return and take:
 
 ```csharp
 // FeatherQR: a result type a symbology, shaped as the *DecodeInfo types (readonly record struct, internal constructor, get-only)
@@ -61,41 +94,24 @@ public readonly record struct QRCodeDecodeResult       // string Text, QRCodeDec
 public readonly record struct MicroQRCodeDecodeResult  // string Text, MicroQRCodeDecodeInfo Info, bool Success
 public readonly record struct RmQRCodeDecodeResult     // string Text, RmQRCodeDecodeInfo Info, bool Success
 
-// Writing. SymbolImageBuilderBase<TSelf>:
-public Task SaveToAsync(Stream output, CancellationToken cancellationToken = default)
-public Task SaveToSvgAsync(Stream output, CancellationToken cancellationToken = default)
-
-// QRCodeImageBuilder. MicroQRCodeImageBuilder and RmQRCodeImageBuilder have the same four with their level and default size.
-public static Task SavePngAsync(string content, Stream output, QREccLevel eccLevel = QREccLevel.M, int size = 512, CancellationToken cancellationToken = default)
-public static Task SavePngAsync(QRCodeData qrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = default)
-public static Task SaveSvgAsync(string content, Stream output, QREccLevel eccLevel = QREccLevel.M, int size = 512, CancellationToken cancellationToken = default)
-public static Task SaveSvgAsync(QRCodeData qrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = default)
-
-// Reading. QRCodeImageDecoder, in its extension(QRCodeDecoder) block, so that QRCodeDecoder.DecodeAsync(...) works on C# 14:
-public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = default)
-public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = default)
-// MicroQRCodeImageDecoder and RmQRCodeImageDecoder, in theirs:
-public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = default)
-public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = default)
-
-// The synchronous twins (A10):
-public static QRCodeDecodeResult Decode(Stream image)
-public static QRCodeDecodeResult[] DecodeSymbols(Stream image)
-public static MicroQRCodeDecodeResult Decode(Stream image)
-public static RmQRCodeDecodeResult Decode(Stream image)
-
-// Limits the caller sets (A11, amended 2026-10-26): each stream read above has an overload that takes them
-public sealed record class ImageStreamReadLimits  // int MaxBytes = 64 MiB, long MaxPixels = 4,096 × 4,096, init, a constructor with no parameters or one of both optional, static readonly Default
-public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = default)  // null for Default
-public static QRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits)
-// and DecodeSymbolsAsync, DecodeSymbols, and the Micro QR and rMQR DecodeAsync and Decode likewise
+// The limits of a stream read (A11, amended 2026-10-26)
+public sealed record class ImageStreamReadLimits
+{
+    public static readonly ImageStreamReadLimits Default;  // 64 MiB and 16,777,216 pixels (4,096 × 4,096)
+    public ImageStreamReadLimits();
+    public ImageStreamReadLimits(int maxBytes = 67_108_864, long maxPixels = 16_777_216);  // for callers below C# 9
+    public int MaxBytes { get; init; }    // 1 to 2,147,483,591
+    public long MaxPixels { get; init; }  // positive
+}
 ```
 
-- One symbol from memory is read with `TryDecode` and `TryDecodeImage`, as now (A13). The calls above read a stream or read several symbols, and return the result type.
 - A one-symbol read returns a result in every case. On a failure `Info.Status` says why and `Text` is empty. A read for every symbol returns the symbols it read, an empty array when none.
 - A caller tells a read's success by `Success`, on the synchronous and the async reads alike. It is false for a failed read and for a default value, such as an entry of a new room the span form left unwritten.
-- A stream over a limit, or one that is not an image, throws `InvalidDataException`. A null stream throws `ArgumentNullException`, and a stream that cannot write or read `ArgumentException`, as `SaveTo(Stream)` does now.
-- The calls for several symbols on a bitmap and on luminance, `DecodeSymbols(SKBitmap)` and the core's array and span forms, are Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md) and return the same `QRCodeDecodeResult`.
+- A null `ImageStreamReadLimits` reads under `Default`. A stream over a limit, or one that is not an image, throws `InvalidDataException`, and the message of a limit's refusal names the limit to raise.
+- Arguments are checked at the call: a null stream throws `ArgumentNullException`, a stream that cannot write or read `ArgumentException`, and the static helpers refuse empty content, null data and a size that is not positive there too. Every other failure comes through the task.
+- Under a `SynchronizationContext` or a `TaskScheduler` of the caller's own, an async call moves to the pool before it renders or decodes, and reads copies of what it was given (A14). With neither it stays on its thread and copies nothing.
+- The token is checked before a render or a decode, during the I/O, and between the symbols of a read for every symbol (A5).
+- The names of the calls for several symbols wait on their ruling in Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md).
 
 ### How a caller writes
 
