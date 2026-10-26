@@ -634,8 +634,8 @@ app.MapPost("/scan", async (HttpRequest request, CancellationToken cancellationT
     {
         var result = await QRCodeDecoder.DecodeAsync(request.Body, cancellationToken);
         return result.Success
-            ? Results.Ok(result.Text)
-            : Results.UnprocessableEntity(result.Info.Status.ToString());
+            ? Results.Text(result.Text)
+            : Results.Text(result.Info.Status.ToString(), statusCode: StatusCodes.Status422UnprocessableEntity);
     }
     catch (InvalidDataException)
     {
