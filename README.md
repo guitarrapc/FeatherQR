@@ -814,14 +814,14 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.7" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
 Option 2: No Dependencies (QR code only), if you don't need advanced font operations.
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.7" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
@@ -831,14 +831,14 @@ Option 2: No Dependencies (QR code only), if you don't need advanced font operat
 #### Windows
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.7" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.6" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.7" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
