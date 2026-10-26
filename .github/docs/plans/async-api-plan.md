@@ -16,7 +16,7 @@ The maintainer decided on 2026-10-15 that 2.0.0 ships an async API, for callers 
 - A review of the branch (2026-10-26) fixed what it found in the code, the tests and the docs. The maintainer ruled its three design questions the same day: a call that moves off the caller's context reads copies of what it was given, the stream reads take limits the caller sets, and the token stays last.
 - The review ran four rounds (2026-10-26) and stopped when one left only comments to fix. The default limits fell to 64 MiB and 4,096 × 4,096 pixels the same day.
 - The write and read benchmarks ran again on the reviewed code (2026-10-26). P2 to P4 hold, and the synchronous calls allocate what they allocated before the async work.
-- The call for several symbols in one image (Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md)) returns the result type an async read must return, since an async method cannot have `out` parameters. That type is ruled (A4), and the call's names are settled in that Phase 3.
+- The call for several symbols in one image (Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md)) returns the result type an async read must return, since an async method cannot have `out` parameters. That type is ruled (A4), and the maintainer ruled the call's draft names final on 2026-10-26.
 
 ## Goals
 
@@ -27,7 +27,7 @@ Set on 2026-10-25, from the decisions below as ruled.
 - A web server refuses synchronous I/O by default. Under Kestrel `SavePng(content, Response.Body)` and `SKBitmap.Decode(Request.Body)` throw, and they are the calls a caller writes first. The ways around them, `GetPngBytes` returned through `Results.File`, `SaveTo(Response.BodyWriter)` with a flush the caller adds, or `CopyToAsync` into memory before decoding, are not what a caller finds.
 - A synchronous write or read holds a pool thread for as long as the client takes to receive or send the image.
 - A client that goes should stop a long read. A read for every symbol takes up to 100 ms on x64.
-- 2.0.0 is where it fits. An async read cannot have `out` parameters and returns a result type, the type the call for several symbols returns, so their names are settled together before the freeze.
+- 2.0.0 is where it fits. An async read cannot have `out` parameters and returns a result type, the type the call for several symbols returns, so their names were settled together before the freeze (2026-10-26).
 
 A UI awaits an async call on its own thread as it is. The call frees the thread while it waits on I/O, and moves off the thread before it renders or decodes (A14). The calls with no I/O stay synchronous, and a UI moves them off its thread with `Task.Run` (A7).
 
@@ -113,7 +113,7 @@ public sealed record class ImageStreamReadLimits
 - Arguments are checked at the call: a null stream throws `ArgumentNullException`, a stream that cannot write or read `ArgumentException`, and the static helpers refuse empty content, null data and a size that is not positive there too. Every other failure comes through the task.
 - Under a `SynchronizationContext` or a `TaskScheduler` of the caller's own, an async call moves to the pool before it renders or decodes, and reads copies of what it was given (A14). With neither it stays on its thread and copies nothing.
 - The token is checked before a render or a decode, during the I/O, and between the symbols of a read for every symbol (A5).
-- The names of the calls for several symbols wait on their ruling in Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md).
+- The names of the calls for several symbols, `DecodeImageSymbols`, `DecodeSymbols` and `DecodeSymbolsAsync`, were ruled final on 2026-10-26 in Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md).
 
 ### How a caller writes
 
