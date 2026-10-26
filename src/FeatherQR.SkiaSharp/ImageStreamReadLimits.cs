@@ -5,9 +5,12 @@ namespace FeatherQR.SkiaSharp;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A read past either limit throws <see cref="InvalidDataException"/> before any pixel is allocated.
+/// A read past either limit throws <see cref="InvalidDataException"/> before any pixel is allocated, and the message names the limit to raise.
 /// The pixel limit bounds the image, not the stream: an image cut short after its header decodes too, so a stream of a few dozen bytes can declare an image at the limit.
-/// Decoding one can take gigabytes, about 3 GiB for an interlaced PNG of 16 bits a channel at the default limit, so a server that reads uploads sets the limits to the images it expects.
+/// An interlaced PNG of 16 bits a channel took 192 MiB to decode at the default limit and 3,078 MiB at 16,384 × 16,384, so a caller raises the limits only as far as the images it expects.
+/// </para>
+/// <para>
+/// The defaults hold an image of 4,032 × 3,024 pixels, a 12-megapixel photograph.
 /// </para>
 /// <para>
 /// The limits apply to the stream reads alone. A bitmap or luminance the caller decodes itself is memory already allocated.
@@ -15,8 +18,8 @@ namespace FeatherQR.SkiaSharp;
 /// </remarks>
 public sealed record class ImageStreamReadLimits
 {
-    private const int DefaultMaxBytes = 256 * 1024 * 1024;
-    private const long DefaultMaxPixels = 16_384L * 16_384;
+    private const int DefaultMaxBytes = 64 * 1024 * 1024;
+    private const long DefaultMaxPixels = 4_096L * 4_096;
 
     // The read holds the bytes in one array, and no array is longer
     private const int LongestArray = 0x7FFFFFC7;
@@ -52,12 +55,12 @@ public sealed record class ImageStreamReadLimits
     }
 
     /// <summary>
-    /// The limits the stream reads take when none are given: 256 MiB, and 268,435,456 pixels (16,384 × 16,384).
+    /// The limits the stream reads take when none are given: 64 MiB, and 16,777,216 pixels (4,096 × 4,096).
     /// </summary>
     public static readonly ImageStreamReadLimits Default = new();
 
     /// <summary>
-    /// The most bytes a read takes from the stream, from 1 to 2,147,483,591, the length of the longest array. 268,435,456 (256 MiB) by default.
+    /// The most bytes a read takes from the stream, from 1 to 2,147,483,591, the length of the longest array. 67,108,864 (64 MiB) by default.
     /// </summary>
     /// <remarks>
     /// A stream that cannot say its length is read into a buffer that doubles as it fills, so the read holds more than this while it reads, about twice it at the default limit and three times it at a limit of 268,435,457 bytes.
@@ -70,7 +73,7 @@ public sealed record class ImageStreamReadLimits
     }
 
     /// <summary>
-    /// The most pixels the image's header may declare. 268,435,456 (16,384 × 16,384) by default.
+    /// The most pixels the image's header may declare. 16,777,216 (4,096 × 4,096) by default.
     /// </summary>
     /// <remarks>
     /// A bitmap holds at most 2,147,483,647 bytes, 536,870,911 pixels of four bytes, so an image past that is refused whatever the limit.

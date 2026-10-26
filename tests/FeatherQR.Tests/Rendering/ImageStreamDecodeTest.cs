@@ -26,8 +26,11 @@ public class ImageStreamDecodeTest
         public override string ToString() => Name;
     }
 
-    // The big reads each hold hundreds of MiB, so they run one at a time
-    private const string LargeReads = "Reads of 256 MiB and more";
+    // The big reads each hold a buffer of the byte limit or more, so they run one at a time
+    private const string LargeReads = "Reads at the byte limit";
+
+    // The documented default byte limit, 64 MiB
+    private const int DefaultMaxBytes = 64 * 1024 * 1024;
 
     private static Read QRBitmap(SKBitmap bitmap)
     {
@@ -246,26 +249,27 @@ public class ImageStreamDecodeTest
     }
 
     [Test]
-    public async Task ImageOneRowOverThePixelLimit_ThrowsInvalidData()
+    [Arguments(4_096, 4_096, false)]
+    [Arguments(4_096, 4_097, true)]
+    [Arguments(2_048, 8_192, false)]
+    [Arguments(2_048, 8_193, true)]
+    public async Task PixelLimit_IsTheDocumentedCount(int width, int height, bool over)
     {
-        // The documented limit is 16,384 × 16,384 pixels, so a row more is over it
-        var png = PngDeclaring(16_384, 16_385);
+        // The documented limit is 16,777,216 pixels (4,096 × 4,096). A 1-bit grey image at it decodes to 16 MiB, so the read itself is held to the boundary
+        var caught = Caught(() => QRCodeDecoder.Decode(new ReadStream(PngDeclaring(width, height))));
 
-        var caught = await Caught(QRCodeDecoder.DecodeAsync(new ReadStream(png)));
-
-        await Assert.That(caught is InvalidDataException && caught.Message.Contains("16384 × 16385")).IsTrue();
+        var refused = caught is InvalidDataException && caught.Message.Contains($"{width} × {height}");
+        await Assert.That(refused).IsEqualTo(over);
+        if (!over)
+            await Assert.That(caught).IsNull();
     }
 
     [Test]
-    [Arguments(16_384, 16_384, false)]
-    [Arguments(16_384, 16_385, true)]
-    [Arguments(1, 268_435_456, false)]
-    [Arguments(1, 268_435_457, true)]
-    [Arguments(int.MaxValue, int.MaxValue, true)]
-    public async Task PixelLimit_IsTheDocumentedCount(int width, int height, bool over)
+    public async Task ImageOverThePixelLimit_SaysHowToReadIt()
     {
-        // An image at the limit would decode to 1 GiB, so the boundary is held on the check the read makes
-        await Assert.That(EncodedImage.IsOverPixelLimit(width, height, ImageStreamReadLimits.Default)).IsEqualTo(over);
+        var caught = await Caught(QRCodeDecoder.DecodeAsync(new ReadStream(PngDeclaring(4_096, 4_097))));
+
+        await Assert.That(caught is InvalidDataException && caught.Message.Contains(nameof(ImageStreamReadLimits.MaxPixels))).IsTrue();
     }
 
     [Test]
@@ -275,6 +279,7 @@ public class ImageStreamDecodeTest
 
         await Assert.That(EncodedImage.IsOverPixelLimit(16_384, 16_385, raised)).IsFalse();
         await Assert.That(EncodedImage.IsOverPixelLimit(16_384, 16_386, raised)).IsTrue();
+        await Assert.That(EncodedImage.IsOverPixelLimit(int.MaxValue, int.MaxValue, raised)).IsTrue();
     }
 
     [Test]
@@ -295,20 +300,20 @@ public class ImageStreamDecodeTest
     [Arguments(true)]
     public async Task RaisedByteLimit_ReadsAStreamOverTheDefault(bool async)
     {
-        var limits = new ImageStreamReadLimits { MaxBytes = 256 * 1024 * 1024 + 1 };
-        var stream = new EndlessStream(256L * 1024 * 1024 + 1);
+        var limits = new ImageStreamReadLimits { MaxBytes = DefaultMaxBytes + 1 };
+        var stream = new EndlessStream(DefaultMaxBytes + 1);
 
         var caught = async ? await Caught(QRCodeDecoder.DecodeAsync(stream, limits)) : Caught(() => QRCodeDecoder.Decode(stream, limits));
 
         await Assert.That(caught is InvalidDataException && caught.Message.Contains("does not hold an image")).IsTrue();
-        await Assert.That(stream.Served).IsEqualTo(256L * 1024 * 1024 + 1);
+        await Assert.That(stream.Served).IsEqualTo(DefaultMaxBytes + 1);
     }
 
     [Test]
     public async Task Limits_Default_IsTheDocumentedOne()
     {
-        await Assert.That(ImageStreamReadLimits.Default.MaxBytes).IsEqualTo(256 * 1024 * 1024);
-        await Assert.That(ImageStreamReadLimits.Default.MaxPixels).IsEqualTo(16_384L * 16_384);
+        await Assert.That(ImageStreamReadLimits.Default.MaxBytes).IsEqualTo(64 * 1024 * 1024);
+        await Assert.That(ImageStreamReadLimits.Default.MaxPixels).IsEqualTo(4_096L * 4_096);
         await Assert.That(new ImageStreamReadLimits()).IsEqualTo(ImageStreamReadLimits.Default);
     }
 
@@ -452,10 +457,10 @@ public class ImageStreamDecodeTest
     public async Task NullLimits_ReadUnderTheDefaultLimits(LimitedCall c)
     {
         // The default limits refuse this image, so a read that took null for no limits would decode it
-        var overTheDefault = await c.Fault(new ReadStream(PngDeclaring(16_384, 16_385)), null!);
+        var overTheDefault = await c.Fault(new ReadStream(PngDeclaring(4_096, 4_097)), null!);
         var withinThem = await c.Fault(new ReadStream(QRCodeImageBuilder.GetPngBytes(Content)), null!);
 
-        await Assert.That(overTheDefault is InvalidDataException && overTheDefault.Message.Contains("16384 × 16385")).IsTrue();
+        await Assert.That(overTheDefault is InvalidDataException && overTheDefault.Message.Contains("4096 × 4097")).IsTrue();
         await Assert.That(withinThem).IsNull();
     }
 
@@ -475,12 +480,15 @@ public class ImageStreamDecodeTest
     [Test]
     public async Task SeekableStreamOverTheByteLimit_ThrowsInvalidDataBeforeReading()
     {
-        // The documented limit is 256 MiB
-        var asyncStream = new OverLengthStream(256L * 1024 * 1024 + 1);
-        var syncStream = new OverLengthStream(256L * 1024 * 1024 + 1);
+        var asyncStream = new OverLengthStream(DefaultMaxBytes + 1);
+        var syncStream = new OverLengthStream(DefaultMaxBytes + 1);
 
-        await Assert.That(await Caught(QRCodeDecoder.DecodeAsync(asyncStream)) is InvalidDataException).IsTrue();
-        await Assert.That(Caught(() => QRCodeDecoder.Decode(syncStream)) is InvalidDataException).IsTrue();
+        var viaAsync = await Caught(QRCodeDecoder.DecodeAsync(asyncStream));
+        var viaSync = Caught(() => QRCodeDecoder.Decode(syncStream));
+
+        // The message names the limit to raise
+        await Assert.That(viaAsync is InvalidDataException && viaAsync.Message.Contains(nameof(ImageStreamReadLimits.MaxBytes))).IsTrue();
+        await Assert.That(viaSync is InvalidDataException && viaSync.Message.Contains(nameof(ImageStreamReadLimits.MaxBytes))).IsTrue();
         await Assert.That(asyncStream.Reads + syncStream.Reads).IsEqualTo(0);
     }
 
@@ -495,9 +503,9 @@ public class ImageStreamDecodeTest
 
         var caught = async ? await Caught(QRCodeDecoder.DecodeAsync(stream)) : Caught(() => QRCodeDecoder.Decode(stream));
 
-        // One byte past the documented 256 MiB is what shows the stream goes over it
+        // One byte past the documented 64 MiB is what shows the stream goes over it
         await Assert.That(caught is InvalidDataException && caught.Message.Contains("more than")).IsTrue();
-        await Assert.That(stream.Served).IsEqualTo(256L * 1024 * 1024 + 1);
+        await Assert.That(stream.Served).IsEqualTo(DefaultMaxBytes + 1);
     }
 
     [Test]
@@ -506,13 +514,13 @@ public class ImageStreamDecodeTest
     [Arguments(true)]
     public async Task StreamOfExactlyTheByteLimit_IsReadWhole(bool async)
     {
-        // 256 MiB of zeros: taken whole, then refused as no image, which the message tells from the byte limit's refusal
-        var stream = new EndlessStream(256L * 1024 * 1024);
+        // 64 MiB of zeros: taken whole, then refused as no image, which the message tells from the byte limit's refusal
+        var stream = new EndlessStream(DefaultMaxBytes);
 
         var caught = async ? await Caught(QRCodeDecoder.DecodeAsync(stream)) : Caught(() => QRCodeDecoder.Decode(stream));
 
         await Assert.That(caught is InvalidDataException && caught.Message.Contains("does not hold an image")).IsTrue();
-        await Assert.That(stream.Served).IsEqualTo(256L * 1024 * 1024);
+        await Assert.That(stream.Served).IsEqualTo(DefaultMaxBytes);
     }
 
     [Test]
@@ -521,7 +529,7 @@ public class ImageStreamDecodeTest
     [Arguments(1, "more than")]
     public async Task ExposedMemoryStreamAtTheByteLimit_IsTakenAndOneBytePastIsNot(int past, string message)
     {
-        var length = 256 * 1024 * 1024 + past;
+        var length = DefaultMaxBytes + past;
         var stream = new MemoryStream(new byte[length], 0, length, writable: false, publiclyVisible: true);
 
         var caught = await Caught(QRCodeDecoder.DecodeAsync(stream));

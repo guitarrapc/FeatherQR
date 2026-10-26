@@ -451,7 +451,7 @@ if (result.Success)
 
 - **The result is the same.** The stream read decodes the image as `SKBitmap.Decode(stream)` does and reads it as `TryDecode` reads that bitmap.
 - **The stream stays open.** `SKBitmap.Decode(stream)` disposes the stream it is given. The stream read leaves it open, read to its end.
-- **A stream that holds no image throws** `InvalidDataException`, where `SKBitmap.Decode` returned `null`. So does a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), by default. An `ImageStreamReadLimits` passed to the read sets other limits, and a larger image can also be decoded into an `SKBitmap` and read with `TryDecode`.
+- **A stream that holds no image throws** `InvalidDataException`, where `SKBitmap.Decode` returned `null`. So does a stream of more than 64 MiB, or an image whose header declares more than 16,777,216 pixels (4,096 × 4,096), by default, which holds a 12-megapixel photograph. An `ImageStreamReadLimits` passed to the read sets other limits, and a larger image can also be decoded into an `SKBitmap` and read with `TryDecode`.
 - **`Success` is `false` for a default value.** `DecodeStatus.Success` is 0, so a default result's status reads as a success, where `Success` does not.
 
 ### Several symbols in one image

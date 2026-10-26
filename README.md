@@ -568,14 +568,11 @@ app.MapGet("/qr", async (string text, HttpResponse response, CancellationToken c
     await QRCodeImageBuilder.SavePngAsync(text, response.Body, cancellationToken: cancellationToken);
 });
 
-// An upload is read under limits of its own, since a few dozen bytes can declare an image at the default limit
-var uploadLimits = new ImageStreamReadLimits { MaxPixels = 4096 * 4096, MaxBytes = 16 * 1024 * 1024 };
-
 app.MapPost("/scan", async (HttpRequest request, CancellationToken cancellationToken) =>
 {
     try
     {
-        var result = await QRCodeDecoder.DecodeAsync(request.Body, uploadLimits, cancellationToken);
+        var result = await QRCodeDecoder.DecodeAsync(request.Body, cancellationToken);
         return result.Success
             ? Results.Ok(result.Text)
             : Results.UnprocessableEntity(result.Info.Status.ToString());
@@ -598,7 +595,7 @@ How the calls behave:
 - **Errors.** A `null` stream, or one that cannot write or read, throws at the call, and so do the static `SavePngAsync` and `SaveSvgAsync` on empty content, `null` data or a size that is not positive. Everything else, a layout that does not fit or an image that cannot be decoded, comes through the task.
 - **Writes** write nothing when the render fails, and do not flush the stream, as the synchronous ones do not.
 - **Reads** leave the stream open, where `SKBitmap.Decode(stream)` disposes it, and read it from its position to its end. A `MemoryStream` whose buffer is exposed is read in place.
-- **Limits.** By default a read refuses a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), with `InvalidDataException`, before any pixel is allocated, and a stream that holds no image throws it too. An image cut short after its header decodes, so a few dozen bytes can declare an image at the limit, and decoding one took about 3 GiB for an interlaced PNG of 16 bits a channel. A server that reads uploads passes an `ImageStreamReadLimits` of its own, as above. A larger image, up to the 2,147,483,647 bytes a bitmap holds (536,870,911 pixels of four bytes), can be read with raised limits, or decoded into an `SKBitmap` and read with `TryDecode`.
+- **Limits.** By default a read refuses a stream of more than 64 MiB, or an image whose header declares more than 16,777,216 pixels (4,096 × 4,096), with `InvalidDataException`, before any pixel is allocated, and a stream that holds no image throws it too. The defaults hold a 12-megapixel photograph of 4,032 × 3,024 pixels, and keep an upload's cost down: an image cut short after its header decodes, so a few dozen bytes can declare an image at the limit, and an interlaced PNG of 16 bits a channel took 192 MiB to decode at the default limit, and 3,078 MiB at 16,384 × 16,384. A larger image, up to the 2,147,483,647 bytes a bitmap holds (536,870,911 pixels of four bytes), is read with raised limits, such as `new ImageStreamReadLimits { MaxPixels = 16_384L * 16_384, MaxBytes = 256 * 1024 * 1024 }` for the pixels of a 200-megapixel photograph, or decoded into an `SKBitmap` and read with `TryDecode`.
 - **Results.** A read for one symbol returns a `QRCodeDecodeResult` (`MicroQRCodeDecodeResult`, `RmQRCodeDecodeResult`) in every case. On a failure `Success` is `false`, `Text` is empty and `Info.Status` says why.
 - **Pixels as encoded.** The EXIF orientation is not applied, as `SKBitmap.Decode` does not apply it.
 

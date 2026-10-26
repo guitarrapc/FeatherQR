@@ -78,7 +78,7 @@ public static class QRCodeImageDecoder
         /// There it decodes a copy of an exposed <see cref="MemoryStream"/>'s buffer, so the buffer may be reused once the call returns.
         /// </para>
         /// <para>
-        /// The read takes the limits of <see cref="ImageStreamReadLimits.Default"/>: a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), is refused before any pixel is allocated.
+        /// The read takes the limits of <see cref="ImageStreamReadLimits.Default"/>: a stream of more than 64 MiB, or an image whose header declares more than 16,777,216 pixels (4,096 × 4,096), is refused before any pixel is allocated.
         /// Other limits are given with <see cref="DecodeAsync(Stream, ImageStreamReadLimits, CancellationToken)"/>, and a larger image can also be decoded into an <see cref="SKBitmap"/> and read with <see cref="TryDecode(SKBitmap, out string, out QRCodeDecodeInfo)"/>.
         /// </para>
         /// </remarks>

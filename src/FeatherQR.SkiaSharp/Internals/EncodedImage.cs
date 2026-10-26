@@ -225,7 +225,7 @@ internal sealed class EncodedImage : IDisposable
             if (info.Width <= 0 || info.Height <= 0)
                 throw NotAnImage();
             if (IsOverPixelLimit(info.Width, info.Height, limits))
-                throw new InvalidDataException($"The image is {info.Width} × {info.Height} pixels, more than the {limits.MaxPixels:N0} the read decodes.");
+                throw new InvalidDataException($"The image is {info.Width} × {info.Height} pixels, more than the {limits.MaxPixels:N0} the read decodes. Give the read an {nameof(ImageStreamReadLimits)} with a larger {nameof(ImageStreamReadLimits.MaxPixels)} to read it.");
             // Skia allocates no bitmap of more than int.MaxValue bytes, and past that throws an exception that names no reason
             if (info.BytesSize64 > int.MaxValue)
                 throw new InvalidDataException($"The image is {info.Width} × {info.Height} pixels, more than a bitmap holds.");
@@ -240,5 +240,5 @@ internal sealed class EncodedImage : IDisposable
 
     private static InvalidDataException NotAnImage() => new("The stream does not hold an image that can be decoded.");
 
-    private static InvalidDataException TooManyBytes(ImageStreamReadLimits limits) => new($"The stream holds more than {limits.MaxBytes:N0} bytes, the most the read takes.");
+    private static InvalidDataException TooManyBytes(ImageStreamReadLimits limits) => new($"The stream holds more than {limits.MaxBytes:N0} bytes, the most the read takes. Give the read an {nameof(ImageStreamReadLimits)} with a larger {nameof(ImageStreamReadLimits.MaxBytes)} to read it.");
 }

@@ -80,7 +80,7 @@ namespace FeatherQR.SkiaSharp
     {
         public static readonly ImageStreamReadLimits Default;
         public ImageStreamReadLimits();
-        public ImageStreamReadLimits(int maxBytes = 268435456, long maxPixels = 268435456);
+        public ImageStreamReadLimits(int maxBytes = 67108864, long maxPixels = 16777216);
         public int MaxBytes { get; init; }
         public long MaxPixels { get; init; }
     }
