@@ -16,7 +16,7 @@ The decoder locates the core, takes the version from its size, reads the format 
 
 ### Image level
 
-The input is an `SKBitmap` or a grayscale luminance span with its width and height (`TryDecodeImage`). An allocation-free variant writes the text to a span destination.
+The input is an `SKBitmap` or a grayscale luminance span with its width and height (`TryDecodeImage`). An allocation-free variant writes the text to a span destination. An encoded image read from a stream (`Decode`, `DecodeAsync`) is decoded into a bitmap first.
 
 Each [shared image decode pass](qrcode-symbologies.md#image-decode-passes) tries the ranked finder candidates one at a time in the order the [shared candidate scan](qrcode-symbologies.md#single-finder-candidate-scan) gives them. For each it measures the module sizes and the centre, then tries two paths:
 

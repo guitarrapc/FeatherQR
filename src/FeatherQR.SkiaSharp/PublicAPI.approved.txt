@@ -1,5 +1,5 @@
 // FeatherQR.SkiaSharp
-// 25 exported types
+// 26 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR.SkiaSharp
@@ -76,6 +76,15 @@ namespace FeatherQR.SkiaSharp
         public override void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor);
     }
 
+    public sealed class ImageStreamReadLimits : IEquatable<ImageStreamReadLimits>
+    {
+        public static readonly ImageStreamReadLimits Default;
+        public ImageStreamReadLimits();
+        public ImageStreamReadLimits(int maxBytes = 67108864, long maxPixels = 16777216);
+        public int MaxBytes { get; init; }
+        public long MaxPixels { get; init; }
+    }
+
     public sealed class ImageTextIconShape : IconShape
     {
         public ImageTextIconShape(SKBitmap image, string text, SKColor textColor, SKFont font, SKTextAlign horizontalAlign = 1, TextVerticalAlignment verticalAlign = 0, int textPadding = 0);
@@ -91,6 +100,10 @@ namespace FeatherQR.SkiaSharp
         public MicroQRCodeImageBuilder WithSegmentation(MicroQRSegmentation segmentation);
         public MicroQRCodeImageBuilder WithVersion(MicroQRVersion version);
         public MicroQRCodeImageBuilder WithVersion(MicroQRVersionRange versionRange);
+        public static Task SavePngAsync(MicroQRCodeData microQrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = null);
+        public static Task SavePngAsync(string content, Stream output, MicroQREccLevel eccLevel = 2, int size = 512, CancellationToken cancellationToken = null);
+        public static Task SaveSvgAsync(MicroQRCodeData microQrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = null);
+        public static Task SaveSvgAsync(string content, Stream output, MicroQREccLevel eccLevel = 2, int size = 512, CancellationToken cancellationToken = null);
         public static byte[] GetImageBytes(MicroQRCodeData microQrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100);
         public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, MicroQREccLevel eccLevel = 2, int size = 512, int quality = 100);
         public static byte[] GetPngBytes(MicroQRCodeData microQrCodeData, int size = 512);
@@ -113,6 +126,10 @@ namespace FeatherQR.SkiaSharp
 
     public static class MicroQRCodeImageDecoder
     {
+        public static MicroQRCodeDecodeResult Decode(Stream image);
+        public static MicroQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
+        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info);
     }
@@ -136,6 +153,10 @@ namespace FeatherQR.SkiaSharp
         public QRCodeImageBuilder WithSegmentation(QRSegmentation segmentation);
         public QRCodeImageBuilder WithVersion(QRVersionRange versionRange);
         public QRCodeImageBuilder WithVersion(int version);
+        public static Task SavePngAsync(QRCodeData qrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = null);
+        public static Task SavePngAsync(string content, Stream output, QREccLevel eccLevel = 1, int size = 512, CancellationToken cancellationToken = null);
+        public static Task SaveSvgAsync(QRCodeData qrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = null);
+        public static Task SaveSvgAsync(string content, Stream output, QREccLevel eccLevel = 1, int size = 512, CancellationToken cancellationToken = null);
         public static byte[] GetImageBytes(QRCodeData qrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100);
         public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, QREccLevel eccLevel = 1, int size = 512, int quality = 100);
         public static byte[] GetPngBytes(QRCodeData qrCodeData, int size = 512);
@@ -158,6 +179,15 @@ namespace FeatherQR.SkiaSharp
 
     public static class QRCodeImageDecoder
     {
+        public static QRCodeDecodeResult Decode(Stream image);
+        public static QRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
+        public static QRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
+        public static QRCodeDecodeResult[] DecodeSymbols(Stream image);
+        public static QRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
+        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info);
     }
@@ -187,6 +217,10 @@ namespace FeatherQR.SkiaSharp
         public RmQRCodeImageBuilder WithSegmentation(RmQRSegmentation segmentation);
         public RmQRCodeImageBuilder WithVersion(RmQRVersion version);
         public RmQRCodeImageBuilder WithWidth(int width);
+        public static Task SavePngAsync(RmQRCodeData rmQrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = null);
+        public static Task SavePngAsync(string content, Stream output, RmQREccLevel eccLevel = 0, int size = 512, CancellationToken cancellationToken = null);
+        public static Task SaveSvgAsync(RmQRCodeData rmQrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = null);
+        public static Task SaveSvgAsync(string content, Stream output, RmQREccLevel eccLevel = 0, int size = 512, CancellationToken cancellationToken = null);
         public static byte[] GetImageBytes(RmQRCodeData rmQrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100);
         public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, RmQREccLevel eccLevel = 0, int size = 512, int quality = 100);
         public static byte[] GetPngBytes(RmQRCodeData rmQrCodeData, int size = 512);
@@ -209,6 +243,10 @@ namespace FeatherQR.SkiaSharp
 
     public static class RmQRCodeImageDecoder
     {
+        public static RmQRCodeDecodeResult Decode(Stream image);
+        public static RmQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
+        public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
     }
@@ -262,6 +300,8 @@ namespace FeatherQR.SkiaSharp
         public TSelf WithModuleShape(ModuleShape moduleShape, float sizePercent = 1);
         public TSelf WithQuietZone(int size);
         public TSelf WithSize(int width, int height);
+        public Task SaveToAsync(Stream output, CancellationToken cancellationToken = null);
+        public Task SaveToSvgAsync(Stream output, CancellationToken cancellationToken = null);
         public byte[] ToByteArray();
         public string ToSvgString();
         public void SaveTo(IBufferWriter<byte> writer);

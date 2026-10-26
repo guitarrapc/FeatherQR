@@ -746,7 +746,7 @@ public class DecodeAllocationTest
     public async Task StandardQR_SeveralSymbols_AllocatesOnlyTheirTexts(int across, int down)
     {
         var (luminance, width, height, _) = TripleSelectionDecodeTest.RenderGrid(across, down, 0f, static i => $"FQR LOTS {i}");
-        var symbols = new DecodedSymbol[16];
+        var symbols = new QRCodeDecodeResult[16];
         QRImageDecoder.ModuleBuffersPeak = 0;
         var count = QRImageDecoder.DecodeSymbols(luminance, width, height, symbols);
         await Assert.That(count).IsEqualTo(across * down);
@@ -770,7 +770,7 @@ public class DecodeAllocationTest
     public async Task StandardQR_SeveralSymbols_NoSymbol_AllocatesNothing(RejectedImage rejected)
     {
         var (luminance, width, height) = Render(rejected);
-        var symbols = new DecodedSymbol[16];
+        var symbols = new QRCodeDecodeResult[16];
         await Assert.That(QRImageDecoder.DecodeSymbols(luminance, width, height, symbols)).IsEqualTo(0);
 
         var allocated = SteadyStateBytes(() => QRImageDecoder.DecodeSymbols(luminance, width, height, symbols));

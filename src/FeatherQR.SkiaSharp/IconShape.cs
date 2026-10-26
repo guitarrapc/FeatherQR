@@ -36,6 +36,34 @@ public abstract class IconShape
     /// <param name="borderRect">The rectangular area for the border (if border width > 0).</param>
     /// <param name="backgroundColor">The color to fill the border with.</param>
     public abstract void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor);
+
+    /// <summary>
+    /// A copy that draws copies of the shape's images and fonts, for a render that runs after its call has returned.
+    /// <c>null</c> for a shape of the caller's own, which cannot be copied.
+    /// </summary>
+    /// <param name="owned">Collects the copies, for the render to dispose.</param>
+    internal virtual IconShape? CopyForLaterRender(List<IDisposable> owned) => null;
+
+    internal static SKBitmap CopyForLaterRender(SKBitmap image, List<IDisposable> owned)
+    {
+        // A bitmap that draws nothing gives an empty copy, which the render refuses as it refuses the bitmap.
+        // A copy made from its info would have pixels the bitmap lacks, and be drawn blank
+        if (image.DrawsNothing)
+        {
+            var none = new SKBitmap();
+            owned.Add(none);
+            return none;
+        }
+
+        // The pixels read as they are. SKBitmap.Copy draws them, which clears the colour of an unpremultiplied pixel of no alpha and takes several times as long
+        var copy = new SKBitmap(image.Info);
+        owned.Add(copy);
+        using var source = image.PeekPixels();
+        using var target = copy.PeekPixels();
+        if (source is null || target is null || !source.ReadPixels(target))
+            throw new InvalidOperationException("The icon's image could not be copied.");
+        return copy;
+    }
 }
 
 /// <summary>
@@ -73,6 +101,8 @@ public sealed class ImageIconShape : IconShape
         // SKSamplingOptions.Default matches what the obsolete DrawBitmap(bitmap, rect) overload used.
         canvas.DrawBitmap(_image, rect, SKSamplingOptions.Default);
     }
+
+    internal override IconShape CopyForLaterRender(List<IDisposable> owned) => new ImageIconShape(CopyForLaterRender(_image, owned));
 }
 
 /// <summary>
@@ -107,6 +137,24 @@ public sealed class ImageTextIconShape : IconShape
         _horizontalAlign = horizontalAlign;
         _verticalAlign = verticalAlign;
         _textPadding = textPadding;
+    }
+
+    internal override IconShape CopyForLaterRender(List<IDisposable> owned)
+    {
+        // Every setting the font carries, so the copy draws the caption as the caller's font does
+        var font = new SKFont(_font.Typeface, _font.Size, _font.ScaleX, _font.SkewX)
+        {
+            Edging = _font.Edging,
+            Hinting = _font.Hinting,
+            Subpixel = _font.Subpixel,
+            Embolden = _font.Embolden,
+            LinearMetrics = _font.LinearMetrics,
+            BaselineSnap = _font.BaselineSnap,
+            ForceAutoHinting = _font.ForceAutoHinting,
+            EmbeddedBitmaps = _font.EmbeddedBitmaps,
+        };
+        owned.Add(font);
+        return new ImageTextIconShape(CopyForLaterRender(_image, owned), _text, _textColor, font, _horizontalAlign, _verticalAlign, _textPadding);
     }
 
     /// <inheritdoc/>

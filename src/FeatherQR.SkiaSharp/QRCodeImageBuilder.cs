@@ -82,10 +82,11 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// Encodes the content and returns an image in the format you choose.
     /// </summary>
     /// <param name="content">The text or URL to encode.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="eccLevel">How much damage the QR code should survive.</param>
     /// <param name="size">Image side length in pixels.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, QREccLevel eccLevel = QREccLevel.M, int size = 512, int quality = 100)
     {
         return new QRCodeImageBuilder(content)
@@ -99,9 +100,10 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// Renders the QR code and returns an image in the format you choose.
     /// </summary>
     /// <param name="qrCodeData">The QR code to draw.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="size">Image side length in pixels.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static byte[] GetImageBytes(QRCodeData qrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100)
     {
         return new QRCodeImageBuilder(qrCodeData)
@@ -136,6 +138,44 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
         new QRCodeImageBuilder(qrCodeData)
             .WithSize(size, size)
             .SaveTo(output);
+    }
+
+    /// <summary>
+    /// Encodes the content and writes a PNG to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SavePng(string, Stream, QREccLevel, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="eccLevel">How much damage the QR code should survive.</param>
+    /// <param name="size">Image side length in pixels.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the image is written.</returns>
+    public static Task SavePngAsync(string content, Stream output, QREccLevel eccLevel = QREccLevel.M, int size = 512, CancellationToken cancellationToken = default)
+    {
+        return new QRCodeImageBuilder(content)
+            .WithSize(size, size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToAsync(output, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renders the QR code and writes a PNG to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SavePng(QRCodeData, Stream, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="qrCodeData">The QR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Image side length in pixels.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the image is written.</returns>
+    public static Task SavePngAsync(QRCodeData qrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = default)
+    {
+        return new QRCodeImageBuilder(qrCodeData)
+            .WithSize(size, size)
+            .SaveToAsync(output, cancellationToken);
     }
 
     /// <summary>
@@ -194,6 +234,44 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
         new QRCodeImageBuilder(qrCodeData)
             .WithSize(size, size)
             .SaveToSvg(output);
+    }
+
+    /// <summary>
+    /// Encodes the content and writes an SVG document to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SaveSvg(string, Stream, QREccLevel, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToSvgAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="eccLevel">How much damage the QR code should survive.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the document is written.</returns>
+    public static Task SaveSvgAsync(string content, Stream output, QREccLevel eccLevel = QREccLevel.M, int size = 512, CancellationToken cancellationToken = default)
+    {
+        return new QRCodeImageBuilder(content)
+            .WithSize(size, size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvgAsync(output, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renders the QR code and writes an SVG document to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SaveSvg(QRCodeData, Stream, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToSvgAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="qrCodeData">The QR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the document is written.</returns>
+    public static Task SaveSvgAsync(QRCodeData qrCodeData, Stream output, int size = 512, CancellationToken cancellationToken = default)
+    {
+        return new QRCodeImageBuilder(qrCodeData)
+            .WithSize(size, size)
+            .SaveToSvgAsync(output, cancellationToken);
     }
 
     /// <summary>
@@ -278,10 +356,11 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// </summary>
     /// <param name="content">The text or URL to encode.</param>
     /// <param name="writer">Where to write.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="eccLevel">How much damage the QR code should survive.</param>
     /// <param name="size">Image side length in pixels.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, QREccLevel eccLevel = QREccLevel.M, int size = 512, int quality = 100)
     {
         new QRCodeImageBuilder(content)
@@ -296,9 +375,10 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// </summary>
     /// <param name="qrCodeData">The QR code to draw.</param>
     /// <param name="writer">Where to write.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="size">Image side length in pixels.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static void WriteImage(QRCodeData qrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = 512, int quality = 100)
     {
         new QRCodeImageBuilder(qrCodeData)
@@ -449,6 +529,14 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
     {
         SymbolRenderer.Render(canvas, contentRect, (QRCodeData)symbol, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
+    }
+
+    private protected override SymbolImageBuilderBase<QRCodeImageBuilder> CopyForLaterRender(List<IDisposable> owned)
+    {
+        var copy = (QRCodeImageBuilder)base.CopyForLaterRender(owned);
+        if (_iconData?.Icon?.CopyForLaterRender(owned) is { } icon)
+            copy._iconData = _iconData with { Icon = icon };
+        return copy;
     }
 
     /// <summary>

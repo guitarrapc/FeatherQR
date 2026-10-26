@@ -24,11 +24,12 @@ public class TypeShapeTest
     // Func<Type> rather than Type: TUnit asks for a factory when a data source yields a
     // reference type, so each case builds its own value and cannot share state with another.
     //
-    // The settings objects whose members are init-only, which is IconData alone. The three
-    // generator options have set accessors and no constructor (GeneratorOptionStructs below).
+    // The settings objects whose members are init-only. The three generator options have set
+    // accessors and no constructor (GeneratorOptionStructs below).
     public static IEnumerable<Func<Type>> InitOnlySettingsObjects()
     {
         yield return () => typeof(IconData);
+        yield return () => typeof(ImageStreamReadLimits);
     }
 
     private static bool IsInitOnly(MethodInfo setter)
@@ -705,6 +706,28 @@ public class TypeShapeTest
             .Because("a public or protected set accessor is a decision made for the generator options, and for no other type");
         await Assert.That(listed.Except(withAPlainSetter)).IsEmpty()
             .Because("each of the generator options has a set accessor a caller can use");
+    }
+
+    /// <summary>
+    /// A class's <c>Default</c> is a <c>static readonly</c> field, as the shapes' and the gradient's are.
+    /// </summary>
+    /// <remarks>
+    /// Moving the member between a field and a property later breaks compiled callers, so it keeps one shape.
+    /// The generator options are structs, whose <c>Default</c> is a property for a reason of their own.
+    /// </remarks>
+    [Test]
+    public async Task ClassDefault_IsAStaticReadOnlyField()
+    {
+        const BindingFlags declared = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var classes = ExportedTypes().Where(t => t.IsClass).ToArray();
+
+        var properties = FullNames(classes.Where(t => t.GetProperty("Default", declared) is not null));
+        var fields = classes.Where(t => t.GetField("Default", declared) is { IsInitOnly: true }).ToArray();
+
+        await Assert.That(properties).IsEmpty()
+            .Because("a class's Default is a static readonly field");
+        await Assert.That(fields).Contains(typeof(GradientOptions))
+            .Because("the sweep has to find the fields the rule was written from, or the rule passes without them");
     }
 
     /// <summary>

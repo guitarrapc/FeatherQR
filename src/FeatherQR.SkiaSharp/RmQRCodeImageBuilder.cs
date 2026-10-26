@@ -83,10 +83,11 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// Encodes the content and returns an image in the format you choose.
     /// </summary>
     /// <param name="content">The text or URL to encode.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, int quality = 100)
     {
         return new RmQRCodeImageBuilder(content)
@@ -100,9 +101,10 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// Renders the rMQR code and returns an image in the format you choose.
     /// </summary>
     /// <param name="rmQrCodeData">The rMQR code to draw.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static byte[] GetImageBytes(RmQRCodeData rmQrCodeData, SKEncodedImageFormat format, int size = DefaultWidth, int quality = 100)
     {
         return new RmQRCodeImageBuilder(rmQrCodeData)
@@ -137,6 +139,44 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
         new RmQRCodeImageBuilder(rmQrCodeData)
             .WithWidth(size)
             .SaveTo(output);
+    }
+
+    /// <summary>
+    /// Encodes the content and writes a PNG to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SavePng(string, Stream, RmQREccLevel, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the image is written.</returns>
+    public static Task SavePngAsync(string content, Stream output, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, CancellationToken cancellationToken = default)
+    {
+        return new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToAsync(output, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renders the rMQR code and writes a PNG to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SavePng(RmQRCodeData, Stream, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="rmQrCodeData">The rMQR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the image is written.</returns>
+    public static Task SavePngAsync(RmQRCodeData rmQrCodeData, Stream output, int size = DefaultWidth, CancellationToken cancellationToken = default)
+    {
+        return new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .SaveToAsync(output, cancellationToken);
     }
 
     /// <summary>
@@ -195,6 +235,44 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
         new RmQRCodeImageBuilder(rmQrCodeData)
             .WithWidth(size)
             .SaveToSvg(output);
+    }
+
+    /// <summary>
+    /// Encodes the content and writes an SVG document to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SaveSvg(string, Stream, RmQREccLevel, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToSvgAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the document is written.</returns>
+    public static Task SaveSvgAsync(string content, Stream output, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, CancellationToken cancellationToken = default)
+    {
+        return new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvgAsync(output, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renders the rMQR code and writes an SVG document to a stream asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Writes what <see cref="SaveSvg(RmQRCodeData, Stream, int)"/> writes, as <see cref="SymbolImageBuilderBase{TSelf}.SaveToSvgAsync(Stream, CancellationToken)"/> does.
+    /// </remarks>
+    /// <param name="rmQrCodeData">The rMQR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
+    /// <param name="cancellationToken">Stops the call before the render and during the write.</param>
+    /// <returns>A task that completes once the document is written.</returns>
+    public static Task SaveSvgAsync(RmQRCodeData rmQrCodeData, Stream output, int size = DefaultWidth, CancellationToken cancellationToken = default)
+    {
+        return new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .SaveToSvgAsync(output, cancellationToken);
     }
 
     /// <summary>
@@ -279,10 +357,11 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// </summary>
     /// <param name="content">The text or URL to encode.</param>
     /// <param name="writer">Destination buffer writer.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, int quality = 100)
     {
         new RmQRCodeImageBuilder(content)
@@ -297,9 +376,10 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// </summary>
     /// <param name="rmQrCodeData">The rMQR code to draw.</param>
     /// <param name="writer">Destination buffer writer.</param>
-    /// <param name="format">The format to encode as.</param>
+    /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="size">Image width in pixels (height follows the rMQR code aspect ratio). Default is 512.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
     public static void WriteImage(RmQRCodeData rmQrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = DefaultWidth, int quality = 100)
     {
         new RmQRCodeImageBuilder(rmQrCodeData)
