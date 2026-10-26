@@ -4,7 +4,7 @@
 
 The maintainer decided on 2026-10-15 that 2.0.0 ships an async API, for callers that cannot hold a thread: web APIs, and UI apps such as WinUI. This plan holds its goals, the analysis they come from, and the design as the decisions the maintainer ruled.
 
-## Where it stands (2026-10-25)
+## Where it stands (2026-10-26)
 
 - The analysis is done: where generation and reading block, by setting, measured on x64 (2026-10-15).
 - The goals are set (2026-10-25), from the decisions as ruled.
@@ -14,6 +14,8 @@ The maintainer decided on 2026-10-15 that 2.0.0 ships an async API, for callers 
 - Phase 3, cancellation between symbols, is done (2026-10-25).
 - Phase 4, the docs, is done (2026-10-25). Every phase is done. The plan folds into the specs at the 2.0.0 freeze.
 - A review of the branch (2026-10-26) fixed what it found in the code, the tests and the docs. The maintainer ruled its three design questions the same day: a call that moves off the caller's context reads copies of what it was given, the stream reads take limits the caller sets, and the token stays last.
+- The review ran four rounds (2026-10-26) and stopped when one left only comments to fix. The default limits fell to 64 MiB and 4,096 × 4,096 pixels the same day.
+- The write and read benchmarks ran again on the reviewed code (2026-10-26). P2 to P4 hold, and the synchronous calls allocate what they allocated before the async work.
 - The call for several symbols in one image (Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md)) returns the result type an async read must return, since an async method cannot have `out` parameters. That type is ruled (A4), and the call's names are settled in that Phase 3.
 
 ## Goals
@@ -663,3 +665,61 @@ Why: a default too low fails at once, with a message that names the limit to rai
 What changed: the two defaults, the refusals' messages, which now name `MaxPixels` or `MaxBytes`, and the docs. The tests hold the pixel limit through a read at 4,096 × 4,096 and 2,048 × 8,192 and one row past each, which the old default made too costly and held at the check alone. The tests of the byte limit now cost 64 MiB where they cost 256. Skia refuses a PNG of 1 × 16,777,216 pixels as no image, so a boundary of that shape tests Skia, not the limit.
 
 The full suite passes on net10.0 (35,324 passed, 401 skipped) and net8.0 (35,230 passed, 401 skipped).
+
+### README and migration guide checked (2026-10-26)
+
+Done, at the maintainer's request, after the maintainer rewrote the README's async examples. What was checked and fixed:
+
+- ASP.NET Core refuses synchronous I/O on both bodies. On Kestrel (.NET 10) `SavePng(text, response.Body)` and `Decode(request.Body)` threw `InvalidOperationException`, and `SaveTo(response.BodyWriter)` wrote. The README says to use the async calls or the response's `PipeWriter`, where it said the async calls must be used.
+- An endpoint that writes to `BodyWriter` without a flush sent the same 2,330-byte PNG as one that flushes. The README says the token reaches only the flush, where it said the flush is required.
+- The README's limit comments name the PNG kind that was measured, where they said "up to".
+- The migration guide's move from `SKBitmap.Decode(stream)` gives the same result within the limits alone. A 6,000 × 4,000 image that the bitmap pair reads is refused by the stream read at the default limits and read with raised ones. The guide says so and shows the raised limits.
+- `QRCodeImageDecoder` has no luminance reads, so the guide sends older language versions to it for the stream and bitmap reads alone.
+- Every async block of the README was compiled as written and run, but for the ASP.NET Core block, which was compiled and whose forms were run on Kestrel in a check of their own. The guide's move was compiled and run as written at C# 12 on net8.0.
+
+### Measured again after the review (2026-10-26)
+
+Done, at the maintainer's request. The review changed the read path and added a copy under a context after Phases 1 and 2 were measured, so their benchmarks ran again on the reviewed code (91e5a380), in process with BenchmarkDotNet 0.15.8, .NET 10.0.9, x64, Ryzen 9 7950X3D.
+
+Writes, into a `MemoryStream`:
+
+| Shape | Sync | Async | Ratio |
+|---|---|---|---|
+| PNG of the URL, 512 px | 4,542 μs | 4,549 μs | 1.00 |
+| PNG of version 40, 1,024 px | 21.65 ms | 22.58 ms | 1.04 |
+| SVG of the URL | 500 μs | 493 μs | 0.99 |
+| SVG of version 40 | 18.13 ms | 18.50 ms | 1.02 |
+
+Reads, against the bitmap pair:
+
+| Shape | Bitmap pair | Stream read | Ratio |
+|---|---|---|---|
+| Exposed `MemoryStream`, async | 60.61 ms | 60.41 ms | 1.00 |
+| Exposed `MemoryStream`, synchronous twin | 60.61 ms | 60.82 ms | 1.00 |
+| `MemoryStream` over an array, async | 61.39 ms | 58.34 ms | 0.95 |
+| 512 px PNG of the URL, async | 428 μs | 431 μs | 1.01 |
+
+P2 holds, at most 4 % more time, and P4 holds, at most 1 %. The version 40 PNG's async call deviated by 1.38 ms where its twin deviated by 0.55 ms, as in Phase 1, and the ratio's deviation is 0.07.
+
+The benchmark's allocation column read more than the calls allocate on the slow shapes: 3.36 KB for the synchronous version 40 PNG, where the URL's PNG, the same code, read 3.17 KB, and 3,881 B for the photograph's bitmap pair, where the PNG's pair read 2,979 B. A scratch probe counted the bytes the calling thread allocates a call, averaged over 30 to 2,000 calls after a warm-up, at the commit before the async work (cf3524d3), the commit before the review (1d102d5e) and the reviewed code. Every thread's bytes over the probe's calls were the calling thread's.
+
+| Call, bytes a call | Before the async work | Before the review | Reviewed |
+|---|---|---|---|
+| PNG write, synchronous, either shape | 3,248 | 3,248 | 3,248 |
+| PNG write, async, either shape | none | 3,280 | 3,288 |
+| SVG write, synchronous, either shape | 5,992 | 5,992 | 5,992 |
+| SVG write, async, either shape | none | 6,056 | 6,064 |
+| Bitmap pair, the photograph | 2,996 | 2,996 | 2,996 |
+| Bitmap pair, the 512 px PNG | 2,976 | 2,976 | 2,976 |
+| Stream read, exposed, async | none | 1,068 | 852 |
+| Stream read, exposed, synchronous twin | none | 852 | 636 |
+| Stream read, over an array, async | none | 1,100 | 892 |
+| Stream read, the 512 px PNG, async | none | 1,080 | 872 |
+
+- The synchronous calls allocate what they allocated before the async work. Their instructions were not counted again.
+- P3 holds: an async write allocates 40 B more than its twin for a PNG and 72 B more for an SVG.
+- The review took 216 B off a read, which no longer calls `SKBitmap.DecodeBounds`, a call that made a codec of its own. The buffer gained a flag, which takes the object from 32 to 40 bytes, so a write gains 8 B and a read of a stream that does not expose its buffer loses 208 B where an exposed one loses 216.
+
+Lessons:
+
+- On a slow shape the benchmark's allocation column, in process, read more than the call allocates, about 190 B over on the version 40 PNG and 885 B over on the photograph's pair, where the faster shapes of the same code read within a few bytes of what the probe counts. A delta in that column is checked with a count of the calling thread's bytes before it is believed.
