@@ -231,7 +231,7 @@ var data = QRCodeGenerator.Create("https://example.com".AsSpan(), QREccLevel.M,
 var icon = new IconData(new ImageTextIconShape(logo, "FooBar", SKColors.Black, font), iconSizePercent: 15);
 ```
 
-`IconData`'s constructor exists for exactly this case. On C# 9 and above, prefer the object initializer: it names only the settings it changes and does not depend on the parameter order. `ImageStreamReadLimits`, the limits of a stream read, has a constructor of the same kind: `new ImageStreamReadLimits(maxPixels: 4096 * 4096)`.
+`IconData`'s constructor exists for exactly this case. On C# 9 and above, prefer the object initializer: it names only the settings it changes and does not depend on the parameter order. `ImageStreamReadLimits`, the limits of a stream read, has a constructor of the same kind: `new ImageStreamReadLimits(maxPixels: 16_384L * 16_384)`.
 
 The generator options had a constructor of the same kind in 2.0.0-preview.3 through preview.5 (`new QRCodeGeneratorOptions(quietZoneSize: 2)`). It is gone, since the initializer now compiles everywhere: write `new QRCodeGeneratorOptions { QuietZoneSize = 2 }`.
 
@@ -433,7 +433,20 @@ Behavior change, not source or binary breaking: code that branches on `Unsupport
 
 ### Async writes and stream reads
 
-Additive. Every method that writes an image to a `Stream` has an `...Async` twin: `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The image decoders read an encoded image from a `Stream`: `DecodeAsync` and `Decode` on the three, and `DecodeSymbolsAsync` and `DecodeSymbols` for every Standard QR code. A stream read returns a result type, `QRCodeDecodeResult` (`MicroQRCodeDecodeResult`, `RmQRCodeDecodeResult`), with `Text`, `Info` and `Success`. The README's [Async and stream I/O](../README.md#async-and-stream-io) describes how the calls behave.
+Additive. Every method that writes an image to a `Stream` has an `...Async` twin: `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The image decoders read an encoded image from a `Stream`: `DecodeAsync` and `Decode` on the three, and `DecodeSymbolsAsync` and `DecodeSymbols` for every Standard QR code. A stream read for one symbol returns a result type, `QRCodeDecodeResult` (`MicroQRCodeDecodeResult`, `RmQRCodeDecodeResult`), with `Text`, `Info` and `Success`, and one for every symbol an array of them. The README's [Async and stream I/O](../README.md#async-and-stream-io) describes how the calls behave.
+
+The calls pair up as below. The writes to a stream and the reads from memory are the 1.x calls as they were, and the calls marked new are new in 2.0.0, as is every async call. With C# 14 the stream and bitmap reads are reachable on `QRCodeDecoder`, as here, and on older language versions on `QRCodeImageDecoder` (see [`TryDecode(SKBitmap)` moved](#trydecodeskbitmap-moved)). The luminance reads, `TryDecodeImage` and `DecodeImageSymbols`, stay on `QRCodeDecoder` at every language version. Micro QR and rMQR write and read one symbol the same way.
+
+| What | Synchronous | Asynchronous |
+|---|---|---|
+| Write an image to a stream | `builder.SaveTo(stream)`, `builder.SaveToSvg(stream)` | `builder.SaveToAsync(stream, ct)`, `builder.SaveToSvgAsync(stream, ct)` |
+| Write a code to a stream in one call | `QRCodeImageBuilder.SavePng(content, stream)`, `SaveSvg(content, stream)` | `QRCodeImageBuilder.SavePngAsync(content, stream, cancellationToken: ct)`, `SaveSvgAsync(content, stream, cancellationToken: ct)` |
+| Read one code from a stream | `QRCodeDecoder.Decode(stream)`, new | `QRCodeDecoder.DecodeAsync(stream, ct)` |
+| Read every code from a stream | `QRCodeDecoder.DecodeSymbols(stream)`, new | `QRCodeDecoder.DecodeSymbolsAsync(stream, ct)` |
+| Read a stream under limits of your own | `Decode(stream, limits)`, `DecodeSymbols(stream, limits)`, new | `DecodeAsync(stream, limits, ct)`, `DecodeSymbolsAsync(stream, limits, ct)` |
+| Write to memory or a buffer writer | `ToByteArray()`, `ToSvgString()`, `SaveTo(IBufferWriter<byte>)`, `GetPngBytes(content)` and the other helpers | None, since there is no I/O to wait on |
+| Read one code from memory | `TryDecode(bitmap, out text)`, `TryDecodeImage(luminance, width, height, out text, out info)` | None, since there is no I/O to wait on |
+| Read every code from memory | `DecodeSymbols(bitmap)`, `DecodeImageSymbols(luminance, width, height)`, new | None, since there is no I/O to wait on |
 
 Code that decoded a stream into a bitmap itself can hand the stream over instead:
 
@@ -447,11 +460,15 @@ if (bitmap is not null && QRCodeImageDecoder.TryDecode(bitmap, out var text, out
 var result = await QRCodeImageDecoder.DecodeAsync(stream, cancellationToken);
 if (result.Success)
     Console.WriteLine(result.Text);
+
+// After, for an image past 4,096 × 4,096 pixels, which the code before read
+var limits = new ImageStreamReadLimits { MaxPixels = 16_384L * 16_384, MaxBytes = 256 * 1024 * 1024 };
+var large = await QRCodeImageDecoder.DecodeAsync(stream, limits, cancellationToken);
 ```
 
-- **The result is the same.** The stream read decodes the image as `SKBitmap.Decode(stream)` does and reads it as `TryDecode` reads that bitmap.
+- **The result is the same within the limits.** The stream read decodes the image as `SKBitmap.Decode(stream)` does and reads it as `TryDecode` reads that bitmap.
 - **The stream stays open.** `SKBitmap.Decode(stream)` disposes the stream it is given. The stream read leaves it open, read to its end.
-- **A stream that holds no image throws** `InvalidDataException`, where `SKBitmap.Decode` returned `null`. So does a stream of more than 64 MiB, or an image whose header declares more than 16,777,216 pixels (4,096 × 4,096), by default, which holds a 12-megapixel photograph. An `ImageStreamReadLimits` passed to the read sets other limits, and a larger image can also be decoded into an `SKBitmap` and read with `TryDecode`.
+- **A stream that holds no image throws** `InvalidDataException`, where `SKBitmap.Decode` returns `null`. So does, by default, a stream of more than 64 MiB or an image whose header declares more than 16,777,216 pixels (4,096 × 4,096). That holds a 12-megapixel photograph but not a 24-megapixel one of 6,000 × 4,000, which `SKBitmap.Decode` reads. Pass larger limits as above, or keep decoding into an `SKBitmap` and read it with `TryDecode`.
 - **`Success` is `false` for a default value.** `DecodeStatus.Success` is 0, so a default result's status reads as a success, where `Success` does not.
 
 ### Several symbols in one image

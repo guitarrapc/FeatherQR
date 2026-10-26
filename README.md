@@ -554,14 +554,74 @@ foreach (var result in QRCodeImageDecoder.DecodeSymbols(sheet))
 
 ### Async and stream I/O
 
-Every method that writes an image to a `Stream` has an `...Async` twin: `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The decoders read an encoded image, a PNG, JPEG or WebP among others, from a `Stream`: `DecodeAsync` on the three, `DecodeSymbolsAsync` for every Standard QR code, and `Decode` and `DecodeSymbols` where the thread may wait.
+Every method that writes an image to a `Stream` has an `...Async` twin, `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The decoders read an encoded image, a PNG, JPEG or WebP among others, from a `Stream`: `DecodeAsync` on the three, `DecodeSymbolsAsync` for every Standard QR code, and `Decode` and `DecodeSymbols` where the thread may wait.
 
-Use the async calls where a thread must not wait on I/O. ASP.NET Core refuses synchronous I/O on a request or a response by default, so `SavePng(content, Response.Body)` and `SKBitmap.Decode(Request.Body)` throw there.
+The calls pair up as below. Micro QR and rMQR write and read one symbol the same way, through their own builders and `MicroQRCodeDecoder` and `RmQRCodeDecoder`.
+
+| What | Synchronous | Asynchronous |
+|---|---|---|
+| Write an image to a stream | `builder.SaveTo(stream)`, `builder.SaveToSvg(stream)` | `builder.SaveToAsync(stream, ct)`, `builder.SaveToSvgAsync(stream, ct)` |
+| Write a code to a stream in one call | `QRCodeImageBuilder.SavePng(content, stream)`, `SaveSvg(content, stream)` | `QRCodeImageBuilder.SavePngAsync(content, stream, cancellationToken: ct)`, `SaveSvgAsync(content, stream, cancellationToken: ct)` |
+| Read one code from a stream | `QRCodeDecoder.Decode(stream)` | `QRCodeDecoder.DecodeAsync(stream, ct)` |
+| Read every code from a stream | `QRCodeDecoder.DecodeSymbols(stream)` | `QRCodeDecoder.DecodeSymbolsAsync(stream, ct)` |
+| Read a stream under limits of your own | `Decode(stream, limits)`, `DecodeSymbols(stream, limits)` | `DecodeAsync(stream, limits, ct)`, `DecodeSymbolsAsync(stream, limits, ct)` |
+| Write to memory or a buffer writer | `ToByteArray()`, `ToSvgString()`, `SaveTo(IBufferWriter<byte>)`, `GetPngBytes(content)` and the other helpers | None, since there is no I/O to wait on |
+| Read from memory | `TryDecode(bitmap, out text)`, `TryDecodeImage(luminance, width, height, out text, out info)`, `DecodeSymbols(bitmap)`, `DecodeImageSymbols(luminance, width, height)` | None, since there is no I/O to wait on |
+
+With C# 14 the stream reads are reachable as `QRCodeDecoder.DecodeAsync(stream)`, as above. On older language versions, such as the C# 12 a net8.0 project uses by default, call them on `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`.
+
+Sample usage of asynchronous stream I/O.
+
+```csharp
+// Writes to a stream asynchronously
+// The image is rendered whole, then sent in one async write, so a render that fails writes nothing
+// The call does not flush, as SaveTo does not
+await builder.SaveToSvgAsync(file, cancellationToken);
+await file.FlushAsync(cancellationToken);
+
+// Reads from a stream asynchronously
+// The stream is read from its position to its end and left open, where SKBitmap.Decode(stream) disposes it
+// The pixels are read as encoded: the EXIF orientation is not applied, as SKBitmap.Decode does not apply it
+await using var photo = File.OpenRead("photo.jpg");
+var result = await QRCodeDecoder.DecodeAsync(photo, cancellationToken);
+// A read for one symbol returns a result in every case
+if (result.Success)
+    Console.WriteLine(result.Text);
+else
+    Console.WriteLine(result.Info.Status);   // why it failed, with Text empty
+
+// Cancellation is handled via the provided CancellationToken
+using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+try
+{
+    // Stops before the render and during the write. A write stopped part way leaves part of the image in the stream
+    await QRCodeImageBuilder.SavePngAsync(text, output, cancellationToken: timeout.Token);
+
+    // Stops before the decode, during the reads, and between the symbols it tries, never inside one symbol's read
+    var symbols = await QRCodeDecoder.DecodeSymbolsAsync(input, timeout.Token);
+}
+catch (OperationCanceledException)
+{
+}
+
+// Arguments are checked at the call and throw there. Every other error comes through the task
+try
+{
+    await new QRCodeImageBuilder(text).WithSize(64, 64).WithModulePixelSize(10).SaveToAsync(output);
+}
+catch (InvalidOperationException)
+{
+    // The layout does not fit
+}
+```
+
+ASP.NET Core refuses synchronous reads and writes of the request and response bodies by default, so use the async methods for them, or write to the response's PipeWriter.
 
 ```csharp
 using FeatherQR;
 using FeatherQR.SkiaSharp;
 
+// On an ASP.NET Core request, which has no context, the call stays on its thread
 app.MapGet("/qr", async (string text, HttpResponse response, CancellationToken cancellationToken) =>
 {
     response.ContentType = "image/png";
@@ -583,28 +643,56 @@ app.MapPost("/scan", async (HttpRequest request, CancellationToken cancellationT
         return Results.BadRequest();
     }
 });
+
+// The response's PipeWriter takes the buffer-writer overload as it is. The token reaches only the flush
+app.MapGet("/qr-pipe", async (string text, HttpResponse response, CancellationToken cancellationToken) =>
+{
+    response.ContentType = "image/png";
+    new QRCodeImageBuilder(text).SaveTo(response.BodyWriter);
+    await response.BodyWriter.FlushAsync(cancellationToken);
+});
 ```
 
-With C# 14 the stream reads are reachable as `QRCodeDecoder.DecodeAsync(stream)`, as above. On older language versions call them on `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`.
-
-How the calls behave:
-
-- **The computation is synchronous, the I/O asynchronous.** The image is rendered and encoded whole, or read whole and then decoded, and the stream is never written or read synchronously.
-- **A UI thread stays free.** Called on a thread with a `SynchronizationContext`, as in WinUI, WPF or MAUI, or under a `TaskScheduler` of your own, the call renders or decodes on the thread pool, so the app awaits it on the UI thread as it is. With neither, as on an ASP.NET Core request, it does not move. A call that moves reads copies of what it was given, the builder with its icon's images and fonts, or the buffer of a `MemoryStream` read in place, so they can be changed or disposed once the call returns. A shape class you derive yourself is drawn as it is, so keep it usable until the task completes.
-- **Cancellation.** The token stops a call before it renders or decodes and during the I/O, and a read for every symbol between the symbols it tries, never inside one symbol's read. A write stopped part way leaves part of the image in the stream.
-- **Errors.** A `null` stream, or one that cannot write or read, throws at the call, and so do the static `SavePngAsync` and `SaveSvgAsync` on empty content, `null` data or a size that is not positive. Everything else, a layout that does not fit or an image that cannot be decoded, comes through the task.
-- **Writes** write nothing when the render fails, and do not flush the stream, as the synchronous ones do not.
-- **Reads** leave the stream open, where `SKBitmap.Decode(stream)` disposes it, and read it from its position to its end. A `MemoryStream` whose buffer is exposed is read in place.
-- **Limits.** By default a read refuses a stream of more than 64 MiB, or an image whose header declares more than 16,777,216 pixels (4,096 × 4,096), with `InvalidDataException`, before any pixel is allocated, and a stream that holds no image throws it too. The defaults hold a 12-megapixel photograph of 4,032 × 3,024 pixels, and keep an upload's cost down: an image cut short after its header decodes, so a few dozen bytes can declare an image at the limit, and an interlaced PNG of 16 bits a channel took 192 MiB to decode at the default limit, and 3,078 MiB at 16,384 × 16,384. A larger image, up to the 2,147,483,647 bytes a bitmap holds (536,870,911 pixels of four bytes), is read with raised limits, such as `new ImageStreamReadLimits { MaxPixels = 16_384L * 16_384, MaxBytes = 256 * 1024 * 1024 }` for the pixels of a 200-megapixel photograph, or decoded into an `SKBitmap` and read with `TryDecode`.
-- **Results.** A read for one symbol returns a `QRCodeDecodeResult` (`MicroQRCodeDecodeResult`, `RmQRCodeDecodeResult`) in every case. On a failure `Success` is `false`, `Text` is empty and `Info.Status` says why.
-- **Pixels as encoded.** The EXIF orientation is not applied, as `SKBitmap.Decode` does not apply it.
-
-A `PipeWriter`, such as `Response.BodyWriter`, takes the buffer-writer overloads as they are, and the caller flushes:
+UI applications should use the async methods to avoid blocking the UI thread. The render or the decode runs on the thread pool, so the UI stays free.
 
 ```csharp
-response.ContentType = "image/png";
-new QRCodeImageBuilder(text).SaveTo(response.BodyWriter);
-await response.BodyWriter.FlushAsync(cancellationToken);
+await builder.SaveToAsync(file, cancellationToken);
+var result = await QRCodeDecoder.DecodeAsync(input, cancellationToken);
+
+Task SaveAsync(string url, Stream output)
+{
+    using var logo = SKBitmap.Decode("logo.png");
+    var builder = new QRCodeImageBuilder(url).WithIcon(IconData.FromImage(logo));
+    var task = builder.SaveToAsync(output);
+
+    // The call has taken what it reads, so changing the builder or disposing the icon now is safe
+    builder.WithSize(1024, 1024);
+    return task;
+}
+
+// A shape class of your own is not copied, so keep it usable until the task completes
+await new QRCodeImageBuilder(url)
+    .WithModuleShape(myShape)
+    .SaveToAsync(output);
+```
+
+A stream read refuses, by default, a stream of more than 64 MiB or an image of more than 16,777,216 pixels (4,096 × 4,096), which holds a 12-megapixel photograph, to prevent excessive memory usage and very large images from being processed.
+
+```csharp
+try
+{
+    // An interlaced PNG of 16 bits a channel took 192 MiB to decode at the default limit
+    var upload = await QRCodeDecoder.DecodeAsync(request.Body, cancellationToken);
+}
+catch (InvalidDataException)
+{
+    // Not an image, or past a limit, refused before any pixel is allocated. The message names the limit to raise
+}
+
+// A larger image, such as a 200-megapixel photograph, is read with raised limits
+// The same kind of PNG took 3,078 MiB to decode at 16,384 × 16,384
+var photoLimits = new ImageStreamReadLimits { MaxPixels = 16_384L * 16_384, MaxBytes = 256 * 1024 * 1024 };
+var large = await QRCodeDecoder.DecodeAsync(photo, photoLimits, cancellationToken);
 ```
 
 ### GS1 data
