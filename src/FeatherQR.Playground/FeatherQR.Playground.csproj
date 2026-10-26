@@ -48,6 +48,12 @@
     <StaticWebAssetFingerprintPattern Include="CSS" Pattern="*.css" Expression="#[.{fingerprint}]$(PlaygroundFingerprintSuffix)" />
   </ItemGroup>
 
+  <!-- The camera and the light the image decode sweep photographs symbols with, so the photograph panel draws what the spec measured. -->
+  <ItemGroup>
+    <Compile Include="..\..\tests\FeatherQR.Tests\Shared\CameraRenderer.cs" Link="Photograph\CameraRenderer.cs" />
+    <Compile Include="..\..\tests\FeatherQR.Tests\Shared\UnevenLightingRenderer.cs" Link="Photograph\UnevenLightingRenderer.cs" />
+  </ItemGroup>
+
   <!--
     libSkiaSharp.a is linked into dotnet.native.wasm only when publishing: the native relink
     requires the wasm-tools workload (Emscripten) and takes minutes. Solution builds stay

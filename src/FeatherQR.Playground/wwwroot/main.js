@@ -199,6 +199,8 @@ const decodeSymbolsEl = document.getElementById('decode-symbols');
 const decodePreviewEl = document.getElementById('decode-preview');
 const decodeCanvasEl = document.getElementById('decode-canvas');
 const decodePreviewCaptionEl = document.getElementById('decode-preview-caption');
+/** Where a preview of a read is drawn: the decode panel's, or the photograph panel's. */
+const decodeView = { canvas: decodeCanvasEl, figure: decodePreviewEl, caption: decodePreviewCaptionEl, corners: decodeCornersCheck };
 const decodeVerifyEl = document.getElementById('decode-verify');
 const benchModeSelect = document.getElementById('bench-mode-select');
 const benchCountSelect = document.getElementById('bench-count-select');
@@ -732,14 +734,16 @@ function isRuntimeDeadError(err) {
 function handleRuntimeDeath() {
   runtimeAlive = false;
   runtimeReady = false;
-  // Stop an in-flight benchmark loop at its next batch boundary.
+  // Stop an in-flight benchmark loop or limit search at its next batch boundary.
   benchCancelled = true;
+  limitCancelled = true;
   // Everything below either needs the runtime or would act on stale output.
   downloadBtn.disabled = true;
   downloadSvgBtn.disabled = true;
   copyImageBtn.disabled = true;
   permalinkBtn.disabled = true;
   benchRunBtn.disabled = true;
+  limitRunBtn.disabled = true;
   showToast('The WebAssembly runtime has crashed. Please reload the page to continue.', 'error', 60000);
   generateErrorEl.hidden = false;
   generateErrorEl.textContent = 'Runtime crashed, please reload the page.';
@@ -836,8 +840,16 @@ function generate() {
   copyImageBtn.disabled = false;
 
   let encoded = null;
+  photoSource = null;
   try {
     const meta = JSON.parse(exports.FeatherQR.Playground.QrInterop.GetLastMeta());
+    photoSource = {
+      symbology: meta.symbology,
+      matrixWidth: meta.matrixSize,
+      matrixHeight: meta.matrixHeight ?? meta.matrixSize,
+      quietZone: Math.min(Math.max(request.quietZone, 0), 10),
+      expected: expectedDecode(request, meta.encoded ?? null),
+    };
     const versionLabel = symbolLabel(meta.symbology, meta.qrVersion);
     const matrixLabel = `${meta.matrixSize}×${meta.matrixHeight ?? meta.matrixSize}`;
     statsEl.textContent =
@@ -853,6 +865,8 @@ function generate() {
     : `${request.gs1 === 'link' ? 'Digital Link URI' : 'Element string, under FNC1 in first position'}: ${displayText(encoded)}`;
 
   scheduleVerifyDecode(bytes, expectedDecode(request, encoded));
+  photoCardStale = true;
+  if (photoPanelEl.open) schedulePhotograph();
 }
 
 /* ─── Decode (self-verify + image upload) ─── */
@@ -989,14 +1003,14 @@ function orientedSize(orientation, width, height) {
  * still disagrees after applying the EXIF tag means the overlay would land wrong, so it is dropped.
  */
 /** Leaves the canvas taking no space, so a caption is not shown beside a stale picture. */
-function collapseDecodeCanvas() {
-  decodeCanvasEl.width = 0;
-  decodeCanvasEl.height = 0;
-  decodeCanvasEl.style.width = '';
-  decodeCanvasEl.style.height = '';
+function collapseDecodeCanvas(view = decodeView) {
+  view.canvas.width = 0;
+  view.canvas.height = 0;
+  view.canvas.style.width = '';
+  view.canvas.style.height = '';
 }
 
-function drawDecodePreview(bitmap, result) {
+function drawDecodePreview(bitmap, result, view = decodeView) {
   const scale = Math.min(
     DECODE_PREVIEW_MAX_WIDTH / bitmap.width,
     DECODE_PREVIEW_MAX_HEIGHT / bitmap.height);
@@ -1007,18 +1021,18 @@ function drawDecodePreview(bitmap, result) {
 
   // Null where the browser blocks canvas; the rest of the page does not need one, so say so
   // rather than throwing out of an event handler.
-  const ctx = decodeCanvasEl.getContext('2d');
+  const ctx = view.canvas.getContext('2d');
   if (!ctx) {
-    collapseDecodeCanvas();
-    decodePreviewEl.hidden = false;
-    decodePreviewCaptionEl.textContent = 'This browser did not give the page a 2D canvas, so the image cannot be previewed.';
+    collapseDecodeCanvas(view);
+    view.figure.hidden = false;
+    view.caption.textContent = 'This browser did not give the page a 2D canvas, so the image cannot be previewed.';
     return;
   }
 
-  decodeCanvasEl.width = Math.round(cssWidth * dpr);
-  decodeCanvasEl.height = Math.round(cssHeight * dpr);
-  decodeCanvasEl.style.width = `${cssWidth}px`;
-  decodeCanvasEl.style.height = `${cssHeight}px`;
+  view.canvas.width = Math.round(cssWidth * dpr);
+  view.canvas.height = Math.round(cssHeight * dpr);
+  view.canvas.style.width = `${cssWidth}px`;
+  view.canvas.style.height = `${cssHeight}px`;
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssWidth, cssHeight);
@@ -1026,7 +1040,7 @@ function drawDecodePreview(bitmap, result) {
   ctx.imageSmoothingEnabled = cssWidth * dpr < bitmap.width;
   ctx.drawImage(bitmap, 0, 0, cssWidth, cssHeight);
 
-  decodePreviewEl.hidden = false;
+  view.figure.hidden = false;
 
   const orientation = result.orientation || 1;
   const [shownWidth, shownHeight] = orientedSize(orientation, result.imageWidth, result.imageHeight);
@@ -1037,7 +1051,7 @@ function drawDecodePreview(bitmap, result) {
     .map((symbol, index) => ({ symbol, number: index + 1 }))
     .filter(({ symbol }) => symbol.corners?.length === 8);
   if (outlines.length === 0 || !aligned) {
-    decodePreviewCaptionEl.textContent = !aligned
+    view.caption.textContent = !aligned
       ? 'The browser decoded this image at a different size than the library did, so the outline is not drawn.'
       : symbols.length > 0
         ? 'The decoder reported no corner geometry for this symbol, so there is no outline to draw.'
@@ -1065,8 +1079,8 @@ function drawDecodePreview(bitmap, result) {
     ? `Every outline winds ${winding}.`
     : `${mirrored} of ${outlines.length} outlines wind counter-clockwise, so those codes are mirrored.`;
 
-  if (!decodeCornersCheck.checked) {
-    decodePreviewCaptionEl.textContent = several ? severalWinding : `Corner winding is ${winding}.`;
+  if (!view.corners.checked) {
+    view.caption.textContent = several ? severalWinding : `Corner winding is ${winding}.`;
     return;
   }
 
@@ -1103,7 +1117,7 @@ function drawDecodePreview(bitmap, result) {
     : unnumbered === outlines.length
       ? 'in the order listed, too small in this preview to number'
       : 'numbered as listed where the preview has room';
-  decodePreviewCaptionEl.textContent = several
+  view.caption.textContent = several
     ? `Outlines are the reported Corners, ${numbering}; each dot is a TopLeft. ${severalWinding}`
     : `Outline is the reported Corners; the dot is TopLeft. Winding is ${winding}.`;
 }
@@ -1144,6 +1158,17 @@ function drawOutlineNumber(ctx, number, at, side) {
   return true;
 }
 
+/**
+ * Resolves once what the page just wrote has been painted, before a call that blocks the main thread.
+ * One rAF resolves before the frame it schedules paints, so nest two; the timer covers a hidden tab, where rAF never fires.
+ */
+function afterPaint() {
+  return Promise.race([
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    new Promise((resolve) => setTimeout(resolve, 50)),
+  ]);
+}
+
 /** Runs one image through the decoder and shows the result; shared by the file input, paste and drop. */
 async function decodeImageFile(file) {
   const generation = ++decodeGeneration;
@@ -1174,13 +1199,9 @@ async function decodeImageFile(file) {
     return;
   }
 
-  // The decode blocks the main thread for seconds. One rAF resolves before the frame it schedules
-  // paints, so nest two; the timer covers a hidden tab, where rAF never fires.
+  // The decode blocks the main thread for seconds, so the status line is painted first.
   decodeResultEl.textContent = 'Decoding…';
-  await Promise.race([
-    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-    new Promise((resolve) => setTimeout(resolve, 50)),
-  ]);
+  await afterPaint();
   if (superseded()) return;
 
   const every = decodeEveryCheck.checked;
@@ -1306,6 +1327,332 @@ decodeDropEl.addEventListener('drop', async (event) => {
   decodeFileEl.value = '';
   await decodeImageFile(file);
 });
+
+/* ─── Photograph the code ─── */
+
+const photoPanelEl = document.getElementById('photo-panel');
+const photoResultEl = document.getElementById('photo-result');
+const photoSeedInput = document.getElementById('photo-seed');
+const photoLightSelect = document.getElementById('photo-light');
+const photoJpegSelect = document.getElementById('photo-jpeg');
+const photoSceneCheck = document.getElementById('photo-scene');
+const photoView = {
+  canvas: document.getElementById('photo-canvas'),
+  figure: document.getElementById('photo-preview'),
+  caption: document.getElementById('photo-preview-caption'),
+  corners: document.getElementById('photo-corners-check'),
+};
+
+/** The sliders: element id, the photograph request's field, and the default. */
+const PHOTO_SLIDERS = [
+  ['photo-ppm', 'pixelsPerModule', 4],
+  ['photo-tilt', 'tilt', 0],
+  ['photo-tilt-axis', 'tiltAxis', 0],
+  ['photo-roll', 'roll', 0],
+  ['photo-barrel', 'barrel', 0],
+  ['photo-bow', 'bow', 0],
+  ['photo-blur', 'blur', 0],
+  ['photo-noise', 'noise', 0],
+  ['photo-light-depth', 'lightDepth', 50],
+  ['photo-light-direction', 'lightDirection', 0],
+].map(([id, key, value]) => ({ input: document.getElementById(id), output: document.getElementById(`${id}-out`), key, value }));
+
+/** What the last generated code is, for the card: its symbology, matrix and quiet zone, and the text it must read as. */
+let photoSource = null;
+/** Whether the WASM side's card is older than the last generated code. */
+let photoCardStale = true;
+let photoTimer = null;
+/** Which photograph is current, so a slow one finishing late does not overwrite a newer one. */
+let photoGeneration = 0;
+let lastPhotoBitmap = null;
+let lastPhotoResult = null;
+const PHOTO_DEBOUNCE_MS = 150;
+
+/** The photograph request the controls describe (see PhotoRequest in PhotoSimulation.cs). */
+function photoRequest() {
+  const request = {
+    light: photoLightSelect.value,
+    jpeg: Number(photoJpegSelect.value),
+    scene: photoSceneCheck.checked,
+    seed: Math.max(0, Math.trunc(Number(photoSeedInput.value) || 0)),
+  };
+  for (const slider of PHOTO_SLIDERS) request[slider.key] = Number(slider.input.value);
+  return request;
+}
+
+/** Whether a read is the text the generated code holds, under the mode it was written with. */
+function readsAsGenerated(read, expected) {
+  return Boolean(read?.ok) && read.text === expected.content && decodedModeMatches(read, expected);
+}
+
+/** Hands the last generated image to the WASM side as the card; false, with the reason shown, when it cannot. */
+function ensurePhotoCard(statusEl) {
+  if (!photoCardStale) return true;
+  if (!lastPngBytes || !photoSource) {
+    statusEl.textContent = 'Generate a code first.';
+    return false;
+  }
+  const { symbology, matrixWidth, matrixHeight, quietZone } = photoSource;
+  const error = exports.FeatherQR.Playground.QrInterop.SetPhotoCard(lastPngBytes, symbology, matrixWidth, matrixHeight, quietZone);
+  if (error) {
+    statusEl.textContent = JSON.parse(error).error;
+    return false;
+  }
+  photoCardStale = false;
+  return true;
+}
+
+function schedulePhotograph() {
+  if (photoTimer !== null) window.clearTimeout(photoTimer);
+  photoTimer = window.setTimeout(() => {
+    photoTimer = null;
+    takePhotograph();
+  }, PHOTO_DEBOUNCE_MS);
+}
+
+async function takePhotograph() {
+  if (!runtimeAlive || !runtimeReady || !exports || limitRunning) return;
+  const generation = ++photoGeneration;
+  // The camera blocks the main thread, so the status line is painted first.
+  photoResultEl.textContent = 'Photographing…';
+  await afterPaint();
+  if (generation !== photoGeneration || !ensurePhotoCard(photoResultEl)) return;
+
+  const request = photoRequest();
+  let bytes;
+  let payload;
+  try {
+    const interop = exports.FeatherQR.Playground.QrInterop;
+    bytes = interop.Photograph(JSON.stringify(request));
+    if (bytes.length === 0 || bytes[0] === 0x7b) {
+      photoResultEl.textContent = `Could not photograph the code: ${JSON.parse(utf8Decoder.decode(bytes)).error}`;
+      return;
+    }
+    payload = JSON.parse(interop.GetLastPhoto());
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return;
+    }
+    photoResultEl.textContent = `Could not photograph the code: ${err?.message ?? err}`;
+    return;
+  }
+  if (generation !== photoGeneration) return;
+
+  const { read } = payload;
+  const verdict = readsAsGenerated(read, photoSource.expected)
+    ? `✓ Reads · ${symbolSummary(read)}`
+    : read.ok
+      ? `⚠ Reads another text · ${symbolSummary(read)}`
+      : `✗ Does not read (${read.status})`;
+  const capped = payload.pixelsPerModule < request.pixelsPerModule ? ' (capped)' : '';
+  photoResultEl.textContent = `${verdict} · photograph ${payload.width}×${payload.height} px at `
+    + `${payload.pixelsPerModule} px/module${capped} · camera ${payload.renderMs} ms, decoder ${payload.readMs} ms`;
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(new Blob([bytes], { type: request.jpeg > 0 ? 'image/jpeg' : 'image/png' }));
+  } catch {
+    if (generation !== photoGeneration) return;
+    collapseDecodeCanvas(photoView);
+    photoView.figure.hidden = false;
+    photoView.caption.textContent = 'The browser could not render the photograph.';
+    return;
+  }
+  if (generation !== photoGeneration) {
+    bitmap.close();
+    return;
+  }
+  lastPhotoBitmap?.close();
+  lastPhotoBitmap = bitmap;
+  lastPhotoResult = decodedSymbols(read);
+  drawDecodePreview(bitmap, lastPhotoResult, photoView);
+}
+
+function syncPhotoOutputs() {
+  for (const slider of PHOTO_SLIDERS) {
+    if (slider.output) slider.output.textContent = slider.input.value;
+  }
+}
+
+for (const slider of PHOTO_SLIDERS) {
+  slider.input.addEventListener('input', () => {
+    syncPhotoOutputs();
+    schedulePhotograph();
+  });
+}
+for (const control of [photoLightSelect, photoJpegSelect, photoSceneCheck, photoSeedInput]) {
+  control.addEventListener('change', schedulePhotograph);
+}
+photoView.corners.addEventListener('change', () => {
+  if (lastPhotoBitmap && lastPhotoResult) drawDecodePreview(lastPhotoBitmap, lastPhotoResult, photoView);
+});
+photoPanelEl.addEventListener('toggle', () => {
+  if (photoPanelEl.open) schedulePhotograph();
+});
+document.getElementById('photo-reset-btn').addEventListener('click', () => {
+  for (const slider of PHOTO_SLIDERS) slider.input.value = String(slider.value);
+  photoLightSelect.value = 'none';
+  photoJpegSelect.value = '0';
+  photoSceneCheck.checked = false;
+  photoSeedInput.value = '1';
+  syncPhotoOutputs();
+  schedulePhotograph();
+});
+syncPhotoOutputs();
+
+/* ─── Find the limit ─── */
+
+const limitEffectSelect = document.getElementById('limit-effect');
+const limitSeedsSelect = document.getElementById('limit-seeds');
+const limitRunBtn = document.getElementById('limit-run-btn');
+const limitCancelBtn = document.getElementById('limit-cancel-btn');
+const limitProgressEl = document.getElementById('limit-progress');
+const limitSummaryEl = document.getElementById('limit-summary');
+const limitTableEl = document.getElementById('limit-table');
+const limitValueHeadEl = document.getElementById('limit-value-head');
+
+/** The values a step takes, from mild to strong, rounded so that 0.1 + 0.2 prints as 0.3. */
+function steps(from, to, step) {
+  const values = [];
+  const count = Math.round((to - from) / step);
+  for (let i = 0; i <= count; i++) values.push(Math.round((from + i * step) * 1000) / 1000);
+  return values;
+}
+
+/** Each effect the search can raise: the request field, its steps from mild to strong, and how a value reads. */
+const LIMIT_EFFECTS = {
+  tilt: { key: 'tilt', head: 'Tilt', values: steps(0, 80, 5), show: (v) => `${v}°` },
+  barrel: { key: 'barrel', head: 'Barrel lens', values: steps(0, 40, 2.5), show: (v) => `${v} %` },
+  bow: { key: 'bow', head: 'Curved card', values: steps(0, 8, 0.5), show: (v) => `${v} modules` },
+  blur: { key: 'blur', head: 'Blur', values: steps(0, 1.5, 0.05), show: (v) => `${v} module` },
+  noise: { key: 'noise', head: 'Noise', values: steps(0, 100, 5), show: (v) => `${v} grey levels` },
+  // Light lost changes nothing under even light, so the search draws a shadow edge unless a light is chosen.
+  lightDepth: {
+    key: 'lightDepth', head: 'Light lost', values: steps(0, 100, 5), show: (v) => `${v} %`,
+    adjust: (request) => (request.light === 'none' ? { ...request, light: 'shadow' } : request),
+  },
+  pixelsPerModule: { key: 'pixelsPerModule', head: 'Module size', values: steps(6, 1, -0.25), show: (v) => `${v} px` },
+  jpeg: { key: 'jpeg', head: 'JPEG quality', values: steps(95, 5, -5), show: (v) => `${v}` },
+};
+
+let limitRunning = false;
+let limitCancelled = false;
+
+function setLimitRunning(running) {
+  limitRunning = running;
+  limitRunBtn.disabled = running || !runtimeReady;
+  limitCancelBtn.hidden = !running;
+  limitCancelBtn.disabled = false;
+  limitProgressEl.hidden = !running;
+}
+
+limitCancelBtn.addEventListener('click', () => {
+  limitCancelled = true;
+  limitCancelBtn.disabled = true;
+});
+
+/**
+ * Raises one effect step by step over the other settings as they are, photographs each step once a seed and reads it.
+ * Each read is a blocking call, so the loop yields between them to keep the page and Cancel responsive.
+ */
+async function runLimitSearch() {
+  if (limitRunning || !runtimeAlive || !runtimeReady || !exports) return;
+  if (!ensurePhotoCard(limitSummaryEl)) return;
+
+  const effect = LIMIT_EFFECTS[limitEffectSelect.value];
+  const base = effect.adjust ? effect.adjust(photoRequest()) : photoRequest();
+  // Seeds only change the noise and the scene: without either, every seed takes the same photograph.
+  const varied = base.noise > 0 || base.scene || effect.key === 'noise';
+  const seeds = varied ? Number(limitSeedsSelect.value) : 1;
+  const source = photoSource;
+  const interop = exports.FeatherQR.Playground.QrInterop;
+
+  limitCancelled = false;
+  setLimitRunning(true);
+  limitValueHeadEl.textContent = effect.head;
+  const body = limitTableEl.tBodies[0];
+  body.replaceChildren();
+  limitTableEl.hidden = false;
+  limitSummaryEl.textContent = '';
+  limitProgressEl.max = effect.values.length * seeds;
+  limitProgressEl.value = 0;
+
+  const results = [];
+  let failure = null;
+  try {
+    outer: for (const value of effect.values) {
+      let reads = 0;
+      let marks = '';
+      for (let k = 0; k < seeds; k++) {
+        if (limitCancelled || photoSource !== source) break outer;
+        const request = { ...base, [effect.key]: value, seed: base.seed + k };
+        const payload = JSON.parse(interop.PhotographRead(JSON.stringify(request)));
+        if (payload.error) {
+          failure = payload.error;
+          break outer;
+        }
+        const ok = readsAsGenerated(payload.read, source.expected);
+        reads += ok ? 1 : 0;
+        marks += ok ? '●' : '○';
+        limitProgressEl.value += 1;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      results.push({ value, reads });
+      const row = body.insertRow();
+      row.className = reads === seeds ? '' : reads === 0 ? 'is-none' : 'is-partial';
+      row.insertCell().textContent = effect.show(value);
+      row.insertCell().textContent = `${reads}/${seeds}`;
+      const cells = row.insertCell();
+      cells.className = 'limit-cells';
+      cells.textContent = marks;
+    }
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return;
+    }
+    failure = err?.message ?? String(err);
+  } finally {
+    setLimitRunning(false);
+  }
+
+  const stopped = failure
+    ? `Stopped: ${failure}`
+    : photoSource !== source
+      ? 'Stopped: the code was generated again.'
+      : limitCancelled ? 'Cancelled.' : '';
+  limitSummaryEl.textContent = [stopped, limitSummary(effect, results, seeds, varied)].filter(Boolean).join(' ');
+}
+
+/** Where reading stops: the last step every seed read before the first miss, the first miss, and the step from which nothing reads. */
+function limitSummary(effect, results, seeds, varied) {
+  if (results.length === 0) return '';
+  const firstMiss = results.findIndex((r) => r.reads < seeds);
+  const sameSeeds = varied ? '' : ' Every seed takes the same photograph without noise or clutter, so each step was taken once.';
+  if (firstMiss < 0) {
+    return `Reads at every step, up to ${effect.show(results[results.length - 1].value)}.${sameSeeds}`;
+  }
+  // The trailing run of steps where no seed reads
+  let noneFrom = results.length;
+  while (noneFrom > 0 && results[noneFrom - 1].reads === 0) noneFrom--;
+  const upTo = firstMiss === 0 ? '' : `Reads every seed up to ${effect.show(results[firstMiss - 1].value)}`;
+  const parts = [];
+  if (noneFrom === firstMiss) {
+    parts.push(firstMiss === 0
+      ? `Reads nothing at any step with the other settings as they are.`
+      : `${upTo}, and none from ${effect.show(results[noneFrom].value)} on.`);
+  } else {
+    parts.push(firstMiss === 0
+      ? `Misses already at ${effect.show(results[0].value)} with the other settings as they are.`
+      : `${upTo}; first miss at ${effect.show(results[firstMiss].value)}.`);
+    if (noneFrom < results.length) parts.push(`Reads none from ${effect.show(results[noneFrom].value)} on.`);
+  }
+  if (results.slice(firstMiss + 1, noneFrom).some((r) => r.reads > 0)) parts.push('Some photographs past the first miss still read.');
+  return parts.join(' ') + sameSeeds;
+}
+
+limitRunBtn.addEventListener('click', runLimitSearch);
 
 /** Shows an inline error while keeping the last good image visible. */
 function showGenerateError(message) {
@@ -1664,6 +2011,7 @@ async function initializeRuntime() {
     loading.style.display = 'none';
     permalinkBtn.disabled = false;
     benchRunBtn.disabled = false;
+    limitRunBtn.disabled = false;
     generate();
   } catch (err) {
     if (isRuntimeDeadError(err)) {

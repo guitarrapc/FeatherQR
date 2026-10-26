@@ -118,6 +118,21 @@ with `#1`, `#2`, …) to demo library throughput under load, in two modes:
 The page script chains `BenchmarkBatch` calls sized to ~150ms of wall clock, so progress
 renders and Cancel stays responsive while everything runs single-threaded on the WASM runtime.
 
+## Photograph the code
+
+The "Photograph the code" panel prints the generated image on a card and photographs it, then reads the
+photograph with the decoder of its symbology, to show where a design stops reading. The sliders set the
+module size, the tilt and its direction, the rotation, a barrel lens, a curved card, blur, sensor noise,
+uneven light (a ramp or a shadow edge), a cluttered background and JPEG compression. "Find the limit" raises
+one effect step by step over the other settings, a few seeds a step, and reports the last step every seed
+read, the first miss and the step from which nothing reads.
+
+The camera is `tests/FeatherQR.Tests/Shared/CameraRenderer.cs` and the light `UnevenLightingRenderer.cs`,
+linked into this project: the renderers the image decode sweep and the decode tests photograph symbols with.
+The card's face here is the generated image (`PhotoSimulation.cs`), where the sweep's is the black and white
+matrix, so a change to either renderer changes both. The photograph is held near 1,200 px a side by capping
+the module size, since the camera traces nine rays a pixel on the page's thread.
+
 ## Share links
 
 The Share button stores the full playground state (compressed with `CompressionStream`,

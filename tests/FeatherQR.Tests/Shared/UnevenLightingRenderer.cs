@@ -96,7 +96,7 @@ internal static class UnevenLightingRenderer
     }
 
     /// <summary>The light at each pixel centre, 1 at full light.</summary>
-    private static float[] Illumination(int width, int height, float pixelsPerModule, UnevenLight light, float degrees, float depth)
+    internal static float[] Illumination(int width, int height, float pixelsPerModule, UnevenLight light, float degrees, float depth)
     {
         var radians = degrees * MathF.PI / 180f;
         var dx = MathF.Cos(radians);

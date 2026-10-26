@@ -1279,5 +1279,7 @@ public sealed record DecodeSymbolsPayload(
 [JsonSerializable(typeof(ErrorPayload))]
 [JsonSerializable(typeof(DecodePayload))]
 [JsonSerializable(typeof(DecodeSymbolsPayload))]
+[JsonSerializable(typeof(PhotoRequest))]
+[JsonSerializable(typeof(PhotoPayload))]
 [JsonSerializable(typeof(GenerateMeta))]
 internal sealed partial class PlaygroundJsonContext : JsonSerializerContext;

@@ -313,6 +313,136 @@
           </p>
         </details>
 
+        <details class="panel" id="photo-panel">
+          <summary>Photograph the code</summary>
+          <p class="field__hint">
+            Prints the generated code on a card and photographs it through a simulated camera, then reads the photograph
+            with the decoder of its symbology. Use it to find where a design stops reading.
+          </p>
+          <div class="panel__grid">
+            <label class="field">
+              <span class="field__label" title="The module size at the symbol's centre in the photograph. Capped so the photograph stays near 1,200 px.">Module size <output id="photo-ppm-out">4</output> px</span>
+              <input type="range" id="photo-ppm" min="1" max="10" step="0.1" value="4" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="The angle between the card and the camera's image plane.">Tilt <output id="photo-tilt-out">0</output>°</span>
+              <input type="range" id="photo-tilt" min="0" max="80" step="1" value="0" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="The direction of the axis the card is tilted about. 0 runs along the symbol's rows.">Tilt direction <output id="photo-tilt-axis-out">0</output>°</span>
+              <input type="range" id="photo-tilt-axis" min="0" max="359" step="1" value="0" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="The turn of the whole photograph.">Rotation <output id="photo-roll-out">0</output>°</span>
+              <input type="range" id="photo-roll" min="0" max="359" step="1" value="0" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="Radial lens distortion: how much nearer the centre a front-on photograph draws the symbol's corners than a pinhole would.">Barrel lens <output id="photo-barrel-out">0</output> %</span>
+              <input type="range" id="photo-barrel" min="0" max="40" step="0.5" value="0" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="The card bent round a cylinder: how far its left and right edges stand off its centre, in modules. Negative bends them away from the camera.">Curved card <output id="photo-bow-out">0</output> modules</span>
+              <input type="range" id="photo-bow" min="-8" max="8" step="0.25" value="0" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="Gaussian blur, out of focus or moving, as a fraction of a module.">Blur <output id="photo-blur-out">0</output> module</span>
+              <input type="range" id="photo-blur" min="0" max="1.5" step="0.01" value="0" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="Gaussian sensor noise, in grey levels out of 255.">Noise <output id="photo-noise-out">0</output></span>
+              <input type="range" id="photo-noise" min="0" max="100" step="1" value="0" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="Light that falls unevenly on the card: a ramp dims it steadily across the photograph, a shadow drops it across a soft edge through the middle.">Uneven light</span>
+              <select id="photo-light">
+                <option value="none">Even</option>
+                <option value="ramp">Ramp</option>
+                <option value="shadow">Shadow edge</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label" title="How much light the dimmest part loses.">Light lost <output id="photo-light-depth-out">50</output> %</span>
+              <input type="range" id="photo-light-depth" min="0" max="100" step="1" value="50" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="The direction the light falls off towards. 0 is to the right, 90 downwards.">Light direction <output id="photo-light-direction-out">0</output>°</span>
+              <input type="range" id="photo-light-direction" min="0" max="359" step="1" value="0" />
+            </label>
+            <label class="field">
+              <span class="field__label" title="Saves the photograph as JPEG before it is read, as a phone or a chat app does.">JPEG</span>
+              <select id="photo-jpeg">
+                <option value="0">None</option>
+                <option value="90">Quality 90</option>
+                <option value="70">Quality 70</option>
+                <option value="50">Quality 50</option>
+                <option value="30">Quality 30</option>
+                <option value="15">Quality 15</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label" title="Seeds the noise and the cluttered scene.">Seed</span>
+              <input type="number" id="photo-seed" min="0" max="99999" step="1" value="1" />
+            </label>
+            <label class="field field--inline field--checkbox">
+              <input type="checkbox" id="photo-scene" />
+              <span class="field__label" title="Lays the card in a larger scene of random shapes and lines instead of on a plain table.">Cluttered background</span>
+            </label>
+            <label class="field field--inline field--checkbox">
+              <input type="checkbox" id="photo-corners-check" checked />
+              <span class="field__label" title="Draws the four corners the decoder reported over the photograph">Show detected corners</span>
+            </label>
+          </div>
+          <div class="bench-actions">
+            <button type="button" id="photo-reset-btn" class="small-btn">Reset</button>
+          </div>
+          <div id="photo-result" class="qr-stats" aria-live="polite"></div>
+          <figure id="photo-preview" class="decode-preview" hidden>
+            <canvas id="photo-canvas"></canvas>
+            <figcaption id="photo-preview-caption" class="field__hint"></figcaption>
+          </figure>
+
+          <h3 class="panel__subheading">Find the limit</h3>
+          <div class="panel__grid">
+            <label class="field">
+              <span class="field__label" title="The effect made stronger step by step, from none, with the other settings as above">Effect</span>
+              <select id="limit-effect">
+                <option value="tilt">Tilt</option>
+                <option value="barrel">Barrel lens</option>
+                <option value="bow">Curved card</option>
+                <option value="blur">Blur</option>
+                <option value="noise">Noise</option>
+                <option value="lightDepth">Uneven light (shadow edge unless one is chosen)</option>
+                <option value="pixelsPerModule">Module size, shrinking</option>
+                <option value="jpeg">JPEG quality, falling</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label" title="Photographs at each step, each with its own seed. Seeds change the noise and the cluttered scene, so with neither every seed takes the same photograph.">Seeds a step</span>
+              <select id="limit-seeds">
+                <option value="1">1</option>
+                <option value="3" selected>3</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+              </select>
+            </label>
+          </div>
+          <div class="bench-actions">
+            <button type="button" id="limit-run-btn" class="action-btn" disabled>Find the limit</button>
+            <button type="button" id="limit-cancel-btn" class="small-btn" hidden>Cancel</button>
+          </div>
+          <progress id="limit-progress" value="0" max="100" hidden></progress>
+          <div id="limit-summary" class="qr-stats" aria-live="polite"></div>
+          <table id="limit-table" class="limit-table" hidden>
+            <thead><tr><th id="limit-value-head">Value</th><th>Read</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="field__hint">
+            The camera is the one the library's image decode sweep photographs symbols with: a pinhole camera over a printed
+            card, nine rays a pixel, then blur and noise. Everything runs in this tab; a large symbol at a large module size
+            takes a moment to photograph.
+          </p>
+        </details>
+
         <details class="panel">
           <summary>Performance benchmark</summary>
           <div class="panel__grid">
@@ -389,6 +519,8 @@
         <li>Decorated codes (gradients, shapes, logos) trade error margin for looks, always test-scan before printing.</li>
         <li>Every generated code is <strong>decoded back in-browser</strong> by the library's own decoder as a
           self-check, and the <em>Decode an image</em> panel reads QR codes from your image files the same way.</li>
+        <li>The <em>Photograph the code</em> panel prints the code on a simulated card and photographs it, tilted, through a
+          lens, blurred, noisy or unevenly lit, to find where a design stops reading.</li>
         <li>GS1 data is checked and converted by the FeatherQR.Gs1 package, whose application identifier table is
           generated from the GS1 Syntax Dictionary under the Apache License 2.0. See the
           <a href="https://github.com/guitarrapc/FeatherQR/blob/main/THIRD-PARTY-NOTICES.md" target="_blank"

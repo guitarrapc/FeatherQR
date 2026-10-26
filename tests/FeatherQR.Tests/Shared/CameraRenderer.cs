@@ -33,9 +33,16 @@ internal static class CameraRenderer
         float Distance = 2.5f,
         int Seed = 0);
 
-    private const float Ink = 35f;
-    private const float Paper = 225f;
+    /// <summary>What ink and paper reflect: a print photographed never reaches 0 or 255.</summary>
+    internal const float Ink = 35f;
+    internal const float Paper = 225f;
     private const float Table = 90f;
+
+    /// <summary>
+    /// The card's colour where a ray meets it, one value a channel written into <paramref name="colour"/>.
+    /// (<paramref name="u"/>, <paramref name="v"/>) are module coordinates from the module area's top-left corner, so the quiet zone and the paper beyond it lie outside 0 to the symbol's size.
+    /// </summary>
+    internal delegate void CardSurface(double u, double v, Span<float> colour);
 
     /// <summary>Paper beyond the quiet zone, in modules.</summary>
     private const float CardMargin = 1.5f;
@@ -50,9 +57,10 @@ internal static class CameraRenderer
         private readonly double offsetX;
         private readonly double offsetY;
 
-        internal Photograph(byte[] luminance, int width, int height, Camera camera, double offsetX, double offsetY, int columns, int rows)
+        internal Photograph(byte[] pixels, int channels, int width, int height, Camera camera, double offsetX, double offsetY, int columns, int rows)
         {
-            Luminance = luminance;
+            Pixels = pixels;
+            Channels = channels;
             Width = width;
             Height = height;
             this.camera = camera;
@@ -61,7 +69,13 @@ internal static class CameraRenderer
             Corners = [ToPixel(0, 0), ToPixel(columns, 0), ToPixel(columns, rows), ToPixel(0, rows)];
         }
 
-        public byte[] Luminance { get; }
+        /// <summary>Row-major, <see cref="Channels"/> bytes a pixel.</summary>
+        public byte[] Pixels { get; }
+
+        public int Channels { get; }
+
+        /// <summary>The grey photograph, one byte a pixel.</summary>
+        public byte[] Luminance => Channels == 1 ? Pixels : throw new InvalidOperationException($"A photograph of {Channels} channels has no single grey plane.");
 
         public int Width { get; }
 
@@ -83,6 +97,21 @@ internal static class CameraRenderer
     /// <param name="rows">Modules down, quiet zone excluded.</param>
     /// <param name="quietZone">Light modules round the symbol, part of the card.</param>
     public static Photograph Render(Func<int, int, bool> isDark, int columns, int rows, int quietZone, Shot shot)
+    {
+        void Printed(double u, double v, Span<float> colour)
+            => colour[0] = u < 0 || v < 0 || u >= columns || v >= rows || !isDark((int)v, (int)u) ? Paper : Ink;
+        return Render(columns, rows, quietZone, shot, channels: 1, Printed);
+    }
+
+    /// <summary>
+    /// Photographs a card whose face is <paramref name="surface"/>, in <paramref name="channels"/> channels: one for grey, three for colour.
+    /// The scene and the table round the card are grey in every channel.
+    /// </summary>
+    /// <param name="columns">Modules across, quiet zone excluded.</param>
+    /// <param name="rows">Modules down, quiet zone excluded.</param>
+    /// <param name="quietZone">Light modules round the symbol, part of the card.</param>
+    /// <param name="light">The light at each pixel of a canvas of the size given, 1 at full light, or null for even light. It falls on the scene before the blur and the noise.</param>
+    public static Photograph Render(int columns, int rows, int quietZone, Shot shot, int channels, CardSurface surface, Func<int, int, float[]>? light = null)
     {
         var camera = new Camera(columns, rows, quietZone, shot);
         var (minX, minY, maxX, maxY) = camera.CardBounds();
@@ -109,50 +138,64 @@ internal static class CameraRenderer
             scene = Scene(width, height, random);
         }
 
-        var image = new float[width * height];
+        var planes = new float[channels][];
+        for (var c = 0; c < channels; c++)
+            planes[c] = new float[width * height];
+        Span<float> colour = stackalloc float[channels];
+        Span<float> sum = stackalloc float[channels];
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
                 var background = scene?[y * width + x] ?? Table;
-                var sum = 0f;
+                sum.Clear();
                 for (var sy = 0; sy < 3; sy++)
                 {
                     for (var sx = 0; sx < 3; sx++)
                     {
                         var px = x + (sx + 0.5) / 3 - offsetX;
                         var py = y + (sy + 0.5) / 3 - offsetY;
-                        sum += camera.Trace(px, py, isDark) switch
-                        {
-                            Surface.Ink => Ink,
-                            Surface.Paper => Paper,
-                            _ => background,
-                        };
+                        if (camera.Trace(px, py, out var u, out var v))
+                            surface(u, v, colour);
+                        else
+                            colour.Fill(background);
+                        for (var c = 0; c < channels; c++)
+                            sum[c] += colour[c];
                     }
                 }
-                image[y * width + x] = sum / 9f;
+                for (var c = 0; c < channels; c++)
+                    planes[c][y * width + x] = sum[c] / 9f;
+            }
+        }
+
+        if (light is not null)
+        {
+            var illumination = light(width, height);
+            foreach (var plane in planes)
+            {
+                for (var i = 0; i < plane.Length; i++)
+                    plane[i] *= illumination[i];
             }
         }
 
         if (shot.BlurSigma > 0f)
-            Blur(image, width, height, shot.BlurSigma);
-
-        var luminance = new byte[width * height];
-        for (var i = 0; i < luminance.Length; i++)
         {
-            var value = image[i];
-            if (shot.NoiseSigma > 0f)
-                value += shot.NoiseSigma * Gaussian(random);
-            luminance[i] = (byte)Math.Clamp(MathF.Round(value), 0f, 255f);
+            foreach (var plane in planes)
+                Blur(plane, width, height, shot.BlurSigma);
         }
-        return new Photograph(luminance, width, height, camera, offsetX, offsetY, columns, rows);
-    }
 
-    internal enum Surface
-    {
-        Miss,
-        Paper,
-        Ink,
+        var pixels = new byte[width * height * channels];
+        for (var i = 0; i < width * height; i++)
+        {
+            for (var c = 0; c < channels; c++)
+            {
+                var value = planes[c][i];
+                if (shot.NoiseSigma > 0f)
+                    value += shot.NoiseSigma * Gaussian(random);
+                pixels[i * channels + c] = (byte)Math.Clamp(MathF.Round(value), 0f, 255f);
+            }
+        }
+        return new Photograph(pixels, channels, width, height, camera, offsetX, offsetY, columns, rows);
     }
 
     /// <summary>
@@ -161,8 +204,6 @@ internal static class CameraRenderer
     /// </summary>
     internal sealed class Camera
     {
-        private readonly int columns;
-        private readonly int rows;
         private readonly double halfWidth;
         private readonly double halfHeight;
         private readonly double cardHalfWidth;
@@ -177,8 +218,6 @@ internal static class CameraRenderer
 
         public Camera(int columns, int rows, int quietZone, Shot shot)
         {
-            this.columns = columns;
-            this.rows = rows;
             halfWidth = columns / 2.0;
             halfHeight = rows / 2.0;
             cardHalfWidth = halfWidth + quietZone + CardMargin;
@@ -254,11 +293,12 @@ internal static class CameraRenderer
             return (minX, minY, maxX, maxY);
         }
 
-        /// <summary>What the ray through image point (<paramref name="x"/>, <paramref name="y"/>) meets first.</summary>
-        public Surface Trace(double x, double y, Func<int, int, bool> isDark)
+        /// <summary>Whether the ray through image point (<paramref name="x"/>, <paramref name="y"/>) meets the card, and where, in module coordinates from the module area's top-left corner.</summary>
+        public bool Trace(double x, double y, out double u, out double v)
         {
+            u = v = 0;
             if (distortion != 0 && !Undistort(ref x, ref y))
-                return Surface.Miss;
+                return false;
 
             // The ray from the lens, in the card's frame: the inverse of a rotation is its transpose
             double dx = x / focal, dy = y / focal, dz = 1;
@@ -269,29 +309,26 @@ internal static class CameraRenderer
             var ry = rotation[1] * dx + rotation[4] * dy + rotation[7] * dz;
             var rz = rotation[2] * dx + rotation[5] * dy + rotation[8] * dz;
 
-            double u, v;
             if (bowRadius == 0)
             {
                 if (Math.Abs(rz) < 1e-12)
-                    return Surface.Miss;
+                    return false;
                 var t = -oz / rz;
                 if (t <= 0)
-                    return Surface.Miss;
+                    return false;
                 u = ox + t * rx;
                 v = oy + t * ry;
             }
             else if (!HitCylinder(ox, oy, oz, rx, ry, rz, out u, out v))
             {
-                return Surface.Miss;
+                return false;
             }
 
             if (Math.Abs(u) > cardHalfWidth || Math.Abs(v) > cardHalfHeight)
-                return Surface.Miss;
+                return false;
             u += halfWidth;
             v += halfHeight;
-            if (u < 0 || v < 0 || u >= columns || v >= rows)
-                return Surface.Paper;
-            return isDark((int)v, (int)u) ? Surface.Ink : Surface.Paper;
+            return true;
         }
 
         /// <summary>The card bent round a cylinder along its columns: arc length <paramref name="s"/> across, <paramref name="t"/> down.</summary>

@@ -566,6 +566,61 @@ output {
   margin-top: 6px;
 }
 
+/* ─── Photograph the code ─── */
+
+.panel__subheading {
+  margin: 18px 0 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+#photo-result,
+#limit-summary {
+  margin-top: 8px;
+}
+
+#photo-preview {
+  margin-top: 8px;
+}
+
+#limit-progress {
+  width: 100%;
+  height: 8px;
+  margin-top: 10px;
+  accent-color: var(--accent);
+}
+
+/* One row a step of the limit search: the value, how many seeds read, and a bar of them. */
+.limit-table {
+  border-collapse: collapse;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.limit-table th,
+.limit-table td {
+  text-align: left;
+  padding: 1px 12px 1px 0;
+}
+
+.limit-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.limit-table .limit-cells {
+  letter-spacing: 1px;
+}
+
+.limit-table tr.is-partial td {
+  color: var(--danger);
+}
+
+.limit-table tr.is-none td {
+  color: var(--text-muted);
+}
+
 /* ─── Toasts ─── */
 
 .toast-stack {
