@@ -45,7 +45,7 @@ The two decoders read around a single finder through the shared scan ([single-fi
 | 2 | The decisions below | The maintainer's ruling |
 | 3 | The public calls under the naming rule, by analogy with Standard QR's: `MicroQRCodeDecoder.DecodeImageSymbols` on luminance in an array form and a span form, `MicroQRCodeImageDecoder.DecodeSymbols` on an `SKBitmap` and a stream, with limits, and `DecodeSymbolsAsync`, and the same for `RmQR`. The approved API listings, `docs/`, the README, the specs and spec maps, and the Playground's option | The feature |
 
-Phase 0 needs no code in `src` and settles whether Phase 1 is worth building. Phase 1 is internal, so it can land before or after the 2.0.0 freeze. Phase 3 adds public API, so it lands in 2.0.0 only if the maintainer holds the freeze for it (N4).
+Phase 0 needs no code in `src` and settles whether Phase 1 is worth building. Phase 1 is internal. Phase 3 adds public API, and the 2.0.0 Phase 7 freeze waits for it (N4): this plan is Phase 6f of [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md).
 
 ## Decisions (the maintainer's)
 
@@ -54,7 +54,7 @@ Phase 0 needs no code in `src` and settles whether Phase 1 is worth building. Ph
 | N1 | Whether the calls ship | Decide on Phase 0 and Phase 1: ship if the entry reads the sheets' codes with no false read over the sweep and the corpus, and a one-symbol image costs under 1.5 times the one-symbol call | |
 | N2 | The calls' shape | Standard QR's, as above: array and span forms on luminance, the array form on an `SKBitmap` and a stream, an async stream read, and the result types that exist. A different shape would make three APIs where a caller expects one | |
 | N3 | The Playground | The option reads every Standard QR symbol, and when there is none, every Micro QR symbol, and when there is none, every rMQR symbol. The three together in one read is the mixed plan's | |
-| N4 | The release | After 2.0.0, in 2.1.0. The calls are additive. Hold the freeze only if Phase 3 is ready when the freeze is otherwise ready | |
+| N4 | The release | After 2.0.0, in 2.1.0. The calls are additive. Hold the freeze only if Phase 3 is ready when the freeze is otherwise ready | Ruled 2026-10-27: in 2.0.0, as Phase 6f of the 2.0.0 plan. The Phase 7 freeze waits for Phase 3 |
 
 ## Documents to change
 

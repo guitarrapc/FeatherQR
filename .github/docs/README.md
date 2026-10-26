@@ -36,7 +36,6 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 
 | Document | Covers |
 |---|---|
-| [async-api-plan.md](plans/async-api-plan.md) | The 2.0.0 async API, decided on 2026-10-15: its goals, the API in full and its performance targets, where generation and reading block a caller's thread, by setting and measured, true async against a pipe, and the decisions as ruled on 2026-10-25 |
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
 | [microqr-rmqr-several-symbols-plan.md](plans/microqr-rmqr-several-symbols-plan.md) | Reading every Micro QR or rMQR symbol of an image in one call, as Standard QR does since 2.0.0: the ceiling and the price measured on composed sheets before any code, an internal entry through the shared candidate scan, the maintainer's decisions, then the public calls, the Playground and the docs. Requested 2026-10-27 |
 | [mixed-symbology-read-plan.md](plans/mixed-symbology-read-plan.md) | One call that reads every symbol of an image whatever its symbology, Standard QR, Micro QR and rMQR together over one finder scan: its price on photographs that hold Standard QR alone, the result type and the entry's name for the maintainer, and the Playground's fallback replaced. Builds on the Micro QR / rMQR plan. Requested 2026-10-27 |
@@ -117,3 +116,11 @@ The image decode follow-ups plan (the photograph stages timed on WebAssembly, th
 - [standardqr-spec-map.md](specs/standardqr-spec-map.md) ("Image level, every symbol"), [qrcode-simd-tiers.md](specs/qrcode-simd-tiers.md) (the kernel table), and the README and `docs/`, which the async API plan's Phase 4 wrote.
 
 It left out per-phase narration, test and planted-fault counts, timing tables that decided nothing, the forms of the edge extraction that were refused, and the commits each measurement was taken at. Micro QR and rMQR, out of it by the ruling of 2026-10-15, are the two plans above.
+
+The async API plan (where generation and reading block a caller's thread, measured by setting; the fourteen async writes; the stream reads with their result types, limits and synchronous twins; cancellation between the symbols of a read for every symbol; the move off a UI context with copies of what the call was given; four review rounds and the safe default limits) completed on 2026-10-26 and was folded into:
+
+- [qrcode-symbologies.md](specs/qrcode-symbologies.md): under Public API direction, the reads' naming rule, the async I/O rules, the pairing of every synchronous and asynchronous form and what the async forms cost; under Why, why the async API stops at the I/O, with the measured costs, the settings, the pipe shape without the pipe types and the reasons behind each ruling; the scope rows "Async API" and "Stream read limits"; the package seam's result-type constructors; the stream reads outside the allocation contract; and the lessons on Skia's codecs, encoders and SVG text, on copying a builder, on the pool's rounding and on measuring allocations.
+- [standardqr-decoder.md](specs/standardqr-decoder.md): the token checked between symbols and how long a read runs past a cancel, in the Decisions row "Several symbols of one image".
+- The README (Async and stream I/O, the FAQ), `docs/migration.md` (the move from `SKBitmap.Decode(stream)`, the limits) and the API page, which the plan's Phase 4 wrote and the review rounds corrected.
+
+It left out the caller examples, which the README and the migration guide hold, the settings tables beyond their conclusion, per-round review narration, test and planted-fault counts, and the benchmark tables beyond their ratios.

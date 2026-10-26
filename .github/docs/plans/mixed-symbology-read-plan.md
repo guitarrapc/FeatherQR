@@ -38,7 +38,7 @@ Two shapes bound the price, and Phase 0 measures both:
 | X3 | The order | Standard QR first, since a triple that reads is the strongest claim on three finders, then Micro QR, then rMQR, each taking what it read out of the list. Phase 0 measures the other orders on the mixed sheets and keeps this one unless another reads more | |
 | X4 | Where the single-finder decoders run | Once after the Standard QR passes, on the full-size leftover, unless Phase 0 shows the per-pass form reads more on the mixed sheets at a price under 1.5 times the Standard QR entry on BoofCV's photographs | |
 | X5 | The Playground | Its option becomes this read, and the fallback goes | |
-| X6 | The release | After 2.0.0. The call is additive, and it waits for the Micro QR and rMQR entries | |
+| X6 | The release | After 2.0.0. The call is additive, and it waits for the Micro QR and rMQR entries | Ruled 2026-10-27: in 2.0.0, as Phase 6g of [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md). The Phase 7 freeze waits for Phase 3 |
 
 ## What has to stay true
 
