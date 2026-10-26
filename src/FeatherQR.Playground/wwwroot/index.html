@@ -293,8 +293,13 @@
               <input type="checkbox" id="decode-corners-check" checked />
               <span class="field__label" title="Draws the four corners the decoder reported over the image">Show detected corners</span>
             </label>
+            <label class="field field--inline field--checkbox">
+              <input type="checkbox" id="decode-every-check" />
+              <span class="field__label" title="Reads every QR Code in the image, such as a sheet of labels or a shelf. Standard QR only, and slower than reading one code. An image with no QR Code is still read for one Micro QR or rMQR symbol.">Read every QR Code in the image</span>
+            </label>
             <div id="decode-result" class="qr-stats" aria-live="polite"></div>
             <div id="decode-gs1" class="decode-gs1" hidden></div>
+            <ol id="decode-symbols" class="decode-symbols" hidden></ol>
             <figure id="decode-preview" class="decode-preview" hidden>
               <canvas id="decode-canvas"></canvas>
               <figcaption id="decode-preview-caption" class="field__hint"></figcaption>
@@ -302,7 +307,8 @@
           </div>
           <p class="field__hint">
             Runs FeatherQR's built-in decoders (QR Code, Micro QR, rMQR) in your browser, nothing is uploaded.
-            They read rendered images, scans and photographs (rotated, mirrored or tilted);
+            They read rendered images, scans and photographs (rotated, mirrored or tilted), one code an image,
+            or with <em>Read every QR Code</em> each QR Code it holds;
             a photograph with glare, damage or blur, or a heavily stylized code, may not decode even when a camera app reads it.
           </p>
         </details>

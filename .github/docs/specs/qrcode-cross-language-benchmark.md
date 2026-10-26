@@ -22,7 +22,7 @@ The corpus is the payloads and symbols of the benchmark project's `Simple*` clas
 | .NET | FeatherQR | this repository | JIT, JIT with `DOTNET_EnableAVX=0` (x64), NativeAOT default, NativeAOT `x86-64-v3` (x64) | Everything |
 | C++ | zxing-cpp | v3.1.0 (885baaf), the commit the ZXingCpp package 0.5.2 ships | Default, `x86-64-v3` | Encode, matrix and image decode, all three symbologies |
 | C | libzint | 2.16.0 (55541e1), the submodule zxing-cpp bundles as its writer | Default, `x86-64-v3` | Encode, all three symbologies |
-| .NET | ZXingCpp package | 0.5.2 | As shipped, and with its `libZXing.so` replaced by one built from the same commit and flags as the default zxing-cpp build | Encode and image decode, all three symbologies |
+| .NET | ZXingCpp package | 0.5.2, held by a `VersionOverride` in the benchmark's two projects where the rest of the repository pins 0.5.3 | As shipped, and with its `libZXing.so` replaced by one built from the same commit and flags as the default zxing-cpp build | Encode and image decode, all three symbologies |
 | C | quirc | v1.2 (542848d), built from its four library sources | Default, `x86-64-v3` | Standard QR matrix and image decode |
 | C | zbar | 0.23.93, Ubuntu noble's package | As Ubuntu ships it | Standard QR image decode |
 | C | libqrencode | 4.1.1, Ubuntu noble's package | As Ubuntu ships it | Standard QR and Micro QR encode |

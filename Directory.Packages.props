@@ -35,6 +35,6 @@
     <!-- Tests -->
     <PackageVersion Include="TUnit" Version="1.12.111" />
     <!-- Tools (interop oracles; keep pinned. see .github/docs/specs/qrcode-test-fixtures.md) -->
-    <PackageVersion Include="ZXingCpp" Version="0.5.2" />
+    <PackageVersion Include="ZXingCpp" Version="0.5.3" />
   </ItemGroup>
 </Project>

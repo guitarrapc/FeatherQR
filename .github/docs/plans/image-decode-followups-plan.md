@@ -16,13 +16,14 @@ The photograph plan of 2026-10 is complete and folded into the specs ([README](.
 - Phase 2 (2026-10-15): the maintainer ruled. The call ships for Standard QR, in an array form and a span form, in 2.0.0, and the Phase 7 freeze waits for it. Phase 3 is next.
 - Phase 3 in part (2026-10-25): the calls shipped with Phase 2 of [async-api-plan.md](async-api-plan.md), under the draft names, `DecodeImageSymbols` in both forms and `DecodeSymbols(SKBitmap)`, beside the stream reads. The array form grows its room instead of reading the image again. `docs/`, the README and the specs describe them since Phase 4 of the async plan (2026-10-25). Left: the names' ruling and the Playground.
 - The names (2026-10-26): the maintainer ruled the draft names final, `QRCodeDecodeResult` for the result, `DecodeImageSymbols` on luminance in both forms, `DecodeSymbols` on an `SKBitmap` and a stream, and `DecodeSymbolsAsync` on a stream. What is left of Phase 3 is the Playground.
+- The Playground (2026-10-26): its decode panel reads every QR Code of an image with `DecodeSymbols(SKBitmap)` when "Read every QR Code in the image" is ticked, lists the codes and draws each outline. Phase 3 is done, and with it the plan.
 - ARM64 (2026-10-15): Phases 1 and 1b were measured on an Apple M2. No read moves, and the one-symbol call compiles to the code it had before the entry, on NativeAOT and on the JIT. Phase 1b takes the entry to 0.83 of its time over the set and the one-symbol call to 0.89, where x64 took them to 0.60 and 0.67, and the entry is 2.3 times the one-symbol call.
 - The row scan (2026-10-15): a word's edges are taken out without a branch. On x64 the rows between strided rows take 0.84 to 0.91 of their time, the entry 0.95 of its time over the set and the one-symbol call 0.97, every read as it was. On an Apple M2 (2026-10-15) the same: the rows between take 0.80 to 0.88 of their cycles, the entry 0.94 of its time and the one-symbol call 0.97, so the form stands there.
 - A triple across two symbols (2026-10-15): a failed strided triple with no timing patterns goes to the inferred stage. BoofCV 456 to 457 photographs, reading again 1,071 to 1,074 codes, the entry 1,071 to 1,073, every read agreed, at 1.08 of the time on the photographs that fail.
 
 ## Order
 
-Work 1 came first and is done (2026-10-13, [Progress log](#progress-log)). It changed no behaviour, and closed a hole in what was measured of code that already ships. Work 2 started with a measurement that needs no change to `src`, Phase 0, and went on to the internal entry, Phase 1. Both are done (2026-10-14, [Progress log](#progress-log)), and so is Phase 1b, which made the entry and the one-symbol call faster. The maintainer ruled on Phase 2 on 2026-10-15, so Phase 3 is next, and it lands before the 2.0.0 freeze.
+Work 1 came first and is done (2026-10-13, [Progress log](#progress-log)). It changed no behaviour, and closed a hole in what was measured of code that already ships. Work 2 started with a measurement that needs no change to `src`, Phase 0, and went on to the internal entry, Phase 1. Both are done (2026-10-14, [Progress log](#progress-log)), and so is Phase 1b, which made the entry and the one-symbol call faster. The maintainer ruled on Phase 2 on 2026-10-15, and Phase 3 was done on 2026-10-26, before the 2.0.0 freeze.
 
 ## Work 1: the photograph stages on WebAssembly
 
@@ -75,7 +76,7 @@ It is the largest difference left against the readers this library was measured 
 | 1 | An internal entry for Standard QR that returns every symbol in one call, designed from where Phase 0's loop stopped. The expected shape: inside a pass, after a read, the candidates inside the read symbol's outline are dropped and the selection runs again, so no row is scanned twice, and the results of different passes are merged by outline. Tests first: renders of two, three and four symbols and a grid, every symbol's corners asserted. The negatives are a symbol returned twice, a symbol built from two neighbours' finders, and a second result on a one-symbol image | Codes against Phase 0's loop and zxing-cpp's 977, the time of the new call on the 368 one-code photographs against the one-symbol call, and the one-symbol call's instructions on the report shapes |
 | 1b | Added on 2026-10-14, when the maintainer asked for the entry's time to be measured and brought down before any decision: the entry's time by pass and by stage on the photographs, then every kernel the measurement names made faster, vector tiers among them. No read may move, and the one-symbol call may not slow down on a report shape | Where the time goes, the time of both calls before and after on each build class, and what was measured and left |
 | 2 | The decisions below. Done 2026-10-15 | The maintainer's ruling |
-| 3 | In part: the calls shipped on 2026-10-25, their names were ruled final on 2026-10-26, and the Playground is left. The public call for Standard QR in M2's shape, an array form and a span form, the SkiaSharp overload, the Playground, the API page and `docs/`. Before the 2.0.0 freeze (M4). Its names and result type are settled with [async-api-plan.md](async-api-plan.md), whose async read returns the same type | The feature |
+| 3 | Done 2026-10-26: the calls shipped on 2026-10-25, their names were ruled final on 2026-10-26, and the Playground reads every QR Code the same day. The public call for Standard QR in M2's shape, an array form and a span form, the SkiaSharp overload, the Playground, the API page and `docs/`. Before the 2.0.0 freeze (M4). Its names and result type are settled with [async-api-plan.md](async-api-plan.md), whose async read returns the same type | The feature |
 
 ### Decisions (the maintainer's, ruled 2026-10-15)
 
@@ -672,3 +673,29 @@ What was done:
 ### Work 2, Phase 3: the names (2026-10-26)
 
 Ruled by the maintainer: the draft names are final. The calls keep the names they shipped under on 2026-10-25: `DecodeImageSymbols(luminance, width, height)` and `DecodeImageSymbols(luminance, width, height, Span<QRCodeDecodeResult>)` in the core, `DecodeSymbols(SKBitmap)`, `DecodeSymbols(Stream)` and `DecodeSymbolsAsync(Stream)` in the SkiaSharp package, each stream read also with an `ImageStreamReadLimits`, and `QRCodeDecodeResult` for the result. The code, the approved API listings and the docs already use these names, so nothing else changes. What is left of Phase 3 is the Playground.
+
+### Work 2, Phase 3: the Playground (2026-10-26)
+
+Done:
+
+- The decode panel has a "Read every QR Code in the image" option, off by default. Ticked, the page calls a new export, `QrInterop.DecodeAll`, which reads with `DecodeSymbols(SKBitmap)`. The result line counts the codes and their time, a numbered list gives each one's text, version, level, mask, corrections and GS1 data, and the preview strokes every outline with its TopLeft dot and its number. Ticking or unticking reads the last image again.
+- The call reads Standard QR alone, so an image where it reads none is read for one Micro QR and then one rMQR symbol, as the one-symbol export reads it. A ticked option therefore never reads less than the panel did before on an image of one Micro QR or rMQR symbol.
+- Untouched: the one-symbol export, its JSON, and the self-check under the generated code, which still reads one symbol.
+
+What it taught:
+
+- A photograph of a sheet of codes shows each code at 10 to 20 CSS pixels in the 460-pixel preview. Badges of a fixed size hid every symbol, so the dot and the number are sized to the outline's shortest side, and a number that would be under 8 pixels is left out, which the caption says.
+- The call for every code reports no status, since it returns only what it read, so an image with none says "No QR code decoded" without the reason the one-symbol read gives.
+
+Checked by hand in a Debug publish (interpreted) and a Release publish (AOT-compiled), with BoofCV's photographs, which are not committed. Each cell is what the panel showed, then the Debug and the Release time:
+
+| Image | One symbol | Every QR Code |
+|---|---|---|
+| `nominal/image001`, one code | the code, 68.5 / 10.4 ms | the same code, 71.1 / 6.5 ms |
+| `lots/image001`, 60 codes | one code, - / 98.1 ms | 60 codes, 810 / 199 ms |
+| `lots/image007`, 60 codes | one code, 127-140 / 80 ms | 60 codes, 1,343-1,604 / 236 ms |
+| A Micro QR code generated by the page | the code, 11.6 ms | the same code through the fallback, 24.5 ms |
+| An rMQR code generated by the page | the code | the same code through the fallback, 63.7 ms |
+| A blank image | "No QR code decoded (NotDetected)" | "No QR code decoded" |
+
+The two codes generated by the page were read on the Debug build alone. The times are single runs, to show the order of the wait a visitor sees, and are not a measurement.

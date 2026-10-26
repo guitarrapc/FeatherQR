@@ -10,7 +10,8 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
-    <PackageReference Include="ZXingCpp" />
+    <!-- Held at the package its native zxing-cpp CLI is built to match (v3.1.0, 885baaf). -->
+    <PackageReference Include="ZXingCpp" VersionOverride="0.5.2" />
   </ItemGroup>
 
   <ItemGroup>

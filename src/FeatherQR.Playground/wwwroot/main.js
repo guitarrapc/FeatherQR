@@ -193,7 +193,9 @@ const decodeFileEl = document.getElementById('decode-file');
 const decodePanelEl = document.getElementById('decode-panel');
 const decodeDropEl = document.getElementById('decode-drop');
 const decodeCornersCheck = document.getElementById('decode-corners-check');
+const decodeEveryCheck = document.getElementById('decode-every-check');
 const decodeResultEl = document.getElementById('decode-result');
+const decodeSymbolsEl = document.getElementById('decode-symbols');
 const decodePreviewEl = document.getElementById('decode-preview');
 const decodeCanvasEl = document.getElementById('decode-canvas');
 const decodePreviewCaptionEl = document.getElementById('decode-preview-caption');
@@ -306,24 +308,28 @@ function expectedDecode(request, encoded) {
  */
 function renderDecodedGs1(result) {
   decodeGs1El.replaceChildren();
-  decodeGs1El.hidden = !(result?.gs1Hri || result?.gs1Error);
-  if (decodeGs1El.hidden) return;
+  decodeGs1El.hidden = !fillGs1View(decodeGs1El, result);
+}
+
+/** Writes a symbol's GS1 view into `container`; false, with nothing written, for a symbol with no GS1 data. */
+function fillGs1View(container, result) {
+  if (!(result?.gs1Hri || result?.gs1Error)) return false;
   const heading = document.createElement('div');
   if (result.gs1Error) {
     heading.textContent = `⚠ FNC1 in first position, but the text does not read as GS1 data: ${result.gs1Error}`;
-    decodeGs1El.appendChild(heading);
-    return;
+    container.appendChild(heading);
+    return true;
   }
   const carrier = result.fnc1 === 'first' ? 'GS1 element string' : 'GS1 Digital Link URI';
   heading.textContent = `${carrier}, as (AI) text: ${result.gs1Hri}`;
-  decodeGs1El.appendChild(heading);
+  container.appendChild(heading);
   // Reading takes data the checks refuse, such as a wrong check digit, so the verdict is shown apart.
   const check = document.createElement('div');
   check.textContent = result.gs1Check
     ? `⚠ The element string fails the GS1 checks: ${result.gs1Check}`
     : '✓ Passes the GS1 checks.';
-  decodeGs1El.appendChild(check);
-  if (!result.gs1Elements?.length) return;
+  container.appendChild(check);
+  if (!result.gs1Elements?.length) return true;
   const table = document.createElement('table');
   const head = table.createTHead().insertRow();
   for (const label of ['AI', 'Value']) {
@@ -337,7 +343,8 @@ function renderDecodedGs1(result) {
     row.insertCell().textContent = `(${ai})`;
     row.insertCell().textContent = value;
   }
-  decodeGs1El.appendChild(table);
+  container.appendChild(table);
+  return true;
 }
 
 /**
@@ -895,10 +902,14 @@ function runVerifyDecode(pngBytes, request) {
   }
 }
 
-/** Calls the WASM decoder; returns the parsed result, or null when the runtime died. */
-function callDecode(bytes) {
+/**
+ * Calls the WASM decoder for one symbol, or with `every` for each QR Code of the image; returns the
+ * parsed result, or null when the runtime died.
+ */
+function callDecode(bytes, every = false) {
   try {
-    return JSON.parse(exports.FeatherQR.Playground.QrInterop.Decode(bytes));
+    const interop = exports.FeatherQR.Playground.QrInterop;
+    return JSON.parse(every ? interop.DecodeAll(bytes) : interop.Decode(bytes));
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -915,6 +926,27 @@ const DECODE_PREVIEW_MAX_HEIGHT = 460;
 /** The image and result the preview is showing, so the corners toggle can redraw without decoding again. */
 let lastDecodeImage = null;
 let lastDecodeResult = null;
+
+/** The file the panel last read, so ticking "Read every QR Code" reads it again under the new choice. */
+let lastDecodeFile = null;
+
+/**
+ * One shape for both calls: the symbols read (none, one, or with "Read every QR Code" any number),
+ * and the image they were read from.
+ */
+function decodedSymbols(result) {
+  if (Array.isArray(result.symbols)) return result;
+  return { ...result, symbols: result.ok ? [result] : [] };
+}
+
+/** A decoded symbol on one line: its text, symbology, mode, level, mask and corrections. */
+function symbolSummary(symbol) {
+  const decodedLabel = symbolLabel(symbol.symbology, symbol.qrVersion);
+  // rMQR has one fixed mask, so no mask pattern is reported for it.
+  const maskLabel = symbol.maskPattern >= 0 ? ` · mask ${symbol.maskPattern}` : '';
+  return `“${displayText(symbol.text)}” · ${decodedLabel}${fnc1Label(symbol)} · ECC ${symbol.ecc}${maskLabel}`
+    + ` · ${symbol.errorsCorrected} codewords corrected`;
+}
 
 /** Which decode is current. Without it a small image pasted second finishes first and wins the result line while the big one wins the canvas. */
 let decodeGeneration = 0;
@@ -999,52 +1031,117 @@ function drawDecodePreview(bitmap, result) {
   const orientation = result.orientation || 1;
   const [shownWidth, shownHeight] = orientedSize(orientation, result.imageWidth, result.imageHeight);
   const aligned = shownWidth === bitmap.width && shownHeight === bitmap.height;
-  if (!result.corners || result.corners.length !== 8 || !aligned) {
+  const { symbols } = result;
+  // Numbered as the list numbers them, so a symbol with no corners keeps the numbers of the rest in step.
+  const outlines = symbols
+    .map((symbol, index) => ({ symbol, number: index + 1 }))
+    .filter(({ symbol }) => symbol.corners?.length === 8);
+  if (outlines.length === 0 || !aligned) {
     decodePreviewCaptionEl.textContent = !aligned
       ? 'The browser decoded this image at a different size than the library did, so the outline is not drawn.'
-      : result.ok
+      : symbols.length > 0
         ? 'The decoder reported no corner geometry for this symbol, so there is no outline to draw.'
         : 'No symbol was located, so there is no outline to draw.';
     return;
   }
 
-  // Corners arrive in stored pixels; the canvas shows the oriented picture.
-  const corners = orientCorners(result.corners, orientation, result.imageWidth, result.imageHeight);
+  for (const outline of outlines) {
+    // Corners arrive in stored pixels; the canvas shows the oriented picture.
+    const corners = orientCorners(outline.symbol.corners, orientation, result.imageWidth, result.imageHeight);
+    // y grows downward, so a printed symbol winds clockwise and a mirrored one reverses it; that is
+    // the whole mirror test. Computed after orienting, so it describes the picture on screen.
+    const cross = (corners[2] - corners[0]) * (corners[7] - corners[1])
+      - (corners[3] - corners[1]) * (corners[6] - corners[0]);
+    outline.corners = corners;
+    outline.mirrored = cross < 0;
+  }
 
-  // y grows downward, so a printed symbol winds clockwise and a mirrored one reverses it; that is
-  // the whole mirror test. Computed after orienting, so it describes the picture on screen.
-  const cross = (corners[2] - corners[0]) * (corners[7] - corners[1])
-    - (corners[3] - corners[1]) * (corners[6] - corners[0]);
-  const winding = cross < 0
+  const several = symbols.length > 1;
+  const mirrored = outlines.filter((o) => o.mirrored).length;
+  const winding = mirrored > 0
     ? 'counter-clockwise, so this capture is mirrored'
     : 'clockwise, so this capture is not mirrored';
+  const severalWinding = mirrored === 0 || mirrored === outlines.length
+    ? `Every outline winds ${winding}.`
+    : `${mirrored} of ${outlines.length} outlines wind counter-clockwise, so those codes are mirrored.`;
 
   if (!decodeCornersCheck.checked) {
-    decodePreviewCaptionEl.textContent = `Corner winding is ${winding}.`;
+    decodePreviewCaptionEl.textContent = several ? severalWinding : `Corner winding is ${winding}.`;
     return;
   }
 
   // Everything below is in CSS pixels, so the stroke is a constant on-screen weight rather than
   // something the source image's resolution decides.
-  const at = (i) => [corners[i] * scale, corners[i + 1] * scale];
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#ff3b30';
+  let unnumbered = 0;
+  for (const { corners, number } of outlines) {
+    const at = (i) => [corners[i] * scale, corners[i + 1] * scale];
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ff3b30';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(...at(0));
+    for (let i = 2; i < 8; i += 2) ctx.lineTo(...at(i));
+    ctx.closePath();
+    ctx.stroke();
+
+    // A photograph of many codes shows each one small, so the marks are sized to the outline
+    // rather than covering it.
+    const side = shortestSide(at);
+
+    // TopLeft is the corner beside the finder that defines the symbol's own top-left, so marking it
+    // is what shows a rotation or a mirror at a glance.
+    ctx.fillStyle = '#007aff';
+    ctx.beginPath();
+    ctx.arc(...at(0), Math.min(5, Math.max(2, side * 0.15)), 0, Math.PI * 2);
+    ctx.fill();
+
+    if (several && !drawOutlineNumber(ctx, number, at, side)) unnumbered++;
+  }
+
+  const numbering = unnumbered === 0
+    ? 'numbered as listed'
+    : unnumbered === outlines.length
+      ? 'in the order listed, too small in this preview to number'
+      : 'numbered as listed where the preview has room';
+  decodePreviewCaptionEl.textContent = several
+    ? `Outlines are the reported Corners, ${numbering}; each dot is a TopLeft. ${severalWinding}`
+    : `Outline is the reported Corners; the dot is TopLeft. Winding is ${winding}.`;
+}
+
+/** The shortest of an outline's four sides, in the canvas's CSS pixels. */
+function shortestSide(at) {
+  let shortest = Infinity;
+  for (let i = 0; i < 8; i += 2) {
+    const [x0, y0] = at(i);
+    const [x1, y1] = at((i + 2) % 8);
+    shortest = Math.min(shortest, Math.hypot(x1 - x0, y1 - y0));
+  }
+  return shortest;
+}
+
+/** The list number at the outline's centre, sized to fit inside it; false when the outline is too small to hold it legibly. */
+function drawOutlineNumber(ctx, number, at, side) {
+  const size = Math.min(13, Math.floor(side * 0.45));
+  if (size < 8) return false;
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < 8; i += 2) {
+    const [px, py] = at(i);
+    x += px / 4;
+    y += py / 4;
+  }
+  const label = String(number);
+  ctx.font = `700 ${size}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // A light halo keeps the number readable on dark modules without hiding the symbol under a badge.
+  ctx.lineWidth = 3;
   ctx.lineJoin = 'round';
-  ctx.beginPath();
-  ctx.moveTo(...at(0));
-  for (let i = 2; i < 8; i += 2) ctx.lineTo(...at(i));
-  ctx.closePath();
-  ctx.stroke();
-
-  // TopLeft is the corner beside the finder that defines the symbol's own top-left, so marking it
-  // is what shows a rotation or a mirror at a glance.
-  ctx.fillStyle = '#007aff';
-  ctx.beginPath();
-  ctx.arc(...at(0), 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  decodePreviewCaptionEl.textContent =
-    `Outline is the reported Corners; the dot is TopLeft. Winding is ${winding}.`;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.strokeText(label, x, y);
+  ctx.fillStyle = '#d70015';
+  ctx.fillText(label, x, y);
+  return true;
 }
 
 /** Runs one image through the decoder and shows the result; shared by the file input, paste and drop. */
@@ -1055,9 +1152,12 @@ async function decodeImageFile(file) {
 
   decodePreviewEl.hidden = true;
   renderDecodedGs1(null);
+  decodeSymbolsEl.replaceChildren();
+  decodeSymbolsEl.hidden = true;
   lastDecodeImage?.close();
   lastDecodeImage = null;
   lastDecodeResult = null;
+  lastDecodeFile = file;
 
   let bytes;
   try {
@@ -1083,24 +1183,35 @@ async function decodeImageFile(file) {
   ]);
   if (superseded()) return;
 
-  const result = callDecode(bytes);
-  if (!result || superseded()) return;
-  if (result.error) {
-    decodeResultEl.textContent = `Decode failed: ${result.error}`;
+  const every = decodeEveryCheck.checked;
+  const raw = callDecode(bytes, every);
+  if (!raw || superseded()) return;
+  if (raw.error) {
+    decodeResultEl.textContent = `Decode failed: ${raw.error}`;
     return;
   }
 
-  if (!result.ok) {
+  const result = decodedSymbols(raw);
+  const { symbols } = result;
+  if (symbols.length === 0) {
+    // The call for every code reports no status: it returns only the symbols it read.
+    const status = result.status ? ` (${result.status})` : '';
     decodeResultEl.textContent =
-      `No QR code decoded (${result.status}). The built-in decoder targets clean, screen-rendered images.`;
+      `No QR code decoded${status}. The built-in decoder targets clean, screen-rendered images.`;
+  } else if (symbols.length === 1) {
+    decodeResultEl.textContent = `${symbolSummary(symbols[0])} · ${result.totalMs} ms`;
+    renderDecodedGs1(symbols[0]);
   } else {
-    const decodedLabel = symbolLabel(result.symbology, result.qrVersion);
-    // rMQR has one fixed mask, so no mask pattern is reported for it.
-    const maskLabel = result.maskPattern >= 0 ? ` · mask ${result.maskPattern}` : '';
-    decodeResultEl.textContent =
-      `“${displayText(result.text)}” · ${decodedLabel}${fnc1Label(result)} · ECC ${result.ecc}${maskLabel}`
-      + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
-    renderDecodedGs1(result);
+    decodeResultEl.textContent = `${symbols.length} QR codes decoded · ${result.totalMs} ms`;
+    for (const symbol of symbols) {
+      const item = document.createElement('li');
+      item.textContent = symbolSummary(symbol);
+      const gs1 = document.createElement('div');
+      gs1.className = 'decode-gs1';
+      if (fillGs1View(gs1, symbol)) item.appendChild(gs1);
+      decodeSymbolsEl.appendChild(item);
+    }
+    decodeSymbolsEl.hidden = false;
   }
 
   let bitmap;
@@ -1132,6 +1243,10 @@ decodeFileEl.addEventListener('change', async () => {
 
 decodeCornersCheck.addEventListener('change', () => {
   if (lastDecodeImage && lastDecodeResult) drawDecodePreview(lastDecodeImage, lastDecodeResult);
+});
+
+decodeEveryCheck.addEventListener('change', async () => {
+  if (lastDecodeFile) await decodeImageFile(lastDecodeFile);
 });
 
 /** Opens the decode panel so a pasted or dropped image is not decoded out of sight. */

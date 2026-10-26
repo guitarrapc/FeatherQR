@@ -118,7 +118,7 @@ dotnet add package FeatherQR.Gs1
 
 Try [FeatherQR Playground](https://guitarrapc.github.io/FeatherQR/) in your browser, no install required.
 
-The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files.
+The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files, one a file or every QR Code it holds.
 
 ### Simplest Example
 

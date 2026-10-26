@@ -106,5 +106,5 @@ internal static class Report
     /// <summary>The symbol was located, sampled and error-corrected. What stopped the read, or changed the text, is in the bit stream or its character set.</summary>
     private static bool IsContent(ResultRow row) => row.Misread || row.Status is "InvalidBitstream" or "UnsupportedContent" or "UnmappedCharacter";
 
-    private static bool IsFailure(string status) => status.StartsWith("EncodeFailed", StringComparison.Ordinal) || status.StartsWith("RenderFailed", StringComparison.Ordinal);
+    public static bool IsFailure(string status) => status.StartsWith("EncodeFailed", StringComparison.Ordinal) || status.StartsWith("RenderFailed", StringComparison.Ordinal);
 }

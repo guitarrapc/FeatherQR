@@ -437,6 +437,26 @@ output {
   color: var(--text);
 }
 
+/* Every code of an image, numbered as the outlines on the preview are. */
+.decode-symbols {
+  margin: 0;
+  padding-left: 1.6em;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  max-height: 16em;
+  overflow-y: auto;
+}
+
+.decode-symbols li + li {
+  margin-top: 4px;
+}
+
+.decode-symbols .decode-gs1 {
+  margin-top: 2px;
+}
+
 /* Drop target for the decode panel. Scoped to the panel rather than the page because the logo
    field takes dropped images too, and a page-wide target would swallow those. */
 .decode-drop {

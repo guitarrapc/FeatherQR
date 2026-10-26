@@ -53,15 +53,20 @@ internal static class Pixels
         {
             using var bitmap = SKBitmap.Decode(path) ?? throw new InvalidDataException($"cannot decode {path}");
             var (luminance, width, height) = ToLuminance(bitmap);
-            using var gray = ToGrayBitmap(luminance, width, height);
-            using var data = gray.Encode(SKEncodedImageFormat.Png, 100);
-            var directory = Path.Combine(outDir, Path.GetFileName(Path.GetDirectoryName(path)!));
-            Directory.CreateDirectory(directory);
-            using var stream = File.Create(Path.Combine(directory, Path.GetFileNameWithoutExtension(path) + ".png"));
-            data.SaveTo(stream);
+            WritePng(luminance, width, height, Path.Combine(outDir, Path.GetFileName(Path.GetDirectoryName(path)!), Path.GetFileNameWithoutExtension(path) + ".png"));
         });
         Console.WriteLine($"wrote {files.Count:N0} grey images under {outDir}");
         return 0;
+    }
+
+    /// <summary>A grey buffer as an 8-bit grey PNG, its directory created.</summary>
+    public static void WritePng(byte[] luminance, int width, int height, string path)
+    {
+        using var gray = ToGrayBitmap(luminance, width, height);
+        using var data = gray.Encode(SKEncodedImageFormat.Png, 100);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var stream = File.Create(path);
+        data.SaveTo(stream);
     }
 
     public static (byte[] Luminance, int Width, int Height) Resize(byte[] luminance, int width, int height, int newWidth, int newHeight, SKSamplingOptions sampling)

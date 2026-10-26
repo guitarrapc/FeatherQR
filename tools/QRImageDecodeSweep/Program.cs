@@ -5,7 +5,9 @@ using QRImageDecodeSweep;
 // See .github/docs/specs/qrcode-test-fixtures.md ("Image decode sweep") for what it measures and why.
 //
 // Usage: dotnet run -c Release --project tools/QRImageDecodeSweep -- <command>
-//   sweep [qr|micro|rmqr|all] [cases] [outDir]   synthetic renders of every encoder's symbols
+//   sweep [qr|micro|rmqr|all] [cases] [outDir] [--dump <dir>] [--lines <file>]   synthetic renders of every encoder's symbols
+//     --dump: every Standard QR render as a grey PNG, <dir>/<kind>/<case>-<encoder>.png, for a reader run in its own harness
+//     --lines: that reader's results on those files, scored by kind as one more reader
 //   corpus [outDir]                              the committed real-image sets
 //   photos <root> [outDir] [--time] [--lines <file>]           sample sets under root that are not committed (a checkout's black-box sets)
 //   boofcv <detection-dir> [outDir] [--time] [--lines <file>]  BoofCV's QR photographs, by category, scored without known texts
@@ -27,14 +29,17 @@ switch (command)
 {
     case "sweep":
         {
-            var which = args.Length > 1 ? args[1] : "all";
-            var outDir = args.Length > 3 ? args[3] : defaultOut;
+            var rest = args.Skip(1).ToList();
+            var lines = ReaderLines.FromArguments(rest);
+            var dump = Sweep.DumpFromArguments(rest);
+            var which = rest.Count > 0 ? rest[0] : "all";
+            var outDir = rest.Count > 2 ? rest[2] : defaultOut;
 
             // A typo must not pass for a run that measured nothing
             var caseCount = 0;
-            if ((which != "all" && !Symbologies.All.Contains(which)) || (args.Length > 2 && (!int.TryParse(args[2], out caseCount) || caseCount < 1)))
+            if ((which != "all" && !Symbologies.All.Contains(which)) || (rest.Count > 1 && (!int.TryParse(rest[1], out caseCount) || caseCount < 1)))
             {
-                Console.Error.WriteLine($"sweep takes one of all, {string.Join(", ", Symbologies.All)}, then a positive case count; got '{string.Join(' ', args.Skip(1).Take(2))}'");
+                Console.Error.WriteLine($"sweep takes one of all, {string.Join(", ", Symbologies.All)}, then a positive case count; got '{string.Join(' ', rest.Take(2))}'");
                 return 1;
             }
             Qrtool.Locate(repoRoot);
@@ -45,13 +50,15 @@ switch (command)
             {
                 if (which != "all" && which != symbology)
                     continue;
-                var cases = args.Length > 2 ? caseCount : Symbologies.DefaultCases(symbology);
-                var rows = Sweep.Run(symbology, cases);
+                var cases = rest.Count > 1 ? caseCount : Symbologies.DefaultCases(symbology);
+                var rows = Sweep.Run(symbology, cases, dump);
                 incomplete |= rows.Any(static r => r.Status.EndsWith(Libzint.DiedStatus, StringComparison.Ordinal));
                 var csv = Path.Combine(outDir, $"sweep-{symbology}.csv");
                 Csv.Write(csv, Sweep.KeyColumns, rows);
                 Console.WriteLine($"wrote {csv}");
                 markdown.Append(Report.Table($"{symbology}, {cases} cases", rows, rowColumn: 3, splitColumn: 2, withZXingNet: symbology == Symbologies.StandardQr));
+                if (symbology == Symbologies.StandardQr)
+                    markdown.Append(Sweep.LinesMarkdown(symbology, rows, lines));
             }
             Finish(Path.Combine(outDir, $"sweep-{which}.md"), markdown.ToString());
             if (!incomplete)
@@ -132,7 +139,7 @@ switch (command)
     case "import-corpus" when args.Length == 3:
         return CorpusImporter.Run(repoRoot, args[1], args[2]);
     default:
-        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] | corpus [outDir] | photos <root> [outDir] [--time] [--lines <file>] | boofcv <detection-dir> [outDir] [--time] [--lines <file>] | grey <root> <outDir> | compare <before.csv> <after.csv> | destination [micro|rmqr|all] [count] [outDir] | compare-destination <before.csv> <after.csv> | import-corpus <zxing-cpp-root> <commit>");
+        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] [--dump <dir>] [--lines <file>] | corpus [outDir] | photos <root> [outDir] [--time] [--lines <file>] | boofcv <detection-dir> [outDir] [--time] [--lines <file>] | grey <root> <outDir> | compare <before.csv> <after.csv> | destination [micro|rmqr|all] [count] [outDir] | compare-destination <before.csv> <after.csv> | import-corpus <zxing-cpp-root> <commit>");
         return 1;
 }
 

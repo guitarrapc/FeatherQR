@@ -137,89 +137,17 @@ public static partial class QrInterop
                 throw new ArgumentException("Image is empty.");
 
             var stopwatch = Stopwatch.StartNew();
-            using var bitmap = SKBitmap.Decode(imageBytes)
-                ?? throw new ArgumentException("The file is not a decodable image (PNG/JPEG/WebP).");
+            using var bitmap = DecodeBitmap(imageBytes);
+            var image = new DecodedImage(bitmap.Width, bitmap.Height, ReadOrigin(imageBytes));
 
-            // SKBitmap.Decode ignores the EXIF orientation tag, so the corners are in the stored
-            // frame. A browser applies the tag, so the page needs it to place the overlay.
-            var origin = ReadOrigin(imageBytes);
-
-            var success = QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
-            if (success)
+            DecodePayload payload;
+            if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
             {
-                stopwatch.Stop();
-                var gs1 = ReadGs1(text, info.Fnc1);
-                var payload = new DecodePayload(
-                    Ok: true,
-                    Text: text,
-                    Status: info.Status.ToString(),
-                    Symbology: "qr",
-                    QrVersion: info.Version,
-                    Ecc: info.EccLevel.ToString(),
-                    MaskPattern: info.MaskPattern,
-                    ErrorsCorrected: info.ErrorsCorrected,
-                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1),
-                    Corners: Flatten(info.Corners),
-                    ImageWidth: bitmap.Width,
-                    ImageHeight: bitmap.Height,
-                    Orientation: origin,
-                    Fnc1: Fnc1Label(info.Fnc1),
-                    ApplicationIndicator: info.Fnc1.ApplicationIndicator,
-                    Gs1Hri: gs1.Hri,
-                    Gs1Elements: gs1.Elements,
-                    Gs1Error: gs1.Error,
-                    Gs1Check: gs1.Check);
-                return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
+                payload = StandardPayload(text, info, ElapsedMs(stopwatch), image);
             }
-
-            // Standard QR failed: try Micro QR, then rMQR (separate, explicitly-typed detectors)
-            if (MicroQRCodeDecoder.TryDecode(bitmap, out var microText, out var microInfo))
+            else
             {
-                stopwatch.Stop();
-                var microPayload = new DecodePayload(
-                    Ok: true,
-                    Text: microText,
-                    Status: microInfo.Status.ToString(),
-                    Symbology: "microqr",
-                    QrVersion: (int)microInfo.Version,
-                    Ecc: microInfo.EccLevel.ToString(),
-                    MaskPattern: microInfo.MaskPattern,
-                    ErrorsCorrected: microInfo.ErrorsCorrected,
-                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1),
-                    Corners: Flatten(microInfo.Corners),
-                    ImageWidth: bitmap.Width,
-                    ImageHeight: bitmap.Height,
-                    Orientation: origin);
-                return JsonSerializer.Serialize(microPayload, PlaygroundJsonContext.Default.DecodePayload);
-            }
-
-            var rmSuccess = RmQRCodeDecoder.TryDecode(bitmap, out var rmText, out var rmInfo);
-            stopwatch.Stop();
-            var rmGs1 = rmSuccess ? ReadGs1(rmText, rmInfo.Fnc1) : default;
-
-            // rMQR has a single fixed mask, so no mask pattern is reported (-1).
-            var resultPayload = rmSuccess
-                ? new DecodePayload(
-                    Ok: true,
-                    Text: rmText,
-                    Status: rmInfo.Status.ToString(),
-                    Symbology: "rmqr",
-                    QrVersion: (int)rmInfo.Version,
-                    Ecc: rmInfo.EccLevel.ToString(),
-                    MaskPattern: -1,
-                    ErrorsCorrected: rmInfo.ErrorsCorrected,
-                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1),
-                    Corners: Flatten(rmInfo.Corners),
-                    ImageWidth: bitmap.Width,
-                    ImageHeight: bitmap.Height,
-                    Orientation: origin,
-                    Fnc1: Fnc1Label(rmInfo.Fnc1),
-                    ApplicationIndicator: rmInfo.Fnc1.ApplicationIndicator,
-                    Gs1Hri: rmGs1.Hri,
-                    Gs1Elements: rmGs1.Elements,
-                    Gs1Error: rmGs1.Error,
-                    Gs1Check: rmGs1.Check)
-                : new DecodePayload(
+                payload = DecodeMicroOrRmqr(bitmap, stopwatch, image) ?? new DecodePayload(
                     Ok: false,
                     Text: null,
                     Status: info.Status.ToString(),
@@ -228,16 +156,150 @@ public static partial class QrInterop
                     Ecc: null,
                     MaskPattern: info.MaskPattern,
                     ErrorsCorrected: info.ErrorsCorrected,
-                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1),
-                    ImageWidth: bitmap.Width,
-                    ImageHeight: bitmap.Height,
-                    Orientation: origin);
-            return JsonSerializer.Serialize(resultPayload, PlaygroundJsonContext.Default.DecodePayload);
+                    TotalMs: ElapsedMs(stopwatch),
+                    ImageWidth: image.Width,
+                    ImageHeight: image.Height,
+                    Orientation: image.Orientation);
+            }
+            return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
         }
         catch (Exception ex)
         {
             return JsonSerializer.Serialize(new ErrorPayload(ToUserFacingMessage(ex)), PlaygroundJsonContext.Default.ErrorPayload);
         }
+    }
+
+    /// <summary>
+    /// Decodes every QR code in encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string (see <see cref="DecodeSymbolsPayload"/>): <c>{"ok":true,"symbols":[...],"totalMs":N,"imageWidth":N,"imageHeight":N,"orientation":N}</c>, each symbol shaped as a <see cref="Decode"/> success, <c>{"ok":false,"symbols":[],...}</c> when none decodes, or <c>{"error":"..."}</c> on unexpected failure.
+    /// <para>
+    /// Standard QR codes are read with <see cref="QRCodeImageDecoder.DecodeSymbols(SKBitmap)"/>, each once, in the order found.
+    /// That read covers Standard QR alone, so an image with none is read for one Micro QR or rMQR symbol, as <see cref="Decode"/> reads it.
+    /// </para>
+    /// </summary>
+    /// <param name="imageBytes">Encoded image file bytes.</param>
+    [JSExport]
+    public static string DecodeAll(byte[] imageBytes)
+    {
+        try
+        {
+            if (imageBytes.Length == 0)
+                throw new ArgumentException("Image is empty.");
+
+            var stopwatch = Stopwatch.StartNew();
+            using var bitmap = DecodeBitmap(imageBytes);
+            var image = new DecodedImage(bitmap.Width, bitmap.Height, ReadOrigin(imageBytes));
+
+            DecodePayload[] symbols;
+            var results = QRCodeDecoder.DecodeSymbols(bitmap);
+            if (results.Length > 0)
+            {
+                var ms = ElapsedMs(stopwatch);
+                symbols = new DecodePayload[results.Length];
+                for (var i = 0; i < results.Length; i++)
+                    symbols[i] = StandardPayload(results[i].Text, results[i].Info, ms, image);
+            }
+            else
+            {
+                symbols = DecodeMicroOrRmqr(bitmap, stopwatch, image) is { } single ? [single] : [];
+            }
+
+            var payload = new DecodeSymbolsPayload(
+                Ok: symbols.Length > 0,
+                Symbols: symbols,
+                TotalMs: ElapsedMs(stopwatch),
+                ImageWidth: image.Width,
+                ImageHeight: image.Height,
+                Orientation: image.Orientation);
+            return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodeSymbolsPayload);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new ErrorPayload(ToUserFacingMessage(ex)), PlaygroundJsonContext.Default.ErrorPayload);
+        }
+    }
+
+    /// <summary>
+    /// The image as the decoders saw it, and its EXIF orientation tag. <see cref="SKBitmap.Decode(byte[])"/> ignores the tag,
+    /// so the corners are in the stored frame. A browser applies it, so the page needs it to place the overlay.
+    /// </summary>
+    private readonly record struct DecodedImage(int Width, int Height, int Orientation);
+
+    private static SKBitmap DecodeBitmap(byte[] imageBytes)
+        => SKBitmap.Decode(imageBytes) ?? throw new ArgumentException("The file is not a decodable image (PNG/JPEG/WebP).");
+
+    private static double ElapsedMs(Stopwatch stopwatch) => Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1);
+
+    private static DecodePayload StandardPayload(string text, QRCodeDecodeInfo info, double totalMs, DecodedImage image)
+    {
+        var gs1 = ReadGs1(text, info.Fnc1);
+        return new DecodePayload(
+            Ok: true,
+            Text: text,
+            Status: info.Status.ToString(),
+            Symbology: "qr",
+            QrVersion: info.Version,
+            Ecc: info.EccLevel.ToString(),
+            MaskPattern: info.MaskPattern,
+            ErrorsCorrected: info.ErrorsCorrected,
+            TotalMs: totalMs,
+            Corners: Flatten(info.Corners),
+            ImageWidth: image.Width,
+            ImageHeight: image.Height,
+            Orientation: image.Orientation,
+            Fnc1: Fnc1Label(info.Fnc1),
+            ApplicationIndicator: info.Fnc1.ApplicationIndicator,
+            Gs1Hri: gs1.Hri,
+            Gs1Elements: gs1.Elements,
+            Gs1Error: gs1.Error,
+            Gs1Check: gs1.Check);
+    }
+
+    /// <summary>One Micro QR symbol, else one rMQR symbol, or null when neither decodes. Each has its own detector.</summary>
+    private static DecodePayload? DecodeMicroOrRmqr(SKBitmap bitmap, Stopwatch stopwatch, DecodedImage image)
+    {
+        if (MicroQRCodeDecoder.TryDecode(bitmap, out var microText, out var microInfo))
+        {
+            return new DecodePayload(
+                Ok: true,
+                Text: microText,
+                Status: microInfo.Status.ToString(),
+                Symbology: "microqr",
+                QrVersion: (int)microInfo.Version,
+                Ecc: microInfo.EccLevel.ToString(),
+                MaskPattern: microInfo.MaskPattern,
+                ErrorsCorrected: microInfo.ErrorsCorrected,
+                TotalMs: ElapsedMs(stopwatch),
+                Corners: Flatten(microInfo.Corners),
+                ImageWidth: image.Width,
+                ImageHeight: image.Height,
+                Orientation: image.Orientation);
+        }
+
+        if (!RmQRCodeDecoder.TryDecode(bitmap, out var rmText, out var rmInfo))
+            return null;
+
+        // rMQR has a single fixed mask, so no mask pattern is reported (-1).
+        var gs1 = ReadGs1(rmText, rmInfo.Fnc1);
+        return new DecodePayload(
+            Ok: true,
+            Text: rmText,
+            Status: rmInfo.Status.ToString(),
+            Symbology: "rmqr",
+            QrVersion: (int)rmInfo.Version,
+            Ecc: rmInfo.EccLevel.ToString(),
+            MaskPattern: -1,
+            ErrorsCorrected: rmInfo.ErrorsCorrected,
+            TotalMs: ElapsedMs(stopwatch),
+            Corners: Flatten(rmInfo.Corners),
+            ImageWidth: image.Width,
+            ImageHeight: image.Height,
+            Orientation: image.Orientation,
+            Fnc1: Fnc1Label(rmInfo.Fnc1),
+            ApplicationIndicator: rmInfo.Fnc1.ApplicationIndicator,
+            Gs1Hri: gs1.Hri,
+            Gs1Elements: gs1.Elements,
+            Gs1Error: gs1.Error,
+            Gs1Check: gs1.Check);
     }
 
     /// <summary>The FNC1 mode for the page: "first" (GS1), "second" (an AIM industry format), or null without FNC1.</summary>
@@ -1197,9 +1259,25 @@ public sealed record DecodePayload(
     string? Gs1Error = null,
     string? Gs1Check = null);
 
+/// <summary>Result of a <see cref="QrInterop.DecodeAll"/> call, serialized to the page script.</summary>
+/// <param name="Ok">Whether any symbol decoded.</param>
+/// <param name="Symbols">Each symbol read, in the order found, shaped as a <see cref="QrInterop.Decode"/> success. Its time is the whole call's.</param>
+/// <param name="TotalMs">The whole call's time.</param>
+/// <param name="ImageWidth">Pixel width of the image the decoder saw.</param>
+/// <param name="ImageHeight">Pixel height of the image the decoder saw.</param>
+/// <param name="Orientation">The file's EXIF orientation tag (1-8), or 1 when it has none, as on <see cref="DecodePayload"/>.</param>
+public sealed record DecodeSymbolsPayload(
+    bool Ok,
+    DecodePayload[] Symbols,
+    double TotalMs,
+    int ImageWidth,
+    int ImageHeight,
+    int Orientation);
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(QrRequest))]
 [JsonSerializable(typeof(ErrorPayload))]
 [JsonSerializable(typeof(DecodePayload))]
+[JsonSerializable(typeof(DecodeSymbolsPayload))]
 [JsonSerializable(typeof(GenerateMeta))]
 internal sealed partial class PlaygroundJsonContext : JsonSerializerContext;
