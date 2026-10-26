@@ -26,8 +26,8 @@ public class ImageStreamDecodeTest
         public override string ToString() => Name;
     }
 
-    // The big reads each hold a 256 MiB buffer, so they run one at a time
-    private const string LargeReads = "Reads of 256 MiB";
+    // The big reads each hold hundreds of MiB, so they run one at a time
+    private const string LargeReads = "Reads of 256 MiB and more";
 
     private static Read QRBitmap(SKBitmap bitmap)
     {
@@ -265,7 +265,211 @@ public class ImageStreamDecodeTest
     public async Task PixelLimit_IsTheDocumentedCount(int width, int height, bool over)
     {
         // An image at the limit would decode to 1 GiB, so the boundary is held on the check the read makes
-        await Assert.That(EncodedImage.IsOverPixelLimit(width, height)).IsEqualTo(over);
+        await Assert.That(EncodedImage.IsOverPixelLimit(width, height, ImageStreamReadLimits.Default)).IsEqualTo(over);
+    }
+
+    [Test]
+    public async Task PixelCheck_TakesTheLimitGiven()
+    {
+        var raised = new ImageStreamReadLimits { MaxPixels = 16_384L * 16_385 };
+
+        await Assert.That(EncodedImage.IsOverPixelLimit(16_384, 16_385, raised)).IsFalse();
+        await Assert.That(EncodedImage.IsOverPixelLimit(16_384, 16_386, raised)).IsTrue();
+    }
+
+    [Test]
+    [MethodDataSource(nameof(LimitedCalls))]
+    public async Task RaisedPixelLimit_ReachesTheBitmapCheck(LimitedCall c)
+    {
+        // 46,341 × 46,341 grey pixels are over the default limit and over the 2,147,483,647 bytes a bitmap holds, so the message says which refused them
+        var raised = new ImageStreamReadLimits { MaxPixels = long.MaxValue };
+
+        var caught = await c.Fault(new ReadStream(PngDeclaring(46_341, 46_341)), raised);
+
+        await Assert.That(caught is InvalidDataException && caught.Message.Contains("more than a bitmap holds")).IsTrue();
+    }
+
+    [Test]
+    [NotInParallel(LargeReads)]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task RaisedByteLimit_ReadsAStreamOverTheDefault(bool async)
+    {
+        var limits = new ImageStreamReadLimits { MaxBytes = 256 * 1024 * 1024 + 1 };
+        var stream = new EndlessStream(256L * 1024 * 1024 + 1);
+
+        var caught = async ? await Caught(QRCodeDecoder.DecodeAsync(stream, limits)) : Caught(() => QRCodeDecoder.Decode(stream, limits));
+
+        await Assert.That(caught is InvalidDataException && caught.Message.Contains("does not hold an image")).IsTrue();
+        await Assert.That(stream.Served).IsEqualTo(256L * 1024 * 1024 + 1);
+    }
+
+    [Test]
+    public async Task Limits_Default_IsTheDocumentedOne()
+    {
+        await Assert.That(ImageStreamReadLimits.Default.MaxBytes).IsEqualTo(256 * 1024 * 1024);
+        await Assert.That(ImageStreamReadLimits.Default.MaxPixels).IsEqualTo(16_384L * 16_384);
+        await Assert.That(new ImageStreamReadLimits()).IsEqualTo(ImageStreamReadLimits.Default);
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    public async Task Limits_NotPositive_Throw(int value)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits { MaxBytes = value });
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits { MaxPixels = value });
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits(maxBytes: value));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits(maxPixels: value));
+    }
+
+    [Test]
+    public async Task Limits_MaxBytes_IsAtMostTheLongestArray()
+    {
+        // The bytes are held in one array, and no array is longer than 2,147,483,591
+        await Assert.That(new ImageStreamReadLimits { MaxBytes = 2_147_483_591 }.MaxBytes).IsEqualTo(2_147_483_591);
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits { MaxBytes = 2_147_483_592 });
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits { MaxBytes = int.MaxValue });
+        await Assert.That(new ImageStreamReadLimits { MaxBytes = 1, MaxPixels = 1 }).IsEqualTo(new ImageStreamReadLimits(maxBytes: 1, maxPixels: 1));
+    }
+
+    [Test]
+    public async Task Limits_NotPositive_NameTheValueTheCallerGave()
+    {
+        await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits(maxBytes: 0)).ParamName).IsEqualTo("maxBytes");
+        await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits(maxPixels: 0)).ParamName).IsEqualTo("maxPixels");
+        await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits { MaxBytes = 0 }).ParamName).IsEqualTo("MaxBytes");
+        await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ImageStreamReadLimits { MaxPixels = 0 }).ParamName).IsEqualTo("MaxPixels");
+    }
+
+    [Test]
+    public async Task Limits_HaveAConstructorWithNoParameters()
+    {
+        // An initializer that binds to it puts no default into the caller's code, where one bound to the optional parameters would keep the default it was compiled with
+        await Assert.That(typeof(ImageStreamReadLimits).GetConstructor(Type.EmptyTypes)).IsNotNull();
+    }
+
+    [Test]
+    public async Task Async_WithNoContext_ReadsAnExposedBufferInPlace()
+    {
+        // 4 MiB after the image is in the stream's bytes, so a copy of them allocates that much, where reading in place allocates far less
+        var png = QRCodeImageBuilder.GetPngBytes(Content);
+        var array = new byte[png.Length + 4 * 1024 * 1024];
+        png.CopyTo(array, 0);
+
+        var (premise, allocated, read) = await Task.Run(async () =>
+        {
+            var stream = new MemoryStream(array, 0, array.Length, writable: false, publiclyVisible: true);
+            var premise = SynchronizationContext.Current is null && TaskScheduler.Current == TaskScheduler.Default;
+            // A call that does not leave completes on this thread, so the thread's count is the call's
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            var task = QRCodeDecoder.DecodeAsync(stream);
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            return (premise && task.IsCompleted, allocated, await task);
+        });
+
+        await Assert.That(premise).IsTrue();
+        await Assert.That(read.Success).IsTrue();
+        await Assert.That(allocated).IsLessThan(1024 * 1024);
+    }
+
+    [Test]
+    public async Task Limits_ConstructorAgreesWithTheObjectInitializer()
+    {
+        // Distinct values, so a crossing shows up as a wrong property
+        await Assert.That(new ImageStreamReadLimits(maxBytes: 1000, maxPixels: 4000)).IsEqualTo(new ImageStreamReadLimits { MaxBytes = 1000, MaxPixels = 4000 });
+        await Assert.That(new ImageStreamReadLimits(maxPixels: 4000)).IsEqualTo(new ImageStreamReadLimits { MaxPixels = 4000 });
+        await Assert.That(new ImageStreamReadLimits(maxBytes: 1000)).IsEqualTo(new ImageStreamReadLimits { MaxBytes = 1000 });
+    }
+
+    public sealed record LimitedCall(string Name, Func<Stream, ImageStreamReadLimits, Task> Call)
+    {
+        public async Task<Exception?> Fault(Stream stream, ImageStreamReadLimits limits)
+        {
+            try
+            {
+                await Call(stream, limits);
+                return null;
+            }
+            catch (Exception e)
+            {
+                return e;
+            }
+        }
+
+        public override string ToString() => Name;
+    }
+
+    public static IEnumerable<Func<LimitedCall>> LimitedCalls()
+    {
+        yield return () => new("QR DecodeAsync", static (s, l) => QRCodeDecoder.DecodeAsync(s, l));
+        yield return () => new("QR Decode", static (s, l) => Task.FromResult(QRCodeDecoder.Decode(s, l)));
+        yield return () => new("QR DecodeSymbolsAsync", static (s, l) => QRCodeDecoder.DecodeSymbolsAsync(s, l));
+        yield return () => new("QR DecodeSymbols", static (s, l) => Task.FromResult(QRCodeDecoder.DecodeSymbols(s, l)));
+        yield return () => new("Micro DecodeAsync", static (s, l) => MicroQRCodeDecoder.DecodeAsync(s, l));
+        yield return () => new("Micro Decode", static (s, l) => Task.FromResult(MicroQRCodeDecoder.Decode(s, l)));
+        yield return () => new("RmQR DecodeAsync", static (s, l) => RmQRCodeDecoder.DecodeAsync(s, l));
+        yield return () => new("RmQR Decode", static (s, l) => Task.FromResult(RmQRCodeDecoder.Decode(s, l)));
+    }
+
+    [Test]
+    [MethodDataSource(nameof(LimitedCalls))]
+    public async Task LowerPixelLimit_RefusesAnImageOverIt_AndTakesOneAtIt(LimitedCall c)
+    {
+        var limits = new ImageStreamReadLimits { MaxPixels = 300 * 300 };
+
+        var over = await c.Fault(new ReadStream(PngDeclaring(300, 301)), limits);
+        var at = await c.Fault(new ReadStream(PngDeclaring(300, 300)), limits);
+
+        await Assert.That(over is InvalidDataException && over.Message.Contains("300 × 301")).IsTrue();
+        await Assert.That(at).IsNull();
+    }
+
+    [Test]
+    [MethodDataSource(nameof(LimitedCalls))]
+    public async Task LowerByteLimit_RefusesAStreamOverIt_AndTakesOneAtIt(LimitedCall c)
+    {
+        var limits = new ImageStreamReadLimits { MaxBytes = 1000 };
+        var seekable = new OverLengthStream(1001);
+
+        // Zeros: one at the limit is read whole and refused as no image, which the message tells from the byte limit's refusal
+        var at = await c.Fault(new EndlessStream(1000), limits);
+        var seekableAt = await c.Fault(new MemoryStream(new byte[1000]), limits);
+        var over = await c.Fault(new EndlessStream(1001), limits);
+        var seekableOver = await c.Fault(seekable, limits);
+        var exposedOver = await c.Fault(new MemoryStream(new byte[1001], 0, 1001, writable: false, publiclyVisible: true), limits);
+
+        await Assert.That(at is InvalidDataException && at.Message.Contains("does not hold an image")).IsTrue();
+        await Assert.That(seekableAt is InvalidDataException && seekableAt.Message.Contains("does not hold an image")).IsTrue();
+        await Assert.That(over is InvalidDataException && over.Message.Contains("more than")).IsTrue();
+        await Assert.That(seekableOver is InvalidDataException && seekableOver.Message.Contains("more than")).IsTrue();
+        await Assert.That(seekable.Reads).IsEqualTo(0);
+        await Assert.That(exposedOver is InvalidDataException && exposedOver.Message.Contains("more than")).IsTrue();
+    }
+
+    [Test]
+    [MethodDataSource(nameof(LimitedCalls))]
+    public async Task NullLimits_ReadUnderTheDefaultLimits(LimitedCall c)
+    {
+        // The default limits refuse this image, so a read that took null for no limits would decode it
+        var overTheDefault = await c.Fault(new ReadStream(PngDeclaring(16_384, 16_385)), null!);
+        var withinThem = await c.Fault(new ReadStream(QRCodeImageBuilder.GetPngBytes(Content)), null!);
+
+        await Assert.That(overTheDefault is InvalidDataException && overTheDefault.Message.Contains("16384 × 16385")).IsTrue();
+        await Assert.That(withinThem).IsNull();
+    }
+
+    [Test]
+    public async Task DefaultInTheSecondPlace_ReadsAlikeOnTheSyncAndAsyncForms()
+    {
+        // default binds to the token on the async form and to the limits on the sync one
+        var png = QRCodeImageBuilder.GetPngBytes(Content);
+
+        var viaAsync = await QRCodeDecoder.DecodeAsync(new MemoryStream(png), default);
+        var viaSync = QRCodeDecoder.Decode(new MemoryStream(png), default);
+
+        await Assert.That(viaSync).IsEqualTo(viaAsync);
+        await Assert.That(viaSync.Success).IsTrue();
     }
 
     [Test]
@@ -286,7 +490,7 @@ public class ImageStreamDecodeTest
     [Arguments(true)]
     public async Task StreamThatDoesNotEnd_ThrowsInvalidDataOneBytePastTheLimit(bool async)
     {
-        // The stream hands over whatever it is asked for without writing it, so the test costs the read's buffer and not a copy
+        // The stream serves zeros from no data of its own, so the test costs the read's buffer alone
         var stream = new EndlessStream();
 
         var caught = async ? await Caught(QRCodeDecoder.DecodeAsync(stream)) : Caught(() => QRCodeDecoder.Decode(stream));
@@ -430,6 +634,63 @@ public class ImageStreamDecodeTest
         await Assert.That(caller).IsSameReferenceAs(context);
         await Assert.That(completedOnReturn).IsFalse();
         await Assert.That(finished).IsTrue();
+    }
+
+    [Test]
+    [Arguments(Caller.SynchronizationContext, false, false)]
+    [Arguments(Caller.SynchronizationContext, true, false)]
+    [Arguments(Caller.SynchronizationContext, false, true)]
+    [Arguments(Caller.TaskScheduler, false, false)]
+    [Arguments(Caller.TaskScheduler, true, true)]
+    public async Task Async_LeavingTheCaller_ExposedBufferClearedOnceTheCallReturns_ReadsWhatItHeld(Caller caller, bool everySymbol, bool offset)
+    {
+        var png = QRCodeImageBuilder.GetPngBytes(Content);
+        // The decode starts on the pool once the call returns, and a clear that comes later proves nothing, so the call is made many times
+        const int Tries = 20;
+        var cleared = 0;
+        var read = 0;
+
+        await Callers.RunUnder(caller, async () =>
+        {
+            for (var i = 0; i < Tries; i++)
+            {
+                // Bytes past the array's start and the stream's position, as a stream over part of an array lends them
+                var array = new byte[(offset ? 5 : 0) + png.Length];
+                png.CopyTo(array, offset ? 5 : 0);
+                var stream = offset
+                    ? new MemoryStream(array, 3, png.Length + 2, writable: true, publiclyVisible: true) { Position = 2 }
+                    : new MemoryStream(array, 0, array.Length, writable: true, publiclyVisible: true);
+
+                var decode = everySymbol ? (Task)QRCodeDecoder.DecodeSymbolsAsync(stream) : QRCodeDecoder.DecodeAsync(stream);
+                if (!decode.IsCompleted)
+                {
+                    Array.Clear(array);
+                    cleared++;
+                }
+                var readWhole = everySymbol
+                    ? await (Task<QRCodeDecodeResult[]>)decode is [{ Success: true, Text: Content }]
+                    : await (Task<QRCodeDecodeResult>)decode is { Success: true, Text: Content };
+                if (readWhole)
+                    read++;
+            }
+        });
+
+        // Premise: some call left the caller before its buffer was cleared
+        await Assert.That(cleared).IsGreaterThan(0);
+        await Assert.That(read).IsEqualTo(Tries);
+    }
+
+    [Test]
+    public async Task Async_CanceledOnceTheReadsEnd_StopsBeforeTheDecode()
+    {
+        // The token is canceled by the read that finds the end, so the check after the reads is what sees it
+        using var cancellation = new CancellationTokenSource();
+        var stream = new ReadStream(QRCodeImageBuilder.GetPngBytes(Content)) { OnEnd = cancellation.Cancel };
+
+        var caught = await Caught(QRCodeDecoder.DecodeAsync(stream, cancellation.Token));
+
+        await Assert.That(caught is OperationCanceledException).IsTrue();
+        await Assert.That(stream.Ended).IsTrue();
     }
 
     [Test]
@@ -612,6 +873,8 @@ public class ImageStreamDecodeTest
         private int _position;
 
         public Func<CancellationToken, Task>? OnRead { get; init; }
+        public Action? OnEnd { get; init; }
+        public bool Ended { get; private set; }
         public int ReadCalls { get; private set; }
         public CancellationToken FirstToken { get; private set; }
 
@@ -645,7 +908,13 @@ public class ImageStreamDecodeTest
                 FirstToken = cancellationToken;
             if (OnRead is not null)
                 await OnRead(cancellationToken);
-            return Copy(buffer.Span);
+            var copied = Copy(buffer.Span);
+            if (copied == 0 && buffer.Length > 0)
+            {
+                Ended = true;
+                OnEnd?.Invoke();
+            }
+            return copied;
         }
 
         private int Copy(Span<byte> buffer)
@@ -697,7 +966,10 @@ public class ImageStreamDecodeTest
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
-    /// <summary>A stream that ends only at the length it is given, if any, cannot seek, and counts the bytes it claims to have handed over.</summary>
+    /// <summary>
+    /// A stream of zeros that ends only at the length it is given, if any, cannot seek, and counts the bytes it served.
+    /// It writes the zeros, since a read's buffer is rented and may hold the bytes of an earlier read.
+    /// </summary>
     private sealed class EndlessStream(long length = long.MaxValue) : Stream
     {
         public long Served { get; private set; }
@@ -712,14 +984,15 @@ public class ImageStreamDecodeTest
             set => throw new NotSupportedException();
         }
 
-        public override int Read(byte[] buffer, int offset, int count) => Serve(count);
-        public override int Read(Span<byte> buffer) => Serve(buffer.Length);
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => Task.FromResult(Serve(count));
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => ValueTask.FromResult(Serve(buffer.Length));
+        public override int Read(byte[] buffer, int offset, int count) => Serve(buffer.AsSpan(offset, count));
+        public override int Read(Span<byte> buffer) => Serve(buffer);
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => Task.FromResult(Serve(buffer.AsSpan(offset, count)));
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => ValueTask.FromResult(Serve(buffer.Span));
 
-        private int Serve(int count)
+        private int Serve(Span<byte> buffer)
         {
-            var served = (int)Math.Min(count, length - Served);
+            var served = (int)Math.Min(buffer.Length, length - Served);
+            buffer.Slice(0, served).Clear();
             Served += served;
             return served;
         }

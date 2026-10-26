@@ -223,6 +223,249 @@ public class SymbolImageAsyncWriteTest
     }
 
     [Test]
+    [Arguments(Caller.SynchronizationContext, false)]
+    [Arguments(Caller.SynchronizationContext, true)]
+    [Arguments(Caller.TaskScheduler, false)]
+    [Arguments(Caller.TaskScheduler, true)]
+    public async Task Async_LeavingTheCaller_RendersTheBuilderAsItWasAtTheCall(Caller caller, bool svg)
+    {
+        // The icon changes the builder while the call copies it, after the builder's own settings are copied and before the call returns.
+        // So a render that read the caller's builder reads the change whatever the threads do, and one that read the copy does not
+        QRCodeImageBuilder? builder = null;
+        var icon = new CountingIconShape(onCopy: () => builder!.WithSize(300, 300));
+        builder = QR().WithSize(100, 100).WithIcon(new IconData(icon, iconSizePercent: 20));
+        var expected = Written(builder, svg);
+        var stream = new AsyncOnlyStream();
+        var completedOnReturn = true;
+
+        await RunUnder(caller, async () =>
+        {
+            var task = Write(builder, stream, svg, CancellationToken.None);
+            completedOnReturn = task.IsCompleted;
+            await task;
+        });
+
+        // Premise: the call copied, which a call that leaves its caller does
+        await Assert.That(icon.Copies).IsEqualTo(1);
+        await Assert.That(completedOnReturn).IsFalse();
+        await Assert.That(stream.Written.AsSpan().SequenceEqual(expected)).IsTrue();
+    }
+
+    [Test]
+    [NotInParallel(SvgCaptions)]
+    [Arguments(false, false)]
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    [Arguments(true, true)]
+    public async Task Async_LeavingTheCaller_IconChangedOnceTheCallReturns_IsDrawnAsItWas(bool svg, bool caption)
+    {
+        var gate = new GateModuleShape();
+        using var logo = new SKBitmap(16, 16);
+        logo.Erase(SKColors.Red);
+        // Every setting off its default, so a copy that dropped one that changes the drawing draws another caption
+        using var font = new SKFont(SKTypeface.Default, 20, 1.3f, 0.2f)
+        {
+            Embolden = true,
+            Edging = SKFontEdging.Alias,
+            Hinting = SKFontHinting.Full,
+            Subpixel = true,
+            LinearMetrics = true,
+            BaselineSnap = false,
+            ForceAutoHinting = true,
+            EmbeddedBitmaps = true,
+        };
+        IconShape shape = caption ? new ImageTextIconShape(logo, "FQR", SKColors.Blue, font) : new ImageIconShape(logo);
+        var builder = QR().WithErrorCorrection(QREccLevel.H).WithModuleShape(gate).WithIcon(new IconData(shape, iconSizePercent: 20));
+        var expected = Written(builder, svg);
+        var stream = new AsyncOnlyStream();
+        var completedOnReturn = true;
+
+        await RunUnder(Caller.SynchronizationContext, async () =>
+        {
+            gate.Close();
+            var task = Write(builder, stream, svg, CancellationToken.None);
+            completedOnReturn = task.IsCompleted;
+            // The icon is drawn after the modules, so a render that drew the caller's own bitmap or font would draw these
+            logo.Erase(SKColors.Green);
+            font.Size = 40;
+            font.ScaleX = 1;
+            font.SkewX = 0;
+            font.Embolden = false;
+            font.Edging = SKFontEdging.SubpixelAntialias;
+            font.Hinting = SKFontHinting.Normal;
+            font.Subpixel = false;
+            font.LinearMetrics = false;
+            font.BaselineSnap = true;
+            font.ForceAutoHinting = false;
+            font.EmbeddedBitmaps = false;
+            gate.Open();
+            await task;
+        });
+
+        await Assert.That(completedOnReturn).IsFalse();
+        await Assert.That(stream.Written.AsSpan().SequenceEqual(expected)).IsTrue();
+    }
+
+    [Test]
+    public async Task Async_WithNoContext_CopiesNothing()
+    {
+        var icon = new CountingIconShape();
+
+        await Task.Run(() => QR().WithIcon(new IconData(icon, iconSizePercent: 20)).SaveToAsync(new AsyncOnlyStream()));
+
+        await Assert.That(icon.Copies).IsEqualTo(0);
+        await Assert.That(icon.Draws).IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments(Caller.SynchronizationContext, false)]
+    [Arguments(Caller.SynchronizationContext, true)]
+    [Arguments(Caller.TaskScheduler, false)]
+    [Arguments(Caller.TaskScheduler, true)]
+    public async Task Async_LeavingTheCaller_CopiesOnceAndReleasesTheCopiesAfterTheDraw(Caller caller, bool svg)
+    {
+        var icon = new CountingIconShape();
+
+        await RunUnder(caller, () => Write(QR().WithIcon(new IconData(icon, iconSizePercent: 20)), new AsyncOnlyStream(), svg, CancellationToken.None));
+
+        await Assert.That(icon.Copies).IsEqualTo(1);
+        await Assert.That(icon.Draws).IsEqualTo(1);
+        await Assert.That(icon.Releases).IsEqualTo(1);
+        await Assert.That(icon.DrawsAfterRelease).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Async_LeavingTheCaller_CanceledOnceCopied_DrawsNothingAndReleasesTheCopies(bool svg)
+    {
+        // The token is canceled while the call copies, before it leaves the context, so the check after the move is what sees it
+        using var cancellation = new CancellationTokenSource();
+        var icon = new CountingIconShape(onCopy: cancellation.Cancel);
+        var stream = new AsyncOnlyStream();
+        Exception? caught = null;
+
+        await RunUnder(Caller.SynchronizationContext, async () =>
+            caught = await Caught(Write(QR().WithIcon(new IconData(icon, iconSizePercent: 20)), stream, svg, cancellation.Token)));
+
+        await Assert.That(caught is OperationCanceledException).IsTrue();
+        await Assert.That(icon.Draws).IsEqualTo(0);
+        await Assert.That(icon.Releases).IsEqualTo(1);
+        await Assert.That(stream.WriteCalls).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Async_LeavingTheCaller_RenderThatThrows_ReleasesTheCopies(bool svg)
+    {
+        var icon = new CountingIconShape(throwOnDraw: true);
+        Exception? caught = null;
+
+        await RunUnder(Caller.SynchronizationContext, async () =>
+            caught = await Caught(Write(QR().WithIcon(new IconData(icon, iconSizePercent: 20)), new AsyncOnlyStream(), svg, CancellationToken.None)));
+
+        await Assert.That(caught?.Message).IsEqualTo(CountingIconShape.Refusal);
+        await Assert.That(icon.Releases).IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Async_UnderASynchronizationContext_IconDataWithNoIcon_WritesWhatTheSyncWriteWrites(bool svg)
+    {
+        // IconData with a null Icon draws no icon, as the renderer reads it
+        using var context = new SingleThreadSynchronizationContext();
+        var builder = QR().WithErrorCorrection(QREccLevel.H).WithIcon(new IconData { Icon = null! });
+        using var expected = new MemoryStream();
+        if (svg) builder.SaveToSvg(expected); else builder.SaveTo(expected);
+        var stream = new AsyncOnlyStream();
+
+        await context.Run(() => Write(builder, stream, svg, CancellationToken.None));
+
+        await Assert.That(stream.Written).IsEquivalentTo(expected.ToArray(), CollectionOrdering.Matching);
+    }
+
+    [Test]
+    [Arguments(false, "unallocated")]
+    [Arguments(true, "unallocated")]
+    [Arguments(false, "no pixel memory")]
+    [Arguments(true, "no pixel memory")]
+    [Arguments(false, "zero area")]
+    [Arguments(true, "zero area")]
+    public async Task Async_UnderASynchronizationContext_IconWithNoPixels_FailsAsTheSyncWriteFails(bool svg, string kind)
+    {
+        using var context = new SingleThreadSynchronizationContext();
+        using var logo = kind switch
+        {
+            "unallocated" => new SKBitmap(),
+            "no pixel memory" => WithNoPixelMemory(),
+            _ => new SKBitmap(0, 0),
+        };
+        // Premise: the bitmap draws nothing, though the last two have an info and the last a pixel store
+        await Assert.That(logo.DrawsNothing).IsTrue();
+        var gate = new GateModuleShape();
+        var builder = QR().WithErrorCorrection(QREccLevel.H).WithModuleShape(gate).WithIcon(IconData.FromImage(logo, iconSizePercent: 20));
+        Exception? expected = null;
+        try
+        {
+            if (svg) builder.SaveToSvg(new MemoryStream()); else builder.SaveTo(new MemoryStream());
+        }
+        catch (Exception e)
+        {
+            expected = e;
+        }
+        var stream = new AsyncOnlyStream();
+        Exception? caught = null;
+
+        await context.Run(async () =>
+        {
+            gate.Close();
+            var task = Write(builder, stream, svg, CancellationToken.None);
+            // The icon is drawn after the modules, so pixels given while the render waits would be drawn by a render that read the caller's bitmap
+            logo.TryAllocPixels(new SKImageInfo(8, 8));
+            logo.Erase(SKColors.Red);
+            gate.Open();
+            caught = await Caught(task);
+        });
+
+        // Premise: a bitmap with no pixels cannot be drawn
+        await Assert.That(expected).IsNotNull();
+        await Assert.That(caught?.GetType()).IsEqualTo(expected!.GetType());
+    }
+
+    private static SKBitmap WithNoPixelMemory()
+    {
+        var bitmap = new SKBitmap();
+        bitmap.InstallPixels(new SKImageInfo(8, 8), IntPtr.Zero);
+        return bitmap;
+    }
+
+    [Test]
+    public async Task Async_UnderASynchronizationContext_UnpremultipliedIcon_WritesTheSvgTheSyncWriteWrites()
+    {
+        // An SVG embeds the icon's pixels as they are. Premultiplying them clears the colour of a pixel of no alpha, so a third of these have none
+        using var context = new SingleThreadSynchronizationContext();
+        using var logo = new SKBitmap(new SKImageInfo(16, 16, SKColorType.Rgba8888, SKAlphaType.Unpremul));
+        var pixels = logo.GetPixelSpan();
+        for (var p = 0; p < pixels.Length / 4; p++)
+        {
+            pixels[4 * p] = (byte)(p * 7 + 1);
+            pixels[4 * p + 1] = (byte)(p * 13 + 1);
+            pixels[4 * p + 2] = (byte)(p * 29 + 1);
+            pixels[4 * p + 3] = p % 3 == 0 ? (byte)0 : (byte)(p * 31);
+        }
+        var builder = QR().WithErrorCorrection(QREccLevel.H).WithIcon(IconData.FromImage(logo, iconSizePercent: 20));
+        using var expected = new MemoryStream();
+        builder.SaveToSvg(expected);
+        var stream = new AsyncOnlyStream();
+
+        await context.Run(() => builder.SaveToSvgAsync(stream));
+
+        await Assert.That(stream.Written.AsSpan().SequenceEqual(expected.ToArray())).IsTrue();
+    }
+
+    [Test]
     [Arguments(false)]
     [Arguments(true)]
     public async Task Async_UnderATaskScheduler_RendersOnTheDefaultScheduler(bool svg)
@@ -272,6 +515,82 @@ public class SymbolImageAsyncWriteTest
     private static Task Write<TSelf>(SymbolImageBuilderBase<TSelf> builder, Stream stream, bool svg, CancellationToken cancellationToken)
         where TSelf : SymbolImageBuilderBase<TSelf>
         => svg ? builder.SaveToSvgAsync(stream, cancellationToken) : builder.SaveToAsync(stream, cancellationToken);
+
+    private static byte[] Written<TSelf>(SymbolImageBuilderBase<TSelf> builder, bool svg)
+        where TSelf : SymbolImageBuilderBase<TSelf>
+    {
+        using var stream = new MemoryStream();
+        if (svg) builder.SaveToSvg(stream); else builder.SaveTo(stream);
+        return stream.ToArray();
+    }
+
+    // SVG captions rendered at once lose their text at times, outside the library's code, so those tests run one at a time
+    private const string SvgCaptions = "SVG captions";
+
+    private static Task RunUnder(Caller caller, Func<Task> body) => Callers.RunUnder(caller, body);
+
+    /// <summary>
+    /// Draws plain squares, and holds the render at its first module while closed.
+    /// The builder's settings are read before the modules and the icon is drawn after them, so a test changes the icon's bitmap and font before they are drawn.
+    /// </summary>
+    private sealed class GateModuleShape : ModuleShape
+    {
+        private readonly ManualResetEventSlim _open = new(initialState: true);
+
+        public override bool RequiresAntialiasing => false;
+
+        public void Close() => _open.Reset();
+        public void Open() => _open.Set();
+
+        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
+        {
+            // Bounded, so a render that never sees the gate open fails the test instead of hanging it
+            if (!_open.Wait(TimeSpan.FromSeconds(10)))
+                throw new TimeoutException("The gate stayed closed.");
+            canvas.DrawRect(rect, paint);
+        }
+    }
+
+    /// <summary>
+    /// An icon that counts the copies a render makes of it, its draws, and the copies released.
+    /// Its copy is the shape itself, so the copy's draws are counted here too.
+    /// </summary>
+    private sealed class CountingIconShape(Action? onCopy = null, bool throwOnDraw = false) : IconShape
+    {
+        public const string Refusal = "The icon refuses to be drawn.";
+
+        private int _copies;
+        private int _draws;
+        private int _releases;
+        private int _drawsAfterRelease;
+
+        public int Copies => Volatile.Read(ref _copies);
+        public int Draws => Volatile.Read(ref _draws);
+        public int Releases => Volatile.Read(ref _releases);
+        public int DrawsAfterRelease => Volatile.Read(ref _drawsAfterRelease);
+
+        public override void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor)
+        {
+            Interlocked.Increment(ref _draws);
+            if (Releases > 0)
+                Interlocked.Increment(ref _drawsAfterRelease);
+            if (throwOnDraw)
+                throw new InvalidOperationException(Refusal);
+        }
+
+        internal override IconShape CopyForLaterRender(List<IDisposable> owned)
+        {
+            Interlocked.Increment(ref _copies);
+            owned.Add(new Release(this));
+            onCopy?.Invoke();
+            return this;
+        }
+
+        private sealed class Release(CountingIconShape shape) : IDisposable
+        {
+            public void Dispose() => Interlocked.Increment(ref shape._releases);
+        }
+    }
 
     private static async Task<Exception?> Caught(Task task)
     {

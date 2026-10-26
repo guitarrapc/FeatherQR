@@ -13,7 +13,7 @@ The maintainer decided on 2026-10-15 that 2.0.0 ships an async API, for callers 
 - Phase 2, the input, is done (2026-10-25): the result types, the stream reads with their limits and their synchronous twins, and the call for several symbols.
 - Phase 3, cancellation between symbols, is done (2026-10-25).
 - Phase 4, the docs, is done (2026-10-25). Every phase is done. The plan folds into the specs at the 2.0.0 freeze.
-- A review of the branch (2026-10-26) fixed what it found in the code, the tests and the docs, and left three design questions to the maintainer.
+- A review of the branch (2026-10-26) fixed what it found in the code, the tests and the docs. The maintainer ruled its three design questions the same day: a call that moves off the caller's context reads copies of what it was given, the stream reads take limits the caller sets, and the token stays last.
 - The call for several symbols in one image (Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md)) returns the result type an async read must return, since an async method cannot have `out` parameters. That type is ruled (A4), and the call's names are settled in that Phase 3.
 
 ## Goals
@@ -34,9 +34,9 @@ A UI awaits an async call on its own thread as it is. The call frees the thread 
 - An `...Async` twin for each of the fourteen methods that write to a `Stream` (A8). The image is rendered and encoded synchronously, and the write alone is asynchronous.
 - `DecodeAsync(Stream)` on the three image decoders and `DecodeSymbolsAsync(Stream)` for Standard QR (A3). The stream is read to its end asynchronously, then decoded and read synchronously.
 - A result type a symbology, its text, its decode info and whether it read (A4).
-- Fixed limits on a stream read, 256 MiB of encoded bytes and 268,435,456 pixels (16,384 × 16,384) declared by its header (A11), and the synchronous twins of the stream reads, which carry the limits too (A10).
+- Limits on a stream read, 256 MiB of encoded bytes and 268,435,456 pixels (16,384 × 16,384) declared by its header by default, and others the caller sets through `ImageStreamReadLimits` (A11, amended 2026-10-26), and the synchronous twins of the stream reads, which carry the limits too (A10).
 - The token checked before a render or a decode starts, during the I/O, and between the symbols of a read for every symbol (A5).
-- An async call made on a UI thread, under a `SynchronizationContext`, moves to the pool before it renders or decodes, so that a UI awaits it as it is. An ASP.NET Core request has no context and takes no extra hop (A14).
+- An async call made on a UI thread, under a `SynchronizationContext`, or under a `TaskScheduler` of the caller's own, moves to the pool before it renders or decodes, so that a UI awaits it as it is. An ASP.NET Core request has neither and takes no extra hop (A14).
 - The docs show a `PipeWriter`, such as `Response.BodyWriter`, written through `SaveTo(IBufferWriter<byte>)` and flushed by the caller (A1).
 
 ### What it does not
@@ -83,11 +83,17 @@ public static QRCodeDecodeResult Decode(Stream image)
 public static QRCodeDecodeResult[] DecodeSymbols(Stream image)
 public static MicroQRCodeDecodeResult Decode(Stream image)
 public static RmQRCodeDecodeResult Decode(Stream image)
+
+// Limits the caller sets (A11, amended 2026-10-26): each stream read above has an overload that takes them
+public sealed record class ImageStreamReadLimits  // int MaxBytes = 256 MiB, long MaxPixels = 16,384 × 16,384, init, a constructor with no parameters or one of both optional, static readonly Default
+public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = default)  // null for Default
+public static QRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits)
+// and DecodeSymbolsAsync, DecodeSymbols, and the Micro QR and rMQR DecodeAsync and Decode likewise
 ```
 
 - One symbol from memory is read with `TryDecode` and `TryDecodeImage`, as now (A13). The calls above read a stream or read several symbols, and return the result type.
 - A one-symbol read returns a result in every case. On a failure `Info.Status` says why and `Text` is empty. A read for every symbol returns the symbols it read, an empty array when none.
-- A caller tells a read's success by `Success`, on the synchronous and the async reads alike. It is false for a failed read and for a default value, such as an entry of a room the span form left unwritten.
+- A caller tells a read's success by `Success`, on the synchronous and the async reads alike. It is false for a failed read and for a default value, such as an entry of a new room the span form left unwritten.
 - A stream over a limit, or one that is not an image, throws `InvalidDataException`. A null stream throws `ArgumentNullException`, and a stream that cannot write or read `ArgumentException`, as `SaveTo(Stream)` does now.
 - The calls for several symbols on a bitmap and on luminance, `DecodeSymbols(SKBitmap)` and the core's array and span forms, are Phase 3 of [image-decode-followups-plan.md](image-decode-followups-plan.md) and return the same `QRCodeDecodeResult`.
 
@@ -162,14 +168,16 @@ A write that cannot be laid out throws `InvalidOperationException` and writes no
 
 Each read as a caller would write it. With C# 14 the SkiaSharp calls read as `QRCodeDecoder.Xxx`, and on older versions as `QRCodeImageDecoder.Xxx`. The names of the calls for several symbols are drafts (A4). Micro QR and rMQR read the same way through `MicroQRCodeDecoder` and `RmQRCodeDecoder`, without the calls for several symbols.
 
-An image a web API is sent, read without holding a thread (`DecodeAsync`). The token is the request's, so a client that goes stops the read:
+An image a web API is sent, read without holding a thread (`DecodeAsync`). The token is the request's, so a client that goes stops the read, and the limits are the server's own, since a few dozen bytes can declare an image at the default limit:
 
 ```csharp
+var uploadLimits = new ImageStreamReadLimits { MaxPixels = 4096 * 4096, MaxBytes = 16 * 1024 * 1024 };
+
 app.MapPost("/scan", async (HttpRequest request, CancellationToken cancellationToken) =>
 {
     try
     {
-        var result = await QRCodeDecoder.DecodeAsync(request.Body, cancellationToken);
+        var result = await QRCodeDecoder.DecodeAsync(request.Body, uploadLimits, cancellationToken);
         return result.Success
             ? Results.Ok(result.Text)
             : Results.UnprocessableEntity(result.Info.Status.ToString());
@@ -187,8 +195,8 @@ Every code on a sheet sent to a web API (`DecodeSymbolsAsync`):
 ```csharp
 app.MapPost("/scan-sheet", async (HttpRequest request, CancellationToken cancellationToken) =>
 {
-    // InvalidDataException is handled as above
-    var results = await QRCodeDecoder.DecodeSymbolsAsync(request.Body, cancellationToken);
+    // InvalidDataException is handled, and uploadLimits made, as above
+    var results = await QRCodeDecoder.DecodeSymbolsAsync(request.Body, uploadLimits, cancellationToken);
     return Results.Ok(results.Select(r => r.Text));
 });
 ```
@@ -369,10 +377,10 @@ The I/O is all in the SkiaSharp package. The core and the GS1 package take and r
 | A8 | Which existing methods get an async twin | The fourteen that take a `Stream`, or the two on the builders' base only | All fourteen, so that a method that writes to a `Stream` has an `...Async` twin and the obvious synchronous call has an obvious fix | Ruled 2026-10-25: as recommended |
 | A9 | The coordinates a stream read reports | The image's pixels as encoded, which `SKBitmap.Decode` gives, or turned by the EXIF orientation | The pixels as encoded, as a caller gets them today. A caller that shows the image turned maps the corners, as the Playground does | Ruled 2026-10-25: as recommended |
 | A10 | A synchronous twin of the stream read | `Decode(Stream)` and `DecodeSymbols(Stream)`, the async names without `Async`, returning the same results. `TryDecode(Stream, out QRCodeDecodeResult)`, a `bool` as `TryDecode` has, but neither the async read's shape nor the bitmap overload's. `TryDecode(Stream, out string, out QRCodeDecodeInfo)`, the bitmap overload's shape, with no result type. Or none: a synchronous caller has `SKBitmap.Decode(Stream)` today, so it is not stranded. Blocking on the async read is no substitute for a twin, since it holds the thread and pays for the async I/O as well | Tied to A11. If the stream reads carry limits, `Decode(Stream)` on the three decoders and `DecodeSymbols(Stream)`, so that a synchronous caller gets the limits, every method that takes a `Stream` has both forms, as A8 gives the writes, and each twin differs from its async form by `Async` and `Task` alone. Without limits, none: a synchronous caller decodes into an `SKBitmap` and calls `TryDecode`, as today | Ruled 2026-10-25: as recommended. A11 puts limits on the stream reads, so `Decode(Stream)` and `DecodeSymbols(Stream)` ship |
-| A11 | Limits on a stream read | None, documented, as today when the caller decodes the image. Fixed limits on the stream reads. Or limits the caller sets. The decoders' only size limit is `int.MaxValue` pixels. A 1-bit PNG of 40,000 × 40,000 pixels holds 200,040,000 bytes of rows, which zlib at level 9 deflates to 194,447 (measured 2026-10-22), and decodes to 1.6 GB at one grey byte a pixel and 6.4 GB at four. Kestrel caps a request body at 30,000,000 bytes by default, which bounds the encoded bytes but not the pixels | Fixed limits on the stream reads alone, where the library takes the caller's I/O over, on the encoded bytes and on the pixels, the pixels checked from the image's header before any pixel is allocated. The `SKBitmap` and luminance entries get memory the caller has already allocated and keep today's limit, so a caller with a larger image decodes it and calls `TryDecode`. The values are set in the build from the largest camera images, and a parameter for them is additive later. A stream over a limit, or one that is not an image, throws `InvalidDataException`, since `DecodeStatus` says what an image held and such a stream gives no image | Ruled 2026-10-25: as recommended |
+| A11 | Limits on a stream read | None, documented, as today when the caller decodes the image. Fixed limits on the stream reads. Or limits the caller sets. The decoders' only size limit is `int.MaxValue` pixels. A 1-bit PNG of 40,000 × 40,000 pixels holds 200,040,000 bytes of rows, which zlib at level 9 deflates to 194,447 (measured 2026-10-22), and decodes to 1.6 GB at one grey byte a pixel and 6.4 GB at four. Kestrel caps a request body at 30,000,000 bytes by default, which bounds the encoded bytes but not the pixels | Fixed limits on the stream reads alone, where the library takes the caller's I/O over, on the encoded bytes and on the pixels, the pixels checked from the image's header before any pixel is allocated. The `SKBitmap` and luminance entries get memory the caller has already allocated and keep today's limit, so a caller with a larger image decodes it and calls `TryDecode`. The values are set in the build from the largest camera images, and a parameter for them is additive later. A stream over a limit, or one that is not an image, throws `InvalidDataException`, since `DecodeStatus` says what an image held and such a stream gives no image | Ruled 2026-10-25: as recommended. Amended 2026-10-26: the limits the caller sets ship too, as `ImageStreamReadLimits` on overloads of the stream reads, with the fixed values as its default. An image cut short after its header decodes to the size it declares, so 47 bytes took about 3 GiB to decode at the default limit, which a request body cap does not prevent |
 | A12 | What the async read for every symbol returns | `Task<QRCodeDecodeResult[]>`, or `IAsyncEnumerable<QRCodeDecodeResult>` handing each symbol over as it is read. The stream is read whole before the first symbol can be found, and the symbols are then found by synchronous computation over one image with no I/O between them. So each step of an `IAsyncEnumerable` would complete synchronously on the same thread, and reading them all takes the time the array takes. What it could give is an early stop, the search ending when the caller breaks, and only if the search could resume between symbols, its pooled buffers held by an object across each yield and the entry the one-symbol call shares reshaped. Otherwise it runs the whole search and yields from an array. The synchronous `DecodeSymbols(SKBitmap)` returns an array. An array gives a count, indexing and LINQ on every target, and `IAsyncEnumerable<T>` needs a package on netstandard2.0 (A2). The two cannot share a name and parameters, so the choice is made for 2.0.0 | `Task<QRCodeDecodeResult[]>`, the array form in a `Task`, as A10's twins are. A caller who wants fewer symbols has the span form's room on luminance ([image-decode-followups-plan.md](image-decode-followups-plan.md), M2). An `IAsyncEnumerable` fits a stream of several images, frames or a multipart upload, where the results arrive over I/O, and that is another call | Ruled 2026-10-25: `Task<QRCodeDecodeResult[]>`, no `IAsyncEnumerable` |
 | A13 | How the reads are named | Keep `TryDecode` for one symbol from memory, a `bool` and `out` parameters as now, and return the result type from a read of a stream and a read for several symbols. Or a design with no past to keep: `Decode` and `DecodeSymbols` on every input returning the result type, and `Try` only for the forms that write into the caller's `Span<char>`, so that a bitmap and a stream read alike and every async form is its synchronous form's exact twin. The library has 24 `Try` reads, 18 that hand out a `string` and 6 that write into a span. That design replaces the 18, and their callers rewrite an `if` and an `out var`, which a token replacement cannot do. A `Try` suits an input in memory, since a `false` leaves it as it was. A stream is consumed by the read whatever it finds, and an async read cannot have `out` parameters | The `Try` forms stay. One symbol from memory is read with `TryDecode` or `TryDecodeImage`, and a read from a stream and a read for several symbols return the result type. A `Decode(SKBitmap)` returning the result type is additive when asked | Ruled 2026-10-25: as recommended. The design with no past was laid out beside it and not taken |
-| A14 | Where an async call computes | An async method runs on its caller's thread until an `await` that does not complete at once. An async write renders and encodes before it writes, so it renders on the caller's thread, up to 32 ms of the renders measured. An async read decodes after its reads: on the pool when a read completed later, and on the caller's thread when every read completed at once, as a `MemoryStream` or data already buffered does, 51 ms and 6 to 7 ms for the 12-megapixel photograph. A UI would then wrap an async call in `Task.Run` to keep its frames. Options: compute wherever the call is, move to the pool before computing on every call, or move only when the call runs under a `SynchronizationContext` or a `TaskScheduler` other than the default, as a UI thread or a Blazor component does and an ASP.NET Core request does not | Move only under a context. A UI awaits the call as it is and never renders or decodes on its thread, and an ASP.NET Core request, with no context, takes no extra hop. A call with no I/O stays synchronous (A7), so this adds no method | Ruled 2026-10-25: as recommended |
+| A14 | Where an async call computes | An async method runs on its caller's thread until an `await` that does not complete at once. An async write renders and encodes before it writes, so it renders on the caller's thread, up to 32 ms of the renders measured. An async read decodes after its reads: on the pool when a read completed later, and on the caller's thread when every read completed at once, as a `MemoryStream` or data already buffered does, 51 ms and 6 to 7 ms for the 12-megapixel photograph. A UI would then wrap an async call in `Task.Run` to keep its frames. Options: compute wherever the call is, move to the pool before computing on every call, or move only when the call runs under a `SynchronizationContext` or a `TaskScheduler` other than the default, as a UI thread or a Blazor component does and an ASP.NET Core request does not | Move only under a context. A UI awaits the call as it is and never renders or decodes on its thread, and an ASP.NET Core request, with no context, takes no extra hop. A call with no I/O stays synchronous (A7), so this adds no method | Ruled 2026-10-25: as recommended. Amended 2026-10-26: a call that moves runs after it has returned, so it reads copies of what it was given, the builder with its icon's images and fonts, or the buffer of a `MemoryStream` read in place. A shape class the caller derives cannot be copied, and its docs say to keep it usable until the task completes |
 
 Notes for the build, not decisions:
 
@@ -571,8 +579,63 @@ What was fixed in the docs: P7 is scoped to the images it was measured on. The R
 
 The full suite passes on net10.0 (35,245 passed, 401 skipped) and net8.0 (35,151 passed, 401 skipped).
 
-Left to the maintainer:
+The three design questions, ruled by the maintainer the same day:
 
-- Under a synchronization context the async writes read the builder after the call has returned, so a builder changed before the await renders as changed, and an icon bitmap disposed before the await ended the process with an access violation in three verifiers' runs. With no context the render runs inside the call. The read of an exposed `MemoryStream` reads its buffer after the call has returned in the same way.
-- The pixel limit holds the bitmap to 1 GiB, but Skia decodes a cut PNG as a success, so a body of 47 bytes declaring 16,384 × 16,384 pixels drove the peak memory to about 1.5 GiB, and to about 3 GiB for an interlaced image of 16 bits a channel, in the verifiers' runs (Windows, .NET 10).
-- The static async helpers take the token after their optional parameters, so `SavePngAsync(content, stream, token)` does not compile and `SavePngAsync(content, stream, default)` binds `default` to the level.
+- Under a synchronization context the async writes read the builder after the call had returned, so a builder changed before the await rendered as changed, and an icon bitmap disposed before the await ended the process with an access violation in three verifiers' runs. The read of an exposed `MemoryStream` read its buffer after the call had returned in the same way. Ruled: a call that moves reads copies (A14 amended). Drawing in the call and encoding off the context was weighed and refused: drawing took 4 to 11 % of a PNG save of a version 3 symbol, but an SVG of version 40 in circles is all drawing, 32 ms on the caller's thread. Copying the builder covers its options, and the library's icon shapes copy their bitmap and their font, which draws the same pixels after the caller disposes its font and the font's typeface (SkiaSharp 4.148.0). The library's module shapes, finder shapes and gradients cannot change after they are made, so the copy shares them. A shape class the caller derives cannot be copied, and the docs say to keep it usable until the task completes. Copying an icon of 128 × 128 pixels took 0.08 ms and one of 1,024 × 1,024 pixels 2.7 ms on the caller's thread. A call that does not move copies nothing.
+- The pixel limit held the bitmap to 1 GiB, but Skia decodes an image cut short after its header to the size it declares. PNG bodies of 47 bytes declaring 16,384 × 16,384 pixels raised the peak memory of one read by 776 MiB at 1 bit of grey, 1,546 MiB at 8 or 16 bits of RGBA, 2,052 MiB interlaced at 8 bits and 3,078 MiB interlaced at 16 bits (scratch probe, .NET 10, Windows). Ruled: the limits the caller sets ship (A11 amended), as `ImageStreamReadLimits`, a record with `MaxBytes` and `MaxPixels` and the old values as its `Default`, on overloads of the eight stream reads. One type serves the three symbologies, since the limits do not depend on the symbol, and decoder options stay unmade (D8 of the 2.0.0 plan): the limits apply to the stream reads alone.
+- The static async helpers take the token after their optional parameters, so `SavePngAsync(content, stream, token)` does not compile and `SavePngAsync(content, stream, default)` binds `default` to the level. Ruled: kept, as CA1068 asks, the mistake a caller is likely to make does not compile, and the examples name the argument.
+
+Tests for the rulings: a builder changed once the call returns and an exposed buffer cleared once a read returns, both under a context, each red before the change. A test that disposed an icon bitmap and a caption font once the call returned was not run before the change, since a disposed icon ended the process in the verifiers' runs, and the second round replaced it (below). The limits are held for each of the eight reads, lowered on bytes and on pixels at the limit and one past it, raised on pixels at the check, and refused when not positive or `null`, which the second round changed to read under the default limits (below).
+
+### Second review round (2026-10-26)
+
+Done, at the maintainer's request. Three reviewers read the copy and the limits for correctness, ownership and security, the caller's view and the docs, and the tests. Their 16 claims each went to three verifiers. One fell as stated: a raised pixel limit does not allocate a bitmap of 8 GiB, since Skia refuses one of more than 2,147,483,647 bytes before it allocates, but the read then threw a bare `Exception`, which all three verifiers reproduced, and that was fixed. The full suite also failed the shape rule that a type's `init` members are reachable from a constructor, below C# 9.
+
+What was fixed in the code:
+
+- An `IconData` with a null `Icon` draws no icon, and the copy of the builder threw `NullReferenceException` on it under a context.
+- The icon's bitmap is copied by reading its pixels. `SKBitmap.Copy` draws them, which cleared the colour of an unpremultiplied pixel of no alpha, so an SVG written under a context differed from the synchronous one. For an icon of 4,096 × 4,096 pixels it took 43 to 54 ms on the caller's thread in the verifiers' runs, longer than the whole synchronous save (15 to 22 ms), where reading the pixels took 9 to 17 ms. A bitmap with no pixels gives an empty copy, which the render refuses as the synchronous render refuses the bitmap, where the copy had drawn the caller's own bitmap. The third round found two more kinds that draw nothing (below).
+- `MaxBytes` is at most 2,147,483,591, the longest array. Past that, `int.MaxValue` among them, a read of more than 1 GiB threw `OutOfMemoryException`.
+- An image whose bitmap would take more than 2,147,483,647 bytes is refused with `InvalidDataException` under any limit.
+- A null limits reads under the default ones, so `Decode(stream, default)`, which binds to the limits, reads as `DecodeAsync(stream, default)`, which binds to the token.
+- `Default` is a static readonly field, as every class's `Default` in the package is, and a constructor of both limits, each optional, serves callers below C# 9.
+
+What was fixed in the docs: the XML docs and the README name a task scheduler of the caller's own beside a synchronization context. The plan's goals and caller examples pass limits of the server's own, and the migration guide names the constructor.
+
+What was fixed in the tests:
+
+- The copy tests hold the render at a module shape that waits until the test has changed the builder. Without the wait, one of 1,600 runs passed on a planted fault in a verifier's run. The third round found that the wait orders the icon's pixels and font, which are drawn after the modules, but not the builder's settings, which are read before them (below).
+- The icon test changes the bitmap and the font once the call returns, where it disposed them. Disposed, a fault that skipped a copy ended the test process and named no test. A fault that releases the copies before the render still ends it, since the copies are native.
+- A counting icon shape checks one copy under a context and none without, and that the copies are released after the draw, on a cancel and on a throw.
+- The cases run under a task scheduler of the caller's own as well, and an exposed stream over part of an array is read under one.
+- The limits are held at a seekable stream at the limit, a raised byte limit, a raised pixel limit through the eight reads, and the longest array.
+- 19 planted faults, the ones the review found surviving among them, each fail a test by name.
+
+Left out: SVG captions rendered at once lose their text at times, with a font and a bitmap of each render's own too (0 to 56 of 160 renders at 8 threads in a round of the verifiers' runs, none one at a time). It is outside this change, and the SVG caption tests run one at a time until a separate task finds the cause.
+
+### Third review round (2026-10-26)
+
+Done, at the maintainer's request. Two reviewers read the second round's changes, and their 16 claims each went to three verifiers. Two fell. The caption race is in Skia's SVG text, which three probes of SkiaSharp alone reproduced, so the test comment that puts it outside the library's code stands. The copy timings of the first ruling were measured on the code of that round, which the second records.
+
+What was fixed in the code:
+
+- A bitmap that draws nothing gives an empty copy, whatever its kind. One with an info and no pixel memory was copied blank and drawn, and one of zero area failed with an exception the synchronous render does not throw.
+- The last growth of a read's buffer, to the byte limit, takes an array of the limit's size, as a copy of an exposed `MemoryStream`'s buffer does. The pool rounds a size up to a power of two, so a read just past one held four times its limit. At a limit of 268,435,457 bytes the peak rose by 1,047 MiB in the verifiers' runs and by 779 MiB now, and the heap held 1,024 MiB after a full collection where it holds 512 now. At the default limit, a power of two, the read takes arrays of the same sizes as before, and the heap holds 256 MiB after a full collection where it held 512, since its last array is no longer the pool's (scratch probe, .NET 10, Windows).
+- The constructor's exception names the parameter, and a constructor with no parameters keeps an object initializer from compiling the defaults into the caller.
+
+What was fixed in the tests:
+
+- The builder test changes the builder while the call copies its icon, after the builder's settings are copied and before the call returns, so a render that read the caller's builder fails whatever the threads do, in 12 of 12 runs on the planted fault. The module shape that waits orders only what is drawn after the modules, the icon's pixels and font, which the icon test changes.
+- The test font has every setting off its default, so a copy that drops one that changes the caption fails.
+- A read with no context is held to reading an exposed buffer in place, by the bytes its thread allocates.
+- The kinds of bitmap that draw nothing, the buffer's last growth and the constructor's parameter names each have a test, and seven planted faults each fail one by name.
+
+What was fixed in the docs: the synchronous reads point to their overloads with limits, `MaxBytes` says what the read holds while it reads, and the spec's allocation sentence and the plan's records were brought up to date.
+
+### Fourth review round (2026-10-26)
+
+Done, at the maintainer's request. One reviewer read the third round's changes and found no defect in the code. What it found was in the docs and the comments, and was fixed: `MaxBytes` claimed up to about three times it held, which a limit under 1 MiB just past a power of two passes at 3.5 to 3.9 times, so it now gives the default limit's twice and three times at 268,435,457 bytes. The internal docs of the buffer still called it rented, the builder test's premise put the copy after the call left its caller, and the plan's API sketch lacked the constructor with no parameters. The review stopped here, at the maintainer's instruction to end once a round leaves only comments to fix.
+
+Left as found: of the eight font settings the copy carries, dropping `Hinting`, `ForceAutoHinting` or `EmbeddedBitmaps` changes no caption on Windows, so no test can see the copy drop them, which the test's comment says. A copy made after the call has left its caller, a fault, passes the builder test, since the icon changes the builder after the clone on whichever thread copies, and the icon tests catch it. A fault that releases the copies before the render ends the test process, as the second round recorded.
+
+The full suite passes on net10.0 (35,325 passed, 401 skipped) and net8.0 (35,231 passed, 401 skipped).

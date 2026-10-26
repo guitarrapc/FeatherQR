@@ -531,6 +531,14 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
         SymbolRenderer.Render(canvas, contentRect, (QRCodeData)symbol, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
     }
 
+    private protected override SymbolImageBuilderBase<QRCodeImageBuilder> CopyForLaterRender(List<IDisposable> owned)
+    {
+        var copy = (QRCodeImageBuilder)base.CopyForLaterRender(owned);
+        if (_iconData?.Icon?.CopyForLaterRender(owned) is { } icon)
+            copy._iconData = _iconData with { Icon = icon };
+        return copy;
+    }
+
     /// <summary>
     /// Curved finder shapes require antialiasing. A square one does not, and neither do the built-in icon shapes, which only draw rectangles, bitmaps, and text.
     /// </summary>

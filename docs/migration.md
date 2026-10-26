@@ -231,7 +231,7 @@ var data = QRCodeGenerator.Create("https://example.com".AsSpan(), QREccLevel.M,
 var icon = new IconData(new ImageTextIconShape(logo, "FooBar", SKColors.Black, font), iconSizePercent: 15);
 ```
 
-`IconData`'s constructor exists for exactly this case. On C# 9 and above, prefer the object initializer: it names only the settings it changes and does not depend on the parameter order.
+`IconData`'s constructor exists for exactly this case. On C# 9 and above, prefer the object initializer: it names only the settings it changes and does not depend on the parameter order. `ImageStreamReadLimits`, the limits of a stream read, has a constructor of the same kind: `new ImageStreamReadLimits(maxPixels: 4096 * 4096)`.
 
 The generator options had a constructor of the same kind in 2.0.0-preview.3 through preview.5 (`new QRCodeGeneratorOptions(quietZoneSize: 2)`). It is gone, since the initializer now compiles everywhere: write `new QRCodeGeneratorOptions { QuietZoneSize = 2 }`.
 
@@ -451,7 +451,7 @@ if (result.Success)
 
 - **The result is the same.** The stream read decodes the image as `SKBitmap.Decode(stream)` does and reads it as `TryDecode` reads that bitmap.
 - **The stream stays open.** `SKBitmap.Decode(stream)` disposes the stream it is given. The stream read leaves it open, read to its end.
-- **A stream that holds no image throws** `InvalidDataException`, where `SKBitmap.Decode` returned `null`. So does a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384). Decode a larger image into an `SKBitmap` yourself and call `TryDecode`.
+- **A stream that holds no image throws** `InvalidDataException`, where `SKBitmap.Decode` returned `null`. So does a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), by default. An `ImageStreamReadLimits` passed to the read sets other limits, and a larger image can also be decoded into an `SKBitmap` and read with `TryDecode`.
 - **`Success` is `false` for a default value.** `DecodeStatus.Success` is 0, so a default result's status reads as a success, where `Success` does not.
 
 ### Several symbols in one image

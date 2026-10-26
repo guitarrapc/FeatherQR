@@ -73,11 +73,12 @@ public static class RmQRCodeImageDecoder
         /// The stream is read to its end through its asynchronous reads alone, so a stream that refuses synchronous reads, such as a server's request body, gives it.
         /// A <see cref="MemoryStream"/> whose buffer is exposed is read in place instead, from its position to its end, with no call to its reads.
         /// The image is then decoded as <see cref="SKBitmap.Decode(Stream)"/> decodes it, in its pixels as encoded with no EXIF orientation applied, and read as <see cref="TryDecode(SKBitmap, out string, out RmQRCodeDecodeInfo)"/> reads that bitmap.
-        /// Called on a thread with a synchronization context, such as a UI thread, the call decodes on the thread pool, so the caller can await it where it is.
+        /// Called on a thread with a synchronization context, such as a UI thread, or under a task scheduler of the caller's own, the call decodes on the thread pool, so the caller can await it where it is.
+        /// There it decodes a copy of an exposed <see cref="MemoryStream"/>'s buffer, so the buffer may be reused once the call returns.
         /// </para>
         /// <para>
-        /// A stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), is refused before any pixel is allocated.
-        /// A larger image can be decoded into an <see cref="SKBitmap"/> and read with <see cref="TryDecode(SKBitmap, out string, out RmQRCodeDecodeInfo)"/>.
+        /// The read takes the limits of <see cref="ImageStreamReadLimits.Default"/>: a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), is refused before any pixel is allocated.
+        /// Other limits are given with <see cref="DecodeAsync(Stream, ImageStreamReadLimits, CancellationToken)"/>, and a larger image can also be decoded into an <see cref="SKBitmap"/> and read with <see cref="TryDecode(SKBitmap, out string, out RmQRCodeDecodeInfo)"/>.
         /// </para>
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
@@ -88,9 +89,26 @@ public static class RmQRCodeImageDecoder
         /// <exception cref="InvalidDataException">Faults the task when the stream holds no image that can be decoded, or one past the limits.</exception>
         /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
         public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = default)
+            => DecodeAsync(image, ImageStreamReadLimits.Default, cancellationToken);
+
+        /// <summary>
+        /// Reads an image from a stream asynchronously under the limits given, and finds and decodes an rMQR code in it.
+        /// </summary>
+        /// <remarks>
+        /// Reads as <see cref="DecodeAsync(Stream, CancellationToken)"/> does, with <paramref name="limits"/> in place of the default ones.
+        /// </remarks>
+        /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
+        /// <param name="limits">The most bytes the read takes from the stream, and the most pixels the image's header may declare. <c>null</c> for <see cref="ImageStreamReadLimits.Default"/>.</param>
+        /// <param name="cancellationToken">Stops the call before the decode and during the reads.</param>
+        /// <returns>The result in every case. On a failure <see cref="RmQRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="RmQRCodeDecodeInfo.Status"/> says why.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
+        /// <exception cref="InvalidDataException">Faults the task when the stream holds no image that can be decoded, or one past the limits.</exception>
+        /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
+        public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = default)
         {
             EncodedImage.ThrowIfUnreadable(image);
-            return EncodedImage.ReadAsync(image, ReadOne, cancellationToken);
+            return EncodedImage.ReadAsync(image, limits ?? ImageStreamReadLimits.Default, ReadOne, cancellationToken);
         }
 
         /// <summary>
@@ -98,7 +116,7 @@ public static class RmQRCodeImageDecoder
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The synchronous twin of <see cref="DecodeAsync(Stream, CancellationToken)"/>: the stream is read to its end through its synchronous reads, or in place as there, and the image is decoded and read as there, under the same limits.
+        /// The synchronous twin of <see cref="DecodeAsync(Stream, CancellationToken)"/>: the stream is read to its end through its synchronous reads, or in place as there, and the image is decoded and read as there, under the same limits. Other limits are given with <see cref="Decode(Stream, ImageStreamReadLimits)"/>.
         /// </para>
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
@@ -107,9 +125,24 @@ public static class RmQRCodeImageDecoder
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
         /// <exception cref="InvalidDataException">Thrown when the stream holds no image that can be decoded, or one past the limits.</exception>
         public static RmQRCodeDecodeResult Decode(Stream image)
+            => Decode(image, ImageStreamReadLimits.Default);
+
+        /// <summary>
+        /// Reads an image from a stream under the limits given, and finds and decodes an rMQR code in it.
+        /// </summary>
+        /// <remarks>
+        /// Reads as <see cref="Decode(Stream)"/> does, with <paramref name="limits"/> in place of the default ones.
+        /// </remarks>
+        /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
+        /// <param name="limits">The most bytes the read takes from the stream, and the most pixels the image's header may declare. <c>null</c> for <see cref="ImageStreamReadLimits.Default"/>.</param>
+        /// <returns>The result in every case. On a failure <see cref="RmQRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="RmQRCodeDecodeInfo.Status"/> says why.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
+        /// <exception cref="InvalidDataException">Thrown when the stream holds no image that can be decoded, or one past the limits.</exception>
+        public static RmQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits)
         {
             EncodedImage.ThrowIfUnreadable(image);
-            return EncodedImage.Read(image, ReadOne);
+            return EncodedImage.Read(image, limits ?? ImageStreamReadLimits.Default, ReadOne);
         }
     }
 

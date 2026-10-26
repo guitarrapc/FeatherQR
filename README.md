@@ -568,11 +568,14 @@ app.MapGet("/qr", async (string text, HttpResponse response, CancellationToken c
     await QRCodeImageBuilder.SavePngAsync(text, response.Body, cancellationToken: cancellationToken);
 });
 
+// An upload is read under limits of its own, since a few dozen bytes can declare an image at the default limit
+var uploadLimits = new ImageStreamReadLimits { MaxPixels = 4096 * 4096, MaxBytes = 16 * 1024 * 1024 };
+
 app.MapPost("/scan", async (HttpRequest request, CancellationToken cancellationToken) =>
 {
     try
     {
-        var result = await QRCodeDecoder.DecodeAsync(request.Body, cancellationToken);
+        var result = await QRCodeDecoder.DecodeAsync(request.Body, uploadLimits, cancellationToken);
         return result.Success
             ? Results.Ok(result.Text)
             : Results.UnprocessableEntity(result.Info.Status.ToString());
@@ -590,12 +593,12 @@ With C# 14 the stream reads are reachable as `QRCodeDecoder.DecodeAsync(stream)`
 How the calls behave:
 
 - **The computation is synchronous, the I/O asynchronous.** The image is rendered and encoded whole, or read whole and then decoded, and the stream is never written or read synchronously.
-- **A UI thread stays free.** Called on a thread with a `SynchronizationContext`, as in WinUI, WPF or MAUI, the call renders or decodes on the thread pool, so the app awaits it on the UI thread as it is. Without one, as on an ASP.NET Core request, it does not move.
+- **A UI thread stays free.** Called on a thread with a `SynchronizationContext`, as in WinUI, WPF or MAUI, or under a `TaskScheduler` of your own, the call renders or decodes on the thread pool, so the app awaits it on the UI thread as it is. With neither, as on an ASP.NET Core request, it does not move. A call that moves reads copies of what it was given, the builder with its icon's images and fonts, or the buffer of a `MemoryStream` read in place, so they can be changed or disposed once the call returns. A shape class you derive yourself is drawn as it is, so keep it usable until the task completes.
 - **Cancellation.** The token stops a call before it renders or decodes and during the I/O, and a read for every symbol between the symbols it tries, never inside one symbol's read. A write stopped part way leaves part of the image in the stream.
 - **Errors.** A `null` stream, or one that cannot write or read, throws at the call, and so do the static `SavePngAsync` and `SaveSvgAsync` on empty content, `null` data or a size that is not positive. Everything else, a layout that does not fit or an image that cannot be decoded, comes through the task.
 - **Writes** write nothing when the render fails, and do not flush the stream, as the synchronous ones do not.
 - **Reads** leave the stream open, where `SKBitmap.Decode(stream)` disposes it, and read it from its position to its end. A `MemoryStream` whose buffer is exposed is read in place.
-- **Limits.** A read refuses a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), with `InvalidDataException`, before any pixel is allocated, and a stream that holds no image throws it too. A larger image can be decoded into an `SKBitmap` and read with `TryDecode`.
+- **Limits.** By default a read refuses a stream of more than 256 MiB, or an image whose header declares more than 268,435,456 pixels (16,384 × 16,384), with `InvalidDataException`, before any pixel is allocated, and a stream that holds no image throws it too. An image cut short after its header decodes, so a few dozen bytes can declare an image at the limit, and decoding one took about 3 GiB for an interlaced PNG of 16 bits a channel. A server that reads uploads passes an `ImageStreamReadLimits` of its own, as above. A larger image, up to the 2,147,483,647 bytes a bitmap holds (536,870,911 pixels of four bytes), can be read with raised limits, or decoded into an `SKBitmap` and read with `TryDecode`.
 - **Results.** A read for one symbol returns a `QRCodeDecodeResult` (`MicroQRCodeDecodeResult`, `RmQRCodeDecodeResult`) in every case. On a failure `Success` is `false`, `Text` is empty and `Info.Status` says why.
 - **Pixels as encoded.** The EXIF orientation is not applied, as `SKBitmap.Decode` does not apply it.
 

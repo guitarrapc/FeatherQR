@@ -3,17 +3,21 @@ using System.Buffers;
 namespace FeatherQR.SkiaSharp.Internals;
 
 /// <summary>
-/// A buffer rented from the pool that grows as it is written, for an image that has to be whole before an async write sends it.
+/// A buffer that grows as it is written, from the pool but for a last growth to the most room past 1 MiB, for an image that has to be whole before an async write sends it.
 /// </summary>
 /// <remarks>
-/// The rental is held across the write's await, so this class owns it. <see cref="Dispose"/> returns it, and a use after that throws instead of reaching an array the pool has handed on.
+/// The buffer is held across the write's await, so this class owns it. <see cref="Dispose"/> returns a buffer the pool lent, and a use after that throws instead of reaching an array the pool has handed on.
 /// </remarks>
 internal sealed class PooledBufferWriter : IBufferWriter<byte>, IDisposable
 {
     private const int DefaultCapacity = 16 * 1024;
 
+    // Past this a buffer of the most room is allocated at its size. The pool rounds a size up to a power of two, so a limit just past one would take twice its room
+    private const int LargestRoundedUp = 1024 * 1024;
+
     private readonly int _maxCapacity;
     private byte[]? _buffer;
+    private bool _pooled;
     private int _written;
 
     /// <param name="capacity">The room to start with.</param>
@@ -21,7 +25,7 @@ internal sealed class PooledBufferWriter : IBufferWriter<byte>, IDisposable
     public PooledBufferWriter(int capacity = DefaultCapacity, int maxCapacity = int.MaxValue)
     {
         _maxCapacity = maxCapacity;
-        _buffer = ArrayPool<byte>.Shared.Rent(Math.Max(capacity, 1));
+        _buffer = Allocate(Math.Max(capacity, 1), out _pooled);
     }
 
     public int WrittenCount => _written;
@@ -55,7 +59,8 @@ internal sealed class PooledBufferWriter : IBufferWriter<byte>, IDisposable
         if (buffer is null)
             return;
         _buffer = null;
-        ArrayPool<byte>.Shared.Return(buffer);
+        if (_pooled)
+            ArrayPool<byte>.Shared.Return(buffer);
     }
 
     private byte[] Buffer => _buffer ?? throw new ObjectDisposedException(nameof(PooledBufferWriter));
@@ -69,10 +74,18 @@ internal sealed class PooledBufferWriter : IBufferWriter<byte>, IDisposable
 
         // Doubling holds the copying of a document written a little at a time to less than twice its size
         var size = Math.Max(needed, Math.Min(2L * buffer.Length, _maxCapacity));
-        var grown = ArrayPool<byte>.Shared.Rent((int)Math.Min(size, int.MaxValue));
+        var grown = Allocate((int)Math.Min(size, int.MaxValue), out var pooled);
         buffer.AsSpan(0, _written).CopyTo(grown);
+        if (_pooled)
+            ArrayPool<byte>.Shared.Return(buffer);
         _buffer = grown;
-        ArrayPool<byte>.Shared.Return(buffer);
+        _pooled = pooled;
         return grown;
+    }
+
+    private byte[] Allocate(int size, out bool pooled)
+    {
+        pooled = size < _maxCapacity || size <= LargestRoundedUp;
+        return pooled ? ArrayPool<byte>.Shared.Rent(size) : new byte[size];
     }
 }

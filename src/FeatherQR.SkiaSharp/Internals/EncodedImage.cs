@@ -11,12 +11,6 @@ namespace FeatherQR.SkiaSharp.Internals;
 /// </remarks>
 internal sealed class EncodedImage : IDisposable
 {
-    /// <summary>The most bytes a stream read takes: 256 MiB.</summary>
-    public const int MaxEncodedBytes = 256 * 1024 * 1024;
-
-    /// <summary>The most pixels a stream read decodes: 16,384 × 16,384.</summary>
-    public const long MaxPixels = 16_384L * 16_384;
-
     // Where the room starts for a stream that cannot say its length
     private const int UnknownLengthCapacity = 64 * 1024;
 
@@ -40,48 +34,69 @@ internal sealed class EncodedImage : IDisposable
     }
 
     /// <summary>Reads the stream to its end, decodes the image and hands the bitmap to <paramref name="read"/>, with no token.</summary>
-    public static TResult Read<TResult>(Stream image, Func<SKBitmap, CancellationToken, TResult> read)
+    public static TResult Read<TResult>(Stream image, ImageStreamReadLimits limits, Func<SKBitmap, CancellationToken, TResult> read)
     {
         SKBitmap bitmap;
-        using (var encoded = ReadToEnd(image))
-            bitmap = Decode(encoded.Bytes);
+        using (var encoded = ReadToEnd(image, limits))
+            bitmap = Decode(encoded.Bytes, limits);
         using (bitmap)
             return read(bitmap, CancellationToken.None);
     }
 
     /// <summary>Reads the stream to its end through its async reads, then decodes the image and hands the bitmap and the token to <paramref name="read"/>, off the caller's context.</summary>
-    public static async Task<TResult> ReadAsync<TResult>(Stream image, Func<SKBitmap, CancellationToken, TResult> read, CancellationToken cancellationToken)
+    public static async Task<TResult> ReadAsync<TResult>(Stream image, ImageStreamReadLimits limits, Func<SKBitmap, CancellationToken, TResult> read, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         SKBitmap bitmap;
-        using (var encoded = await ReadToEndAsync(image, cancellationToken).ConfigureAwait(false))
+        var encoded = await ReadToEndAsync(image, limits, cancellationToken).ConfigureAwait(false);
+        try
         {
             // Reads that all completed at once leave the call on the caller's thread
-            await CallerContext.Leave();
+            var leave = CallerContext.Leave();
+            // A call that leaves the caller's context decodes after it has returned, so it decodes a copy of a buffer the caller lent
+            if (!leave.IsCompleted)
+                encoded = encoded.Owned();
+            await leave;
             cancellationToken.ThrowIfCancellationRequested();
-            bitmap = Decode(encoded.Bytes);
+            bitmap = Decode(encoded.Bytes, limits);
+        }
+        finally
+        {
+            encoded.Dispose();
         }
         using (bitmap)
             return read(bitmap, cancellationToken);
     }
 
-    private static EncodedImage ReadToEnd(Stream stream)
+    /// <summary>The image in a buffer of its own: a borrowed buffer is copied into one of its size, and one already its own is kept.</summary>
+    private EncodedImage Owned()
     {
-        if (TryBorrow(stream, out var borrowed))
+        if (_owned is not null)
+            return this;
+
+        var buffer = new PooledBufferWriter(_borrowed.Count, _borrowed.Count);
+        _borrowed.AsSpan().CopyTo(buffer.GetSpan(_borrowed.Count));
+        buffer.Advance(_borrowed.Count);
+        return new EncodedImage(buffer);
+    }
+
+    private static EncodedImage ReadToEnd(Stream stream, ImageStreamReadLimits limits)
+    {
+        if (TryBorrow(stream, limits, out var borrowed))
             return borrowed;
 
-        var buffer = new PooledBufferWriter(InitialCapacity(stream), MaxEncodedBytes);
+        var buffer = new PooledBufferWriter(InitialCapacity(stream, limits), limits.MaxBytes);
         try
         {
             while (true)
             {
-                var room = Room(buffer);
+                var room = Room(buffer, limits);
                 if (room.IsEmpty)
                 {
                     // At the limit, one byte more says whether the stream goes past it
                     if (Read(stream, new byte[1]) > 0)
-                        throw TooManyBytes();
+                        throw TooManyBytes(limits);
                     return new EncodedImage(buffer);
                 }
 
@@ -98,22 +113,22 @@ internal sealed class EncodedImage : IDisposable
         }
     }
 
-    private static async Task<EncodedImage> ReadToEndAsync(Stream stream, CancellationToken cancellationToken)
+    private static async Task<EncodedImage> ReadToEndAsync(Stream stream, ImageStreamReadLimits limits, CancellationToken cancellationToken)
     {
-        if (TryBorrow(stream, out var borrowed))
+        if (TryBorrow(stream, limits, out var borrowed))
             return borrowed;
 
-        var buffer = new PooledBufferWriter(InitialCapacity(stream), MaxEncodedBytes);
+        var buffer = new PooledBufferWriter(InitialCapacity(stream, limits), limits.MaxBytes);
         try
         {
             while (true)
             {
-                var room = Room(buffer);
+                var room = Room(buffer, limits);
                 if (room.IsEmpty)
                 {
                     // At the limit, one byte more says whether the stream goes past it
                     if (await ReadAsync(stream, new byte[1], cancellationToken).ConfigureAwait(false) > 0)
-                        throw TooManyBytes();
+                        throw TooManyBytes(limits);
                     return new EncodedImage(buffer);
                 }
 
@@ -133,7 +148,7 @@ internal sealed class EncodedImage : IDisposable
     /// <summary>
     /// An exposed <see cref="MemoryStream"/>'s bytes from its position on, read in place with no copy. The stream is left where a read to its end leaves it.
     /// </summary>
-    private static bool TryBorrow(Stream stream, [NotNullWhen(true)] out EncodedImage? image)
+    private static bool TryBorrow(Stream stream, ImageStreamReadLimits limits, [NotNullWhen(true)] out EncodedImage? image)
     {
         image = null;
         if (stream is not MemoryStream memory || !memory.TryGetBuffer(out var whole))
@@ -141,8 +156,8 @@ internal sealed class EncodedImage : IDisposable
 
         var start = (int)Math.Min(memory.Position, whole.Count);
         var bytes = new ArraySegment<byte>(whole.Array!, whole.Offset + start, whole.Count - start);
-        if (bytes.Count > MaxEncodedBytes)
-            throw TooManyBytes();
+        if (bytes.Count > limits.MaxBytes)
+            throw TooManyBytes(limits);
 
         // A read at a position past the end reads nothing and leaves the position there
         if (memory.Position < memory.Length)
@@ -151,23 +166,23 @@ internal sealed class EncodedImage : IDisposable
         return true;
     }
 
-    private static int InitialCapacity(Stream stream)
+    private static int InitialCapacity(Stream stream, ImageStreamReadLimits limits)
     {
         if (!stream.CanSeek)
-            return UnknownLengthCapacity;
+            return Math.Min(UnknownLengthCapacity, limits.MaxBytes);
 
         var remaining = Math.Max(stream.Length - stream.Position, 0);
-        if (remaining > MaxEncodedBytes)
-            throw TooManyBytes();
+        if (remaining > limits.MaxBytes)
+            throw TooManyBytes(limits);
 
         // A byte over what is left, so the read that finds the end needs no room of its own
-        return (int)Math.Min(remaining + 1, MaxEncodedBytes);
+        return (int)Math.Min(remaining + 1, limits.MaxBytes);
     }
 
     /// <summary>The room for the next read, never past the limit. Empty once the bytes reach it.</summary>
-    private static Memory<byte> Room(PooledBufferWriter buffer)
+    private static Memory<byte> Room(PooledBufferWriter buffer, ImageStreamReadLimits limits)
     {
-        var allowed = MaxEncodedBytes - buffer.WrittenCount;
+        var allowed = limits.MaxBytes - buffer.WrittenCount;
         if (allowed == 0)
             return Memory<byte>.Empty;
 
@@ -196,7 +211,7 @@ internal sealed class EncodedImage : IDisposable
 #endif
 
     /// <summary>Decodes the image as <see cref="SKBitmap.Decode(ReadOnlySpan{byte})"/> does, once its header shows it within the pixel limit.</summary>
-    private static unsafe SKBitmap Decode(ReadOnlySpan<byte> encoded)
+    private static unsafe SKBitmap Decode(ReadOnlySpan<byte> encoded, ImageStreamReadLimits limits)
     {
         if (encoded.IsEmpty)
             throw NothingLeft();
@@ -209,18 +224,21 @@ internal sealed class EncodedImage : IDisposable
             var info = codec.Info;
             if (info.Width <= 0 || info.Height <= 0)
                 throw NotAnImage();
-            if (IsOverPixelLimit(info.Width, info.Height))
-                throw new InvalidDataException($"The image is {info.Width} × {info.Height} pixels, more than the {MaxPixels:N0} a stream read decodes.");
+            if (IsOverPixelLimit(info.Width, info.Height, limits))
+                throw new InvalidDataException($"The image is {info.Width} × {info.Height} pixels, more than the {limits.MaxPixels:N0} the read decodes.");
+            // Skia allocates no bitmap of more than int.MaxValue bytes, and past that throws an exception that names no reason
+            if (info.BytesSize64 > int.MaxValue)
+                throw new InvalidDataException($"The image is {info.Width} × {info.Height} pixels, more than a bitmap holds.");
 
             return SKBitmap.Decode(codec) ?? throw NotAnImage();
         }
     }
 
-    internal static bool IsOverPixelLimit(int width, int height) => (long)width * height > MaxPixels;
+    internal static bool IsOverPixelLimit(int width, int height, ImageStreamReadLimits limits) => (long)width * height > limits.MaxPixels;
 
     private static InvalidDataException NothingLeft() => new("The stream has nothing left to read from its position.");
 
     private static InvalidDataException NotAnImage() => new("The stream does not hold an image that can be decoded.");
 
-    private static InvalidDataException TooManyBytes() => new($"The stream holds more than {MaxEncodedBytes:N0} bytes, the most a stream read takes.");
+    private static InvalidDataException TooManyBytes(ImageStreamReadLimits limits) => new($"The stream holds more than {limits.MaxBytes:N0} bytes, the most the read takes.");
 }

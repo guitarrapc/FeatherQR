@@ -307,7 +307,9 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Nothing reaches the stream when the render fails. The stream is not flushed, as <see cref="SaveTo(Stream)"/> does not flush it.
     /// </para>
     /// <para>
-    /// Called on a thread with a synchronization context, such as a UI thread, the call renders on the thread pool, so the caller can await it where it is.
+    /// Called on a thread with a synchronization context, such as a UI thread, or under a task scheduler of the caller's own, the call renders on the thread pool, so the caller can await it where it is.
+    /// There it renders a copy of the builder that draws copies of the icon's images and fonts, so the builder and its icon may be changed or disposed once the call returns.
+    /// A shape class of your own, derived from <see cref="ModuleShape"/>, <see cref="FinderPatternShape"/> or <see cref="IconShape"/>, is drawn as it is there, so keep it usable until the task completes.
     /// </para>
     /// </remarks>
     /// <param name="output">Where to write. Left open afterwards.</param>
@@ -380,7 +382,9 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Nothing reaches the stream when the render fails, where the synchronous form has already written part of the document. The stream is not flushed.
     /// </para>
     /// <para>
-    /// Called on a thread with a synchronization context, such as a UI thread, the call renders on the thread pool, so the caller can await it where it is.
+    /// Called on a thread with a synchronization context, such as a UI thread, or under a task scheduler of the caller's own, the call renders on the thread pool, so the caller can await it where it is.
+    /// There it renders a copy of the builder that draws copies of the icon's images and fonts, so the builder and its icon may be changed or disposed once the call returns.
+    /// A shape class of your own, derived from <see cref="ModuleShape"/>, <see cref="FinderPatternShape"/> or <see cref="IconShape"/>, is drawn as it is there, so keep it usable until the task completes.
     /// </para>
     /// </remarks>
     /// <param name="output">Where to write. Left open afterwards.</param>
@@ -475,22 +479,75 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
 
     private async Task SaveToCoreAsync(Stream output, CancellationToken cancellationToken)
     {
-        await CallerContext.Leave();
-        cancellationToken.ThrowIfCancellationRequested();
+        var leave = CallerContext.Leave();
+        PooledBufferWriter encoded;
+        // A call that leaves the caller's context renders after it has returned, so it renders a copy the caller may change or dispose meanwhile
+        using (var later = leave.IsCompleted ? null : new LaterRender(this))
+        {
+            await leave;
+            cancellationToken.ThrowIfCancellationRequested();
+            encoded = (later?.Builder ?? this).EncodeToBuffer();
+        }
 
-        using var encoded = EncodeToBuffer();
-        cancellationToken.ThrowIfCancellationRequested();
-        await encoded.WriteToAsync(output, cancellationToken).ConfigureAwait(false);
+        using (encoded)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await encoded.WriteToAsync(output, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task SaveToSvgCoreAsync(Stream output, CancellationToken cancellationToken)
     {
-        await CallerContext.Leave();
-        cancellationToken.ThrowIfCancellationRequested();
+        var leave = CallerContext.Leave();
+        PooledBufferWriter document;
+        // A call that leaves the caller's context renders after it has returned, so it renders a copy the caller may change or dispose meanwhile
+        using (var later = leave.IsCompleted ? null : new LaterRender(this))
+        {
+            await leave;
+            cancellationToken.ThrowIfCancellationRequested();
+            document = (later?.Builder ?? this).RenderSvgToBuffer();
+        }
 
-        using var document = RenderSvgToBuffer();
-        cancellationToken.ThrowIfCancellationRequested();
-        await document.WriteToAsync(output, cancellationToken).ConfigureAwait(false);
+        using (document)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await document.WriteToAsync(output, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// A copy of the builder that shares what the caller cannot change and draws copies of the icon's images and fonts.
+    /// The shapes a caller writes are shared, since they cannot be copied.
+    /// </summary>
+    /// <param name="owned">Collects the copies, for the render to dispose.</param>
+    private protected virtual SymbolImageBuilderBase<TSelf> CopyForLaterRender(List<IDisposable> owned) => (SymbolImageBuilderBase<TSelf>)MemberwiseClone();
+
+    /// <summary>The copy a render reads after its call has returned, and the images and fonts it owns.</summary>
+    private sealed class LaterRender : IDisposable
+    {
+        private readonly List<IDisposable> _owned = [];
+
+        public LaterRender(SymbolImageBuilderBase<TSelf> source)
+        {
+            try
+            {
+                Builder = source.CopyForLaterRender(_owned);
+            }
+            catch
+            {
+                Dispose();
+                throw;
+            }
+        }
+
+        public SymbolImageBuilderBase<TSelf> Builder { get; }
+
+        public void Dispose()
+        {
+            foreach (var item in _owned)
+                item.Dispose();
+            _owned.Clear();
+        }
     }
 
     /// <summary>Encodes the rendered image in the format the builder was given.</summary>

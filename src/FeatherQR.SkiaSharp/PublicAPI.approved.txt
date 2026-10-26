@@ -1,5 +1,5 @@
 // FeatherQR.SkiaSharp
-// 25 exported types
+// 26 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR.SkiaSharp
@@ -76,6 +76,15 @@ namespace FeatherQR.SkiaSharp
         public override void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor);
     }
 
+    public sealed class ImageStreamReadLimits : IEquatable<ImageStreamReadLimits>
+    {
+        public static readonly ImageStreamReadLimits Default;
+        public ImageStreamReadLimits();
+        public ImageStreamReadLimits(int maxBytes = 268435456, long maxPixels = 268435456);
+        public int MaxBytes { get; init; }
+        public long MaxPixels { get; init; }
+    }
+
     public sealed class ImageTextIconShape : IconShape
     {
         public ImageTextIconShape(SKBitmap image, string text, SKColor textColor, SKFont font, SKTextAlign horizontalAlign = 1, TextVerticalAlignment verticalAlign = 0, int textPadding = 0);
@@ -118,7 +127,9 @@ namespace FeatherQR.SkiaSharp
     public static class MicroQRCodeImageDecoder
     {
         public static MicroQRCodeDecodeResult Decode(Stream image);
+        public static MicroQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
         public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info);
     }
@@ -169,10 +180,14 @@ namespace FeatherQR.SkiaSharp
     public static class QRCodeImageDecoder
     {
         public static QRCodeDecodeResult Decode(Stream image);
+        public static QRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
         public static QRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
         public static QRCodeDecodeResult[] DecodeSymbols(Stream image);
+        public static QRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
         public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info);
     }
@@ -229,7 +244,9 @@ namespace FeatherQR.SkiaSharp
     public static class RmQRCodeImageDecoder
     {
         public static RmQRCodeDecodeResult Decode(Stream image);
+        public static RmQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
         public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
     }

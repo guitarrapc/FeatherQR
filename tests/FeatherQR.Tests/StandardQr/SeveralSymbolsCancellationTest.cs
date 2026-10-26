@@ -117,8 +117,8 @@ public class SeveralSymbolsCancellationTest
         CancellationToken viaAsync = default;
         var viaSync = new CancellationTokenSource().Token;
 
-        await EncodedImage.ReadAsync(new MemoryStream(png), (_, token) => viaAsync = token, cancellation.Token);
-        EncodedImage.Read(new MemoryStream(png), (_, token) => viaSync = token);
+        await EncodedImage.ReadAsync(new MemoryStream(png), ImageStreamReadLimits.Default, (_, token) => viaAsync = token, cancellation.Token);
+        EncodedImage.Read(new MemoryStream(png), ImageStreamReadLimits.Default, (_, token) => viaSync = token);
 
         await Assert.That(viaAsync).IsEqualTo(cancellation.Token);
         await Assert.That(viaSync).IsEqualTo(CancellationToken.None);
