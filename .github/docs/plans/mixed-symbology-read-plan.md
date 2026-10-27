@@ -2,7 +2,7 @@
 
 ## Purpose
 
-One call that returns every symbol of an image whatever its symbology: Standard QR, Micro QR and rMQR together. Today a caller picks a decoder (the scope row "Image detection default" in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions): Standard QR by default, typed entry points for the other two), and the Playground tries the three in that order, reading a Micro QR or rMQR symbol only when no Standard QR symbol read. The maintainer asked for a mixed read on 2026-10-27. This plan builds on [microqr-rmqr-several-symbols-plan.md](microqr-rmqr-several-symbols-plan.md): without its entries a mixed sheet with two Micro QR symbols would return one of them.
+One call that returns every symbol of an image whatever its symbology: Standard QR, Micro QR and rMQR together. Today a caller picks a decoder (the scope row "Image detection default" in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions): Standard QR by default, typed entry points for the other two), and the Playground tries the three in that order, reading a Micro QR or rMQR symbol only when no Standard QR symbol read. The maintainer asked for a mixed read on 2026-10-27. This plan builds on the Micro QR and rMQR reads for every symbol, shipped on 2026-10-27 ([qrcode-symbologies.md](../specs/qrcode-symbologies.md#every-symbol-of-an-image)): without them a mixed sheet with two Micro QR symbols would return one of them.
 
 ## Where it stands (2026-10-27)
 

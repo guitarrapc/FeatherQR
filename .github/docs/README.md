@@ -37,8 +37,7 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 | Document | Covers |
 |---|---|
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
-| [microqr-rmqr-several-symbols-plan.md](plans/microqr-rmqr-several-symbols-plan.md) | Reading every Micro QR or rMQR symbol of an image in one call, as Standard QR does since 2.0.0: the ceiling and the price measured on composed sheets before any code, an internal entry through the shared candidate scan, the maintainer's decisions, then the public calls, the Playground and the docs. Requested 2026-10-27 |
-| [mixed-symbology-read-plan.md](plans/mixed-symbology-read-plan.md) | One call that reads every symbol of an image whatever its symbology, Standard QR, Micro QR and rMQR together over one finder scan: its price on photographs that hold Standard QR alone, the result type and the entry's name for the maintainer, and the Playground's fallback replaced. Builds on the Micro QR / rMQR plan. Requested 2026-10-27 |
+| [mixed-symbology-read-plan.md](plans/mixed-symbology-read-plan.md) | One call that reads every symbol of an image whatever its symbology, Standard QR, Micro QR and rMQR together over one finder scan: its price on photographs that hold Standard QR alone, the result type and the entry's name for the maintainer, and the Playground's fallback replaced. Builds on the Micro QR and rMQR reads for every symbol. Requested 2026-10-27 |
 
 The 2.0.0 core split plan (`FeatherQR` core, `FeatherQR.SkiaSharp` renderer, `SkiaSharp.QrCode` metapackage, repository rename) completed on 2026-09-06 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (package architecture, seam, graph, the "why three packages" record, scope decisions, lessons) and [DESIGN.md](DESIGN.md).
 
@@ -115,7 +114,7 @@ The image decode follow-ups plan (the photograph stages timed on WebAssembly, th
 - [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md): the `boofcv` command's codes column and the rules that score it, the read-again and entry tables, and the result lines that carry each read's centre.
 - [standardqr-spec-map.md](specs/standardqr-spec-map.md) ("Image level, every symbol"), [qrcode-simd-tiers.md](specs/qrcode-simd-tiers.md) (the kernel table), and the README and `docs/`, which the async API plan's Phase 4 wrote.
 
-It left out per-phase narration, test and planted-fault counts, timing tables that decided nothing, the forms of the edge extraction that were refused, and the commits each measurement was taken at. Micro QR and rMQR, out of it by the ruling of 2026-10-15, are the two plans above.
+It left out per-phase narration, test and planted-fault counts, timing tables that decided nothing, the forms of the edge extraction that were refused, and the commits each measurement was taken at. Micro QR and rMQR, out of it by the ruling of 2026-10-15, got the same calls from the plan folded below, and the mixed read of the three is the plan above.
 
 The async API plan (where generation and reading block a caller's thread, measured by setting; the fourteen async writes; the stream reads with their result types, limits and synchronous twins; cancellation between the symbols of a read for every symbol; the move off a UI context with copies of what the call was given; four review rounds and the safe default limits) completed on 2026-10-26 and was folded into:
 
@@ -124,3 +123,12 @@ The async API plan (where generation and reading block a caller's thread, measur
 - The README (Async and stream I/O, the FAQ), `docs/migration.md` (the move from `SKBitmap.Decode(stream)`, the limits) and the API page, which the plan's Phase 4 wrote and the review rounds corrected.
 
 It left out the caller examples, which the README and the migration guide hold, the settings tables beyond their conclusion, per-round review narration, test and planted-fault counts, and the benchmark tables beyond their ratios.
+
+The Micro QR and rMQR several-symbols plan (the ceiling and the price measured on composed sheets with no change to `src`, an internal entry for each through one scan written beside the one-symbol scan, where the time goes, the maintainer's rulings, then the public calls in Standard QR's shape, the Playground's fallback from one symbology to the next and the docs) completed on 2026-10-27. On 84 sheets a symbology of 2 to 100 symbols the call reads 2,347 of 2,436 Micro QR codes and 2,435 of 2,436 rMQR codes with no false read, and on an image of one symbol it returns the one-symbol read and nothing else, at 1.27 and 3.80 times that call, within 2 and 7 % of what any call that goes on after a read pays. It was folded into:
+
+- [qrcode-symbologies.md](specs/qrcode-symbologies.md): "Every symbol of an image" under the single-finder candidate scan, with its rules against the one-symbol scan's, the listings check, the counts, the costs, where the time goes and the rule refused; the scope rows "Several symbols in one image" and "Image detection default"; the pairing of the synchronous and asynchronous reads, and the token rules.
+- [microqr-decoder.md](specs/microqr-decoder.md) and [rmqr-decoder.md](specs/rmqr-decoder.md): the image level paragraph and the Decisions row "Every symbol of an image", with what would reopen it.
+- [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md): the `sheets` and `again` commands, and the lessons on the floor of a call that goes on, on room tests, on a rule another holds and on checking a rule on the whole set.
+- The two spec maps ("Image level, every symbol"), the README, `docs/migration.md`, the approved API listings and the API page.
+
+It left out per-phase narration, the per-sheet and per-kind tables, the Micro QR camera sheets' code-by-code difference, and the probe the listings were compared on. The planted faults are in [tools/mutants/single-finder-several-symbols.tsv](../../tools/mutants/single-finder-several-symbols.tsv).
