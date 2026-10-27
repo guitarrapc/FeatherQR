@@ -128,8 +128,13 @@ namespace FeatherQR.SkiaSharp
     {
         public static MicroQRCodeDecodeResult Decode(Stream image);
         public static MicroQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
+        public static MicroQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
+        public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image);
+        public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
         public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
         public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+        public static Task<MicroQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<MicroQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info);
     }
@@ -245,8 +250,13 @@ namespace FeatherQR.SkiaSharp
     {
         public static RmQRCodeDecodeResult Decode(Stream image);
         public static RmQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
+        public static RmQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
+        public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image);
+        public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
         public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
         public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+        public static Task<RmQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<RmQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
     }

@@ -605,7 +605,7 @@ public class DecodeAllocationTest
 
     #region Image level: rejections
 
-    /// <summary>An image a decoder must not read: every pass runs, and each candidate it finds is tried to the end.</summary>
+    /// <summary>An image a decoder must not read: each candidate it finds is tried to the end, in the passes the image reaches.</summary>
     public enum RejectedImage
     {
         /// <summary>White: no finder, and no grey level for a regional pass.</summary>
@@ -776,6 +776,65 @@ public class DecodeAllocationTest
         var allocated = SteadyStateBytes(() => QRImageDecoder.DecodeSymbols(luminance, width, height, symbols));
 
         await Assert.That(allocated).IsEqualTo(0);
+    }
+
+    #endregion
+
+    #region Micro QR and rMQR: several symbols
+
+    /// <summary>The entries that return every Micro QR or rMQR symbol of an image allocate the texts they return and nothing else, for a grid of nine symbols and for one symbol.</summary>
+    [Test]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.MicroQR, 3, 3)]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.MicroQR, 1, 1)]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.RmQR, 3, 3)]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.RmQR, 1, 1)]
+    public async Task SingleFinder_SeveralSymbols_AllocatesOnlyTheirTexts(SingleFinderSymbolsDecodeTest.Symbology symbology, int across, int down)
+    {
+        var (luminance, width, height) = SingleFinderSymbolsDecodeTest.RenderGrid(symbology, across, down);
+        var micro = new MicroQRCodeDecodeResult[16];
+        var rmqr = new RmQRCodeDecodeResult[16];
+        int Read() => symbology == SingleFinderSymbolsDecodeTest.Symbology.MicroQR
+            ? MicroQRImageDecoder.DecodeSymbols(luminance, width, height, micro)
+            : RmQRImageDecoder.DecodeSymbols(luminance, width, height, rmqr);
+        var count = Read();
+        await Assert.That(count).IsEqualTo(across * down);
+        int[] lengths = symbology == SingleFinderSymbolsDecodeTest.Symbology.MicroQR
+            ? [.. micro.Take(count).Select(static s => s.Text.Length)]
+            : [.. rmqr.Take(count).Select(static s => s.Text.Length)];
+
+        // What strings of those lengths cost, measured the same way
+        var texts = SteadyStateBytes(() =>
+        {
+            foreach (var length in lengths)
+                GC.KeepAlive(new string('x', length));
+        });
+        var allocated = SteadyStateBytes(() => Read());
+
+        await Assert.That(allocated).IsEqualTo(texts);
+    }
+
+    /// <summary>An image with no symbol of the symbology allocates nothing, whichever passes it reaches.</summary>
+    [Test]
+    [MethodDataSource(nameof(RejectedByMicroQR))]
+    public async Task MicroQR_SeveralSymbols_NoSymbol_AllocatesNothing(RejectedImage rejected)
+    {
+        var (luminance, width, height) = Render(rejected);
+        var symbols = new MicroQRCodeDecodeResult[16];
+        await Assert.That(MicroQRImageDecoder.DecodeSymbols(luminance, width, height, symbols)).IsEqualTo(0);
+
+        await Assert.That(SteadyStateBytes(() => MicroQRImageDecoder.DecodeSymbols(luminance, width, height, symbols))).IsEqualTo(0L);
+    }
+
+    /// <inheritdoc cref="MicroQR_SeveralSymbols_NoSymbol_AllocatesNothing"/>
+    [Test]
+    [MethodDataSource(nameof(RejectedByRmQR))]
+    public async Task RmQR_SeveralSymbols_NoSymbol_AllocatesNothing(RejectedImage rejected)
+    {
+        var (luminance, width, height) = Render(rejected);
+        var symbols = new RmQRCodeDecodeResult[16];
+        await Assert.That(RmQRImageDecoder.DecodeSymbols(luminance, width, height, symbols)).IsEqualTo(0);
+
+        await Assert.That(SteadyStateBytes(() => RmQRImageDecoder.DecodeSymbols(luminance, width, height, symbols))).IsEqualTo(0L);
     }
 
     #endregion

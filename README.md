@@ -537,7 +537,7 @@ if (QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var
 
 The returned decode information includes a status when decoding fails. When an image decode succeeds it also carries `Corners`, the symbol's module-area corners (quiet zone excluded) in the image's continuous pixel coordinates. `TopLeft` is the corner beside the symbol's top-left finder wherever it landed, so the four points draw an outline that follows rotation, reverse their winding for a mirrored capture, and form a general quadrilateral under perspective. Matrix-level decodes have no image and report `Corners.IsEmpty`. See [samples/Dotfiles/DecodeCorners.cs](samples/Dotfiles/DecodeCorners.cs), which decodes a flat, a rotated, a mirrored and a keystoned capture and writes each one with the reported outline drawn on it.
 
-To read every QR code of an image at once, call `DecodeSymbols` on an `SKBitmap` or a stream, or `DecodeImageSymbols` on luminance. Each symbol is returned once, with its corners, and only symbols that decode are returned: a symbol whose content cannot be given as text is left out, and so is one inside a symbol already read. The span overload of `DecodeImageSymbols` writes into a room you provide and stops once it is full, so a caller who expects a number of symbols pays for no more. Micro QR and rMQR read one symbol a call.
+To read every QR code of an image at once, call `DecodeSymbols` on an `SKBitmap` or a stream, or `DecodeImageSymbols` on luminance. Each symbol is returned once, with its corners, and only symbols that decode are returned: a symbol whose content cannot be given as text is left out, and so is one inside a symbol already read. The span overload of `DecodeImageSymbols` writes into a room you provide and stops once it is full, so a caller who expects a number of symbols pays for no more. `MicroQRCodeDecoder` and `RmQRCodeDecoder` have the same calls for Micro QR and rMQR. Reading every symbol takes longer than reading one on an image of one symbol, since the search goes on past the first symbol it reads. The Micro QR and rMQR calls try every finder-like pattern in full, so an image crowded with other codes' finders, such as a sheet of QR codes, can take many times longer than reading one symbol.
 
 ```csharp
 using SkiaSharp;
@@ -554,9 +554,9 @@ foreach (var result in QRCodeImageDecoder.DecodeSymbols(sheet))
 
 ### Async and stream I/O
 
-Every method that writes an image to a `Stream` has an `...Async` twin, `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The decoders read an encoded image, a PNG, JPEG or WebP among others, from a `Stream`: `DecodeAsync` on the three, `DecodeSymbolsAsync` for every Standard QR code, and `Decode` and `DecodeSymbols` where the thread may wait.
+Every method that writes an image to a `Stream` has an `...Async` twin, `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The decoders read an encoded image, a PNG, JPEG or WebP among others, from a `Stream`: `DecodeAsync` on the three and `DecodeSymbolsAsync` for every code of an image, and `Decode` and `DecodeSymbols` where the thread may wait.
 
-The calls pair up as below. Micro QR and rMQR write and read one symbol the same way, through their own builders and `MicroQRCodeDecoder` and `RmQRCodeDecoder`.
+The calls pair up as below. Micro QR and rMQR write and read the same way, through their own builders and `MicroQRCodeDecoder` and `RmQRCodeDecoder`.
 
 | What | Synchronous | Asynchronous |
 |---|---|---|
@@ -900,7 +900,7 @@ No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional
 
 ### Does it read QR codes from images?
 
-Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)), screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. It reads an `SKBitmap`, a luminance span or an encoded image in a stream, one symbol a call or every Standard QR code of the image at once. Photographs are where it fails most often: glare, damage, blur, a curved surface, a steep tilt or strong lens distortion. A failed decode reports a status that says where it stopped.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)), screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. It reads an `SKBitmap`, a luminance span or an encoded image in a stream, one symbol a call or every code of the image at once, as do `MicroQRCodeDecoder` and `RmQRCodeDecoder`. Photographs are where it fails most often: glare, damage, blur, a curved surface, a steep tilt or strong lens distortion. A failed decode reports a status that says where it stopped.
 
 ### What QR code style provides the best scan reliability?
 

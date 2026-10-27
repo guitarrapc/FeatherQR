@@ -155,6 +155,17 @@ The supported envelope, its measurements and the reasons for its limits are in t
 
 Reference tests: [MicroQRCodeDecoderImageTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRCodeDecoderImageTest.cs) (clean renders for every version × ECC, arbitrary rotation, uniform scale, non-square modules drawn through a canvas scale, mirror/inversion/translation/quiet-zone variants, a deterministic degradation subset per test strategy §7, and negative cases in both symbology directions), [MicroQRCodeDecoderPerspectiveTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRCodeDecoderPerspectiveTest.cs) (the keystone envelope on each edge and at its lowest densities, rotation and mirror combinations, and keystones only the perspective search reads), [MicroQRFixtureTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRFixtureTest.cs) (committed external-encoder PNG corpus through the image path).
 
+### Image level, every symbol
+
+Public since 2.0.0 through `MicroQRCodeDecoder.DecodeImageSymbols`, in an array form and a span form, and `DecodeSymbols` on an `SKBitmap` or a stream. The passes and the path above are run without a read ending them.
+
+| Spec reference | Topic | Implementation |
+|---|---|---|
+| - | Every symbol of an image: the one-symbol call's passes in their order, none ended by a read. Each reading runs the strided scan, then the full sweep less the strided scan's candidates, after a read too. Every ranked candidate is decoded through the path above, less those inside a symbol read so far. A symbol whose content gives a verdict is left out. The search ends when a caller's room is full, and the array form's room grows instead. A token is checked as each reading starts and before each candidate | [CandidateScan.DecodeSymbols](../../../src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs), shared by Micro QR and rMQR, reached through [MicroQRImageDecoder.DecodeSymbols](../../../src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs) |
+| - | Public entry points (luminance array or span, SKBitmap, stream and its async form) | [MicroQRCodeDecoder.DecodeImageSymbols](../../../src/FeatherQR/MicroQRCodeDecoder.cs) / [MicroQRCodeImageDecoder.DecodeSymbols](../../../src/FeatherQR.SkiaSharp/MicroQRCodeImageDecoder.cs) (rendering package) |
+
+Reference tests: [SingleFinderSymbolsDecodeTest](../../../tests/FeatherQR.Tests/Shared/SingleFinderSymbolsDecodeTest.cs) (grids of 2 to 25 turned and under keystone and of 60 upright, both polarities, symbols only the regional pass, the sweep or the midpoint pass reads, reversed symbols only the negative regional or midpoint pass reads, a verdict, room for all or fewer, the longest text, no symbol, a grid of another symbology, a buffer longer than the image, every path's one-symbol image and the corpus held to the one-symbol read, cancellation), [SingleFinderDecodeImageSymbolsTest](../../../tests/FeatherQR.Tests/Shared/SingleFinderDecodeImageSymbolsTest.cs) (the public forms), [LuminanceSizeArgumentTest](../../../tests/FeatherQR.Tests/Shared/LuminanceSizeArgumentTest.cs) (the size and buffer checks), [ImageStreamDecodeTest](../../../tests/FeatherQR.Tests/Rendering/ImageStreamDecodeTest.cs) (the stream reads, their limits and their token), [DecodeAllocationTest](../../../tests/FeatherQR.Tests/Shared/DecodeAllocationTest.cs) (only the texts are allocated).
+
 ## Data Model and Serialization
 
 | Spec reference | Topic | Implementation |

@@ -186,7 +186,7 @@ internal static class BoofCv
     }
 
     /// <summary>The pixels of row <paramref name="y"/> whose centres lie inside a convex <paramref name="outline"/>: one run, between the two edges the row's centre line crosses.</summary>
-    private static Span<byte> RowInside(byte[] luminance, int width, (double X, double Y)[] outline, int y)
+    internal static Span<byte> RowInside(byte[] luminance, int width, (double X, double Y)[] outline, int y)
     {
         var centre = y + 0.5;
         double from = double.MaxValue, to = double.MinValue;

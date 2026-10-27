@@ -216,7 +216,7 @@ internal static class ImageDecodePasses
     /// <summary>
     /// The midpoint of <paramref name="grey"/> to the nearest level, unless the image has no grey levels or it is <paramref name="threshold"/>, where the sweep would read what the global pass read.
     /// </summary>
-    private static bool TryMidpoint(byte threshold, in GreyLevels grey, out byte midpoint)
+    internal static bool TryMidpoint(byte threshold, in GreyLevels grey, out byte midpoint)
     {
         midpoint = 0;
         if (!grey.IsEnabled)

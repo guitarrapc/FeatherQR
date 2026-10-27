@@ -135,11 +135,13 @@ internal static partial class QRImageDecoder
 #endif
 
     /// <summary>
-    /// The lengths the unchecked loops rely on. Throws for a buffer too small to hold what the dimensions say, and returns false for a mesh the stack tables cannot hold, which the caller hands to the reference.
+    /// The lengths the unchecked loops rely on. Throws for a size below one or a buffer too small to hold what the dimensions say, and returns false for a mesh the stack tables cannot hold, which the caller hands to the reference.
     /// </summary>
     private static bool CheckPiecewiseArguments(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {
-        if (width < 1 || height < 1 || luminance.Length < (long)width * height)
+        if (width < 1 || height < 1)
+            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Image size must be positive: got {width} x {height}.");
+        if (luminance.Length < (long)width * height)
             throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
         if (dimension < 1 || modules.Length < (long)dimension * dimension)
             throw new ArgumentException($"Module buffer too small: required {(long)dimension * dimension}, got {modules.Length}", nameof(modules));

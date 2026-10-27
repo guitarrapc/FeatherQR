@@ -198,6 +198,17 @@ The rMQR decoder rejects Standard QR and Micro QR images, and `QRCodeDecoder` an
 
 Reference tests: [RmQRCodeDecoderImageTest](../../../tests/FeatherQR.Tests/RmQr/RmQRCodeDecoderImageTest.cs), [RmQRCodeDecoderPerspectiveTest](../../../tests/FeatherQR.Tests/RmQr/RmQRCodeDecoderPerspectiveTest.cs), [RmQRStrongKeystoneDecodeTest](../../../tests/FeatherQR.Tests/RmQr/RmQRStrongKeystoneDecodeTest.cs), [RmQrFixtureTest](../../../tests/FeatherQR.Tests/RmQr/RmQrFixtureTest.cs) (`Decode_PngFixture_*`, the PNG corpus through the image path), and a Release-only zero-allocation test on the luminance-span destination overload.
 
+### Image level, every symbol
+
+Public since 2.0.0 through `RmQRCodeDecoder.DecodeImageSymbols`, in an array form and a span form, and `DecodeSymbols` on an `SKBitmap` or a stream. The passes and the path above are run without a read ending them.
+
+| Spec reference | Topic | Implementation |
+|---|---|---|
+| - | Every symbol of an image: the one-symbol call's passes in their order, none ended by a read. Each reading runs the strided scan, then the full sweep less the strided scan's candidates, after a read too. Every ranked candidate is decoded through the path above, less those inside a symbol read so far. A symbol whose content gives a verdict is left out. The search ends when a caller's room is full, and the array form's room grows instead. A token is checked as each reading starts and before each candidate | [CandidateScan.DecodeSymbols](../../../src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs), shared by Micro QR and rMQR, reached through [RmQRImageDecoder.DecodeSymbols](../../../src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs) |
+| - | Public entry points (luminance array or span, SKBitmap, stream and its async form) | [RmQRCodeDecoder.DecodeImageSymbols](../../../src/FeatherQR/RmQRCodeDecoder.cs) / [RmQRCodeImageDecoder.DecodeSymbols](../../../src/FeatherQR.SkiaSharp/RmQRCodeImageDecoder.cs) (rendering package) |
+
+Reference tests: [SingleFinderSymbolsDecodeTest](../../../tests/FeatherQR.Tests/Shared/SingleFinderSymbolsDecodeTest.cs) (grids of 2 to 18 turned and under keystone and of 60 upright, both polarities, symbols only the regional pass, the sweep or the midpoint pass reads, reversed symbols only the negative regional or midpoint pass reads, a verdict, room for all or fewer, the longest text, no symbol, a grid of another symbology, a buffer longer than the image, every path's one-symbol image and the corpus held to the one-symbol read, cancellation), [SingleFinderDecodeImageSymbolsTest](../../../tests/FeatherQR.Tests/Shared/SingleFinderDecodeImageSymbolsTest.cs) (the public forms), [LuminanceSizeArgumentTest](../../../tests/FeatherQR.Tests/Shared/LuminanceSizeArgumentTest.cs) (the size and buffer checks), [ImageStreamDecodeTest](../../../tests/FeatherQR.Tests/Rendering/ImageStreamDecodeTest.cs) (the stream reads, their limits and their token), [DecodeAllocationTest](../../../tests/FeatherQR.Tests/Shared/DecodeAllocationTest.cs) (only the texts are allocated).
+
 ## Data Model and Serialization
 
 | Spec reference | Topic | Implementation |

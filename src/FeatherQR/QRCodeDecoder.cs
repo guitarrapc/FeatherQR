@@ -141,6 +141,7 @@ public static class QRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners), the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>) and the FNC1 mode when it carries one (<see cref="QRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when a QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out QRCodeDecodeInfo info)
     {
         char[]? rentedChars = null;
@@ -172,10 +173,13 @@ public static class QRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners), the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>) and the FNC1 mode when it carries one (<see cref="QRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when a QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
+        if (width < 1 || height < 1)
+            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Image size must be positive: got {width} x {height}.");
         // long arithmetic: dimensions are caller-controlled and width·height can overflow int
-        if (width < 1 || height < 1 || luminance.Length < (long)width * height)
+        if (luminance.Length < (long)width * height)
             throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
 
         return QRImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == DecodeStatus.Success;
@@ -198,6 +202,7 @@ public static class QRCodeDecoder
     /// <param name="height">Image height in pixels.</param>
     /// <returns>The symbols read, an empty array when there is none.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static QRCodeDecodeResult[] DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height)
     {
         ThrowIfLuminanceDoesNotFit(luminance, width, height);
@@ -222,6 +227,7 @@ public static class QRCodeDecoder
     /// <param name="destination">Where to write the symbols read, from the start.</param>
     /// <returns>How many symbols were written.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> destination)
     {
         ThrowIfLuminanceDoesNotFit(luminance, width, height);
@@ -230,8 +236,10 @@ public static class QRCodeDecoder
 
     private static void ThrowIfLuminanceDoesNotFit(ReadOnlySpan<byte> luminance, int width, int height)
     {
+        if (width < 1 || height < 1)
+            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Image size must be positive: got {width} x {height}.");
         // long arithmetic: dimensions are caller-controlled and width·height can overflow int
-        if (width < 1 || height < 1 || luminance.Length < (long)width * height)
+        if (luminance.Length < (long)width * height)
             throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
     }
 

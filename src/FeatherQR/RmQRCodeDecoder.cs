@@ -139,6 +139,7 @@ public static class RmQRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level and corrections, and on success where the symbol sits in the image (Corners) and the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info)
     {
         char[]? rentedChars = null;
@@ -170,13 +171,74 @@ public static class RmQRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level and corrections, and on success where the symbol sits in the image (Corners) and the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
+        if (width < 1 || height < 1)
+            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Image size must be positive: got {width} x {height}.");
         // long arithmetic: dimensions are caller-controlled and width·height can overflow int
-        if (width < 1 || height < 1 || luminance.Length < (long)width * height)
+        if (luminance.Length < (long)width * height)
             throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
 
         return RmQRImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == DecodeStatus.Success;
+    }
+
+    /// <summary>
+    /// Finds and decodes every rMQR code in a grayscale image.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each symbol is returned once, in the order found, with where it sits in the image in <see cref="RmQRCodeDecodeInfo.Corners"/>.
+    /// Only symbols that decode are returned. One whose content cannot be given as text (<see cref="DecodeStatus.UnmappedCharacter"/>, <see cref="DecodeStatus.UnsupportedContent"/>) is left out, and so is one that lies inside a symbol already read.
+    /// </para>
+    /// <para>
+    /// The search goes on past the first symbol it reads, so it takes longer than <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> on an image of one symbol.
+    /// </para>
+    /// </remarks>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and an rMQR code composited against black is not detected.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <returns>The symbols read, an empty array when there is none.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
+    public static RmQRCodeDecodeResult[] DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height)
+    {
+        ThrowIfLuminanceDoesNotFit(luminance, width, height);
+        return RmQRImageDecoder.DecodeSymbols(luminance, width, height);
+    }
+
+    /// <summary>
+    /// Finds and decodes the rMQR codes in a grayscale image into the room you provide, as many as it holds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reads as <see cref="DecodeImageSymbols(ReadOnlySpan{byte}, int, int)"/> does, and stops once <paramref name="destination"/> is full, so a caller who expects a number of symbols pays for no more.
+    /// A full room does not say whether the image held more.
+    /// </para>
+    /// <para>
+    /// Nothing is allocated but the texts.
+    /// </para>
+    /// </remarks>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and an rMQR code composited against black is not detected.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="destination">Where to write the symbols read, from the start.</param>
+    /// <returns>How many symbols were written.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
+    public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<RmQRCodeDecodeResult> destination)
+    {
+        ThrowIfLuminanceDoesNotFit(luminance, width, height);
+        return RmQRImageDecoder.DecodeSymbols(luminance, width, height, destination);
+    }
+
+    private static void ThrowIfLuminanceDoesNotFit(ReadOnlySpan<byte> luminance, int width, int height)
+    {
+        if (width < 1 || height < 1)
+            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Image size must be positive: got {width} x {height}.");
+        // long arithmetic: dimensions are caller-controlled and width·height can overflow int
+        if (luminance.Length < (long)width * height)
+            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
     }
 
     /// <summary>

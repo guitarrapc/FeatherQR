@@ -102,8 +102,6 @@ public class DecodeImageSymbolsTest
 
     [Test]
     [Arguments(10, 10, 99)]
-    [Arguments(0, 10, 0)]
-    [Arguments(10, -1, 0)]
     public async Task BufferThatDoesNotFitTheDimensions_Throws(int width, int height, int length)
     {
         var luminance = new byte[length];
