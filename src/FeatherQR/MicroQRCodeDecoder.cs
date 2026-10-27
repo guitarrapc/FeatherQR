@@ -173,6 +173,60 @@ public static class MicroQRCodeDecoder
     }
 
     /// <summary>
+    /// Finds and decodes every Micro QR code in a grayscale image.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each symbol is returned once, in the order found, with where it sits in the image in <see cref="MicroQRCodeDecodeInfo.Corners"/>.
+    /// Only symbols that decode are returned. One whose content cannot be given as text (<see cref="DecodeStatus.UnmappedCharacter"/>, <see cref="DecodeStatus.UnsupportedContent"/>) is left out, and so is one that lies inside a symbol already read.
+    /// </para>
+    /// <para>
+    /// The search goes on past the first symbol it reads, so it takes longer than <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out MicroQRCodeDecodeInfo)"/> on an image of one symbol.
+    /// </para>
+    /// </remarks>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a Micro QR code composited against black is not detected.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <returns>The symbols read, an empty array when there is none.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    public static MicroQRCodeDecodeResult[] DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height)
+    {
+        ThrowIfLuminanceDoesNotFit(luminance, width, height);
+        return MicroQRImageDecoder.DecodeSymbols(luminance, width, height);
+    }
+
+    /// <summary>
+    /// Finds and decodes the Micro QR codes in a grayscale image into the room you provide, as many as it holds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reads as <see cref="DecodeImageSymbols(ReadOnlySpan{byte}, int, int)"/> does, and stops once <paramref name="destination"/> is full, so a caller who expects a number of symbols pays for no more.
+    /// A full room does not say whether the image held more.
+    /// </para>
+    /// <para>
+    /// Nothing is allocated but the texts.
+    /// </para>
+    /// </remarks>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a Micro QR code composited against black is not detected.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="destination">Where to write the symbols read, from the start.</param>
+    /// <returns>How many symbols were written.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<MicroQRCodeDecodeResult> destination)
+    {
+        ThrowIfLuminanceDoesNotFit(luminance, width, height);
+        return MicroQRImageDecoder.DecodeSymbols(luminance, width, height, destination);
+    }
+
+    private static void ThrowIfLuminanceDoesNotFit(ReadOnlySpan<byte> luminance, int width, int height)
+    {
+        // long arithmetic: dimensions are caller-controlled and width·height can overflow int
+        if (width < 1 || height < 1 || luminance.Length < (long)width * height)
+            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
+    }
+
+    /// <summary>
     /// The most characters a Micro QR code of this version can decode to, across every error correction level and mode.
     /// Use it to size the destination of the allocation-free overloads.
     /// </summary>

@@ -173,7 +173,7 @@ public static partial class QrInterop
     /// Decodes every QR code in encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string (see <see cref="DecodeSymbolsPayload"/>): <c>{"ok":true,"symbols":[...],"totalMs":N,"imageWidth":N,"imageHeight":N,"orientation":N}</c>, each symbol shaped as a <see cref="Decode"/> success, <c>{"ok":false,"symbols":[],...}</c> when none decodes, or <c>{"error":"..."}</c> on unexpected failure.
     /// <para>
     /// Standard QR codes are read with <see cref="QRCodeImageDecoder.DecodeSymbols(SKBitmap)"/>, each once, in the order found.
-    /// That read covers Standard QR alone, so an image with none is read for one Micro QR or rMQR symbol, as <see cref="Decode"/> reads it.
+    /// That read covers Standard QR alone, so an image with none is read for every Micro QR symbol, and an image with none of those for every rMQR symbol.
     /// </para>
     /// </summary>
     /// <param name="imageBytes">Encoded image file bytes.</param>
@@ -194,13 +194,18 @@ public static partial class QrInterop
             if (results.Length > 0)
             {
                 var ms = ElapsedMs(stopwatch);
-                symbols = new DecodePayload[results.Length];
-                for (var i = 0; i < results.Length; i++)
-                    symbols[i] = StandardPayload(results[i].Text, results[i].Info, ms, image);
+                symbols = Array.ConvertAll(results, r => StandardPayload(r.Text, r.Info, ms, image));
+            }
+            else if (MicroQRCodeDecoder.DecodeSymbols(bitmap) is { Length: > 0 } micro)
+            {
+                var ms = ElapsedMs(stopwatch);
+                symbols = Array.ConvertAll(micro, r => MicroPayload(r.Text, r.Info, ms, image));
             }
             else
             {
-                symbols = DecodeMicroOrRmqr(bitmap, stopwatch, image) is { } single ? [single] : [];
+                var rmqr = RmQRCodeDecoder.DecodeSymbols(bitmap);
+                var ms = ElapsedMs(stopwatch);
+                symbols = Array.ConvertAll(rmqr, r => RmqrPayload(r.Text, r.Info, ms, image));
             }
 
             var payload = new DecodeSymbolsPayload(
@@ -258,44 +263,46 @@ public static partial class QrInterop
     private static DecodePayload? DecodeMicroOrRmqr(SKBitmap bitmap, Stopwatch stopwatch, DecodedImage image)
     {
         if (MicroQRCodeDecoder.TryDecode(bitmap, out var microText, out var microInfo))
-        {
-            return new DecodePayload(
-                Ok: true,
-                Text: microText,
-                Status: microInfo.Status.ToString(),
-                Symbology: "microqr",
-                QrVersion: (int)microInfo.Version,
-                Ecc: microInfo.EccLevel.ToString(),
-                MaskPattern: microInfo.MaskPattern,
-                ErrorsCorrected: microInfo.ErrorsCorrected,
-                TotalMs: ElapsedMs(stopwatch),
-                Corners: Flatten(microInfo.Corners),
-                ImageWidth: image.Width,
-                ImageHeight: image.Height,
-                Orientation: image.Orientation);
-        }
+            return MicroPayload(microText, microInfo, ElapsedMs(stopwatch), image);
+        return RmQRCodeDecoder.TryDecode(bitmap, out var rmText, out var rmInfo) ? RmqrPayload(rmText, rmInfo, ElapsedMs(stopwatch), image) : null;
+    }
 
-        if (!RmQRCodeDecoder.TryDecode(bitmap, out var rmText, out var rmInfo))
-            return null;
+    private static DecodePayload MicroPayload(string text, MicroQRCodeDecodeInfo info, double totalMs, DecodedImage image)
+        => new(
+            Ok: true,
+            Text: text,
+            Status: info.Status.ToString(),
+            Symbology: "microqr",
+            QrVersion: (int)info.Version,
+            Ecc: info.EccLevel.ToString(),
+            MaskPattern: info.MaskPattern,
+            ErrorsCorrected: info.ErrorsCorrected,
+            TotalMs: totalMs,
+            Corners: Flatten(info.Corners),
+            ImageWidth: image.Width,
+            ImageHeight: image.Height,
+            Orientation: image.Orientation);
 
+    private static DecodePayload RmqrPayload(string text, RmQRCodeDecodeInfo info, double totalMs, DecodedImage image)
+    {
         // rMQR has a single fixed mask, so no mask pattern is reported (-1).
-        var gs1 = ReadGs1(rmText, rmInfo.Fnc1);
+        var gs1 = ReadGs1(text, info.Fnc1);
         return new DecodePayload(
             Ok: true,
-            Text: rmText,
-            Status: rmInfo.Status.ToString(),
+            Text: text,
+            Status: info.Status.ToString(),
             Symbology: "rmqr",
-            QrVersion: (int)rmInfo.Version,
-            Ecc: rmInfo.EccLevel.ToString(),
+            QrVersion: (int)info.Version,
+            Ecc: info.EccLevel.ToString(),
             MaskPattern: -1,
-            ErrorsCorrected: rmInfo.ErrorsCorrected,
-            TotalMs: ElapsedMs(stopwatch),
-            Corners: Flatten(rmInfo.Corners),
+            ErrorsCorrected: info.ErrorsCorrected,
+            TotalMs: totalMs,
+            Corners: Flatten(info.Corners),
             ImageWidth: image.Width,
             ImageHeight: image.Height,
             Orientation: image.Orientation,
-            Fnc1: Fnc1Label(rmInfo.Fnc1),
-            ApplicationIndicator: rmInfo.Fnc1.ApplicationIndicator,
+            Fnc1: Fnc1Label(info.Fnc1),
+            ApplicationIndicator: info.Fnc1.ApplicationIndicator,
             Gs1Hri: gs1.Hri,
             Gs1Elements: gs1.Elements,
             Gs1Error: gs1.Error,

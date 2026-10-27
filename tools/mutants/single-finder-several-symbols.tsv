@@ -1,0 +1,22 @@
+# Planted faults for the entry that reads every Micro QR or rMQR symbol of an image (qrcode-symbologies.md, single-finder candidate scan).
+# One fault a rule of the entry: the sweep after a read, the passes going on, the skip inside a read, each pass, every candidate tried,
+# the token, the room.
+#
+#   dotnet run tools/mutation_check.cs -- run tools/mutants/single-finder-several-symbols.tsv <out-dir> --filter "/*/*/SingleFinderSymbolsDecodeTest/*"
+#
+# Against SingleFinderSymbolsDecodeTest (2026-10-27) 9 of the 11 are caught. These change the time only, measured with the sweep tool's sheets and again:
+# SS-sweep-skips-strided (a candidate the strided scan tried decodes the same way again) and SS-midpoint-no-finder (a midpoint sweep where
+# the global pass found a finder reads nothing the passes before it did not).
+SS-sweep-after-read	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	            DecodeSymbolsOfScan<TDecoder, TInfo, TResult>(ref decoder, ref search, image, strided.Slice(0, stridedCount), skip: default);␤	            var before = search.Count;␤            DecodeSymbolsOfScan<TDecoder, TInfo, TResult>(ref decoder, ref search, image, strided.Slice(0, stridedCount), skip: default);␤            if (search.Count != before)␤                return false;␤
+SS-passes-go-on	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	        var noFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveThreshold, positiveGrey), candidates, sweepOnly: false);␤        if (search.IsFull)	        var noFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveThreshold, positiveGrey), candidates, sweepOnly: false);␤        if (search.IsFull || search.Count > 0)
+SS-skip-inside-read	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	            if (SymbolGeometry.Contains(decoder.ResultCorners(symbol), candidate.X, candidate.Y))␤                return true;	            if (SymbolGeometry.Contains(decoder.ResultCorners(symbol), candidate.X, candidate.Y))␤                return false;
+SS-regional	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	        if (scratchLength != 0 && !RegionalRetry.HoldsOnlyExtremes(histogram))	        if (false && scratchLength != 0 && !RegionalRetry.HoldsOnlyExtremes(histogram))
+SS-every-candidate	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	        foreach (var candidate in ranked)␤        {␤            if (search.IsFull)␤                return;	        var decoded = 0;␤        foreach (var candidate in ranked)␤        {␤            if (search.IsFull || decoded == 8)␤                return;
+SS-every-candidate	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	            search.Token.ThrowIfCancellationRequested();␤␤            // The candidate	            search.Token.ThrowIfCancellationRequested();␤            decoded++;␤␤            // The candidate
+SS-midpoint	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	        if (noFinder && !search.IsFull	        if (false && noFinder && !search.IsFull
+SS-midpoint	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	        if (invertedNoFinder && !search.IsFull	        if (false && invertedNoFinder && !search.IsFull
+SS-token-candidate	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	            search.Token.ThrowIfCancellationRequested();␤␤            // The candidate	␤            // The candidate
+SS-token-reading	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	        // Every reading checks once at least, so an image where nothing is decoded still sees the token␤        search.Token.ThrowIfCancellationRequested();␤	
+SS-room	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	            if (search.IsFull)␤                return;␤            if (FinderPatternFinder.ContainsCandidate	            if (FinderPatternFinder.ContainsCandidate
+SS-sweep-skips-strided	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	swept.Slice(0, sweptCount), strided.Slice(0, stridedCount));	swept.Slice(0, sweptCount), skip: default);
+SS-midpoint-no-finder	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	        return stridedCount == 0 && sweptCount == 0;	        return search.Count == 0;

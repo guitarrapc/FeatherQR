@@ -10,8 +10,8 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class ContentVerdictImageDecodeTest
 {
-    private const int Mapped = 0x889F; // 亜
-    private const int Unmapped = 0x8740; // CP932 circled digit one, outside JIS X 0208
+    internal const int Mapped = 0x889F; // 亜
+    internal const int Unmapped = 0x8740; // CP932 circled digit one, outside JIS X 0208
 
     public enum Symbology { StandardQR, MicroQR, RmQR }
 
@@ -467,7 +467,7 @@ public class ContentVerdictImageDecodeTest
     }
 
     /// <summary>An M4 symbol holding one Kanji cell, level L unless given.</summary>
-    private static (byte[] Modules, int Columns, int Rows) BuildMicroQR(int sjis, MicroQREccLevel eccLevel = MicroQREccLevel.L)
+    internal static (byte[] Modules, int Columns, int Rows) BuildMicroQR(int sjis, MicroQREccLevel eccLevel = MicroQREccLevel.L)
     {
         const MicroQRVersion version = MicroQRVersion.M4;
         var dataCount = MicroQRConstants.GetDataCodewordCount(version, eccLevel);
@@ -491,7 +491,7 @@ public class ContentVerdictImageDecodeTest
     }
 
     /// <summary>An R11x43 symbol holding one Kanji cell, level M unless given.</summary>
-    private static (byte[] Modules, int Columns, int Rows) BuildRmQR(int sjis, RmQREccLevel eccLevel = RmQREccLevel.M)
+    internal static (byte[] Modules, int Columns, int Rows) BuildRmQR(int sjis, RmQREccLevel eccLevel = RmQREccLevel.M)
     {
         const RmQRVersion version = RmQRVersion.R11x43;
         var dataCount = RmQRConstants.GetDataCodewordCount(version, eccLevel);

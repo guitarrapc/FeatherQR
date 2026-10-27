@@ -40,7 +40,7 @@ internal interface ICandidateDecoder<TInfo>
 /// The rules and why they are so are in the architecture record (qrcode-symbologies.md, single-finder candidate scan). What each decoder does with one
 /// candidate is its own.
 /// </remarks>
-internal static class CandidateScan
+internal static partial class CandidateScan
 {
     /// <summary>Candidates actually tried, most confirmed first (false hits rank behind).</summary>
     public const int MaxCandidatesToTry = 8;

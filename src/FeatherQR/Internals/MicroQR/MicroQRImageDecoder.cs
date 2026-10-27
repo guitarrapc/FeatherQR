@@ -76,9 +76,34 @@ internal static partial class MicroQRImageDecoder
         }
     }
 
-    /// <summary>This decoder's part of the shared candidate scan: a candidate's decode (<see cref="DecodeCandidate"/>) and the corners of its results.</summary>
-    private readonly struct CandidateDecoder : ICandidateDecoder<MicroQRCodeDecodeInfo>
+    /// <summary>
+    /// Decodes every Micro QR code of a grayscale image into <paramref name="symbols"/>, as many as it has room for, each once and in the order found (<see cref="CandidateScan.DecodeSymbols{TDecoder, TInfo, TResult}(ref TDecoder, ReadOnlySpan{byte}, int, int, Span{TResult}, CancellationToken)"/>).
+    /// </summary>
+    /// <returns>How many symbols were written.</returns>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check, the symbols read so far left in <paramref name="symbols"/>.</exception>
+    internal static int DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<MicroQRCodeDecodeResult> symbols, CancellationToken cancellationToken = default)
     {
+        var decoder = new CandidateDecoder();
+        return CandidateScan.DecodeSymbols<CandidateDecoder, MicroQRCodeDecodeInfo, MicroQRCodeDecodeResult>(ref decoder, luminance, width, height, symbols, cancellationToken);
+    }
+
+    /// <summary>Decodes every Micro QR code of a grayscale image, with room for all of them.</summary>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check.</exception>
+    internal static MicroQRCodeDecodeResult[] DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, CancellationToken cancellationToken = default)
+    {
+        var decoder = new CandidateDecoder();
+        return CandidateScan.DecodeSymbols<CandidateDecoder, MicroQRCodeDecodeInfo, MicroQRCodeDecodeResult>(ref decoder, luminance, width, height, cancellationToken);
+    }
+
+    /// <summary>This decoder's part of the shared candidate scan: a candidate's decode (<see cref="DecodeCandidate"/>), the corners of its results, and what a symbol of every symbol's read is returned as.</summary>
+    private readonly struct CandidateDecoder : ISymbolsDecoder<MicroQRCodeDecodeInfo, MicroQRCodeDecodeResult>
+    {
+        public int MaxChars => MicroQRMatrixDecoder.GetMaxCharCount(MicroQRVersion.M4);
+
+        public MicroQRCodeDecodeResult Result(string text, in MicroQRCodeDecodeInfo info) => new(text, info);
+
+        public SymbolCorners ResultCorners(in MicroQRCodeDecodeResult result) => result.Info.Corners;
+
         public MicroQRCodeDecodeInfo NotDetected => new(DecodeStatus.NotDetected, 0, default, -1, 0);
 
         /// <summary>The largest grid, M4's 17 × 17.</summary>

@@ -413,8 +413,12 @@ public class ImageStreamDecodeTest
         yield return () => new("QR DecodeSymbols", static (s, l) => Task.FromResult(QRCodeDecoder.DecodeSymbols(s, l)));
         yield return () => new("Micro DecodeAsync", static (s, l) => MicroQRCodeDecoder.DecodeAsync(s, l));
         yield return () => new("Micro Decode", static (s, l) => Task.FromResult(MicroQRCodeDecoder.Decode(s, l)));
+        yield return () => new("Micro DecodeSymbolsAsync", static (s, l) => MicroQRCodeDecoder.DecodeSymbolsAsync(s, l));
+        yield return () => new("Micro DecodeSymbols", static (s, l) => Task.FromResult(MicroQRCodeDecoder.DecodeSymbols(s, l)));
         yield return () => new("RmQR DecodeAsync", static (s, l) => RmQRCodeDecoder.DecodeAsync(s, l));
         yield return () => new("RmQR Decode", static (s, l) => Task.FromResult(RmQRCodeDecoder.Decode(s, l)));
+        yield return () => new("RmQR DecodeSymbolsAsync", static (s, l) => RmQRCodeDecoder.DecodeSymbolsAsync(s, l));
+        yield return () => new("RmQR DecodeSymbols", static (s, l) => Task.FromResult(RmQRCodeDecoder.DecodeSymbols(s, l)));
     }
 
     [Test]
@@ -547,6 +551,12 @@ public class ImageStreamDecodeTest
         Assert.Throws<ArgumentNullException>(() => { _ = QRCodeDecoder.DecodeSymbolsAsync(null!); });
         Assert.Throws<ArgumentNullException>(() => { _ = MicroQRCodeDecoder.DecodeAsync(null!); });
         Assert.Throws<ArgumentNullException>(() => { _ = RmQRCodeDecoder.DecodeAsync(null!); });
+        Assert.Throws<ArgumentNullException>(() => { _ = MicroQRCodeDecoder.DecodeSymbolsAsync(null!); });
+        Assert.Throws<ArgumentNullException>(() => { _ = RmQRCodeDecoder.DecodeSymbolsAsync(null!); });
+        Assert.Throws<ArgumentNullException>(() => MicroQRCodeDecoder.DecodeSymbols((Stream)null!));
+        Assert.Throws<ArgumentNullException>(() => RmQRCodeDecoder.DecodeSymbols((Stream)null!));
+        Assert.Throws<ArgumentNullException>(() => MicroQRCodeDecoder.DecodeSymbols((SKBitmap)null!));
+        Assert.Throws<ArgumentNullException>(() => RmQRCodeDecoder.DecodeSymbols((SKBitmap)null!));
         Assert.Throws<ArgumentNullException>(() => QRCodeDecoder.Decode((Stream)null!));
         Assert.Throws<ArgumentNullException>(() => QRCodeDecoder.DecodeSymbols((Stream)null!));
         Assert.Throws<ArgumentException>(() => { _ = QRCodeDecoder.DecodeAsync(unreadable); });
@@ -555,6 +565,10 @@ public class ImageStreamDecodeTest
         Assert.Throws<ArgumentException>(() => { _ = RmQRCodeDecoder.DecodeAsync(unreadable); });
         Assert.Throws<ArgumentException>(() => MicroQRCodeDecoder.Decode(unreadable));
         Assert.Throws<ArgumentException>(() => RmQRCodeDecoder.Decode(unreadable));
+        Assert.Throws<ArgumentException>(() => { _ = MicroQRCodeDecoder.DecodeSymbolsAsync(unreadable); });
+        Assert.Throws<ArgumentException>(() => { _ = RmQRCodeDecoder.DecodeSymbolsAsync(unreadable); });
+        Assert.Throws<ArgumentException>(() => MicroQRCodeDecoder.DecodeSymbols(unreadable));
+        Assert.Throws<ArgumentException>(() => RmQRCodeDecoder.DecodeSymbols(unreadable));
     }
 
     [Test]
@@ -876,7 +890,7 @@ public class ImageStreamDecodeTest
     /// Hands its bytes over as few at a time as asked, through either kind of read or only one, and records what its async reads saw.
     /// Its async read is the memory overload alone, so an async read through the array overload falls to the synchronous read.
     /// </summary>
-    private sealed class ReadStream(byte[] data, int perRead = int.MaxValue, bool seekable = false, bool refuseSync = false, bool refuseAsync = false, bool canRead = true) : Stream
+    internal sealed class ReadStream(byte[] data, int perRead = int.MaxValue, bool seekable = false, bool refuseSync = false, bool refuseAsync = false, bool canRead = true) : Stream
     {
         private int _position;
 

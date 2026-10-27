@@ -84,12 +84,14 @@ namespace FeatherQR
 
     public static class MicroQRCodeDecoder
     {
+        public static MicroQRCodeDecodeResult[] DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height);
         public static bool TryDecode(MicroQRCodeData data, out string text);
         public static bool TryDecode(MicroQRCodeData data, out string text, out MicroQRCodeDecodeInfo info);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out MicroQRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out MicroQRCodeDecodeInfo info);
+        public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<MicroQRCodeDecodeResult> destination);
         public static int GetMaxDecodedLength(MicroQRVersion version);
     }
 
@@ -326,12 +328,14 @@ namespace FeatherQR
 
     public static class RmQRCodeDecoder
     {
+        public static RmQRCodeDecodeResult[] DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info);
         public static bool TryDecode(RmQRCodeData data, out string text);
         public static bool TryDecode(RmQRCodeData data, out string text, out RmQRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info);
+        public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<RmQRCodeDecodeResult> destination);
         public static int GetMaxDecodedLength(RmQRVersion version);
     }
 

@@ -16,6 +16,8 @@ using QRImageDecodeSweep;
 //   compare <before.csv> <after.csv>             two result files of the same run, image for image
 //   destination [micro|rmqr|all] [count] [outDir]  what a destination too short costs, render for render
 //   compare-destination <before.csv> <after.csv>  two destination files of the same set, render for render
+//   sheets [micro|rmqr|all] [perCell] [outDir] [--time]  sheets of several Micro QR or rMQR symbols, read by the call for every symbol and again with the one-symbol call
+//   again [micro|rmqr|all] [cases] [outDir] [--time]     one-symbol renders and real images, each read painted over and read again
 //   import-corpus <zxing-cpp-root> <commit>      copies the sample sets in, with provenance
 
 if (Libzint.IsWorker(args))
@@ -134,12 +136,27 @@ switch (command)
             }
             return Finish(Path.Combine(outDir, $"destination-{which}.md"), markdown.ToString());
         }
+    case "sheets" or "again":
+        {
+            var timed = args.Contains("--time");
+            var rest = args.Skip(1).Where(static a => a != "--time").ToList();
+            var which = rest.Count > 0 ? rest[0] : "all";
+            var outDir = rest.Count > 2 ? rest[2] : defaultOut;
+            var count = command == "sheets" ? 3 : 100;
+            if ((which != "all" && which != Symbologies.MicroQr && which != Symbologies.RmQr) || (rest.Count > 1 && (!int.TryParse(rest[1], out count) || count < 1)))
+            {
+                Console.Error.WriteLine($"{command} takes one of all, {Symbologies.MicroQr}, {Symbologies.RmQr}, then a positive count; got '{string.Join(' ', rest.Take(2))}'");
+                return 1;
+            }
+            var markdown = command == "sheets" ? Sheets.Run(which, count, timed, Sheets.Every) : Sheets.Again(repoRoot, which, count, timed, Sheets.Every);
+            return Finish(Path.Combine(outDir, $"{command}-{which}.md"), markdown);
+        }
     case "compare-destination" when args.Length == 3:
         return Destination.Compare(args[1], args[2]);
     case "import-corpus" when args.Length == 3:
         return CorpusImporter.Run(repoRoot, args[1], args[2]);
     default:
-        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] [--dump <dir>] [--lines <file>] | corpus [outDir] | photos <root> [outDir] [--time] [--lines <file>] | boofcv <detection-dir> [outDir] [--time] [--lines <file>] | grey <root> <outDir> | compare <before.csv> <after.csv> | destination [micro|rmqr|all] [count] [outDir] | compare-destination <before.csv> <after.csv> | import-corpus <zxing-cpp-root> <commit>");
+        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] [--dump <dir>] [--lines <file>] | corpus [outDir] | photos <root> [outDir] [--time] [--lines <file>] | boofcv <detection-dir> [outDir] [--time] [--lines <file>] | grey <root> <outDir> | compare <before.csv> <after.csv> | destination [micro|rmqr|all] [count] [outDir] | compare-destination <before.csv> <after.csv> | sheets [micro|rmqr|all] [perCell] [outDir] [--time] | again [micro|rmqr|all] [cases] [outDir] [--time] | import-corpus <zxing-cpp-root> <commit>");
         return 1;
 }
 
