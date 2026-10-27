@@ -77,7 +77,7 @@ if (QRCodeDecoder.TryDecode(bitmap, out text, out info)) { }
 
 The classes are `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`; both overloads (`out string` and `out string, out …DecodeInfo`) exist on each. A net8.0 project defaults to C# 12, so if the 1.x spelling stops compiling there, either add `using FeatherQR.SkiaSharp;` and switch to the class name, or raise `LangVersion`. This is not a missing overload.
 
-The luminance overloads, `TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, …)`, are unchanged and remain in the core; they are the way to decode from any image library other than SkiaSharp. Composite transparent pixels against white before converting.
+The luminance overloads, `TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, …)`, keep their signatures and remain in the core. They are the way to decode from any image library other than SkiaSharp. A width or height below one now throws naming that argument ([A luminance read names a size below one](#a-luminance-read-names-a-size-below-one)). Composite transparent pixels against white before converting.
 
 ### The announced removals
 
@@ -535,6 +535,10 @@ Use `EciMode.Utf8`, or `EciMode.Default` to let the library choose. Text ISO-885
 - **A quiet zone above 10,000 modules throws `ArgumentOutOfRangeException` naming `quietZoneSize`**, the bound Micro QR and rMQR have. `Create` and `CreateStructuredAppend` used to accept any non-negative size and return a `QRCodeData` whose `Size` had overflowed (−2,147,483,629 for 2^30 − 1, 19 for `int.MaxValue`). `TryGetRequiredBufferSize` and the span `Create` refused only sizes whose buffer did not fit an `int`, about 23,000 and up.
 - **The `QRCodeData` constructors apply the same bound**, and now refuse a negative quiet zone as well. `new QRCodeData(version, quietZoneSize)` also refuses a version outside 1 to 40, naming `version`, where it used to size the matrix from it (`-5` gave a `Size` of −3).
 - **When an argument is wrong and the content does not fit either, the argument is reported.** All three symbologies report in the same order: quiet zone, segmentation, ECI (Standard QR and rMQR), ECC level, then the fit.
+
+### A luminance read names a size below one
+
+**Run-time break, and only for an argument that never gave a result.** `TryDecodeImage` on luminance, on `QRCodeDecoder`, `MicroQRCodeDecoder` and `RmQRCodeDecoder`, throws `ArgumentOutOfRangeException` naming `width` or `height` when either is below one, and so does the new `DecodeImageSymbols`. It used to throw an `ArgumentException` naming `luminance`, with a message about the buffer ("Luminance buffer too small: required 0, got 100" for a width of 0 and a 100-byte buffer). Code that catches `ArgumentException` still catches it. A buffer shorter than the size still throws `ArgumentException` naming `luminance`.
 
 ### Module styling no longer reaches the finder patterns
 

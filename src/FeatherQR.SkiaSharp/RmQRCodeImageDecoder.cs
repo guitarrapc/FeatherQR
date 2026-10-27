@@ -150,7 +150,7 @@ public static class RmQRCodeImageDecoder
         /// Finds and decodes every rMQR code in a bitmap.
         /// </summary>
         /// <remarks>
-        /// Reads the bitmap's luminance as <see cref="RmQRCodeDecoder.DecodeImageSymbols(ReadOnlySpan{byte}, int, int)"/> reads it: each symbol once, in the order found, the ones that decode alone.
+        /// Reads the bitmap's luminance as <see cref="RmQRCodeDecoder.DecodeImageSymbols(ReadOnlySpan{byte}, int, int)"/> reads it: each symbol that decodes, once, in the order found.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <returns>The symbols read, an empty array when there is none.</returns>

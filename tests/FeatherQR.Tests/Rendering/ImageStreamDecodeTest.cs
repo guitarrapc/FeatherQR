@@ -631,6 +631,33 @@ public class ImageStreamDecodeTest
         await Assert.That(stream.FirstToken).IsEqualTo(cancellation.Token);
     }
 
+    /// <summary>Micro QR's and rMQR's reads for every symbol hand their token to the stream's read as Standard QR's does.</summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task MicroQRAndRmQR_SymbolsAsync_CanceledDuringARead_StopsTheRead(bool rmqr)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stream = new ReadStream(QRCodeImageBuilder.GetPngBytes(Content))
+        {
+            OnRead = async token =>
+            {
+                entered.TrySetResult();
+                // Bounded, so a read that never sees the token fails the test instead of hanging it
+                await Task.Delay(TimeSpan.FromSeconds(10), token);
+            },
+        };
+
+        Task task = rmqr ? RmQRCodeDecoder.DecodeSymbolsAsync(stream, cancellation.Token) : MicroQRCodeDecoder.DecodeSymbolsAsync(stream, cancellation.Token);
+        await Task.WhenAny(entered.Task, task);
+        cancellation.Cancel();
+        var caught = await Caught(task);
+
+        await Assert.That(caught is OperationCanceledException).IsTrue();
+        await Assert.That(stream.FirstToken).IsEqualTo(cancellation.Token);
+    }
+
     [Test]
     [Arguments(false)]
     [Arguments(true)]

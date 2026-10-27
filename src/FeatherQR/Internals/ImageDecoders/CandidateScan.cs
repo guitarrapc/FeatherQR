@@ -38,7 +38,7 @@ internal interface ICandidateDecoder<TInfo>
 /// </summary>
 /// <remarks>
 /// The rules and why they are so are in the architecture record (qrcode-symbologies.md, single-finder candidate scan). What each decoder does with one
-/// candidate is its own.
+/// candidate is its own. The scan that returns every symbol of an image (<c>CandidateScan.Symbols.cs</c>) is written beside this one, with none of the rules that end this scan on a read.
 /// </remarks>
 internal static partial class CandidateScan
 {

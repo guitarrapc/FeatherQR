@@ -119,8 +119,8 @@ public class SingleFinderDecodeImageSymbolsTest
 
     [Test]
     [Arguments(10, 10, 99)]
-    [Arguments(0, 10, 0)]
-    [Arguments(10, -1, 0)]
+    // A size whose pixel count overflows an int
+    [Arguments(65_536, 65_536, 0)]
     public async Task BufferThatDoesNotFitTheDimensions_Throws(int width, int height, int length)
     {
         var luminance = new byte[length];
@@ -129,6 +129,39 @@ public class SingleFinderDecodeImageSymbolsTest
         Assert.Throws<ArgumentException>(() => MicroQRCodeDecoder.DecodeImageSymbols(luminance, width, height, new MicroQRCodeDecodeResult[4]));
         Assert.Throws<ArgumentException>(() => RmQRCodeDecoder.DecodeImageSymbols(luminance, width, height));
         Assert.Throws<ArgumentException>(() => RmQRCodeDecoder.DecodeImageSymbols(luminance, width, height, new RmQRCodeDecodeResult[4]));
+    }
+
+    [Test]
+    [Arguments(Symbology.MicroQR)]
+    [Arguments(Symbology.RmQR)]
+    public async Task Array_GridThatFillsItsFirstRoom_ReadsEverySymbolOnce(Symbology symbology)
+    {
+        // Eight symbols, as many as the array form's first room holds, so the room itself is returned
+        var (bitmap, luminance) = Sheet(symbology, 4, 2);
+        using var _ = bitmap;
+
+        var results = Array(symbology, luminance, bitmap.Width, bitmap.Height);
+
+        await Assert.That(results.Length).IsEqualTo(8);
+        await Assert.That(results.Select(static r => r.Text).Distinct().Count()).IsEqualTo(8);
+        await Assert.That(results).IsEquivalentTo(Span(symbology, luminance, bitmap.Width, bitmap.Height, 16), CollectionOrdering.Matching);
+    }
+
+    /// <summary>The public forms take a buffer longer than the image. Whether the bytes past it are left out is held by the internal entry's test on a symbol whose read depends on the thresholds.</summary>
+    [Test]
+    [Arguments(Symbology.MicroQR)]
+    [Arguments(Symbology.RmQR)]
+    public async Task BufferLongerThanTheImage_ReadsWhatTheImageHolds(Symbology symbology)
+    {
+        var (bitmap, luminance) = Sheet(symbology, 2, 1);
+        using var _ = bitmap;
+        var longer = new byte[luminance.Length + 4 * luminance.Length];
+        luminance.CopyTo(longer, 0);
+        var expected = Array(symbology, luminance, bitmap.Width, bitmap.Height);
+        await Assert.That(expected.Length).IsEqualTo(2);
+
+        await Assert.That(Array(symbology, longer, bitmap.Width, bitmap.Height)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(Span(symbology, longer, bitmap.Width, bitmap.Height, 4)).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -201,6 +234,7 @@ public class SingleFinderDecodeImageSymbolsTest
         await Assert.That(viaSync).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
+    /// <summary>A bitmap smaller than the smallest symbol gives no result and does not throw. A blank one reads nothing either way, so this holds the result, not the shortcut that skips the search.</summary>
     [Test]
     [Arguments(Symbology.MicroQR, 10)]
     [Arguments(Symbology.RmQR, 6)]

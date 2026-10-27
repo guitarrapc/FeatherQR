@@ -6,7 +6,7 @@ One call that returns every symbol of an image whatever its symbology: Standard 
 
 ## Where it stands (2026-10-27)
 
-- Nothing is built. Phase 0 waits for the Micro QR and rMQR entries.
+- Nothing of this plan is built. The Micro QR and rMQR reads for every symbol it builds on shipped on 2026-10-27. Each searches every finder in full, and on three of BoofCV's photographs of 60 Standard QR codes the Micro QR read took 14 to 20 times its one-symbol call (the every-symbol section of [qrcode-symbologies.md](../specs/qrcode-symbologies.md#every-symbol-of-an-image)), which is part of what Phase 0 prices.
 
 ## Why
 

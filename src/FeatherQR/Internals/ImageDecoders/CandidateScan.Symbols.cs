@@ -23,7 +23,10 @@ internal interface ISymbolsDecoder<TInfo, TResult> : ICandidateDecoder<TInfo>
 
 internal static partial class CandidateScan
 {
-    /// <summary>The candidates a finder scan's list has room for when every symbol is read: 4,096 finders.</summary>
+    /// <summary>
+    /// The candidates a finder scan's list has room for when every symbol is read. The one-symbol scan's 32 would leave finders of a large sheet unread.
+    /// A finder past this many is dropped, and nothing reports it.
+    /// </summary>
     private const int MaxSymbolCandidates = 4096;
 
     /// <summary>The room the array form starts with, doubled each time it fills.</summary>
@@ -113,21 +116,25 @@ internal static partial class CandidateScan
         var moduleLength = decoder.ModuleBufferLength;
         var rentedChars = ArrayPool<char>.Shared.Rent(maxChars);
         var rentedModules = ArrayPool<byte>.Shared.Rent(moduleLength);
-        // Two lists: the strided scan's, whose candidates the sweep does not try again, and the sweep's
-        var rentedCandidates = ArrayPool<byte>.Shared.Rent(2 * MaxSymbolCandidates * Unsafe.SizeOf<FinderPattern>());
+        // Two lists: the strided scan's, whose candidates the sweep does not try again, and the sweep's.
+        // They are rented apart because one rental of both would be over the large object heap's 85,000-byte threshold, and each alone is under it.
+        var rentedStrided = ArrayPool<byte>.Shared.Rent(MaxSymbolCandidates * Unsafe.SizeOf<FinderPattern>());
+        var rentedSwept = ArrayPool<byte>.Shared.Rent(MaxSymbolCandidates * Unsafe.SizeOf<FinderPattern>());
         var rentedImage = ArrayPool<byte>.Shared.Rent(pixelCount);
         try
         {
             var search = new SymbolSearch<TResult> { Symbols = symbols, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Modules = rentedModules.AsSpan(0, moduleLength) };
-            var candidates = MemoryMarshal.Cast<byte, FinderPattern>(rentedCandidates.AsSpan()).Slice(0, 2 * MaxSymbolCandidates);
-            DecodeSymbolsInPasses<TDecoder, TInfo, TResult>(ref decoder, ref search, luminance, width, height, rentedImage.AsSpan(0, pixelCount), candidates);
+            var strided = MemoryMarshal.Cast<byte, FinderPattern>(rentedStrided.AsSpan()).Slice(0, MaxSymbolCandidates);
+            var swept = MemoryMarshal.Cast<byte, FinderPattern>(rentedSwept.AsSpan()).Slice(0, MaxSymbolCandidates);
+            DecodeSymbolsInPasses<TDecoder, TInfo, TResult>(ref decoder, ref search, luminance, width, height, rentedImage.AsSpan(0, pixelCount), strided, swept);
             grown = search.Growing ?? [];
             return search.Count;
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(rentedImage, clearArray: false);
-            ArrayPool<byte>.Shared.Return(rentedCandidates, clearArray: false);
+            ArrayPool<byte>.Shared.Return(rentedSwept, clearArray: false);
+            ArrayPool<byte>.Shared.Return(rentedStrided, clearArray: false);
             ArrayPool<byte>.Shared.Return(rentedModules, clearArray: false);
             ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
         }
@@ -137,13 +144,13 @@ internal static partial class CandidateScan
     /// The passes of <see cref="ImageDecodePasses"/> in their order, none ended by a read: the global threshold of each polarity, the regional binarization of each, and the midpoint sweep of each polarity whose global pass found no finder.
     /// </summary>
     /// <remarks><paramref name="buffer"/>, one byte a pixel, takes the inverted image, then each binarization.</remarks>
-    private static void DecodeSymbolsInPasses<TDecoder, TInfo, TResult>(ref TDecoder decoder, ref SymbolSearch<TResult> search, scoped ReadOnlySpan<byte> luminance, int width, int height, scoped Span<byte> buffer, scoped Span<FinderPattern> candidates)
+    private static void DecodeSymbolsInPasses<TDecoder, TInfo, TResult>(ref TDecoder decoder, ref SymbolSearch<TResult> search, scoped ReadOnlySpan<byte> luminance, int width, int height, scoped Span<byte> buffer, scoped Span<FinderPattern> strided, scoped Span<FinderPattern> swept)
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
     {
         Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
         Binarizer.FillHistogram(luminance, histogram);
         var positiveThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var positiveGrey);
-        var noFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveThreshold, positiveGrey), candidates, sweepOnly: false);
+        var noFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveThreshold, positiveGrey), strided, swept, sweepOnly: false);
         if (search.IsFull)
             return;
 
@@ -151,7 +158,7 @@ internal static partial class CandidateScan
         LuminanceInverter.Invert(luminance, inverted);
         Binarizer.InvertHistogram(histogram);
         var negativeThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var negativeGrey);
-        var invertedNoFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, negativeThreshold, negativeGrey), candidates, sweepOnly: false);
+        var invertedNoFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, negativeThreshold, negativeGrey), strided, swept, sweepOnly: false);
         if (search.IsFull)
             return;
 
@@ -174,7 +181,7 @@ internal static partial class CandidateScan
                     histogram[LocalBinarizer.Dark] = darkCount;
                     histogram[LocalBinarizer.Light] = inverted.Length - darkCount;
                     var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
-                    DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, threshold, grey), candidates, sweepOnly: false);
+                    DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, threshold, grey), strided, swept, sweepOnly: false);
                 }
             }
             finally
@@ -184,12 +191,12 @@ internal static partial class CandidateScan
         }
 
         if (noFinder && !search.IsFull && ImageDecodePasses.TryMidpoint(positiveThreshold, positiveGrey, out var positiveMidpoint))
-            DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveMidpoint, positiveGrey), candidates, sweepOnly: true);
+            DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveMidpoint, positiveGrey), strided, swept, sweepOnly: true);
         if (invertedNoFinder && !search.IsFull && ImageDecodePasses.TryMidpoint(negativeThreshold, negativeGrey, out var negativeMidpoint))
         {
             // The regional pass wrote its binarization into this buffer
             LuminanceInverter.Invert(luminance, inverted);
-            DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, negativeMidpoint, negativeGrey), candidates, sweepOnly: true);
+            DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, negativeMidpoint, negativeGrey), strided, swept, sweepOnly: true);
         }
     }
 
@@ -197,13 +204,11 @@ internal static partial class CandidateScan
     /// One reading of the image: the strided scan, then the full sweep less the candidates the strided scan found, each decoding its candidates (<see cref="DecodeSymbolsOfScan"/>). With <paramref name="sweepOnly"/>, the sweep alone, as the midpoint pass scans.
     /// </summary>
     /// <returns>Whether neither scan found a finder candidate.</returns>
-    private static bool DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref TDecoder decoder, ref SymbolSearch<TResult> search, scoped ImageView image, scoped Span<FinderPattern> candidates, bool sweepOnly)
+    private static bool DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref TDecoder decoder, ref SymbolSearch<TResult> search, scoped ImageView image, scoped Span<FinderPattern> strided, scoped Span<FinderPattern> swept, bool sweepOnly)
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
     {
         // Every reading checks once at least, so an image where nothing is decoded still sees the token
         search.Token.ThrowIfCancellationRequested();
-        var strided = candidates.Slice(0, MaxSymbolCandidates);
-        var swept = candidates.Slice(MaxSymbolCandidates, MaxSymbolCandidates);
         var stridedCount = 0;
         if (!sweepOnly)
         {

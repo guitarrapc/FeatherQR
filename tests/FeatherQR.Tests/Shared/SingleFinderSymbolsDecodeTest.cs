@@ -20,7 +20,7 @@ public class SingleFinderSymbolsDecodeTest
 
     private const int QuietZone = 2;
 
-    /// <summary>What a result's corner may be off by, in modules: Micro QR's corners are good to about a module, rMQR's to a module and a half.</summary>
+    /// <summary>What a result's corner may be off by on these renders, in modules. rMQR's is wider since its far corners drift under keystone.</summary>
     private static float CornerTolerance(Symbology symbology) => symbology == Symbology.MicroQR ? 1f : 1.5f;
 
     private static Read[] DecodeSymbols(Symbology symbology, byte[] luminance, int width, int height, int room = 256, CancellationToken cancellationToken = default)
@@ -264,11 +264,11 @@ public class SingleFinderSymbolsDecodeTest
         await Assert.That(read.Select(static r => r.Text)).IsEquivalentTo([Text(symbology, 1), Text(symbology, 2)], TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
-    /// <summary>Whether the global threshold of either polarity reads a symbol of the image.</summary>
-    private static bool GlobalPassesRead(Symbology symbology, byte[] luminance, int width, int height)
+    /// <summary>Whether the global threshold of either polarity, or of the negative alone, reads a symbol of the image.</summary>
+    private static bool GlobalPassesRead(Symbology symbology, byte[] luminance, int width, int height, bool negativeOnly = false)
     {
         var inverted = luminance.Select(static p => (byte)(255 - p)).ToArray();
-        foreach (var image in new[] { luminance, inverted })
+        foreach (var image in negativeOnly ? new[] { inverted } : new[] { luminance, inverted })
         {
             var histogram = new int[Binarizer.HistogramBins];
             Binarizer.FillHistogram(image, histogram);
@@ -295,8 +295,12 @@ public class SingleFinderSymbolsDecodeTest
         var left = NearestNeighbourRenderer.Render(large.IsDark, large.Columns, large.Rows, 4f, 0f, 0f);
         var right = NearestNeighbourRenderer.Render(small.IsDark, small.Columns, small.Rows, 1.30f, 0.75f, 0.75f);
         var image = Beside(left, right);
-        // The premises: the strided scan finds no candidate on the small symbol, the small one alone reads, and the one-symbol call reads the large one
+        // The premises: the strided scan finds no candidate on the small symbol, the small one alone reads, and the one-symbol call reads the large one.
+        // The image is black and white, so no regional pass runs. A regional pass reads nothing by its strided scan, and its own sweep would find the small symbol even for a call that skips the sweep after a read.
         await Assert.That(StridedCandidatesRightOf(image.Luminance, image.Width, image.Height, left.Width)).IsEqualTo(0);
+        var histogram = new int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(image.Luminance, histogram);
+        await Assert.That(RegionalRetry.HoldsOnlyExtremes(histogram)).IsTrue();
         await Assert.That(DecodeOne(symbology, right.Luminance, right.Width, right.Height)?.Text).IsEqualTo(Text(symbology, 2));
         await Assert.That(DecodeOne(symbology, image.Luminance, image.Width, image.Height)?.Text).IsEqualTo(Text(symbology, 1));
 
@@ -324,6 +328,25 @@ public class SingleFinderSymbolsDecodeTest
     [Arguments(Symbology.RmQR, 1.1457224f, 0.99830526f, 0.71906835f)]
     public async Task SymbolOnlyTheMidpointPassReads_IsRead(Symbology symbology, float pixelsPerModule, float offsetX, float offsetY)
     {
+        var (text, luminance, width, height) = MidpointSymbol(symbology, pixelsPerModule, offsetX, offsetY);
+        // The premises: no finder at the global threshold, no read by the passes before the midpoint, and the one-symbol call reads it
+        var histogram = new int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(luminance, histogram);
+        var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
+        var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+        await Assert.That(FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey)).IsEqualTo(0);
+        await Assert.That(GlobalPassesRead(symbology, luminance, width, height)).IsFalse();
+        await Assert.That(RegionalPassesRead(symbology, luminance, width, height)).IsFalse();
+        await Assert.That(DecodeOne(symbology, luminance, width, height)?.Text).IsEqualTo(text);
+
+        var read = DecodeSymbols(symbology, luminance, width, height);
+
+        await Assert.That(read.Select(static r => r.Text)).IsEquivalentTo([text], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+    /// <summary>The symbol of <see cref="SymbolOnlyTheMidpointPassReads_IsRead"/>, anti-aliased with its two-module quiet zone.</summary>
+    private static (string Text, byte[] Luminance, int Width, int Height) MidpointSymbol(Symbology symbology, float pixelsPerModule, float offsetX, float offsetY)
+    {
         var text = symbology == Symbology.MicroQR ? "FQR MICRO 2" : "FQR RMQR 1";
         Func<int, int, bool> symbol;
         int columns, rows;
@@ -341,23 +364,167 @@ public class SingleFinderSymbolsDecodeTest
             rows = rmqr.Height;
         }
         var (luminance, width, height) = AntiAliasedRenderer.Render((r, c) => r >= QuietZone && c >= QuietZone && r < rows + QuietZone && c < columns + QuietZone && symbol(r - QuietZone, c - QuietZone), columns + 2 * QuietZone, rows + 2 * QuietZone, pixelsPerModule, offsetX, offsetY);
-        // The premises: no finder at the global threshold, no read by the passes before the midpoint, and the one-symbol call reads it
+        return (text, luminance, width, height);
+    }
+
+    /// <summary>
+    /// A plain symbol beside a reversed copy of an anti-aliased symbol that only the midpoint pass reads: the negative midpoint pass reads the second, and it runs after the positive pass has read the first.
+    /// </summary>
+    [Test]
+    [Arguments(Symbology.MicroQR, 1.13f, 0.59004194f, 0.19798319f, (byte)255)]
+    [Arguments(Symbology.RmQR, 1.09f, 0.80488366f, 0.33534238f, (byte)255)]
+    [Arguments(Symbology.RmQR, 1.1f, 0.7842325f, 0.22932193f, (byte)0)]
+    public async Task ReversedSymbolOnlyTheNegativeMidpointPassReads_BesideAPlainOne_BothAreRead(Symbology symbology, float pixelsPerModule, float offsetX, float offsetY, byte paper)
+    {
+        var (text, luminance, width, height) = MidpointSymbol(symbology, pixelsPerModule, offsetX, offsetY);
+        var reversed = (Luminance: luminance.Select(static p => (byte)(255 - p)).ToArray(), Width: width, Height: height);
+        var plainText = symbology == Symbology.MicroQR ? "10123456789" : "FQR RMQR 7AAAAAAAAAA";
+        Func<int, int, bool> plainSymbol;
+        int columns, rows;
+        if (symbology == Symbology.MicroQR)
+        {
+            var micro = MicroQRCodeGenerator.Create(plainText, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+            plainSymbol = (r, c) => micro[r, c];
+            columns = rows = micro.Size;
+        }
+        else
+        {
+            var rmqr = RmQRCodeGenerator.Create(plainText, RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0, Version = RmQRVersion.R11x59 });
+            plainSymbol = (r, c) => rmqr[r, c];
+            columns = rmqr.Width;
+            rows = rmqr.Height;
+        }
+        const int PlainZone = 4;
+        var plain = NearestNeighbourRenderer.Render((r, c) => r >= PlainZone && c >= PlainZone && r < rows + PlainZone && c < columns + PlainZone && plainSymbol(r - PlainZone, c - PlainZone), columns + 2 * PlainZone, rows + 2 * PlainZone, 4f, 0f, 0f);
+        var image = Beside(plain, reversed, paper);
+        // The premises: the inverted image has no finder at its global threshold, so the negative midpoint pass runs, the reversed symbol alone is read by no global or regional pass,
+        // the negative regional binarization of the whole image reads nothing, and the one-symbol call reads the plain one
+        await Assert.That(FullSweepCandidates(image.Luminance.Select(static p => (byte)(255 - p)).ToArray(), image.Width, image.Height)).IsEqualTo(0);
+        await Assert.That(GlobalPassesRead(symbology, reversed.Luminance, width, height)).IsFalse();
+        await Assert.That(RegionalPassesRead(symbology, reversed.Luminance, width, height)).IsFalse();
+        await Assert.That(RegionalPassesRead(symbology, image.Luminance, image.Width, image.Height, negativeOnly: true)).IsFalse();
+        await Assert.That(DecodeOne(symbology, image.Luminance, image.Width, image.Height)?.Text).IsEqualTo(plainText);
+
+        var read = DecodeSymbols(symbology, image.Luminance, image.Width, image.Height);
+
+        await Assert.That(read.Select(static r => r.Text)).IsEquivalentTo([plainText, text], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+    /// <summary>
+    /// A buffer longer than the image is read as its first width × height bytes. The symbol is rMQR's midpoint one, whose read depends on the thresholds.
+    /// The bytes past the image are black, four times as many as the image's, so read with it they would move its global threshold.
+    /// </summary>
+    [Test]
+    public async Task BufferLongerThanTheImage_IsReadAsTheImage()
+    {
+        var (text, luminance, width, height) = MidpointSymbol(Symbology.RmQR, 1.1457224f, 0.99830526f, 0.71906835f);
+        var longer = new byte[5 * luminance.Length];
+        luminance.CopyTo(longer, 0);
+        // The premise: the whole buffer has another global threshold than the image
+        await Assert.That(GlobalThreshold(longer)).IsNotEqualTo(GlobalThreshold(luminance));
+
+        var read = DecodeSymbols(Symbology.RmQR, longer, width, height);
+
+        await Assert.That(read.Select(static r => r.Text)).IsEquivalentTo([text], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+
+        static byte GlobalThreshold(byte[] luminance)
+        {
+            var histogram = new int[Binarizer.HistogramBins];
+            Binarizer.FillHistogram(luminance, histogram);
+            return Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out _);
+        }
+    }
+
+    /// <summary>How many finder candidates the full sweep finds at the image's global threshold.</summary>
+    private static int FullSweepCandidates(byte[] luminance, int width, int height)
+    {
         var histogram = new int[Binarizer.HistogramBins];
         Binarizer.FillHistogram(luminance, histogram);
         var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
         var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        await Assert.That(FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey)).IsEqualTo(0);
-        await Assert.That(GlobalPassesRead(symbology, luminance, width, height)).IsFalse();
-        await Assert.That(RegionalPassesRead(symbology, luminance, width, height)).IsFalse();
-        await Assert.That(DecodeOne(symbology, luminance, width, height)?.Text).IsEqualTo(text);
-
-        var read = DecodeSymbols(symbology, luminance, width, height);
-
-        await Assert.That(read.Select(static r => r.Text)).IsEquivalentTo([text], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        return FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey);
     }
 
-    /// <summary>Whether the regional binarization of either polarity reads a symbol of the image.</summary>
-    private static bool RegionalPassesRead(Symbology symbology, byte[] luminance, int width, int height)
+    /// <summary>A plain symbol beside a reversed one in a shadow deep enough that only the negative regional binarization reads it: both are read.</summary>
+    [Test]
+    [Arguments(Symbology.MicroQR)]
+    [Arguments(Symbology.RmQR)]
+    public async Task ReversedSymbolOnlyTheNegativeRegionalPassReads_BesideAPlainOne_BothAreRead(Symbology symbology)
+    {
+        var plain = Tile(symbology, Text(symbology, 1), quietZone: 2);
+        var shadowed = Tile(symbology, Text(symbology, 2), quietZone: 2);
+        var shadowedImage = UnevenLightingRenderer.Render(shadowed.IsDark, shadowed.Columns, shadowed.Rows, 4, UnevenLight.Shadow, 0f, 0.55f);
+        var reversed = (Luminance: shadowedImage.Luminance.Select(static p => (byte)(255 - p)).ToArray(), shadowedImage.Width, shadowedImage.Height);
+        var image = Beside(UnevenLightingRenderer.Render(plain.IsDark, plain.Columns, plain.Rows, 4, UnevenLight.Shadow, 0f, 0f), reversed, UnevenLightingRenderer.LightReflectance);
+        // The premises: no global pass reads the reversed one alone, and no negative global pass reads it beside the plain one. The one-symbol call reads it alone, so a regional pass does.
+        // The inverted image has finders at its global threshold, so no negative midpoint pass runs, and the one-symbol call reads the plain one.
+        await Assert.That(GlobalPassesRead(symbology, reversed.Luminance, reversed.Width, reversed.Height)).IsFalse();
+        await Assert.That(GlobalPassesRead(symbology, image.Luminance, image.Width, image.Height, negativeOnly: true)).IsFalse();
+        await Assert.That(DecodeOne(symbology, reversed.Luminance, reversed.Width, reversed.Height)?.Text).IsEqualTo(Text(symbology, 2));
+        await Assert.That(FullSweepCandidates(image.Luminance.Select(static p => (byte)(255 - p)).ToArray(), image.Width, image.Height)).IsGreaterThan(0);
+        await Assert.That(DecodeOne(symbology, image.Luminance, image.Width, image.Height)?.Text).IsEqualTo(Text(symbology, 1));
+
+        var read = DecodeSymbols(symbology, image.Luminance, image.Width, image.Height);
+
+        await Assert.That(read.Select(static r => r.Text)).IsEquivalentTo([Text(symbology, 1), Text(symbology, 2)], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+    public enum Foreign { StandardQR, MicroQR, RmQR }
+
+    /// <summary>
+    /// A grid of 16 symbols of another symbology, turned: no result. Every finder of the grid is a candidate the call decodes, where the one-symbol call decodes eight.
+    /// </summary>
+    [Test]
+    [Arguments(Symbology.MicroQR, Foreign.StandardQR)]
+    [Arguments(Symbology.MicroQR, Foreign.RmQR)]
+    [Arguments(Symbology.RmQR, Foreign.StandardQR)]
+    [Arguments(Symbology.RmQR, Foreign.MicroQR)]
+    public async Task GridOfAnotherSymbology_GivesNoResult(Symbology symbology, Foreign foreign)
+    {
+        var cells = new List<(Func<int, int, bool> IsDark, int Columns, int Rows)>();
+        for (var i = 0; i < 16; i++)
+        {
+            var text = $"FOREIGN {i}";
+            switch (foreign)
+            {
+                case Foreign.StandardQR:
+                    var qr = QRCodeGenerator.Create(text + new string('X', i * 3), QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+                    cells.Add(((r, c) => qr[r, c], qr.Size, qr.Size));
+                    break;
+                case Foreign.MicroQR:
+                    var micro = MicroQRCodeGenerator.Create(text, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+                    cells.Add(((r, c) => micro[r, c], micro.Size, micro.Size));
+                    break;
+                default:
+                    var rmqr = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
+                    cells.Add(((r, c) => rmqr[r, c], rmqr.Width, rmqr.Height));
+                    break;
+            }
+        }
+        int cellColumns = cells.Max(static c => c.Columns) + 2 * QuietZone, cellRows = cells.Max(static c => c.Rows) + 2 * QuietZone;
+        var (luminance, width, height) = SupersampledRenderer.Render((row, column) =>
+        {
+            var (isDark, columns, rows) = cells[row / cellRows * 4 + column / cellColumns];
+            int r = row % cellRows - QuietZone, c = column % cellColumns - QuietZone;
+            return r >= 0 && c >= 0 && r < rows && c < columns && isDark(r, c);
+        }, 4 * cellColumns, 4 * cellRows, 3f, 10f);
+        // The premise: the strided scan finds more candidates than the one-symbol call decodes
+        await Assert.That(StridedCandidates(luminance, width, height)).IsGreaterThan(CandidateScan.MaxCandidatesToTry);
+
+        await Assert.That(DecodeSymbols(symbology, luminance, width, height)).IsEmpty();
+
+        static int StridedCandidates(byte[] luminance, int width, int height)
+        {
+            var histogram = new int[Binarizer.HistogramBins];
+            Binarizer.FillHistogram(luminance, histogram);
+            var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
+            var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+            return FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates, grey);
+        }
+    }
+
+    /// <summary>Whether the regional binarization of either polarity, or of the negative alone, reads a symbol of the image.</summary>
+    private static bool RegionalPassesRead(Symbology symbology, byte[] luminance, int width, int height, bool negativeOnly = false)
     {
         var positive = new int[Binarizer.HistogramBins];
         Binarizer.FillHistogram(luminance, positive);
@@ -366,7 +533,7 @@ public class SingleFinderSymbolsDecodeTest
         var negativeThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(positive, out _);
         var scratch = new int[LocalBinarizer.ScratchLength(width, height)];
         var binarized = new byte[width * height];
-        foreach (var negative in new[] { false, true })
+        foreach (var negative in negativeOnly ? new[] { true } : new[] { false, true })
         {
             if (!LocalBinarizer.TryBinarize(luminance, width, height, negative, negative ? negativeThreshold : positiveThreshold, binarized, scratch, out var dark))
                 continue;
@@ -490,13 +657,15 @@ public class SingleFinderSymbolsDecodeTest
         await Assert.That(read.Select(static r => r.Text)).IsEquivalentTo(["亜"], TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
-    /// <summary>Room for fewer symbols than the image holds is filled with the first symbols the read with room for all of them gives, in its order.</summary>
+    /// <summary>Room for the four symbols of the image, or for fewer, is filled with the first symbols the read with ample room gives, in its order.</summary>
     [Test]
     [Arguments(Symbology.MicroQR, 1)]
     [Arguments(Symbology.MicroQR, 3)]
+    [Arguments(Symbology.MicroQR, 4)]
     [Arguments(Symbology.RmQR, 1)]
     [Arguments(Symbology.RmQR, 3)]
-    public async Task RoomForFewer_IsFilledWithTheFirstFound(Symbology symbology, int room)
+    [Arguments(Symbology.RmQR, 4)]
+    public async Task Room_IsFilledWithTheFirstFound(Symbology symbology, int room)
     {
         var (luminance, width, height) = RenderGrid(symbology, 2, 2);
         var all = DecodeSymbols(symbology, luminance, width, height);
@@ -588,7 +757,7 @@ public class SingleFinderSymbolsDecodeTest
         }
     }
 
-    /// <summary>Images with no symbol of the symbology: paper, noise, and the symbols of the other two. Each gives no result, through every pass, the midpoint passes included.</summary>
+    /// <summary>Images with no symbol of the symbology: paper, noise, and the symbols of the other two. Each gives no result.</summary>
     [Test]
     [Arguments(Symbology.MicroQR, NoSymbolImage.Blank)]
     [Arguments(Symbology.MicroQR, NoSymbolImage.Noise)]

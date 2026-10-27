@@ -185,7 +185,7 @@ internal static class Sheets
     }
 
     /// <summary>
-    /// Fills a read symbol's outline, a module wider on every side, with the light level of the pixels it holds (<see cref="BoofCv"/> paints the same way).
+    /// Fills a read symbol's outline, a module wider on every side, with the light level of the pixels it holds, chosen as <see cref="BoofCv"/> chooses it.
     /// The outline is the corners extended by one module along each of the symbol's own axes, so a rectangle grows by a module on its short sides too.
     /// </summary>
     public static void PaintOver(byte[] luminance, int width, int height, Found found)
@@ -355,7 +355,7 @@ internal static class Sheets
 
     /// <summary>
     /// The sweep's one-symbol renders of this library's own symbols and the committed real images: each that reads is painted over and read again, where any read is a false one.
-    /// With <paramref name="every"/>, a second result of it is a false read too.
+    /// With <paramref name="every"/>, the call for every symbol should return the one-symbol read alone, at its corners, and a text the image does not hold is a false read.
     /// </summary>
     public static string Again(string repoRoot, string which, int cases, bool timed, EveryReader? every)
     {
@@ -390,7 +390,7 @@ internal static class Sheets
             }
             Console.WriteLine($"{symbology}: {images.Count} images");
 
-            var rows = new ConcurrentBag<(string Kind, string Name, bool Read, string? Second, int EveryCount, string[] EveryOthers, double FirstMs, double SecondMs, double EveryMs)>();
+            var rows = new ConcurrentBag<(string Kind, string Name, bool Read, string? Second, bool EveryDiffers, bool CornersDiffer, string[] EveryOthers, double FirstMs, double SecondMs, double EveryMs)>();
             Parallel.ForEach(images, new ParallelOptions { MaxDegreeOfParallelism = timed ? 1 : Math.Max(1, Environment.ProcessorCount - 2) }, image =>
             {
                 var luminance = image.Image.Luminance;
@@ -409,17 +409,19 @@ internal static class Sheets
                         secondMs = Fastest(() => ReadOne(symbology, painted, image.Image.Width, image.Image.Height, out _));
                     }
                 }
-                var everyCount = 0;
+                bool everyDiffers = false, cornersDiffer = false;
                 string[] everyOthers = [];
                 if (every is not null)
                 {
                     var all = every(symbology, luminance, image.Image.Width, image.Image.Height);
-                    everyCount = all.Length;
+                    // The call for every symbol returns the one-symbol call's read and nothing else, whatever that read is
+                    everyDiffers = first is { } one ? all.Length != 1 || all[0].Text != one.Text : all.Length != 0;
+                    cornersDiffer = !everyDiffers && first is { } same && all[0].Corners != same.Corners;
                     everyOthers = [.. all.Select(static f => f.Text).Where(t => t != image.Text)];
                     if (timed && first is not null)
                         everyMs = Fastest(() => every(symbology, luminance, image.Image.Width, image.Image.Height));
                 }
-                rows.Add((image.Kind, image.Name, read, second, everyCount, everyOthers, firstMs, secondMs, everyMs));
+                rows.Add((image.Kind, image.Name, read, second, everyDiffers, cornersDiffer, everyOthers, firstMs, secondMs, everyMs));
             });
 
             var list = rows.ToList();
@@ -429,17 +431,17 @@ internal static class Sheets
             markdown.AppendLine();
             markdown.Append("| Kind | Images | Read | Second read |");
             if (every is not null)
-                markdown.Append(" Every: none | Every: more than one |");
+                markdown.Append(" Every: not the one-symbol read | Every: same read, other corners | Every: another text |");
             if (timed)
                 markdown.Append(" First ms | Second ms | Second / first |").Append(every is not null ? " Every ms | Every / first |" : "");
             markdown.AppendLine();
-            markdown.Append("|---|---|---|---|").Append(every is not null ? "---|---|" : "").AppendLine(timed ? (every is not null ? "---|---|---|---|---|" : "---|---|---|") : "");
+            markdown.Append("|---|---|---|---|").Append(every is not null ? "---|---|---|" : "").AppendLine(timed ? (every is not null ? "---|---|---|---|---|" : "---|---|---|") : "");
             foreach (var group in list.GroupBy(static r => r.Kind).OrderBy(static g => g.Key, StringComparer.Ordinal).Append(list.GroupBy(static _ => "**All**").Single()))
             {
                 var g = group.ToList();
                 markdown.Append(CultureInfo.InvariantCulture, $"| {group.Key} | {g.Count:N0} | {g.Count(static r => r.Read):N0} | {g.Count(static r => r.Second is not null):N0} |");
                 if (every is not null)
-                    markdown.Append(CultureInfo.InvariantCulture, $" {g.Count(static r => r.Read && r.EveryCount == 0):N0} | {g.Count(static r => r.EveryOthers.Length > 0):N0} |");
+                    markdown.Append(CultureInfo.InvariantCulture, $" {g.Count(static r => r.EveryDiffers):N0} | {g.Count(static r => r.CornersDiffer):N0} | {g.Count(static r => r.EveryOthers.Length > 0):N0} |");
                 if (timed)
                 {
                     double first = g.Sum(static r => r.FirstMs), second = g.Sum(static r => r.SecondMs);
@@ -450,13 +452,13 @@ internal static class Sheets
                 markdown.AppendLine();
             }
             markdown.AppendLine();
-            var missed = list.Where(r => every is not null && r.Read && r.EveryCount == 0).ToList();
+            var missed = list.Where(static r => r.EveryDiffers || r.CornersDiffer).ToList();
             if (missed.Count > 0)
             {
-                markdown.AppendLine("Read by the one-symbol call and not by the call for every symbol:");
+                markdown.AppendLine("Where the call for every symbol does not return the one-symbol call's read alone, at its corners:");
                 markdown.AppendLine();
                 foreach (var r in missed.OrderBy(static r => r.Kind, StringComparer.Ordinal))
-                    markdown.AppendLine(CultureInfo.InvariantCulture, $"- {r.Kind}, {r.Name}");
+                    markdown.AppendLine(CultureInfo.InvariantCulture, $"- {r.Kind}, {r.Name}{(r.CornersDiffer ? ": other corners" : "")}");
                 markdown.AppendLine();
             }
             var falseReads = list.Where(static r => r.Second is not null || r.EveryOthers.Length > 0).ToList();

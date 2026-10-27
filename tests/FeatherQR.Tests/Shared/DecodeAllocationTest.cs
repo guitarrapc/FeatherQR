@@ -605,7 +605,7 @@ public class DecodeAllocationTest
 
     #region Image level: rejections
 
-    /// <summary>An image a decoder must not read: every pass runs, and each candidate it finds is tried to the end.</summary>
+    /// <summary>An image a decoder must not read: each candidate it finds is tried to the end, in the passes the image reaches.</summary>
     public enum RejectedImage
     {
         /// <summary>White: no finder, and no grey level for a regional pass.</summary>
@@ -813,7 +813,7 @@ public class DecodeAllocationTest
         await Assert.That(allocated).IsEqualTo(texts);
     }
 
-    /// <summary>An image with no symbol goes through every pass of the entry, the midpoint passes included, and allocates nothing.</summary>
+    /// <summary>An image with no symbol of the symbology allocates nothing, whichever passes it reaches.</summary>
     [Test]
     [MethodDataSource(nameof(RejectedByMicroQR))]
     public async Task MicroQR_SeveralSymbols_NoSymbol_AllocatesNothing(RejectedImage rejected)

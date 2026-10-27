@@ -186,7 +186,7 @@ internal static partial class FinderPatternFinder
     /// </summary>
     internal static void RankByConfirmation(Span<FinderPattern> candidates)
     {
-        // Insertion sort: netstandard2.0 has no Span.Sort, and the list is tiny (≤ 32)
+        // Insertion sort: it keeps ties in the order found, which Span.Sort does not promise, and netstandard2.0 has no Span.Sort
         for (var i = 1; i < candidates.Length; i++)
         {
             var current = candidates[i];
