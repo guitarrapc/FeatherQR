@@ -1,5 +1,4 @@
 #if NET8_0_OR_GREATER
-using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -9,7 +8,7 @@ namespace FeatherQR.Internals.RmQR;
 
 internal static partial class RmQRImageDecoder
 {
-    /// <summary>The scalar classification four points at a time: the same expressions and comparisons per lane, the pixel read only where the lane is certain.</summary>
+    /// <summary>The scalar classification four points at a time: the same expressions and comparisons per lane, the pixel taken only where the lane is certain.</summary>
     internal static void ClassifySubFinderLatticeVector128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float predictedX, float predictedY, float uX, float uY, float svX, float svY, int side, float marginX, float marginY, Span<ulong> mismatchIfDark, Span<ulong> mismatchIfLight)
     {
         var first = -(side - 1) / 2;
@@ -22,8 +21,8 @@ internal static partial class RmQRImageDecoder
         var widths = Vector128.Create((float)width);
         var heights = Vector128.Create((float)height);
         var stride = Vector128.Create(width);
+        var level = (int)threshold;
         var sideMask = side == 64 ? ulong.MaxValue : (1UL << side) - 1;
-        Span<int> indices = stackalloc int[4];
         for (var row = 0; row < side; row++)
         {
             var halfV = (first + row) * 0.5f;
@@ -60,16 +59,15 @@ internal static partial class RmQRImageDecoder
                 var certainBits = certain.ExtractMostSignificantBits();
                 if (certainBits == 0)
                     continue;
-                (pyLow * stride + pxLow).CopyTo(indices);
-                while (certainBits != 0)
-                {
-                    var lane = BitOperations.TrailingZeroCount(certainBits);
-                    certainBits &= certainBits - 1;
-                    // Branch-free: on texture the pixel's class is a coin toss
-                    var dark = (ulong)(luminance[indices[lane]] - threshold) >> 63;
-                    ifLight |= dark << (column + lane);
-                    ifDark |= (dark ^ 1) << (column + lane);
-                }
+                // Every lane is read, not only the certain ones: a loop over the certain lanes spills the indices and branches on a count that varies.
+                // A lane that is not certain may hold no pixel, so it reads pixel 0 and its bit is masked off.
+                var index = Vector128.ConditionalSelect(certain, pyLow * stride + pxLow, Vector128<int>.Zero);
+                var dark = (uint)(luminance[index.GetElement(0)] - level) >> 31
+                    | (uint)(luminance[index.GetElement(1)] - level) >> 31 << 1
+                    | (uint)(luminance[index.GetElement(2)] - level) >> 31 << 2
+                    | (uint)(luminance[index.GetElement(3)] - level) >> 31 << 3;
+                ifLight |= (ulong)(dark & certainBits) << column;
+                ifDark |= (ulong)(~dark & certainBits) << column;
             }
             mismatchIfDark[row] = ifDark & sideMask;
             mismatchIfLight[row] = ifLight & sideMask;

@@ -160,17 +160,20 @@ public class RmQRSubFinderScreenParityTest
         await Assert.That(checkedPoints).IsGreaterThan(500_000L);
     }
 
-    /// <summary>The vector classification against the scalar one, mask for mask, with the lattice inside, across and wholly outside the image.</summary>
+    /// <summary>Each vector classification against the scalar one, mask for mask, with the lattice inside, across and wholly outside the image.</summary>
     [Test]
-    [Arguments(0)]
-    [Arguments(1)]
-    [Arguments(2)]
-    public async Task Lattice_Vector128AndScalar_AreIdentical(int seed)
+    [Arguments(128, 0)]
+    [Arguments(128, 1)]
+    [Arguments(128, 2)]
+    [Arguments(256, 0)]
+    [Arguments(256, 1)]
+    [Arguments(256, 2)]
+    public async Task Lattice_VectorAndScalar_AreIdentical(int bits, int seed)
     {
 #if NET8_0_OR_GREATER
-        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        if (!IsAccelerated(bits))
         {
-            Skip.Test("Vector128 not accelerated on this machine");
+            Skip.Test($"Vector{bits} not accelerated on this machine");
             return;
         }
 
@@ -201,7 +204,7 @@ public class RmQRSubFinderScreenParityTest
             var vectorDark = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
             var vectorLight = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
             RmQRImageDecoder.ClassifySubFinderLatticeScalar(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, side, marginX, marginY, scalarDark, scalarLight);
-            RmQRImageDecoder.ClassifySubFinderLatticeVector128(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, side, marginX, marginY, vectorDark, vectorLight);
+            ClassifyVector(bits, luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, side, marginX, marginY, vectorDark, vectorLight);
             if (!scalarDark.AsSpan().SequenceEqual(vectorDark) || !scalarLight.AsSpan().SequenceEqual(vectorLight))
             {
                 if (mismatches++ == 0)
@@ -221,16 +224,20 @@ public class RmQRSubFinderScreenParityTest
     /// Only the outside tests can differ: a margin ending exactly on a border from inside leaves its two ends in different pixels, uncertain either way.
     /// </summary>
     [Test]
-    [Arguments("left")]
-    [Arguments("right")]
-    [Arguments("top")]
-    [Arguments("bottom")]
-    public async Task Lattice_Vector128AndScalar_AreIdentical_WhereAMarginEndsOnTheBorder(string border)
+    [Arguments(128, "left")]
+    [Arguments(128, "right")]
+    [Arguments(128, "top")]
+    [Arguments(128, "bottom")]
+    [Arguments(256, "left")]
+    [Arguments(256, "right")]
+    [Arguments(256, "top")]
+    [Arguments(256, "bottom")]
+    public async Task Lattice_VectorAndScalar_AreIdentical_WhereAMarginEndsOnTheBorder(int bits, string border)
     {
 #if NET8_0_OR_GREATER
-        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        if (!IsAccelerated(bits))
         {
-            Skip.Test("Vector128 not accelerated on this machine");
+            Skip.Test($"Vector{bits} not accelerated on this machine");
             return;
         }
 
@@ -253,7 +260,7 @@ public class RmQRSubFinderScreenParityTest
         var vectorDark = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
         var vectorLight = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
         RmQRImageDecoder.ClassifySubFinderLatticeScalar(luminance, Width, Height, 128, predictedX, predictedY, uX, uY, svX, svY, Side, marginX, marginY, scalarDark, scalarLight);
-        RmQRImageDecoder.ClassifySubFinderLatticeVector128(luminance, Width, Height, 128, predictedX, predictedY, uX, uY, svX, svY, Side, marginX, marginY, vectorDark, vectorLight);
+        ClassifyVector(bits, luminance, Width, Height, 128, predictedX, predictedY, uX, uY, svX, svY, Side, marginX, marginY, vectorDark, vectorLight);
 
         // The premise: every point is on the tie and the scalar path calls it outside, a mismatch either way
         var outside = 0;
@@ -266,6 +273,98 @@ public class RmQRSubFinderScreenParityTest
 #else
         await Task.CompletedTask;
 #endif
+    }
+
+#if NET8_0_OR_GREATER
+    private static bool IsAccelerated(int bits) => bits == 256 ? System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated : System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated;
+
+    private static void ClassifyVector(int bits, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float predictedX, float predictedY, float uX, float uY, float svX, float svY, int side, float marginX, float marginY, Span<ulong> mismatchIfDark, Span<ulong> mismatchIfLight)
+    {
+        if (bits == 256)
+            RmQRImageDecoder.ClassifySubFinderLatticeVector256(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, side, marginX, marginY, mismatchIfDark, mismatchIfLight);
+        else
+            RmQRImageDecoder.ClassifySubFinderLatticeVector128(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, side, marginX, marginY, mismatchIfDark, mismatchIfLight);
+    }
+#endif
+
+    /// <summary>
+    /// The survivor count against the template's 25 cells counted one by one, position by position, at every radius the screen takes:
+    /// the scalar count, and the one the screen calls, four rows a step on 256-bit vectors and the rows left over one at a time.
+    /// </summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(256)]
+    public async Task Survivors_AreThePositionsWithAtMostOneMismatch(int bits)
+    {
+#if NET8_0_OR_GREATER
+        if (bits == 256 && !System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector256 not accelerated on this machine");
+            return;
+        }
+#else
+        if (bits == 256)
+        {
+            Skip.Test("no Vector256 tier on this target");
+            return;
+        }
+#endif
+        var random = new Random(bits + 5);
+        var survived = 0;
+        var mismatches = 0;
+        var first = "";
+        for (var i = 0; i < 300; i++)
+        {
+            var radius = random.Next(0, 28);
+            var side = 2 * radius + 9;
+            var positions = 2 * radius + 1;
+            // Sparse masks: positions with no mismatch, one and two are all common
+            var density = 0.01 + random.NextDouble() * 0.1;
+            var ifDark = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
+            var ifLight = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
+            for (var row = 0; row < side; row++)
+            {
+                for (var column = 0; column < side; column++)
+                {
+                    if (random.NextDouble() < density)
+                        ifDark[row] |= 1UL << column;
+                    if (random.NextDouble() < density)
+                        ifLight[row] |= 1UL << column;
+                }
+            }
+
+            var got = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
+            if (bits == 256)
+                RmQRImageDecoder.CountSubFinderSurvivors(ifDark, ifLight, positions, got);
+            else
+                RmQRImageDecoder.CountSubFinderSurvivorsScalar(ifDark, ifLight, positions, got, 0);
+
+            for (var ov = 0; ov < positions; ov++)
+            {
+                for (var ou = 0; ou < positions; ou++)
+                {
+                    var count = 0;
+                    for (var j = 0; j < 5; j++)
+                    {
+                        for (var c = 0; c < 5; c++)
+                        {
+                            var expectedDark = c == 0 || c == 4 || j == 0 || j == 4 || (c == 2 && j == 2);
+                            var mask = expectedDark ? ifDark[ov + 2 * j] : ifLight[ov + 2 * j];
+                            count += (int)(mask >> (ou + 2 * c) & 1);
+                        }
+                    }
+                    var want = count <= 1;
+                    var kept = (got[ov] >> ou & 1) != 0;
+                    survived += kept ? 1 : 0;
+                    if (kept != want && mismatches++ == 0)
+                        first = $"case {i}: radius {radius}, position ({ou}, {ov}) has {count} mismatches, kept {kept}";
+                }
+            }
+        }
+
+        await Assert.That(mismatches).IsEqualTo(0).Because(first);
+        // The masks have to leave survivors, or only dropped positions were compared
+        await Assert.That(survived).IsGreaterThan(1000);
     }
 
     /// <summary>On noise the screen leaves few positions to score, which is all it is for.</summary>

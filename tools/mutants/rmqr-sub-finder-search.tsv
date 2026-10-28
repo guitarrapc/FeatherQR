@@ -1,8 +1,19 @@
-# Planted faults for the rMQR sub-finder search's early end (rmqr-decoder.md, Decisions, failed-decode cost): the rings are not walked once the
-# lattice screen leaves no position, which changes the time only when it is right.
+# Planted faults for the rMQR sub-finder search (rmqr-decoder.md, Decisions, failed-decode cost): the rings are not walked once the
+# lattice screen leaves no position, which changes the time only when it is right, and the screen's tiers: the lattice classified
+# four and eight points at a time, and the survivors counted a row and four rows at a time.
 #
 #   dotnet run tools/mutation_check.cs -- run tools/mutants/rmqr-sub-finder-search.tsv <out-dir> --allow-dirty --filter "/*/*/RmQRSubFinderScreenParityTest/*"
 #
-# Against that class (2026-10-28) both faults are caught.
+# Against that class (2026-10-28) every fault is caught.
 SF-end-when-screened	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	if (screened && !AnySurvivor(survivors.Slice(0, 2 * radius + 1)))	if (screened)
 SF-end-rows-checked	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	AnySurvivor(survivors.Slice(0, 2 * radius + 1))	AnySurvivor(survivors.Slice(0, radius))
+SF-v256-lane-bit	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.Vector256.cs	| (uint)(luminance[high.GetElement(0)] - level) >> 31 << 4	| (uint)(luminance[high.GetElement(0)] - level) >> 31 << 3
+SF-v256-certain-mask	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.Vector256.cs	ifLight |= (ulong)(dark & certainBits) << column;	ifLight |= (ulong)dark << column;
+SF-v256-halves	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.Vector256.cs	| (uint)(luminance[high.GetElement(3)] - level) >> 31 << 7	| (uint)(luminance[low.GetElement(3)] - level) >> 31 << 7
+SF-v128-lane-bit	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.Vector128.cs	| (uint)(luminance[index.GetElement(2)] - level) >> 31 << 2	| (uint)(luminance[index.GetElement(2)] - level) >> 31 << 1
+SF-v128-certain-mask	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.Vector128.cs	ifDark |= (ulong)(~dark & certainBits) << column;	ifDark |= (ulong)(~dark & 15u) << column;
+SF-survivors-centre	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	CountTemplateRow(ref one, ref two, dark2, light2, dark2);	CountTemplateRow(ref one, ref two, dark2, light2, light2);
+SF-survivors-row-offset	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	CountTemplateRow(ref one, ref two, mismatchIfDark[p + 6], mismatchIfLight[p + 6], mismatchIfLight[p + 6]);	CountTemplateRow(ref one, ref two, mismatchIfDark[p + 6], mismatchIfLight[p + 5], mismatchIfLight[p + 6]);
+SF-survivors-v256-shift	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.Vector256.cs	CountMismatch(ref one, ref two, Vector256.ShiftRightLogical(inner, 6));	CountMismatch(ref one, ref two, Vector256.ShiftRightLogical(inner, 4));
+SF-survivors-v256-rows	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.Vector256.cs	var light2 = Vector256.Create(mismatchIfLight.Slice(p + 4, 4));	var light2 = Vector256.Create(mismatchIfDark.Slice(p + 4, 4));
+SF-survivors-v256-tail	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	CountSubFinderSurvivorsScalar(mismatchIfDark, mismatchIfLight, positions, survivors, counted);	CountSubFinderSurvivorsScalar(mismatchIfDark, mismatchIfLight, counted, survivors, counted);

@@ -256,8 +256,8 @@ internal static class SimdTiers
         new("RmQRModulePlacer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // RmQRMatrixDecoder.ExtractCodewords: codeword extraction, x64 bit planes or ARM64 pair planes. The 128-bit tier is the pair planes on portable vectors, which WebAssembly takes only for symbols of 44 stream bits or more per eight columns.
         new("RmQRExtractCodewords", (SimdTier.Avx2Pext, Isa.Avx2Pext), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
-        // RmQRImageDecoder.ClassifySubFinderLattice: the sub-finder lattice classification. Coordinates are converted as PerspectiveGridSampler's.
-        new("RmQRSubFinderLattice", (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // RmQRImageDecoder.TryScreenSubFinderPositions: the sub-finder lattice classification, eight points a step on 256-bit vectors and four on 128-bit ones, and the survivor count, four rows a step on 256-bit vectors. Coordinates are converted with AVX2 on 256-bit vectors, and on 128-bit ones as PerspectiveGridSampler's.
+        new("RmQRSubFinderLattice", (SimdTier.Avx2, Isa.Vector256 && Isa.Avx2), (SimdTier.Vector256, Isa.Vector256), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // RmQRImageDecoder.SampleGrid: the perspective sampler. Coordinates are converted as PerspectiveGridSampler's.
         new("RmQRSampleGrid", (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
     ];
@@ -334,7 +334,7 @@ internal static class SimdTiers
         new("RmQRLatin1Segment",       [Sse2],          [Sse2],               [Vector128],          [Vector128]),
         new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
         new("RmQRExtractCodewords",    [Vector128],     [Avx2Pext, Vector128], [AdvSimd],           [PackedSimd]),
-        new("RmQRSubFinderLattice",    [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
+        new("RmQRSubFinderLattice",    [Sse2],          [Avx2],               [Vector128],          [PackedSimd]),
         new("RmQRSampleGrid",          [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
     ];
 

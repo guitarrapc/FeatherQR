@@ -14,6 +14,24 @@ internal static class RmQRFormatInformationDecoder
     private static readonly int[] finderSideCandidates = BuildCandidates(subFinderSide: false);
     private static readonly int[] subFinderSideCandidates = BuildCandidates(subFinderSide: true);
 
+    // The word of a side by its bits 0-5: no two words of a side share those bits (RmQRFormatInformationDecoderUnitTest checks it)
+    private static readonly int[] finderSideByLowBits = BuildByLowBits(finderSideCandidates);
+    private static readonly int[] subFinderSideByLowBits = BuildByLowBits(subFinderSideCandidates);
+
+    private static int[] BuildByLowBits(int[] candidates)
+    {
+        var table = new int[64];
+        foreach (var word in candidates)
+            table[word & 63] = word;
+        return table;
+    }
+
+    /// <summary>The valid word of a side whose bits 0-5 are those of <paramref name="lowBits"/>, the only one a copy with those bits can equal.</summary>
+    internal static int WordOfLowBits(int lowBits, bool subFinderSide) => (subFinderSide ? subFinderSideByLowBits : finderSideByLowBits)[lowBits & 63];
+
+    /// <summary>The valid word of a version and level on one side.</summary>
+    internal static int Word(RmQRVersion version, RmQREccLevel eccLevel, bool subFinderSide) => (subFinderSide ? subFinderSideCandidates : finderSideCandidates)[(int)eccLevel << 5 | ((int)version - 1)];
+
     private static int[] BuildCandidates(bool subFinderSide)
     {
         var table = new int[64];
@@ -85,10 +103,14 @@ internal static class RmQRFormatInformationDecoder
 
     private static int PopCount(uint v)
     {
-        // 32-bit SWAR popcount (netstandard2.0 has no BitOperations.PopCount)
+#if NET8_0_OR_GREATER
+        return System.Numerics.BitOperations.PopCount(v);
+#else
+        // 32-bit SWAR popcount: the netstandard targets have no BitOperations.PopCount
         v -= (v >> 1) & 0x55555555;
         v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
         v = (v + (v >> 4)) & 0x0F0F0F0F;
         return (int)((v * 0x01010101) >> 24);
+#endif
     }
 }
