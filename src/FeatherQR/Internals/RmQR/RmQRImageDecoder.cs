@@ -900,6 +900,9 @@ internal static partial class RmQRImageDecoder
                 {
                     screenTried = true;
                     screened = TryScreenSubFinderPositions(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, radius, survivors);
+                    // With no position left the rings would only test bits, and on noise none is left
+                    if (screened && !AnySurvivor(survivors.Slice(0, 2 * radius + 1)))
+                        break;
                 }
 
                 for (var ov = -ring; ov <= ring; ov++)
@@ -1018,6 +1021,15 @@ internal static partial class RmQRImageDecoder
             survivors[p] = ~two & positionMask;
         }
         return true;
+    }
+
+    /// <summary>Whether any position of the screen's rows survived.</summary>
+    private static bool AnySurvivor(ReadOnlySpan<ulong> survivors)
+    {
+        var any = 0UL;
+        foreach (var row in survivors)
+            any |= row;
+        return any != 0;
     }
 
     /// <summary>

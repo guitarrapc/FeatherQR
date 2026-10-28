@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 #endif
@@ -154,6 +155,57 @@ internal static partial class FinderPatternFinder
     /// <returns>The number of candidates written.</returns>
     internal static int FindCandidatesFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey)
         => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, stride: 1, FinderRowKernel.Auto);
+
+    /// <summary>The hits of one strided row that <see cref="FindCandidatesStridedAndFullSweep"/> gathers before merging them into both lists.</summary>
+    internal const int RowHitCapacity = 64;
+
+    /// <summary>
+    /// <see cref="FindCandidates"/> and <see cref="FindCandidatesFullSweep"/> in one pass over the rows, each list bit for bit as its scan alone leaves it.
+    /// </summary>
+    /// <remarks>
+    /// The strided rows are rows of the sweep, and a row's hits do not depend on the list they go to. So a strided row is scanned once, its hits gathered in a list of their own, and each hit is merged into both lists in the order found.
+    /// The gathering list merges and fills as any list does, so its entries are the row's hits only while each counts one hit and the list has room. A row where they are not is scanned again into each list.
+    /// </remarks>
+    internal static void FindCandidatesStridedAndFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> strided, out int stridedCount, Span<FinderPattern> swept, out int sweptCount)
+    {
+        stridedCount = 0;
+        sweptCount = 0;
+        Span<FinderPattern> rowHits = stackalloc FinderPattern[RowHitCapacity];
+        var rentedEdges = RentEdgeBuffer(FinderRowKernel.Auto, width);
+        try
+        {
+            for (var y = 0; y < height; y++)
+            {
+                if (y % CandidateRowStride != 0)
+                {
+                    ScanRow(luminance, width, height, threshold, grey, y, FinderRowKernel.Auto, rentedEdges, swept, ref sweptCount);
+                    continue;
+                }
+
+                var hits = 0;
+                ScanRow(luminance, width, height, threshold, grey, y, FinderRowKernel.Auto, rentedEdges, rowHits, ref hits);
+                var oneHitEach = hits < rowHits.Length;
+                for (var i = 0; i < hits && oneHitEach; i++)
+                    oneHitEach = rowHits[i].Count == 1;
+                if (!oneHitEach)
+                {
+                    ScanRow(luminance, width, height, threshold, grey, y, FinderRowKernel.Auto, rentedEdges, strided, ref stridedCount);
+                    ScanRow(luminance, width, height, threshold, grey, y, FinderRowKernel.Auto, rentedEdges, swept, ref sweptCount);
+                    continue;
+                }
+
+                foreach (var hit in rowHits.Slice(0, hits))
+                {
+                    MergeHit(strided, ref stridedCount, hit.X, hit.Y, hit.ModuleSize);
+                    MergeHit(swept, ref sweptCount, hit.X, hit.Y, hit.ModuleSize);
+                }
+            }
+        }
+        finally
+        {
+            ReturnEdgeBuffer(rentedEdges);
+        }
+    }
 
     /// <summary>Stride- and kernel-selecting entry for parity tests.</summary>
     internal static int FindCandidatesWith(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey, int stride, FinderRowKernel kernel)
@@ -630,9 +682,15 @@ internal static partial class FinderPatternFinder
             return;
         }
 
-        var moduleSize = refinedTotal / 7f;
+        MergeHit(candidates, ref candidateCount, centerX, centerY, refinedTotal / 7f);
+    }
 
-        // Merge with an existing candidate when centers and module sizes agree
+    /// <summary>
+    /// A hit into the list: averaged into the first candidate whose centre and module size agree with it, or added while there is room.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void MergeHit(Span<FinderPattern> candidates, ref int candidateCount, float centerX, float centerY, float moduleSize)
+    {
         for (var i = 0; i < candidateCount; i++)
         {
             ref var existing = ref candidates[i];

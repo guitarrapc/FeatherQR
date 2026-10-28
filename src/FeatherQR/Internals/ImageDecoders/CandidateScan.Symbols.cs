@@ -201,8 +201,9 @@ internal static partial class CandidateScan
     }
 
     /// <summary>
-    /// One reading of the image: the strided scan, then the full sweep less the candidates the strided scan found, each decoding its candidates (<see cref="DecodeSymbolsOfScan"/>). With <paramref name="sweepOnly"/>, the sweep alone, as the midpoint pass scans.
+    /// One reading of the image: the strided scan's candidates, then the full sweep's less those the strided scan found, each list decoded in turn (<see cref="DecodeSymbolsOfScan"/>). With <paramref name="sweepOnly"/>, the sweep alone, as the midpoint pass scans.
     /// </summary>
+    /// <remarks>Both lists come from one pass over the rows (<see cref="FinderPatternFinder.FindCandidatesStridedAndFullSweep"/>), since the sweep runs whatever the strided candidates read.</remarks>
     /// <returns>Whether neither scan found a finder candidate.</returns>
     private static bool DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref TDecoder decoder, ref SymbolSearch<TResult> search, scoped ImageView image, scoped Span<FinderPattern> strided, scoped Span<FinderPattern> swept, bool sweepOnly)
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
@@ -210,16 +211,20 @@ internal static partial class CandidateScan
         // Every reading checks once at least, so an image where nothing is decoded still sees the token
         search.Token.ThrowIfCancellationRequested();
         var stridedCount = 0;
+        int sweptCount;
         if (!sweepOnly)
         {
-            stridedCount = FinderPatternFinder.FindCandidates(image.Luminance, image.Width, image.Height, image.Threshold, strided, image.Grey);
+            FinderPatternFinder.FindCandidatesStridedAndFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, strided, out stridedCount, swept, out sweptCount);
             FinderPatternFinder.RankByConfirmation(strided.Slice(0, stridedCount));
             DecodeSymbolsOfScan<TDecoder, TInfo, TResult>(ref decoder, ref search, image, strided.Slice(0, stridedCount), skip: default);
             if (search.IsFull)
                 return false;
         }
+        else
+        {
+            sweptCount = FinderPatternFinder.FindCandidatesFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, swept, image.Grey);
+        }
 
-        var sweptCount = FinderPatternFinder.FindCandidatesFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, swept, image.Grey);
         FinderPatternFinder.RankByConfirmation(swept.Slice(0, sweptCount));
         // A candidate equal to one the strided scan found decodes the same way: read, it lies inside its symbol, and otherwise it fails again
         DecodeSymbolsOfScan<TDecoder, TInfo, TResult>(ref decoder, ref search, image, swept.Slice(0, sweptCount), strided.Slice(0, stridedCount));

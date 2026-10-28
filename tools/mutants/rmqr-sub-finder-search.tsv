@@ -1,0 +1,8 @@
+# Planted faults for the rMQR sub-finder search's early end (rmqr-decoder.md, Decisions, failed-decode cost): the rings are not walked once the
+# lattice screen leaves no position, which changes the time only when it is right.
+#
+#   dotnet run tools/mutation_check.cs -- run tools/mutants/rmqr-sub-finder-search.tsv <out-dir> --allow-dirty --filter "/*/*/RmQRSubFinderScreenParityTest/*"
+#
+# Against that class (2026-10-28) both faults are caught.
+SF-end-when-screened	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	if (screened && !AnySurvivor(survivors.Slice(0, 2 * radius + 1)))	if (screened)
+SF-end-rows-checked	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	AnySurvivor(survivors.Slice(0, 2 * radius + 1))	AnySurvivor(survivors.Slice(0, radius))

@@ -1,13 +1,16 @@
 # Planted faults for the entry that reads every Micro QR or rMQR symbol of an image (qrcode-symbologies.md, single-finder candidate scan),
 # and for its public calls. One fault a rule: the sweep after a read, the passes going on, the skip inside a read, each pass and polarity,
-# every candidate tried, the token, the room, the part of the buffer read, and the public calls' checks and token.
+# every candidate tried, the token, the room, the part of the buffer read, the public calls' checks and token, and the one pass over the rows
+# that fills the strided and full-sweep lists.
 #
-#   dotnet run tools/mutation_check.cs -- run tools/mutants/single-finder-several-symbols.tsv <out-dir> --allow-dirty --filter "/*/*/SingleFinderSymbolsDecodeTest/*" --filter "/*/*/SingleFinderDecodeImageSymbolsTest/*" --filter "/*/*/ImageStreamDecodeTest/*" --filter "/*/*/LuminanceSizeArgumentTest/*"
+#   dotnet run tools/mutation_check.cs -- run tools/mutants/single-finder-several-symbols.tsv <out-dir> --allow-dirty --filter "/*/*/SingleFinderSymbolsDecodeTest/*" --filter "/*/*/SingleFinderDecodeImageSymbolsTest/*" --filter "/*/*/ImageStreamDecodeTest/*" --filter "/*/*/LuminanceSizeArgumentTest/*" --filter "/*/*/FinderCandidatesOneRowPassParityTest/*"
 #
-# Lines that share an id are one fault. Against those four classes (2026-10-27) 22 of the 24 faults are caught. Two are not:
+# Lines that share an id are one fault. Against those five classes 26 of the 29 faults are caught (2026-10-27, the one-pass faults 2026-10-28). Three are not:
 # SS-sweep-skips-strided changes the time only, since a candidate the strided scan tried decodes the same way again.
 # SS-regional-negative-threshold changes only the check that skips a regional binarization matching the global pass's, the one use of the
 # threshold, and no test catches it.
+# SS-one-pass-hits-merged takes a row's gathered entries as hits after two of them merged, and no scene merges two hits of one row: one
+# finder gives one window a row.
 SS-sweep-after-read	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	            DecodeSymbolsOfScan<TDecoder, TInfo, TResult>(ref decoder, ref search, image, strided.Slice(0, stridedCount), skip: default);␤	            var before = search.Count;␤            DecodeSymbolsOfScan<TDecoder, TInfo, TResult>(ref decoder, ref search, image, strided.Slice(0, stridedCount), skip: default);␤            if (search.Count != before)␤                return false;␤
 SS-passes-go-on	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	positiveThreshold, positiveGrey), strided, swept, sweepOnly: false);␤        if (search.IsFull)	positiveThreshold, positiveGrey), strided, swept, sweepOnly: false);␤        if (search.IsFull || search.Count > 0)
 SS-skip-inside-read	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	            if (SymbolGeometry.Contains(decoder.ResultCorners(symbol), candidate.X, candidate.Y))␤                return true;	            if (SymbolGeometry.Contains(decoder.ResultCorners(symbol), candidate.X, candidate.Y))␤                return false;
@@ -34,3 +37,8 @@ PUB-long-micro	src/FeatherQR/MicroQRCodeDecoder.cs	        if (luminance.Length 
 PUB-long-rmqr	src/FeatherQR/RmQRCodeDecoder.cs	        if (luminance.Length < (long)width * height)␤            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));␤    }	        if (luminance.Length < width * height)␤            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));␤    }
 PUB-async-token-micro	src/FeatherQR.SkiaSharp/MicroQRCodeImageDecoder.cs	DecodeEverySymbol, cancellationToken);	DecodeEverySymbol, CancellationToken.None);
 PUB-async-token-rmqr	src/FeatherQR.SkiaSharp/RmQRCodeImageDecoder.cs	DecodeEverySymbol, cancellationToken);	DecodeEverySymbol, CancellationToken.None);
+SS-one-pass-strided-rows	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.cs	if (y % CandidateRowStride != 0)	if (y % CandidateRowStride != 1)
+SS-one-pass-row-full	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.cs	var oneHitEach = hits < rowHits.Length;	var oneHitEach = true;
+SS-one-pass-hits-merged	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.cs	oneHitEach = rowHits[i].Count == 1;	oneHitEach = true;
+SS-one-pass-strided-merge	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.cs	MergeHit(strided, ref stridedCount, hit.X, hit.Y, hit.ModuleSize);	
+SS-one-pass-fallback-strided	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.cs	rentedEdges, strided, ref stridedCount);	rentedEdges, swept, ref sweptCount);
