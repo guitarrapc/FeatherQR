@@ -19,6 +19,9 @@ internal interface ISymbolsDecoder<TInfo, TResult> : ICandidateDecoder<TInfo>
 
     /// <summary>Where a result's symbol lies in the image.</summary>
     SymbolCorners ResultCorners(in TResult result);
+
+    /// <summary>The histogram of <paramref name="luminance"/>, the image the scan reads, which its global thresholds come from.</summary>
+    void FillHistogram(ReadOnlySpan<byte> luminance, Span<int> histogram);
 }
 
 internal static partial class CandidateScan
@@ -169,7 +172,7 @@ internal static partial class CandidateScan
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
     {
         Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
-        Binarizer.FillHistogram(luminance, histogram);
+        decoder.FillHistogram(luminance, histogram);
         var positiveThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var positiveGrey);
         var noFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveThreshold, positiveGrey), strided, swept, sweepOnly: false);
         if (search.IsFull)

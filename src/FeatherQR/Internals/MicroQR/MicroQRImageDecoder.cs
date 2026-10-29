@@ -96,13 +96,15 @@ internal static partial class MicroQRImageDecoder
     }
 
     /// <summary>This decoder's part of the shared candidate scan: a candidate's decode (<see cref="DecodeCandidate"/>), the corners of its results, and what a symbol of every symbol's read is returned as.</summary>
-    private readonly struct CandidateDecoder : ISymbolsDecoder<MicroQRCodeDecodeInfo, MicroQRCodeDecodeResult>
+    internal readonly struct CandidateDecoder : ISymbolsDecoder<MicroQRCodeDecodeInfo, MicroQRCodeDecodeResult>
     {
         public int MaxChars => MicroQRMatrixDecoder.GetMaxCharCount(MicroQRVersion.M4);
 
         public MicroQRCodeDecodeResult Result(string text, in MicroQRCodeDecodeInfo info) => new(text, info);
 
         public SymbolCorners ResultCorners(in MicroQRCodeDecodeResult result) => result.Info.Corners;
+
+        public void FillHistogram(ReadOnlySpan<byte> luminance, Span<int> histogram) => Binarizer.FillHistogram(luminance, histogram);
 
         public MicroQRCodeDecodeInfo NotDetected => new(DecodeStatus.NotDetected, 0, default, -1, 0);
 

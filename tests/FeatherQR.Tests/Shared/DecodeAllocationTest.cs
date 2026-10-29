@@ -838,5 +838,50 @@ public class DecodeAllocationTest
     }
 
     #endregion
+
+    #region Every symbology: several symbols
+
+    /// <summary>
+    /// The entry that returns every symbol of any symbology allocates the texts it returns and nothing else: on a sheet of the three, and on one symbol of each, where a Micro QR or rMQR read makes Standard QR read again.
+    /// </summary>
+    [Test]
+    [Arguments(MixedSymbolsDecodeTest.Mix.AllThree, 3, 2)]
+    [Arguments(MixedSymbolsDecodeTest.Mix.StandardAndMicro, 1, 1)]
+    [Arguments(MixedSymbolsDecodeTest.Mix.MicroAndRmQR, 1, 1)]
+    [Arguments(MixedSymbolsDecodeTest.Mix.MicroAndRmQR, 2, 1)]
+    public async Task Mixed_SeveralSymbols_AllocatesOnlyTheirTexts(MixedSymbolsDecodeTest.Mix mix, int across, int down)
+    {
+        var (luminance, width, height) = MixedSymbolsDecodeTest.RenderGrid(mix, across, down);
+        var symbols = new MixedSymbol[16];
+        var count = MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols);
+        await Assert.That(count).IsEqualTo(across * down);
+        int[] lengths = [.. symbols.Take(count).Select(static s => s.Text.Length)];
+
+        // What strings of those lengths cost, measured the same way
+        var texts = SteadyStateBytes(() =>
+        {
+            foreach (var length in lengths)
+                GC.KeepAlive(new string('x', length));
+        });
+        var allocated = SteadyStateBytes(() => MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols));
+
+        await Assert.That(allocated).IsEqualTo(texts);
+    }
+
+    public static IEnumerable<RejectedImage> RejectedByAll() => [RejectedImage.Blank, RejectedImage.Noise];
+
+    /// <summary>An image with no symbol of any symbology goes through every decoder's passes and allocates nothing.</summary>
+    [Test]
+    [MethodDataSource(nameof(RejectedByAll))]
+    public async Task Mixed_SeveralSymbols_NoSymbol_AllocatesNothing(RejectedImage rejected)
+    {
+        var (luminance, width, height) = Render(rejected);
+        var symbols = new MixedSymbol[16];
+        await Assert.That(MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols)).IsEqualTo(0);
+
+        await Assert.That(SteadyStateBytes(() => MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols))).IsEqualTo(0L);
+    }
+
+    #endregion
 #endif
 }

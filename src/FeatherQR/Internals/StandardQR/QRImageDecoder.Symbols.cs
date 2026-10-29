@@ -153,6 +153,113 @@ internal static partial class QRImageDecoder
         }
     }
 
+    /// <summary>
+    /// Decodes every QR code of a grayscale image that is not one of the first <paramref name="seeded"/> symbols of <paramref name="symbols"/>, after them, as many as there is room for.
+    /// </summary>
+    /// <remarks>
+    /// The seeded symbols are taken as read, whatever their symbology, since only their corners are looked at: the candidates inside them leave every list before anything is selected, and a read at their corners is not added.
+    /// The finders of other symbologies' symbols can keep the stages from reading a QR code, which they read with those finders out of the lists.
+    /// </remarks>
+    /// <param name="luminance">Grayscale pixels, row-major, <paramref name="width"/> × <paramref name="height"/> bytes read.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="histogram">The image's histogram, as <see cref="Binarizer.FillHistogram"/> fills it from those pixels. Each round's passes at full size take their thresholds from it.</param>
+    /// <param name="symbols">The seeded symbols, then the room the codes read are written to.</param>
+    /// <param name="seeded">How many symbols at the start of <paramref name="symbols"/> are taken as read.</param>
+    /// <returns>How many symbols the room holds, the seeded ones included.</returns>
+    internal static int DecodeSymbolsBeside(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<int> histogram, Span<QRCodeDecodeResult> symbols, int seeded)
+        => seeded >= symbols.Length ? seeded : DecodeSymbolsBesideCore(luminance, width, height, histogram, symbols, seeded, growing: null, CancellationToken.None, out _);
+
+    /// <summary>
+    /// Decodes every QR code of a grayscale image that is not one of the first <paramref name="seeded"/> symbols of <paramref name="room"/>, as <see cref="DecodeSymbolsBeside(ReadOnlySpan{byte}, int, int, ReadOnlySpan{int}, Span{QRCodeDecodeResult}, int)"/> does in a room that grows as it fills.
+    /// </summary>
+    /// <remarks><paramref name="room"/> holds the seeded symbols and at least one place more, and is replaced by one twice its size each time it fills.</remarks>
+    /// <returns>How many symbols the room holds, the seeded ones included.</returns>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check.</exception>
+    internal static int DecodeSymbolsBeside(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<int> histogram, ref QRCodeDecodeResult[] room, int seeded, CancellationToken cancellationToken)
+    {
+        // The room doubles as it fills, so an empty one could not grow
+        System.Diagnostics.Debug.Assert(room.Length > 0);
+        var count = DecodeSymbolsBesideCore(luminance, width, height, histogram, room, seeded, room, cancellationToken, out var grown);
+        room = grown;
+        return count;
+    }
+
+    /// <summary><see cref="DecodeSymbolsCore"/> with the first <paramref name="seeded"/> symbols of the room taken as read, and the image's histogram given.</summary>
+    /// <remarks>The rounds are that method's, written out again: shared through a method the JIT inlines, they moved that method's stack frame.</remarks>
+    private static int DecodeSymbolsBesideCore(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<int> histogram, Span<QRCodeDecodeResult> symbols, int seeded, QRCodeDecodeResult[]? growing, CancellationToken cancellationToken, out QRCodeDecodeResult[] grown)
+    {
+        grown = growing ?? [];
+        if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
+            return seeded;
+        luminance = luminance.Slice(0, pixelCount);
+
+        var maxChars = QRMatrixDecoder.GetMaxCharCount(40);
+        var rentedChars = ArrayPool<char>.Shared.Rent(maxChars);
+        try
+        {
+            Span<FinderPattern> left = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+            var search = new SymbolSearch { Symbols = symbols, Count = seeded, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
+            for (var round = 0; round < MaxSymbolRounds; round++)
+            {
+                var before = search.Count;
+                search.LeftCount = 0;
+                search.LeftOut = false;
+                DecodeSymbolsInPasses(ref search, luminance, histogram, width, height);
+                if (search.Count == before || search.IsFull || !IsWorthAnotherRound(search.Left.Slice(0, search.LeftCount), search.LeftOut, search.Read))
+                    break;
+            }
+            grown = search.Growing ?? [];
+            return search.Count;
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
+        }
+    }
+
+    /// <summary>One round of <see cref="DecodeSymbolsInPasses(ref SymbolSearch, ReadOnlySpan{byte}, int, int)"/>, with the image's histogram given in place of one filled from the pixels.</summary>
+    /// <remarks>Written out again with that line changed, so that the method that fills the histogram keeps its code.</remarks>
+    private static void DecodeSymbolsInPasses(ref SymbolSearch search, scoped ReadOnlySpan<byte> luminance, scoped ReadOnlySpan<int> imageHistogram, int width, int height)
+    {
+        // A copy: the passes overwrite it, and each round starts from the image's
+        Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
+        imageHistogram.CopyTo(histogram);
+        DecodeSymbolsOfReading(ref search, luminance, default, negative: false, histogram, width, height, scale: 1);
+        if (search.IsFull)
+            return;
+
+        // Read before the later passes overwrite the histogram, as the one-symbol passes do
+        var searchReduced = !RegionalRetry.HoldsOnlyExtremes(histogram);
+        var rented = ArrayPool<byte>.Shared.Rent(luminance.Length);
+        try
+        {
+            var buffer = rented.AsSpan(0, luminance.Length);
+            DecodeSymbolsAfterPositive(ref search, luminance, histogram, width, height, scale: 1, buffer);
+
+            var above = luminance;
+            for (var scale = 2; searchReduced && !search.IsFull && Math.Min(width, height) / 2 >= ImageDecodePasses.MinimumReducedSide; scale *= 2)
+            {
+                int levelWidth = width / 2, levelHeight = height / 2;
+                var level = buffer.Slice(0, levelWidth * levelHeight);
+                LuminanceHalver.Halve(above, width, height, level);
+
+                Binarizer.FillHistogram(level, histogram);
+                DecodeSymbolsOfReading(ref search, level, default, negative: false, histogram, levelWidth, levelHeight, scale);
+                if (!search.IsFull)
+                    DecodeSymbolsAfterPositive(ref search, level, histogram, levelWidth, levelHeight, scale, buffer.Slice(level.Length, level.Length));
+
+                above = level;
+                width = levelWidth;
+                height = levelHeight;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
     /// <summary>One round: the passes of <see cref="ImageDecodePasses"/> in their order, at full size and then at each reduced scale, none ended by a read.</summary>
     private static void DecodeSymbolsInPasses(ref SymbolSearch search, scoped ReadOnlySpan<byte> luminance, int width, int height)
     {
