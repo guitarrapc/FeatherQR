@@ -177,8 +177,8 @@ public class MicroQRGridEvidenceTest
     {
         var destination = new char[64];
         var status = mirrored
-            ? MicroQRMatrixDecoder.DecodeSampledGrid(grid, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, default, 0, 0, 0, new CountedQuietZone(quietZoneDark), destination, out var charsWritten, out var info)
-            : MicroQRMatrixDecoder.DecodeSampledGrid(grid, new MatrixModules(size), size, default, 0, 0, 0, new CountedQuietZone(quietZoneDark), destination, out charsWritten, out info);
+            ? MicroQRMatrixDecoder.DecodeSampledGrid(grid, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, default, 0, 0, 0, new CountedQuietZone(quietZoneDark), destination, out var charsWritten, out var info, out _)
+            : MicroQRMatrixDecoder.DecodeSampledGrid(grid, new MatrixModules(size), size, default, 0, 0, 0, new CountedQuietZone(quietZoneDark), destination, out charsWritten, out info, out _);
         return (status, info, new string(destination, 0, charsWritten));
     }
 
