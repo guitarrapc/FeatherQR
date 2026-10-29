@@ -12,7 +12,8 @@ namespace QRImageDecodeSweep;
 /// located, when the read symbol's centre lies inside a labelled code's outline, and agreed, when another reader, or the same reader in another photograph, read the same text.
 /// A photograph counts for a reader when one of its reads is agreed. The set is never committed (its licence is not stated), so the path is given on the command line.
 /// Readers run in their own harness join through a file of result lines (<see cref="ReaderLines"/>): their texts count toward agreement like any other read, and each gets a table and a gap of its own. Their reads count photographs, and codes too where the lines say where each read is.
-/// This library returns one symbol a call. What it reads of a photograph's other codes is measured by painting each read symbol over and reading again until a call reads nothing (<see cref="ReadAgain"/>), with the public call alone.
+/// This library's one-symbol call returns one symbol. What it reads of a photograph's other codes is measured by painting each read symbol over and reading again until a call reads nothing (<see cref="ReadAgain"/>), with the public call alone.
+/// Beside it are the call for every Standard QR symbol and the call for every symbol of any symbology, which on this set of Standard QR alone should return what the first returns (<see cref="EveryMarkdown"/>).
 /// </summary>
 internal static class BoofCv
 {
@@ -23,8 +24,8 @@ internal static class BoofCv
     /// <summary>Calls <see cref="ReadAgain"/> makes of one photograph at most. The set's fullest photograph holds 60 codes.</summary>
     private const int ReadAgainLimit = 128;
 
-    /// <summary>A decoded symbol: its text and the centre of the outline the reader reported.</summary>
-    private sealed record Read(string Text, double X, double Y);
+    /// <summary>A decoded symbol: its text, the centre of the outline the reader reported, and its symbology where this library's call for every symbology read it.</summary>
+    private sealed record Read(string Text, double X, double Y, Symbology Symbology = Symbology.StandardQR);
 
     /// <summary>What <see cref="Alone"/> made of one code: the call's status, and its text when it read.</summary>
     private sealed record Cut(string Status, string? Text);
@@ -38,8 +39,14 @@ internal static class BoofCv
     /// <param name="Again">Every read of <see cref="ReadAgain"/>, the one-call read first.</param>
     /// <param name="AgainStatus">The status of the call that ended <see cref="ReadAgain"/>.</param>
     /// <param name="Alone">For each label no read of <paramref name="Again"/> lies in, what the code reads cut out on its own. Null for the others.</param>
-    private sealed record Photo(string Category, string File, int Width, int Height, List<(double X, double Y)[]> Labels, string FeatherQrStatus, Read[][] Reads, Read[] Again, string AgainStatus, Cut?[] Alone)
+    /// <param name="Entry">The reads of the call for every Standard QR symbol.</param>
+    /// <param name="Every">The reads of the call for every symbol of any symbology.</param>
+    private sealed record Photo(string Category, string File, int Width, int Height, List<(double X, double Y)[]> Labels, string FeatherQrStatus, Read[][] Reads, Read[] Again, string AgainStatus, Cut?[] Alone, Read[] Entry, Read[] Every)
     {
+        public double EntryMs { get; set; } = double.NaN;
+
+        public double EveryMs { get; set; } = double.NaN;
+
         public double FeatherQrMs { get; set; } = double.NaN;
 
         public double FeatherQrAgainMs { get; set; } = double.NaN;
@@ -104,7 +111,7 @@ internal static class BoofCv
         Directory.CreateDirectory(outDir);
         WriteCsv(Path.Combine(outDir, "boofcv.csv"), photos, Agreed, lines);
         WriteCodesCsv(Path.Combine(outDir, "boofcv-codes.csv"), photos, Agreed, Seen, lines);
-        return finish(Path.Combine(outDir, "boofcv.md"), Markdown(photos, Agreed, timed) + AgainMarkdown(photos, Agreed, Seen) + LinesMarkdown(photos, Agreed, lines));
+        return finish(Path.Combine(outDir, "boofcv.md"), Markdown(photos, Agreed, timed) + AgainMarkdown(photos, Agreed, Seen) + EveryMarkdown(photos, Agreed, timed) + LinesMarkdown(photos, Agreed, lines));
     }
 
     private static Photo Measure(string category, string path, ReaderLines lines)
@@ -122,8 +129,13 @@ internal static class BoofCv
 
         // A read from result lines lies inside no label unless its line says where it is
         var fromLines = lines.Readers.Select(reader => lines.Find(reader, category, Path.GetFileName(path)) is { } line ? line.Texts.Select((t, i) => new Read(t, line.Centres?[i].X ?? double.NaN, line.Centres?[i].Y ?? double.NaN)).ToArray() : []);
-        return new Photo(category, Path.GetFileName(path), width, height, labels, firstStatus, [own, ZXingCpp(luminance, width, height), ZXingNet(luminance, width, height), .. fromLines], again, lastStatus, alone);
+        Read[] entry = [.. QRCodeDecoder.DecodeImageSymbols(luminance, width, height).Select(static r => Centre(r.Text, r.Info.Corners, Symbology.StandardQR))];
+        Read[] every = [.. SymbolDecoder.DecodeImageSymbols(luminance, width, height).Select(static r => Centre(r.Text, r.Corners, r.Symbology))];
+        return new Photo(category, Path.GetFileName(path), width, height, labels, firstStatus, [own, ZXingCpp(luminance, width, height), ZXingNet(luminance, width, height), .. fromLines], again, lastStatus, alone, entry, every);
     }
+
+    private static Read Centre(string text, SymbolCorners c, Symbology symbology) =>
+        new(text, (c.TopLeft.X + c.TopRight.X + c.BottomRight.X + c.BottomLeft.X) / 4.0, (c.TopLeft.Y + c.TopRight.Y + c.BottomRight.Y + c.BottomLeft.Y) / 4.0, symbology);
 
     /// <summary>
     /// Every symbol this library reads of an image through its one-symbol call: each read symbol is painted over and the image read again, until a call reads nothing.
@@ -144,9 +156,8 @@ internal static class BoofCv
                 firstStatus = lastStatus;
             if (!success)
                 break;
-            var c = info.Corners;
-            reads.Add(new Read(text, (c.TopLeft.X + c.TopRight.X + c.BottomRight.X + c.BottomLeft.X) / 4.0, (c.TopLeft.Y + c.TopRight.Y + c.BottomRight.Y + c.BottomLeft.Y) / 4.0));
-            PaintOver(luminance, width, height, c, info.Version);
+            reads.Add(Centre(text, info.Corners, Symbology.StandardQR));
+            PaintOver(luminance, width, height, info.Corners, info.Version);
         }
         return [.. reads];
     }
@@ -244,6 +255,8 @@ internal static class BoofCv
                 best = Math.Min(best, Stopwatch.GetElapsedTime(start).TotalMilliseconds);
         }
         photo.FeatherQrAgainMs = best;
+        photo.EntryMs = Fastest(() => QRCodeDecoder.DecodeImageSymbols(luminance, width, height));
+        photo.EveryMs = Fastest(() => SymbolDecoder.DecodeImageSymbols(luminance, width, height));
     }
 
     private static double Fastest(Action call)
@@ -452,6 +465,59 @@ internal static class BoofCv
         return sb.ToString();
     }
 
+    /// <summary>
+    /// The call for every Standard QR symbol and the call for every symbology, by codes a photograph, beside reading again.
+    /// The set holds Standard QR alone, so a Micro QR or rMQR read is false, and the call for every symbology should return the other call's reads and nothing else.
+    /// </summary>
+    private static string EveryMarkdown(Photo[] photos, Func<Read, bool> agreed, bool timed)
+    {
+        int Codes(Photo p, IEnumerable<Read> reads) => reads.Where(agreed).Select(r => LabelOf(p, r)).Where(static l => l >= 0).Distinct().Count();
+        static bool Same(Photo p) => p.Every.Length == p.Entry.Length && p.Every.Zip(p.Entry).All(static x => x.First == x.Second);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("## Every symbol in one call");
+        sb.AppendLine();
+        sb.AppendLine("Standard QR's call is the call for every Standard QR symbol, and every symbology the call for every symbol of any symbology. The set holds Standard QR alone, so every symbology should return Standard QR's call's reads and nothing else, and a Micro QR or rMQR read is false.");
+        sb.AppendLine();
+        sb.AppendLine("| Codes a photograph | Photographs | Codes | Standard QR's call | Every symbology | Read again |");
+        sb.AppendLine("|---|---|---|---|---|---|");
+        foreach (var group in ByCodes(photos))
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| {group.Name} | {group.Photos.Length:N0} | {group.Photos.Sum(static p => p.Labels.Count):N0} | {group.Photos.Sum(p => Codes(p, p.Entry)):N0} | {group.Photos.Sum(p => Codes(p, p.Every)):N0} | {group.Photos.Sum(p => Codes(p, p.Again)):N0} |");
+        sb.AppendLine();
+
+        var others = photos.SelectMany(static p => p.Every).Where(static r => r.Symbology != Symbology.StandardQR).GroupBy(static r => r.Symbology).Select(static g => $"{g.Key} {g.Count():N0}").ToList();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Standard QR's call makes {photos.Sum(static p => p.Entry.Length):N0} reads, {photos.Sum(p => p.Entry.Count(r => agreed(r) && LabelOf(p, r) >= 0)):N0} of them agreed and inside an outline. Every symbology returns the same reads in the same order at the same centres on {photos.Count(Same):N0} of the {photos.Length:N0} photographs. Its Micro QR and rMQR reads: {(others.Count == 0 ? "none" : string.Join(", ", others))}.");
+        sb.AppendLine();
+        List(sb, "Every symbology returns other reads than Standard QR's call", photos.Where(static p => !Same(p)), static p => $"{p.Category}/{p.File}: Standard QR's call {string.Join(", ", p.Entry.Select(static r => Show(r.Text)))}; every symbology {string.Join(", ", p.Every.Select(static r => $"{r.Symbology} {Show(r.Text)}"))}");
+
+        if (timed)
+        {
+            sb.AppendLine("### Every symbol in one call, timed: one thread, fastest of three after one untimed call (ms)");
+            sb.AppendLine();
+            sb.AppendLine("By the codes Standard QR's call reads, since the call for every symbology decodes no Micro QR or rMQR candidate inside a symbol it read.");
+            sb.AppendLine();
+            sb.AppendLine("| Codes Standard QR's call reads | Photographs | Standard QR's call | Every symbology | Every / Standard QR's call |");
+            sb.AppendLine("|---|---|---|---|---|");
+            List<(string Name, Photo[] Photos)> groups =
+            [
+                .. photos.GroupBy(static p => p.Entry.Length).OrderBy(static g => g.Key).Select(static g => (g.Key.ToString(CultureInfo.InvariantCulture), g.ToArray())),
+                ("**One to four**", [.. photos.Where(static p => p.Entry.Length is >= 1 and <= 4)]),
+                ("**All**", photos),
+            ];
+            foreach (var group in groups)
+            {
+                double entry = group.Photos.Sum(static p => p.EntryMs), every = group.Photos.Sum(static p => p.EveryMs);
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {group.Name} | {group.Photos.Length:N0} | {entry:F0} | {every:F0} | {every / entry:F2} |");
+            }
+            sb.AppendLine();
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>The photographs by how many codes each holds, then those of more than one and all of them.</summary>
+    private static List<(string Name, Photo[] Photos)> ByCodes(Photo[] photos) =>
+        [.. photos.GroupBy(static p => p.Labels.Count).OrderBy(static g => g.Key).Select(static g => (g.Key.ToString(CultureInfo.InvariantCulture), g.ToArray())), ("**More than one**", [.. photos.Where(static p => p.Labels.Count > 1)]), ("**All**", photos)];
+
     /// <summary>Whether an agreed read of <paramref name="reads"/> lies inside the photograph's <paramref name="label"/>.</summary>
     private static bool ReadsCode(Photo photo, IEnumerable<Read> reads, int label, Func<Read, bool> agreed) => reads.Any(r => agreed(r) && LabelOf(photo, r) == label);
 
@@ -562,7 +628,7 @@ internal static class BoofCv
     {
         using var writer = new StreamWriter(path, false, new UTF8Encoding(false)) { NewLine = "\n" };
         // The readers from result lines come last, so the columns before them keep their places
-        writer.WriteLine("category,file,width,height,codes,featherqr_status,featherqr,featherqr_located,zxingcpp,zxingcpp_codes,zxingnet,featherqr_ms,zxingcpp_ms,featherqr_again_reads,featherqr_again_codes,featherqr_again_status,featherqr_again_ms" + string.Concat(lines.Readers.Select(static r => $",{r},{r}_ms")));
+        writer.WriteLine("category,file,width,height,codes,featherqr_status,featherqr,featherqr_located,zxingcpp,zxingcpp_codes,zxingnet,featherqr_ms,zxingcpp_ms,featherqr_again_reads,featherqr_again_codes,featherqr_again_status,featherqr_again_ms,featherqr_entry_codes,featherqr_every_codes,featherqr_every_other,featherqr_entry_ms,featherqr_every_ms" + string.Concat(lines.Readers.Select(static r => $",{r},{r}_ms")));
         foreach (var p in photos)
         {
             var own = p.Reads[0].Any(agreed);
@@ -571,8 +637,11 @@ internal static class BoofCv
             var cppCodes = p.Reads[1].Where(agreed).Select(r => LabelOf(p, r)).Where(static l => l >= 0).Distinct().Count();
             var net = p.Reads[2].Any(agreed);
             var againCodes = p.Again.Where(agreed).Select(r => LabelOf(p, r)).Where(static l => l >= 0).Distinct().Count();
+            var entryCodes = p.Entry.Where(agreed).Select(r => LabelOf(p, r)).Where(static l => l >= 0).Distinct().Count();
+            var everyCodes = p.Every.Where(agreed).Select(r => LabelOf(p, r)).Where(static l => l >= 0).Distinct().Count();
+            var everyOther = p.Every.Count(static r => r.Symbology != Symbology.StandardQR);
             var fromLines = string.Concat(lines.Readers.Select((reader, r) => string.Create(CultureInfo.InvariantCulture, $",{(p.Reads[FirstLineReader + r].Any(agreed) ? 1 : 0)},{lines.Find(reader, p.Category, p.File)?.Milliseconds ?? double.NaN:F3}")));
-            writer.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{p.Category},{p.File},{p.Width},{p.Height},{p.Labels.Count},{p.FeatherQrStatus},{(own ? 1 : 0)},{(located ? 1 : 0)},{(cpp ? 1 : 0)},{cppCodes},{(net ? 1 : 0)},{p.FeatherQrMs:F3},{p.ZXingCppMs:F3},{p.Again.Length},{againCodes},{p.AgainStatus},{p.FeatherQrAgainMs:F3}") + fromLines);
+            writer.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{p.Category},{p.File},{p.Width},{p.Height},{p.Labels.Count},{p.FeatherQrStatus},{(own ? 1 : 0)},{(located ? 1 : 0)},{(cpp ? 1 : 0)},{cppCodes},{(net ? 1 : 0)},{p.FeatherQrMs:F3},{p.ZXingCppMs:F3},{p.Again.Length},{againCodes},{p.AgainStatus},{p.FeatherQrAgainMs:F3},{entryCodes},{everyCodes},{everyOther},{p.EntryMs:F3},{p.EveryMs:F3}") + fromLines);
         }
     }
 
@@ -585,7 +654,7 @@ internal static class BoofCv
         using var writer = new StreamWriter(path, false, new UTF8Encoding(false)) { NewLine = "\n" };
         // A reader of the lines that says where its reads are has a column of its own, after the others
         int[] located = [.. Enumerable.Range(0, lines.Readers.Length).Where(r => photos.Any(p => p.Reads[FirstLineReader + r].Any(static read => !double.IsNaN(read.X))))];
-        writer.WriteLine("category,file,codes,code,centre_x,centre_y,side_px,featherqr,featherqr_again,featherqr_again_call,zxingcpp,zxingnet,alone" + string.Concat(located.Select(r => $",{lines.Readers[r]}")));
+        writer.WriteLine("category,file,codes,code,centre_x,centre_y,side_px,featherqr,featherqr_again,featherqr_again_call,zxingcpp,zxingnet,alone,featherqr_entry,featherqr_every" + string.Concat(located.Select(r => $",{lines.Readers[r]}")));
         foreach (var p in photos)
         {
             for (var label = 0; label < p.Labels.Count; label++)
@@ -598,7 +667,7 @@ internal static class BoofCv
                 var call = Array.FindIndex(p.Again, r => agreed(r) && LabelOf(p, r) == label);
                 var cut = p.Alone[label];
                 var alone = cut is null ? "" : cut.Text is null ? cut.Status : CutStatus(p, label, cut.Text, seen);
-                writer.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{p.Category},{p.File},{p.Labels.Count},{label},{outline.Average(static q => q.X):F1},{outline.Average(static q => q.Y):F1},{Math.Sqrt(Math.Abs(area) / 2):F1},{(ReadsCode(p, p.Reads[0], label, agreed) ? 1 : 0)},{(call >= 0 ? 1 : 0)},{(call >= 0 ? call + 1 : 0)},{(ReadsCode(p, p.Reads[1], label, agreed) ? 1 : 0)},{(ReadsCode(p, p.Reads[2], label, agreed) ? 1 : 0)},{alone}") + string.Concat(located.Select(r => ReadsCode(p, p.Reads[FirstLineReader + r], label, agreed) ? ",1" : ",0")));
+                writer.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{p.Category},{p.File},{p.Labels.Count},{label},{outline.Average(static q => q.X):F1},{outline.Average(static q => q.Y):F1},{Math.Sqrt(Math.Abs(area) / 2):F1},{(ReadsCode(p, p.Reads[0], label, agreed) ? 1 : 0)},{(call >= 0 ? 1 : 0)},{(call >= 0 ? call + 1 : 0)},{(ReadsCode(p, p.Reads[1], label, agreed) ? 1 : 0)},{(ReadsCode(p, p.Reads[2], label, agreed) ? 1 : 0)},{alone},{(ReadsCode(p, p.Entry, label, agreed) ? 1 : 0)},{(ReadsCode(p, p.Every, label, agreed) ? 1 : 0)}") + string.Concat(located.Select(r => ReadsCode(p, p.Reads[FirstLineReader + r], label, agreed) ? ",1" : ",0")));
             }
         }
     }
