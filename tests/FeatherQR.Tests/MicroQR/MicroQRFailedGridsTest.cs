@@ -138,20 +138,23 @@ public class MicroQRFailedGridsTest
     /// </summary>
     /// <remarks>
     /// An M1 symbol transposed fails its format word as sampled and passes Reed-Solomon transposed. M1 corrects nothing, so its read needs the quiet zone's evidence, and against a dark one it fails there: only one of its reads is decided by the modules.
+    /// Read as drawn, the same symbol is decided the other way only, so a flag taken from either way alone fails one of the two.
     /// Noise under a valid format word, transposed, fails both ways on its modules.
     /// </remarks>
     [Test]
     public async Task BothWays_IsDecidedByModulesOnlyWhenBothReadsAre()
     {
         var random = new Random(7);
-        var oneWay = 0;
+        var straightOnly = 0;
+        var mirroredOnly = 0;
         var bothWays = 0;
         var first = "";
         var mismatches = 0;
-        for (var i = 0; i < 4000 && (oneWay < 20 || bothWays < 20); i++)
+        for (var i = 0; i < 4000 && (straightOnly < 20 || mirroredOnly < 20 || bothWays < 20); i++)
         {
             var (matrix, size) = i % 2 == 0 ? M1Matrix(random) : FormattedNoise(random);
-            Transpose(matrix, size);
+            if (i % 4 != 2)
+                Transpose(matrix, size);
             var quietZoneDark = 2 * size + 1;
             var straight = Decode(matrix, size, transposed: false, quietZoneDark, out var straightDecided);
             var mirrored = Decode(matrix, size, transposed: true, quietZoneDark, out var mirroredDecided);
@@ -162,15 +165,101 @@ public class MicroQRFailedGridsTest
             var got = BothWaysDecided(matrix, size);
             if (got != (straightDecided && mirroredDecided) && mismatches++ == 0)
                 first = $"case {i} size {size}: {got} where the ways were {straightDecided} and {mirroredDecided}";
-            if (straightDecided != mirroredDecided)
-                oneWay++;
+            if (straightDecided && !mirroredDecided)
+                straightOnly++;
+            else if (mirroredDecided && !straightDecided)
+                mirroredOnly++;
             else if (straightDecided)
                 bothWays++;
         }
 
         await Assert.That(mismatches).IsEqualTo(0).Because(first);
-        await Assert.That(oneWay).IsGreaterThanOrEqualTo(20).Because("grids decided one way only have to occur, or a flag from either way would pass");
+        await Assert.That(straightOnly).IsGreaterThanOrEqualTo(20).Because("grids decided as sampled only have to occur, or a flag from the read as sampled alone would pass");
+        await Assert.That(mirroredOnly).IsGreaterThanOrEqualTo(20).Because("grids decided transposed only have to occur, or a flag from the transposed read alone would pass");
         await Assert.That(bothWays).IsGreaterThanOrEqualTo(20);
+    }
+
+    /// <summary>
+    /// A grid that failed on its quiet zone is not kept, so a later grid with its modules still reads: a symbol whose quiet zone a dark band crosses at the finder's scale reads through a nudged grid past the band.
+    /// </summary>
+    /// <remarks>
+    /// Each scene is an M1 symbol turned and drawn crisp, with a dark band from a hair past a far side to about a module out, where the grids at and near the finder's scale sample the quiet zone.
+    /// M1 corrects nothing and its format word reads, so only the quiet zone fails such a grid, and a nudge that keeps the symbol's modules fails the same until one samples past the band.
+    /// So a search that kept a grid the quiet zone failed, in the base grid, the scale search or the perspective search, would skip the grids that read.
+    /// </remarks>
+    [Test]
+    [Arguments("07658", 13.373, 302.213, 0, 0.002, 1.068)]
+    [Arguments("28850", 11.804, 50.308, 1, 0.011, 1.071)]
+    [Arguments("56192", 9.629, 155.426, 1, 0.009, 1.041)]
+    [Arguments("49070", 9.230, 55.011, 1, 0.003, 1.042)]
+    [Arguments("36597", 7.677, 137.811, 1, 0.016, 1.112)]
+    public async Task GridFailedByItsQuietZone_IsNotKept(string text, double pixelsPerModule, double degrees, int sides, double bandFrom, double bandTo)
+    {
+        var (banded, width, height, grid) = Banded(text, pixelsPerModule, degrees, sides, bandFrom, bandTo);
+        var (clear, _, _, _) = Banded(text, pixelsPerModule, degrees, sides, bandFrom, bandFrom);
+
+        // The premise: the grid drawn at the finder's scale reads without the band, and with it fails on the quiet zone alone
+        await Assert.That(DecodeExactGrid(clear, width, height, grid, out _)).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(DecodeExactGrid(banded, width, height, grid, out var decided)).IsNotEqualTo(DecodeStatus.Success);
+        await Assert.That(decided).IsFalse();
+
+        await Assert.That(MicroQRCodeDecoder.TryDecodeImage(banded, width, height, out var read, out _)).IsTrue();
+        await Assert.That(read).IsEqualTo(text);
+    }
+
+    /// <summary>
+    /// An M1 symbol turned by <paramref name="degrees"/> about the image centre, crisp, and a dark band from <paramref name="bandFrom"/> to <paramref name="bandTo"/> modules past its bottom side (sides 0), its right side (1) or both (2).
+    /// </summary>
+    private static (byte[] Luminance, int Width, int Height, MicroQRImageDecoder.AffineGrid Grid) Banded(string text, double pixelsPerModule, double degrees, int sides, double bandFrom, double bandTo)
+    {
+        var symbol = MicroQRCodeGenerator.Create(text, MicroQREccLevel.ErrorDetectionOnly, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var size = symbol.Size;
+        var side = (int)Math.Ceiling((size + 14) * pixelsPerModule * 1.45);
+        var luminance = new byte[side * side];
+        var theta = degrees * (Math.PI / 180);
+        double cx = side / 2.0, cy = side / 2.0, cos = Math.Cos(theta), sin = Math.Sin(theta);
+        for (var py = 0; py < side; py++)
+        {
+            for (var px = 0; px < side; px++)
+            {
+                double dx = px + 0.5 - cx, dy = py + 0.5 - cy;
+                var mx = (dx * cos + dy * sin) / pixelsPerModule + size / 2.0;
+                var my = (-dx * sin + dy * cos) / pixelsPerModule + size / 2.0;
+                var dark = false;
+                if (mx >= 0 && my >= 0 && mx < size && my < size)
+                    dark = symbol[(int)my, (int)mx];
+                else if (sides != 1 && my >= size + bandFrom && my < size + bandTo && mx >= -1 && mx < size + 1)
+                    dark = true;
+                else if (sides != 0 && mx >= size + bandFrom && mx < size + bandTo && my >= -1 && my < size + 1)
+                    dark = true;
+                luminance[py * side + px] = dark ? (byte)0 : (byte)255;
+            }
+        }
+        var half = size / 2.0;
+        var grid = new MicroQRImageDecoder.AffineGrid(
+            (float)(cx + (-half * cos + half * sin) * pixelsPerModule), (float)(cy + (-half * sin - half * cos) * pixelsPerModule),
+            (float)(cos * pixelsPerModule), (float)(sin * pixelsPerModule), (float)(-sin * pixelsPerModule), (float)(cos * pixelsPerModule));
+        return (luminance, side, side, grid);
+    }
+
+    /// <summary>The M1 grid of <paramref name="grid"/> sampled at its module centres and read both ways, with the quiet zone read from the image.</summary>
+    private static DecodeStatus DecodeExactGrid(byte[] luminance, int width, int height, MicroQRImageDecoder.AffineGrid grid, out bool decidedByModules)
+    {
+        const int Size = 11;
+        var modules = new byte[Size * Size];
+        for (var row = 0; row < Size; row++)
+        {
+            for (var col = 0; col < Size; col++)
+            {
+                grid.Map(col + 0.5f, row + 0.5f, out var x, out var y);
+                modules[row * Size + col] = luminance[(int)y * width + (int)x] < 128 ? (byte)1 : (byte)0;
+            }
+        }
+        var both = new MicroQRImageDecoder.BothWays<MicroQRImageDecoder.AffineGrid>(grid, Size);
+        var result = new SearchResult<MicroQRCodeDecodeInfo>(ReportRule.Furthest, default);
+        var status = both.Decode(modules, new ImageView(luminance, width, height, 128, default), new char[64], out _, out _, ref result);
+        decidedByModules = both.DecidedByModules;
+        return status;
     }
 
     /// <summary>The image path's grid read both ways, over an image dark everywhere, so its quiet zone counts every module dark as the matrix decode above was told.</summary>

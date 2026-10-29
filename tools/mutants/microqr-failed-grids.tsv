@@ -1,12 +1,15 @@
-# Planted faults for the grid searches' record of failed grids (microqr-decoder.md, Decisions, failed-decode cost): the flag that the
-# modules alone decided a grid's result, the record that packs and keeps such grids, and its use in the scale and perspective searches.
-# Also the error locator's updates, which now stop at the block's capacity, in the correction every symbology runs.
+# Planted faults for the grid searches' record of failed grids (microqr-decoder.md, Lessons learned): the flag that the modules
+# alone decided a grid's result, the record that packs and keeps such grids, and its use in the base grid and the scale and
+# perspective searches. Also the error locator, whose updates now stop at the degree of the term they add and which fails once its
+# length passes the block's capacity, in the correction every symbology runs.
 #
 #   dotnet run tools/mutation_check.cs -- run tools/mutants/microqr-failed-grids.tsv <out-dir> --allow-dirty --filter "/*/*/MicroQRFailedGridsTest/*" --filter "/*/*/EccBinaryDecoderUnitTest/*" --filter "/*/*/MicroQRCodeDecoderImageTest/*" --filter "/*/*/MicroQRCodeDecoderPerspectiveTest/*" --filter "/*/*/MicroQRCodeDecoderRobustnessTest/*" --filter "/*/*/MicroQRCoverageConditionTest/*"
 #
-# Against those classes (2026-10-29) 12 of the 15 are caught. Not caught: a skipped grid left uncharged, in either search, only lets a
+# Against those classes (2026-10-29) 17 of the 20 are caught. Not caught: a skipped grid left uncharged, in either search, only lets a
 # search go on past where its budget ended, and no test has a symbol that reads only there. A grid remembered after a re-read by
-# coverage wrote over its modules is skipped only when a later grid samples those rewritten modules, which no scene was found to do.
+# coverage wrote over its modules is kept under the modules it sampled, so a later grid that samples those is skipped, with the read its
+# own quiet zone or re-read could give. Outside those classes, UnevenLightingDecodeTest under this fault skipped such grids about
+# 6,500 times and still read every symbol it asserts (a probe, 2026-10-29).
 MF-locator-length-change	src/FeatherQR/Internals/BinaryDecoders/EccBinaryDecoder.cs	lambda.CopyTo(temp);␤                for (var i = 0; i + gap <= reach; i++)	lambda.CopyTo(temp);␤                for (var i = 0; i + gap < reach; i++)
 MF-locator-same-length	src/FeatherQR/Internals/BinaryDecoders/EccBinaryDecoder.cs	// Same length: Λ(x) ← Λ(x) - (δ/b)·x^m·B(x)␤                for (var i = 0; i + gap <= reach; i++)	// Same length: Λ(x) ← Λ(x) - (δ/b)·x^m·B(x)␤                for (var i = 0; i + gap < reach; i++)
 MF-locator-reach	src/FeatherQR/Internals/BinaryDecoders/EccBinaryDecoder.cs	            var reach = n + 1 - errorCountEstimate;	            var reach = n - errorCountEstimate;
@@ -22,3 +25,8 @@ MF-ring-count	src/FeatherQR/Internals/MicroQR/MicroQRFailedGrids.cs	        if (
 MF-scale-not-charged	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	                        attemptsRemaining -= 2;␤                        if (failed.Seen(modules, size))␤                            continue;	                        if (failed.Seen(modules, size))␤                            continue;␤                        attemptsRemaining -= 2;
 MF-scale-after-coverage	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	                        if (grid.DecidedByModules && !readByCoverage)	                        if (grid.DecidedByModules)
 MF-perspective-not-charged	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	                attemptsRemaining -= 2;␤                if (failed.Seen(modules, size))␤                    continue;	                if (failed.Seen(modules, size))␤                    continue;␤                attemptsRemaining -= 2;
+MF-decided-mirrored-only	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	decidedByModules = straightDecided && mirroredDecided;	decidedByModules = mirroredDecided;
+MF-decided-straight-only	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	decidedByModules = straightDecided && mirroredDecided;	decidedByModules = straightDecided;
+MF-base-any-failure	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	if (grid.DecidedByModules && !readByCoverage && !failed.Seen(modules, size))	if (!readByCoverage && !failed.Seen(modules, size))
+MF-scale-any-failure	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	                        if (grid.DecidedByModules && !readByCoverage)	                        if (!readByCoverage)
+MF-perspective-any-failure	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	return status;␤                if (grid.DecidedByModules && !readByCoverage)	return status;␤                if (!readByCoverage)

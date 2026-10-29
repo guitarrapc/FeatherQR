@@ -324,7 +324,7 @@ internal static class RmQRConstants
 
     /// <summary>The top-left module of the block of five rows by three columns that carries bits 0-14 of one copy: bit 5·c + r sits r rows below and c columns right of it.</summary>
     /// <remarks>
-    /// The image decoder's and the matrix decoder's readers walk the block from here with two loops rather than asking <see cref="GetFormatModule"/> for each bit: they run for every frame and every grid an image decode tries, where a call per bit is a visible cost.
+    /// The image decoder's and the matrix decoder's readers find the block's bits from here rather than asking <see cref="GetFormatModule"/> for each one: they run for every frame and every grid an image decode tries, where a call per bit is a visible cost.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void GetFormatBlock(bool subFinderSide, int height, int width, out int row, out int col)

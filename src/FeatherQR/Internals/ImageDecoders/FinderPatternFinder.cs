@@ -156,7 +156,7 @@ internal static partial class FinderPatternFinder
     internal static int FindCandidatesFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey)
         => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, stride: 1, FinderRowKernel.Auto);
 
-    /// <summary>The hits of one strided row that <see cref="FindCandidatesStridedAndFullSweep"/> gathers before merging them into both lists.</summary>
+    /// <summary>The hits of one strided row that <see cref="FindCandidatesStridedAndFullSweep"/> and <see cref="FindCandidatesKeepingRowHits"/> gather before merging them.</summary>
     internal const int RowHitCapacity = 64;
 
     /// <summary>
@@ -200,6 +200,88 @@ internal static partial class FinderPatternFinder
                     MergeHit(swept, ref sweptCount, hit.X, hit.Y, hit.ModuleSize);
                 }
             }
+        }
+        finally
+        {
+            ReturnEdgeBuffer(rentedEdges);
+        }
+    }
+
+    /// <summary>The rows <see cref="FindCandidates"/> scans in an image <paramref name="height"/> rows tall: the room <see cref="FindCandidatesKeepingRowHits"/> needs for its row ends.</summary>
+    internal static int StridedRowCount(int height) => (height + CandidateRowStride - 1) / CandidateRowStride;
+
+    /// <summary>
+    /// <see cref="FindCandidates"/>, with each strided row's hits kept for <see cref="FindCandidatesFullSweepReplaying"/>, so the sweep that may follow need not scan those rows again.
+    /// </summary>
+    /// <remarks>
+    /// The strided rows are rows of the sweep, and a row's hits do not depend on the list they go to. So a strided row is scanned once, its hits gathered in the next slice of <paramref name="kept"/>, and each hit is merged into <paramref name="strided"/> in the order found. <paramref name="rowEnds"/>, room for <see cref="StridedRowCount"/>, takes the end of each row's hits.
+    /// The gathering slice merges and fills as any list does, so its entries are the row's hits only while each counts one hit and the slice has room. A row where they are not is scanned into <paramref name="strided"/> and its end set to -1, for the sweep to scan it again.
+    /// So is every row once fewer than <see cref="RowHitCapacity"/> entries of <paramref name="kept"/> are left: a slice that small can fill on a row that a full one keeps, and that row would be scanned three times.
+    /// </remarks>
+    internal static void FindCandidatesKeepingRowHits(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> strided, out int stridedCount, Span<FinderPattern> kept, Span<int> rowEnds)
+    {
+        stridedCount = 0;
+        var keptCount = 0;
+        var rentedEdges = RentEdgeBuffer(FinderRowKernel.Auto, width);
+        try
+        {
+            for (var y = 0; y < height; y += CandidateRowStride)
+            {
+                var hits = 0;
+                var oneHitEach = false;
+                var rowHits = default(Span<FinderPattern>);
+                if (kept.Length - keptCount >= RowHitCapacity)
+                {
+                    rowHits = kept.Slice(keptCount, RowHitCapacity);
+                    ScanRow(luminance, width, height, threshold, grey, y, FinderRowKernel.Auto, rentedEdges, rowHits, ref hits);
+                    oneHitEach = hits < rowHits.Length;
+                    for (var i = 0; i < hits && oneHitEach; i++)
+                        oneHitEach = rowHits[i].Count == 1;
+                }
+                if (!oneHitEach)
+                {
+                    ScanRow(luminance, width, height, threshold, grey, y, FinderRowKernel.Auto, rentedEdges, strided, ref stridedCount);
+                    rowEnds[y / CandidateRowStride] = -1;
+                    continue;
+                }
+
+                foreach (var hit in rowHits.Slice(0, hits))
+                    MergeHit(strided, ref stridedCount, hit.X, hit.Y, hit.ModuleSize);
+                keptCount += hits;
+                rowEnds[y / CandidateRowStride] = keptCount;
+            }
+        }
+        finally
+        {
+            ReturnEdgeBuffer(rentedEdges);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="FindCandidatesFullSweep"/> after <see cref="FindCandidatesKeepingRowHits"/>: a strided row's kept hits are merged where its scan would merge them, and only a marked strided row is scanned again.
+    /// </summary>
+    /// <returns>The number of candidates written, bit for bit those of <see cref="FindCandidatesFullSweep"/>.</returns>
+    internal static int FindCandidatesFullSweepReplaying(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> swept, ReadOnlySpan<FinderPattern> kept, ReadOnlySpan<int> rowEnds)
+    {
+        var sweptCount = 0;
+        var start = 0;
+        var rentedEdges = RentEdgeBuffer(FinderRowKernel.Auto, width);
+        try
+        {
+            for (var y = 0; y < height; y++)
+            {
+                var end = y % CandidateRowStride != 0 ? -1 : rowEnds[y / CandidateRowStride];
+                if (end < 0)
+                {
+                    ScanRow(luminance, width, height, threshold, grey, y, FinderRowKernel.Auto, rentedEdges, swept, ref sweptCount);
+                    continue;
+                }
+
+                foreach (var hit in kept.Slice(start, end - start))
+                    MergeHit(swept, ref sweptCount, hit.X, hit.Y, hit.ModuleSize);
+                start = end;
+            }
+            return sweptCount;
         }
         finally
         {

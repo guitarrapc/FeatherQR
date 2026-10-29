@@ -48,7 +48,7 @@ internal static partial class RmQRImageDecoder
     /// <summary>Template matches (of 25) required to accept a sub-finder location.</summary>
     private const int SubFinderMinScore = 24;
 
-    /// <summary>Rings of the sub-finder search scored before the lattice screen: a sub-finder on its prediction is found for the cost of one position, and from the next ring on the screen costs less than the positions it drops.</summary>
+    /// <summary>Rings of the sub-finder search scored before the lattice screen: a sub-finder on its prediction is found for the cost of one position, and from the next ring on the screen costs less than the positions it drops, as timed on 256-bit vectors.</summary>
     private const int SubFinderUnscreenedRings = 1;
 
     /// <summary>The cosines and sines of the leans the sub-finder template is matched with, 0°, 12° and -12°, computed once.</summary>

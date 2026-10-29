@@ -14,7 +14,7 @@ internal static class RmQRFormatInformationDecoder
     private static readonly int[] finderSideCandidates = BuildCandidates(subFinderSide: false);
     private static readonly int[] subFinderSideCandidates = BuildCandidates(subFinderSide: true);
 
-    // The word of a side by its bits 0-5: no two words of a side share those bits (RmQRFormatInformationDecoderUnitTest checks it)
+    // The word of a side by its bits 0-5: no two words of a side share those bits (RmQRFormatCopyEarlyExitTest checks it)
     private static readonly int[] finderSideByLowBits = BuildByLowBits(finderSideCandidates);
     private static readonly int[] subFinderSideByLowBits = BuildByLowBits(subFinderSideCandidates);
 
