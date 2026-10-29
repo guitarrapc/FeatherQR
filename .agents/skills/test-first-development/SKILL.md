@@ -87,6 +87,7 @@ Relevant benchmarks by change area:
 | `QRCodeGenerator`, binary encoders | `SimpleEncode`, `QRCodeEncodeEndToEnd` |
 | `QRCodeDecoder`, matrix decode | `QRCodeDecodeEndToEnd` |
 | `QRImageDecoder`, image decoders, finder scan, threshold | `QRCodeImageDecodeEndToEnd` |
+| Micro QR and rMQR image decoders, the every-symbol scan (`CandidateScan`) | `MicroQRImageEndToEnd`, `RmQRImageEndToEnd`, `SingleFinderDecodeImageSymbols` |
 | `QRCodeImageBuilder`, rendering | `QRCodeImageEndToEnd` |
 
 ### 6. Update Specs
