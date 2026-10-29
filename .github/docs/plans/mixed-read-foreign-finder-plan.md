@@ -1,0 +1,66 @@
+# Mixed read: the cost of a candidate decoded as the other symbology
+
+## Purpose
+
+The read of every symbology ([qrcode-symbologies.md](../specs/qrcode-symbologies.md#every-symbol-of-any-symbology)) decodes each finder candidate Standard QR left over as a Micro QR symbol, then as an rMQR one. A finder of one symbology is a failed candidate of the other, and a failed candidate costs far more than a read. On crisp pages at 4 px a module, Micro QR's failure on an rMQR finder takes about 2.9 ms, its budget of 10,000 arbitrary-orientation attempts, and rMQR's failure on a Micro QR finder 0.4 ms alone and about 3.1 ms with an rMQR symbol in the next cell 320 px away, whose structure its frames reach, where a read of either takes 0.1 to 0.5 ms (probe, 2026-10-30). On the page of twelve symbols, four of each symbology, the single-finder scan is 11.5 of the call's 19.2 ms, almost all of it those failures. On BoofCV's photographs of Standard QR codes, Micro QR's failed candidates were 38 % of the time, 629 of 1,143 of them inside codes that do not read.
+
+The order of the two decoders is not the lever. Tried per candidate the other way round, rMQR first, the page of four rMQR symbols went from 16.5 to 5.6 ms and one rMQR symbol from 5.3 to 2.4, but four Micro QR symbols from 5.6 to 7.8, eight of both from 16.6 to 20.6 and the twelve from 19.2 to 23.5, the photographs unchanged (A/B on a worktree, 2026-10-30). Each order pays the other symbology's failure on the finders it does not own.
+
+This plan finds a test of the symbol's shape at a candidate, cheap against either failure, that says which decoder need not run, with no read lost. Reads are the measure: a rule that loses a read of any set is tightened or dropped ([qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md#image-decode-sweep)).
+
+## What a finder tells about its symbol
+
+| Symbology | From the finder's outer edge along the symbol's two axes | The other two directions | Quiet zone |
+|---|---|---|---|
+| Micro QR | 4 to 10 modules on both (a square of 11 to 17), timing patterns along row 0 and column 0 | nothing | 2 modules |
+| rMQR | 0 to 10 on one (a height of 7 to 17), 20 to 132 on the other (a width of 27 to 139), timing patterns on every edge | nothing | 2 |
+| Standard QR | 14 to 170 on both (a side of 21 to 177) | nothing | 4 |
+
+The symbol lies in the quadrant two of the four directions span, and the quiet zone begins at the finder's edge in the other two. The lengths do not overlap: Micro QR ends by 10, Standard QR starts at 14, rMQR's long side at 20.
+
+## Candidate A: the extent probe
+
+For each of the four directions along the symbol's axes, from the finder's outer edge (3.5 modules from its centre), Q is how many modules the band 7 modules across stays dark before a light gap of 1.5 modules: half-module steps, a step light when at most 10 % of its pixels are dark, the walk ended by the gap, by the image's edge (Q unknown) or by a bound. The band spans the whole height of an R7 symbol and the finder's width in the short directions, so single timing modules and alignment rings keep it dark and a 2-module quiet zone ends it.
+
+The rules, each alone enough to skip a decoder, none firing on an unknown Q:
+- Not Micro QR when some Q is 13 or more: Micro QR's 10 and a quarter for the module size overestimated. This skips Micro QR at rMQR finders and, on photographs, at the finders of Standard QR codes that did not read, the share of the 38 %.
+- Not rMQR when every Q is 12 or less and every gap was found: rMQR's long side of 20 shrunk by 40 % under perspective, which changes the pitch by a quarter across 139 modules ([rmqr-decoder.md](../specs/rmqr-decoder.md)). This skips rMQR at Micro QR finders.
+- A dead band: a step is dark when 25 % or more of its pixels are, light at 10 % or less, and a walk that meets a step between gives up, since the regional binarizer's speckle sits there.
+
+Where it runs: in `MixedImageDecoder`'s composite candidate decoder, before either symbology's decoder, so the one-symbology calls keep their behaviour and no switch enters the symbology code. Cost: at most four walks of about 30 half-steps over 7 modules of pixels, some 10 µs at 4 px a module against failures of 0.4 to 3 ms.
+
+The walk must follow the finder's own axes, not the image's. Measured on the pages of the benchmark `SymbolDecodeImageSymbols` with a scratch probe, the walk on the image axes separated the three exactly while the symbols were upright, and the texture page, where 70 to 100 % of the pixels past the 2-module quiet zone are dark, moved nothing:
+
+| Page | Standard QR finders (12 or 36) | Micro QR (4) | rMQR (4) |
+|---|---|---|---|
+| mixed-12, single-8, qr-page-12, mixed-12-tex, crisp 4 px | 18 / 18 / 0 / 0 | 8 / 8 / 0 / 0 | 20 / 6 / 0 / 0 |
+
+Turned, with the walk still on the image axes (the page scaled by 0.7): Micro QR's longest Q stayed 8 to 9 and Standard QR's 17 to 22 from 0° to 45°, but rMQR's fell from 20 to 12 or 13 at 20° and 7 to 9 at 30° and 45°, where the band walks out through the symbol's slanted edge, and a Micro QR M4 at 45° would reach about 15 along its diagonal. On the image axes the second rule would skip rMQR at its own turned finders. The axes come from the finder's outline (`FinderOutline.TryMeasure`, which rMQR already measures at every candidate, 2.5 % of a turned read) or from the orientation candidates both decoders compute; the image axes serve only a finder the outline measures square.
+
+## Candidate B: stage the two decoders and share the orientation sweep
+
+Each decoder tries the axis-aligned frames first, then runs the angular sweep (`FinderAxisEstimator.FindOrientationCandidates`) for its arbitrary-orientation search, each for itself at the same candidate. Staged per candidate, the cheap frames of both would run first, one sweep would serve both, and the probe along the sweep's axes would gate the two expensive searches. It is the larger change: the composition stays in `MixedImageDecoder` (the symbology seam forbids cross references), so each decoder gains internal entry points for its stages. It is measured after A, which may leave it nothing on sheets.
+
+## Candidate C: the Standard QR triple
+
+The lead recorded with the mixed read: a leftover candidate that forms a triple with two finders of its module size, timing modules between, is a Standard QR finder, whatever its format information reads. A's first rule covers the same candidates without the other two finders, so it is tried first; this stays the alternative for photographs where A's band meets the dead band.
+
+## Measurement plan
+
+1. Characterize, in a scratch worktree with trace lines and nothing changed in the repository: for every candidate the composite decoder sees on the 432 mixed sheets, the one-symbol renders of the three symbologies with their uneven-light and noise kinds, and BoofCV's 536 photographs, record Q in the four directions along the outline's axes and along the image axes, the dark shares met, the finder's turn and keystone, the truth (read as which symbology, inside which read, or none) and what each decoder's failure cost there. The output is the distribution of Q by truth, the thresholds that lose no read, and the saving as the sum of the failures skipped.
+2. Implement A with its tests first: renders of Micro QR M1 to M4, rMQR R7x27 to R17x139 and Standard QR versions 1, 2 and 10, upright, at 15°, 30°, 45° and 90°, under keystone to 8 %, each asserting the class the probe gives through an internal entry; negatives that give unknown: noise, a speckled quiet zone, a symbol at the image's edge; `MixedSymbolsDecodeTest` reading as before; planted faults for each rule's bound and for the dead band.
+3. Exactness: `sheets mixed` (2,884 of 3,024, no false read), the one-symbol sweep against the commit before with `--lines` (no diff), `again`, and `boofcv` (1,073 and the time). A read lost anywhere tightens or drops the rule that lost it.
+4. Time: the probe pages (mixed-12 19.2, single-8 16.6, rmqr-4 16.5, micro-4 5.6 ms), `sheets mixed --time`, and the BoofCV set, where the first rule's share of Micro QR's 38 % is the number.
+5. Decide B from what A leaves on turned sheets.
+
+## Open questions
+
+- Perspective: the thresholds hold for a quarter of stretch at the far end; step 1 says how far the outline's axes drift across a long rMQR symbol under the sweep's keystones.
+- The passes: the probe reads the pass's binarized view (global, inverted, regional). The regional pass's speckle sets the dead band's width.
+- A symbol whose quiet zone another dark object enters may be skipped where it would not decode anyway. Step 3 counts such reads, if any.
+
+## Progress log
+
+### Candidates and the first probe (2026-10-30)
+
+Done: the three candidates above, the extent probe measured on the benchmark pages upright and turned (scratch, not committed), the A/B of the decoder order. Lesson: on the image axes the walk reads the symbol's extent only while the symbol is upright, and a rule on it would skip rMQR at its own turned finders; the finder's axes are needed before any rule is tried.
