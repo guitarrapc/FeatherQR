@@ -1,0 +1,32 @@
+# Planted faults for the grid searches' record of failed grids (microqr-decoder.md, Lessons learned): the flag that the modules
+# alone decided a grid's result, the record that packs and keeps such grids, and its use in the base grid and the scale and
+# perspective searches. Also the error locator, whose updates now stop at the degree of the term they add and which fails once its
+# length passes the block's capacity, in the correction every symbology runs.
+#
+#   dotnet run tools/mutation_check.cs -- run tools/mutants/microqr-failed-grids.tsv <out-dir> --allow-dirty --filter "/*/*/MicroQRFailedGridsTest/*" --filter "/*/*/EccBinaryDecoderUnitTest/*" --filter "/*/*/MicroQRCodeDecoderImageTest/*" --filter "/*/*/MicroQRCodeDecoderPerspectiveTest/*" --filter "/*/*/MicroQRCodeDecoderRobustnessTest/*" --filter "/*/*/MicroQRCoverageConditionTest/*"
+#
+# Against those classes (2026-10-29) 17 of the 20 are caught. Not caught: a skipped grid left uncharged, in either search, only lets a
+# search go on past where its budget ended, and no test has a symbol that reads only there. A grid remembered after a re-read by
+# coverage wrote over its modules is kept under the modules it sampled, so a later grid that samples those is skipped, with the read its
+# own quiet zone or re-read could give. Outside those classes, UnevenLightingDecodeTest under this fault skipped such grids about
+# 6,500 times and still read every symbol it asserts (a probe, 2026-10-29).
+MF-locator-length-change	src/FeatherQR/Internals/BinaryDecoders/EccBinaryDecoder.cs	lambda.CopyTo(temp);␤                for (var i = 0; i + gap <= reach; i++)	lambda.CopyTo(temp);␤                for (var i = 0; i + gap < reach; i++)
+MF-locator-same-length	src/FeatherQR/Internals/BinaryDecoders/EccBinaryDecoder.cs	// Same length: Λ(x) ← Λ(x) - (δ/b)·x^m·B(x)␤                for (var i = 0; i + gap <= reach; i++)	// Same length: Λ(x) ← Λ(x) - (δ/b)·x^m·B(x)␤                for (var i = 0; i + gap < reach; i++)
+MF-locator-reach	src/FeatherQR/Internals/BinaryDecoders/EccBinaryDecoder.cs	            var reach = n + 1 - errorCountEstimate;	            var reach = n - errorCountEstimate;
+MF-locator-past-capacity	src/FeatherQR/Internals/BinaryDecoders/EccBinaryDecoder.cs	                if (2 * reach > eccCount)	                if (2 * reach >= eccCount)
+MF-decided-after-correction	src/FeatherQR/Internals/MicroQR/MicroQRMatrixDecoder.cs	        decidedByModules = false;␤        if (sampled	        decidedByModules = true;␤        if (sampled
+MF-decided-never	src/FeatherQR/Internals/MicroQR/MicroQRMatrixDecoder.cs	        charsWritten = 0;␤        decidedByModules = true;	        charsWritten = 0;␤        decidedByModules = false;
+MF-decided-one-way	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	decidedByModules = straightDecided && mirroredDecided;	decidedByModules = straightDecided || mirroredDecided;
+MF-pack-size	src/FeatherQR/Internals/MicroQR/MicroQRFailedGrids.cs	        packed[Words - 1] |= (ulong)size << 56;	        packed[Words - 1] |= 0;
+MF-pack-non-zero	src/FeatherQR/Internals/MicroQR/MicroQRFailedGrids.cs	(((eight & 0x7F7F7F7F7F7F7F7FUL) + 0x7F7F7F7F7F7F7F7FUL) | eight) & 0x8080808080808080UL	eight & 0x8080808080808080UL
+MF-pack-tail	src/FeatherQR/Internals/MicroQR/MicroQRFailedGrids.cs	            if (modules[i] != 0)	            if (modules[i] > 1)
+MF-ring-wrap	src/FeatherQR/Internals/MicroQR/MicroQRFailedGrids.cs	        _next = _next == Capacity - 1 ? 0 : _next + 1;	        _next = _next == Capacity - 2 ? 0 : _next + 1;
+MF-ring-count	src/FeatherQR/Internals/MicroQR/MicroQRFailedGrids.cs	        if (_count < Capacity)	        if (_count < Capacity - 1)
+MF-scale-not-charged	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	                        attemptsRemaining -= 2;␤                        if (failed.Seen(modules, size))␤                            continue;	                        if (failed.Seen(modules, size))␤                            continue;␤                        attemptsRemaining -= 2;
+MF-scale-after-coverage	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	                        if (grid.DecidedByModules && !readByCoverage)	                        if (grid.DecidedByModules)
+MF-perspective-not-charged	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	                attemptsRemaining -= 2;␤                if (failed.Seen(modules, size))␤                    continue;	                if (failed.Seen(modules, size))␤                    continue;␤                attemptsRemaining -= 2;
+MF-decided-mirrored-only	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	decidedByModules = straightDecided && mirroredDecided;	decidedByModules = mirroredDecided;
+MF-decided-straight-only	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	decidedByModules = straightDecided && mirroredDecided;	decidedByModules = straightDecided;
+MF-base-any-failure	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	if (grid.DecidedByModules && !readByCoverage && !failed.Seen(modules, size))	if (!readByCoverage && !failed.Seen(modules, size))
+MF-scale-any-failure	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	                        if (grid.DecidedByModules && !readByCoverage)	                        if (!readByCoverage)
+MF-perspective-any-failure	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	return status;␤                if (grid.DecidedByModules && !readByCoverage)	return status;␤                if (!readByCoverage)

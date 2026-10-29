@@ -105,7 +105,7 @@ For each kernel, its tiers in the order its dispatch tries them, and the tier th
 | `RmQRLatin1Segment` | `Sse2`, `Vector128` | `Sse2` | `Sse2` | `Vector128` | `Vector128` |
 | `RmQRModulePlacer` | `Avx2`, `Ssse3`, `AdvSimd`, `PackedSimd` | `Ssse3` | `Avx2` | `AdvSimd` | `PackedSimd` |
 | `RmQRExtractCodewords` | `Avx2Pext`, `AdvSimd`, `PackedSimd`, `Vector128` | `Vector128` | `Avx2Pext` or `Vector128` | `AdvSimd` | `PackedSimd` |
-| `RmQRSubFinderLattice` | `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Sse2` | `Vector128` | `PackedSimd` |
+| `RmQRSubFinderLattice` | `Avx2`, `Vector256`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Avx2` | `Vector128` | `PackedSimd` |
 | `RmQRSampleGrid` | `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Sse2` | `Vector128` | `PackedSimd` |
 <!-- END GENERATED kernels -->
 

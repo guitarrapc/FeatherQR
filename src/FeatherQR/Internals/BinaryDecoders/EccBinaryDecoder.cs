@@ -88,16 +88,23 @@ internal static partial class EccBinaryDecoder
                 continue;
             }
 
+            // x^m·B(x) has degree at most n + 1 - L, so the update stops there rather than at the buffer's end.
+            // A Micro QR block has 2 to 14 ECC codewords, and its grid searches run the correction on many of the grids they sample.
             var coefficient = GaloisField.Divide(delta, lastDiscrepancy);
+            var reach = n + 1 - errorCountEstimate;
             if (2 * errorCountEstimate <= n)
             {
+                // L never shrinks, so a length past ⌊eccCount/2⌋ is already more errors than the code can correct
+                if (2 * reach > eccCount)
+                    return false;
+
                 // Length change: Λ(x) ← Λ(x) - (δ/b)·x^m·B(x), then B(x) ← old Λ(x)
                 lambda.CopyTo(temp);
-                for (var i = 0; i + gap <= MaxEccPerBlock; i++)
+                for (var i = 0; i + gap <= reach; i++)
                 {
                     lambda[i + gap] ^= GaloisField.Multiply(coefficient, prev[i]);
                 }
-                errorCountEstimate = n + 1 - errorCountEstimate;
+                errorCountEstimate = reach;
                 temp.CopyTo(prev);
                 lastDiscrepancy = delta;
                 gap = 1;
@@ -105,17 +112,13 @@ internal static partial class EccBinaryDecoder
             else
             {
                 // Same length: Λ(x) ← Λ(x) - (δ/b)·x^m·B(x)
-                for (var i = 0; i + gap <= MaxEccPerBlock; i++)
+                for (var i = 0; i + gap <= reach; i++)
                 {
                     lambda[i + gap] ^= GaloisField.Multiply(coefficient, prev[i]);
                 }
                 gap++;
             }
         }
-
-        // More errors than the code can correct
-        if (2 * errorCountEstimate > eccCount)
-            return false;
 
         // 3. Chien search: codeword[idx] is the coefficient of x^(n-1-idx), so an
         // error at idx has locator X = α^(n-1-idx). Test every position p by

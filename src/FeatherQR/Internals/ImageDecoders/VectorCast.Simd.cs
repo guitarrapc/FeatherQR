@@ -45,5 +45,15 @@ internal static class VectorCast
             return PackedSimd.ConvertToInt32Saturate(value);
         return Vector128.ConvertToInt32(value);
     }
+
+    /// <inheritdoc cref="ToInt32Native(Vector128{float})"/>
+    /// <remarks>On x64, 256-bit vectors need AVX2, so the AVX2 check is the one a caller on them passes.</remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static Vector256<int> ToInt32Native(Vector256<float> value)
+    {
+        if (Avx2.IsSupported)
+            return Avx.ConvertToVector256Int32WithTruncation(value);
+        return Vector256.ConvertToInt32(value);
+    }
 }
 #endif

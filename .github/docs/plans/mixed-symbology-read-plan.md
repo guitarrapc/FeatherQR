@@ -4,9 +4,9 @@
 
 One call that returns every symbol of an image whatever its symbology: Standard QR, Micro QR and rMQR together. Today a caller picks a decoder (the scope row "Image detection default" in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions): Standard QR by default, typed entry points for the other two), and the Playground tries the three in that order, reading a Micro QR or rMQR symbol only when no Standard QR symbol read. The maintainer asked for a mixed read on 2026-10-27. This plan builds on the Micro QR and rMQR reads for every symbol, shipped on 2026-10-27 ([qrcode-symbologies.md](../specs/qrcode-symbologies.md#every-symbol-of-an-image)): without them a mixed sheet with two Micro QR symbols would return one of them.
 
-## Where it stands (2026-10-27)
+## Where it stands (2026-10-29)
 
-- Nothing of this plan is built. The Micro QR and rMQR reads for every symbol it builds on shipped on 2026-10-27. Each searches every finder in full, and on three of BoofCV's photographs of 60 Standard QR codes the Micro QR read took 14 to 20 times its one-symbol call (the every-symbol section of [qrcode-symbologies.md](../specs/qrcode-symbologies.md#every-symbol-of-an-image)), which is part of what Phase 0 prices.
+- Phase 0 is done (Progress log): the shape that skips the candidates inside what the decoders before it read reads every symbol the three calls read, and no false one, at 3.4 times the Standard QR entry on BoofCV's photographs as separate calls. No shape measured comes under X4's 1.5. Nothing of `src` is built. X3 and X4 wait for the maintainer before Phase 1.
 
 ## Why
 
@@ -67,3 +67,18 @@ Two shapes bound the price, and Phase 0 measures both:
 ## Progress log
 
 Each finished phase is appended here: what was done, what it taught, and the numbers it moved.
+
+### Phase 0, 2026-10-29
+
+Done: a probe ran the three every-symbol entries on a scratch copy of the tree at e42919cc, with two switches that the copy alone has. One makes a decoder skip the candidates inside what the decoders before it read, Standard QR's list included. The other makes a single-finder decoder try a finder once, in the first reading that found it, and skip one within half a finder of it in a later reading. The shapes: T, the three calls in turn with nothing skipped and their reads merged. P, each decoder skipping inside the reads before it, which is the per-pass form with each decoder running its own passes. O, P with each finder tried once, the nearest form to running once on the leftover. Q, P in the order Standard QR, Micro QR, rMQR, then Standard QR again when the single-finder decoders read anything.
+
+BoofCV's 536 photographs, each shape once, one thread, a warm-up first. The Standard QR entry took 4.0 s and read 1,073 codes. Micro QR and rMQR read nothing in any shape, so Q's second Standard QR read never ran. Over the Standard QR entry: T 14.7 times, P 3.37, O 3.09. Micro QR and rMQR scan the same passes, and that scan with no candidate decoded took 2.3 s, so with it paid once P comes to 2.78 and O to 2.50. On the seven photographs of 60 codes T was 53 times and P 1.92. P decoded 1,143 Micro QR candidates where T decoded 11,638, each failed one 3.3 to 4.0 ms against rMQR's 0.5 to 0.6. The 79 photographs where Standard QR reads nothing carried 2.5 s of Micro QR's 6.5 s in P.
+
+The sweep's one-symbol renders, 48,240: every kind at 400 Standard QR, 400 Micro QR and 640 rMQR cases, and 100 cases of each lit unevenly at six depths, each with its negative. P and Q returned each symbol the symbology's own call reads, alone: no read lost and no extra read. O lost 210 Micro QR and 420 rMQR reads.
+
+Mixed sheets, 432: Standard QR with Micro QR, Standard QR with rMQR, Micro QR with rMQR, and all three, in three layouts of 2 to 18 symbols, through the sweep's four sheet kinds, three of each, each also lit unevenly at two depths. 3,024 codes, 1,008 a symbology, Standard QR at versions 1 to 10, each symbol in its own quiet zone. T read 2,868. P read 2,868 with Standard QR first, up to 2,879 with it last, and Q 2,884: Standard QR 963, 974 and 979, Micro QR 944 and rMQR 961 in every order. O read 2,790 to 2,805. No shape or order read a false code. The evenly lit sheets read 994 to 996 in every order: the differences are on the unevenly lit ones, and 9 of the 16 more Standard QR codes Q reads are on the sheets of Standard QR beside rMQR.
+
+Lessons:
+- Trying a finder once is not the cheap bound X4 assumed. It saves 8 % of P's time, and it loses the reads of the regional pass: a finder the global pass found but could not read is not tried where the regional binarization reads it.
+- Standard QR reads more once the single-finder symbols are out of its list. An rMQR finder is a Standard QR finder, and the triple selection takes it in a real one's place. Running Standard QR first keeps the photographs' price, and running it again only after a single-finder read keeps that price too.
+- What is left of the price is Micro QR's failed candidates outside every read symbol, in a Standard QR symbol that did not read or in texture, each spending its whole budget.

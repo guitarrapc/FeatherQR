@@ -1,0 +1,21 @@
+# Planted faults for the rMQR image decoder's format reads that stop early (rmqr-decoder.md, Decisions, failed-decode cost): the read at
+# a corrected scale, which takes a valid word only, and the perspective gate, which takes a copy within a bit of the version's words.
+# Also the lookups they rest on, the affine sample and the rounding of its sums, and the full read kept at the finder's own scale.
+#
+#   dotnet run tools/mutation_check.cs -- run tools/mutants/rmqr-format-reads.tsv <out-dir> --allow-dirty --filter "/*/*/RmQRFormatCopyEarlyExitTest/*" --filter "/*/*/RmQRFormatInformationDecoderUnitTest/*"
+#
+# Against those classes (2026-10-29) 10 of the 11 are caught. Not caught: the full read at the finder's own scale made exact only. A copy
+# a few bits off at that scale also reads through the outline frames, which take a copy within 3 bits. Outside those classes, on rMQR
+# renders with 1 to 3 of the copy's modules flipped, crisp, turned and keystoned, every read held under this fault, and only images
+# that failed anyway reported another status (a probe, 2026-10-29).
+FR-exact-word-bits	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	            if (bit == 5)	            if (bit == 4)
+FR-exact-checked-from	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	            else if (bit > 5 && ((raw ^ word) >> bit & 1) != 0)	            else if (bit > 6 && ((raw ^ word) >> bit & 1) != 0)
+FR-within-both	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	            if (offM > 1 && offH > 1)	            if (offM > 1 || offH > 1)
+FR-within-distance	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	            if (offM > 1 && offH > 1)	            if (offM > 2 && offH > 2)
+FR-word-index	src/FeatherQR/Internals/RmQR/RmQRFormatInformationDecoder.cs	[(int)eccLevel << 5 | ((int)version - 1)]	[(int)eccLevel << 5 | (int)version & 31]
+FR-low-bits-mask	src/FeatherQR/Internals/RmQR/RmQRFormatInformationDecoder.cs	            table[word & 63] = word;	            table[word & 31] = word;
+FR-tail-module	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	            RmQRConstants.GetFormatTail(bit - 15, subFinderSide, symbolHeight, symbolWidth, out row, out col);	            RmQRConstants.GetFormatTail(bit - 16, subFinderSide, symbolHeight, symbolWidth, out row, out col);
+FR-affine-sample	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	            x = transform.a11 * gridX + transform.a21 * gridY + transform.a31;	            x = transform.a11 * gridX + transform.a21 * gridY + transform.a32;
+FR-affine-fused	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	            x = transform.a11 * gridX + transform.a21 * gridY + transform.a31;	            x = MathF.FusedMultiplyAdd(transform.a11, gridX, MathF.FusedMultiplyAdd(transform.a21, gridY, transform.a31));
+FR-affine-reassociated	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	            y = transform.a12 * gridX + transform.a22 * gridY + transform.a32;	            y = transform.a12 * gridX + (transform.a22 * gridY + transform.a32);
+FR-scale-one-exact	src/FeatherQR/Internals/RmQR/RmQRImageDecoder.cs	            if (scale == 1f)␤                finderSideRaw = ReadFormatCopy(	            if (false)␤                finderSideRaw = ReadFormatCopy(

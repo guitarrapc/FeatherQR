@@ -52,6 +52,11 @@ internal static partial class CandidateScan
         /// <summary>The module buffer every decode samples into: the largest symbol's.</summary>
         public Span<byte> Modules;
 
+        /// <summary>The strided rows' hits a reading keeps for its sweep, and the end of each row's hits (<see cref="FinderPatternFinder.FindCandidatesKeepingRowHits"/>). Empty where the room grows.</summary>
+        public Span<FinderPattern> Kept;
+
+        public Span<int> RowEnds;
+
         public readonly bool IsFull => Growing is null && Count == Symbols.Length;
 
         public void Add(TResult symbol)
@@ -116,14 +121,26 @@ internal static partial class CandidateScan
         var moduleLength = decoder.ModuleBufferLength;
         var rentedChars = ArrayPool<char>.Shared.Rent(maxChars);
         var rentedModules = ArrayPool<byte>.Shared.Rent(moduleLength);
-        // Two lists: the strided scan's, whose candidates the sweep does not try again, and the sweep's.
-        // They are rented apart because one rental of both would be over the large object heap's 85,000-byte threshold, and each alone is under it.
+        // Two lists: the strided scan's, whose candidates the sweep does not try again, and the sweep's. A caller's room also keeps the strided rows' hits for the sweep.
+        // They are rented apart because one rental of them would be over the large object heap's 85,000-byte threshold, and each alone is under it.
         var rentedStrided = ArrayPool<byte>.Shared.Rent(MaxSymbolCandidates * Unsafe.SizeOf<FinderPattern>());
         var rentedSwept = ArrayPool<byte>.Shared.Rent(MaxSymbolCandidates * Unsafe.SizeOf<FinderPattern>());
+        var rentedKept = growing is null ? ArrayPool<byte>.Shared.Rent(MaxSymbolCandidates * Unsafe.SizeOf<FinderPattern>()) : null;
+        var rowCount = FinderPatternFinder.StridedRowCount(height);
+        var rentedRowEnds = growing is null ? ArrayPool<int>.Shared.Rent(rowCount) : null;
         var rentedImage = ArrayPool<byte>.Shared.Rent(pixelCount);
         try
         {
-            var search = new SymbolSearch<TResult> { Symbols = symbols, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Modules = rentedModules.AsSpan(0, moduleLength) };
+            var search = new SymbolSearch<TResult>
+            {
+                Symbols = symbols,
+                Growing = growing,
+                Token = cancellationToken,
+                Chars = rentedChars.AsSpan(0, maxChars),
+                Modules = rentedModules.AsSpan(0, moduleLength),
+                Kept = rentedKept is null ? default : MemoryMarshal.Cast<byte, FinderPattern>(rentedKept.AsSpan()).Slice(0, MaxSymbolCandidates),
+                RowEnds = rentedRowEnds is null ? default : rentedRowEnds.AsSpan(0, rowCount),
+            };
             var strided = MemoryMarshal.Cast<byte, FinderPattern>(rentedStrided.AsSpan()).Slice(0, MaxSymbolCandidates);
             var swept = MemoryMarshal.Cast<byte, FinderPattern>(rentedSwept.AsSpan()).Slice(0, MaxSymbolCandidates);
             DecodeSymbolsInPasses<TDecoder, TInfo, TResult>(ref decoder, ref search, luminance, width, height, rentedImage.AsSpan(0, pixelCount), strided, swept);
@@ -133,6 +150,10 @@ internal static partial class CandidateScan
         finally
         {
             ArrayPool<byte>.Shared.Return(rentedImage, clearArray: false);
+            if (rentedRowEnds is not null)
+                ArrayPool<int>.Shared.Return(rentedRowEnds, clearArray: false);
+            if (rentedKept is not null)
+                ArrayPool<byte>.Shared.Return(rentedKept, clearArray: false);
             ArrayPool<byte>.Shared.Return(rentedSwept, clearArray: false);
             ArrayPool<byte>.Shared.Return(rentedStrided, clearArray: false);
             ArrayPool<byte>.Shared.Return(rentedModules, clearArray: false);
@@ -201,8 +222,12 @@ internal static partial class CandidateScan
     }
 
     /// <summary>
-    /// One reading of the image: the strided scan, then the full sweep less the candidates the strided scan found, each decoding its candidates (<see cref="DecodeSymbolsOfScan"/>). With <paramref name="sweepOnly"/>, the sweep alone, as the midpoint pass scans.
+    /// One reading of the image: the strided scan's candidates, then the full sweep's less those the strided scan found, each list decoded in turn (<see cref="DecodeSymbolsOfScan"/>). With <paramref name="sweepOnly"/>, the sweep alone, as the midpoint pass scans.
     /// </summary>
+    /// <remarks>
+    /// A room that grows never fills, so the sweep runs whatever the strided candidates read, and both lists come from one pass over the rows (<see cref="FinderPatternFinder.FindCandidatesStridedAndFullSweep"/>).
+    /// A caller's room can fill on the strided candidates, so the sweep is scanned only after them, and it merges the hits the strided scan kept in those rows' places (<see cref="FinderPatternFinder.FindCandidatesKeepingRowHits"/>).
+    /// </remarks>
     /// <returns>Whether neither scan found a finder candidate.</returns>
     private static bool DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref TDecoder decoder, ref SymbolSearch<TResult> search, scoped ImageView image, scoped Span<FinderPattern> strided, scoped Span<FinderPattern> swept, bool sweepOnly)
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
@@ -210,16 +235,26 @@ internal static partial class CandidateScan
         // Every reading checks once at least, so an image where nothing is decoded still sees the token
         search.Token.ThrowIfCancellationRequested();
         var stridedCount = 0;
+        var sweptCount = 0;
         if (!sweepOnly)
         {
-            stridedCount = FinderPatternFinder.FindCandidates(image.Luminance, image.Width, image.Height, image.Threshold, strided, image.Grey);
+            var onePass = search.Growing is not null;
+            if (onePass)
+                FinderPatternFinder.FindCandidatesStridedAndFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, strided, out stridedCount, swept, out sweptCount);
+            else
+                FinderPatternFinder.FindCandidatesKeepingRowHits(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, strided, out stridedCount, search.Kept, search.RowEnds);
             FinderPatternFinder.RankByConfirmation(strided.Slice(0, stridedCount));
             DecodeSymbolsOfScan<TDecoder, TInfo, TResult>(ref decoder, ref search, image, strided.Slice(0, stridedCount), skip: default);
             if (search.IsFull)
                 return false;
+            if (!onePass)
+                sweptCount = FinderPatternFinder.FindCandidatesFullSweepReplaying(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, swept, search.Kept, search.RowEnds);
+        }
+        else
+        {
+            sweptCount = FinderPatternFinder.FindCandidatesFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, swept, image.Grey);
         }
 
-        var sweptCount = FinderPatternFinder.FindCandidatesFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, swept, image.Grey);
         FinderPatternFinder.RankByConfirmation(swept.Slice(0, sweptCount));
         // A candidate equal to one the strided scan found decodes the same way: read, it lies inside its symbol, and otherwise it fails again
         DecodeSymbolsOfScan<TDecoder, TInfo, TResult>(ref decoder, ref search, image, swept.Slice(0, sweptCount), strided.Slice(0, stridedCount));

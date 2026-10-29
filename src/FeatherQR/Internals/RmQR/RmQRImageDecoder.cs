@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 #endif
@@ -47,8 +48,12 @@ internal static partial class RmQRImageDecoder
     /// <summary>Template matches (of 25) required to accept a sub-finder location.</summary>
     private const int SubFinderMinScore = 24;
 
-    /// <summary>Rings of the sub-finder search scored without the lattice screen: a sub-finder near its prediction is found before the screen would pay for itself.</summary>
-    private const int SubFinderUnscreenedRings = 3;
+    /// <summary>Rings of the sub-finder search scored before the lattice screen: a sub-finder on its prediction is found for the cost of one position, and from the next ring on the screen costs less than the positions it drops, as timed on 256-bit vectors.</summary>
+    private const int SubFinderUnscreenedRings = 1;
+
+    /// <summary>The cosines and sines of the leans the sub-finder template is matched with, 0°, 12° and -12°, computed once.</summary>
+    private static readonly float[] SubFinderLeanCos = [(float)Math.Cos(0f * (Math.PI / 180d)), (float)Math.Cos(12f * (Math.PI / 180d)), (float)Math.Cos(-12f * (Math.PI / 180d))];
+    private static readonly float[] SubFinderLeanSin = [(float)Math.Sin(0f * (Math.PI / 180d)), (float)Math.Sin(12f * (Math.PI / 180d)), (float)Math.Sin(-12f * (Math.PI / 180d))];
 
     /// <summary>Rows of positions the lattice screen can hold: the lattice is <c>2 · radius + 9</c> points a side, one 64-bit mask a row.</summary>
     internal const int MaxSubFinderScreenRows = 64;
@@ -409,7 +414,11 @@ internal static partial class RmQRImageDecoder
             if (attemptsRemaining <= 0)
                 break; // nothing left to decode with: reading and searching would be waste
             var affine = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, scale * uX, scale * uY, scale * vX, scale * vY, 0f, 0f);
-            var finderSideRaw = ReadFormatCopy(image.Luminance, image.Width, image.Height, image.Threshold, affine, subFinderSide: false, 0, 0);
+            int finderSideRaw;
+            if (scale == 1f)
+                finderSideRaw = ReadFormatCopy(image.Luminance, image.Width, image.Height, image.Threshold, affine, subFinderSide: false, 0, 0);
+            else if (!TryReadExactFormatCopy(image.Luminance, image.Width, image.Height, image.Threshold, affine, subFinderSide: false, 0, 0, out finderSideRaw))
+                continue;
             if (!RmQRFormatInformationDecoder.TryDecodeCopy(finderSideRaw, subFinderSide: false, out var version, out _, out var distance) || (scale != 1f && distance != 0))
                 continue;
 
@@ -743,16 +752,13 @@ internal static partial class RmQRImageDecoder
                     Rotate(svX, svY, cos, sin, out var rvX, out var rvY);
 
                     var transform = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, a * ruX, a * ruY, rvX, rvY, perspectiveX, perspectiveY);
+
+                    // Cheap gate: the far-end format copy must name the version within a bit.
+                    // Before the fit to the image: neither test changes anything, so the order only sets the cost, and a copy off both words is given up after a few bits. Its samples clamp to the image.
+                    if (!IsFormatCopyWithinABit(image.Luminance, image.Width, image.Height, image.Threshold, transform, subFinderSide: true, symbolWidth, symbolHeight, version))
+                        continue;
                     if (!SymbolFitsImage(transform, symbolWidth, symbolHeight, image.Width, image.Height, samplingSlack))
                         continue;
-
-                    // Cheap gate: the far-end format copy must agree with the version.
-                    var subFinderSideRaw = ReadFormatCopy(image.Luminance, image.Width, image.Height, image.Threshold, transform, subFinderSide: true, symbolWidth, symbolHeight);
-                    if (!RmQRFormatInformationDecoder.TryDecodeCopy(subFinderSideRaw, subFinderSide: true, out var farVersion, out _, out var distance)
-                        || farVersion != version || distance > 1)
-                    {
-                        continue;
-                    }
                     if (!TimingRowsAgree(image.Luminance, image.Width, image.Height, image.Threshold, transform, version, symbolWidth, symbolHeight))
                         continue;
 
@@ -884,13 +890,11 @@ internal static partial class RmQRImageDecoder
         var bestVY = vY;
 
         // A keystone leans the column axis (see TryPerspectiveVariants). The template is matched with a few leans so its corner samples stay on their modules.
-        ReadOnlySpan<float> shearDegrees = stackalloc float[] { 0f, 12f, -12f };
         Span<ulong> survivors = stackalloc ulong[MaxSubFinderScreenRows];
-        foreach (var degrees in shearDegrees)
+        for (var lean = 0; lean < SubFinderLeanCos.Length; lean++)
         {
-            var radians = degrees * (Math.PI / 180d);
-            var leanCos = (float)Math.Cos(radians);
-            Rotate(vX / leanCos, vY / leanCos, leanCos, (float)Math.Sin(radians), out var svX, out var svY);
+            var leanCos = SubFinderLeanCos[lean];
+            Rotate(vX / leanCos, vY / leanCos, leanCos, SubFinderLeanSin[lean], out var svX, out var svY);
             var screenTried = false;
             var screened = false;
             // Outward by rings (Chebyshev distance): the prediction is usually within a few modules, and the first perfect match on the innermost ring is the answer (the tie-break prefers the nearest anyway), so the search stops there.
@@ -900,6 +904,9 @@ internal static partial class RmQRImageDecoder
                 {
                     screenTried = true;
                     screened = TryScreenSubFinderPositions(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, radius, survivors);
+                    // With no position left the rings would only test bits, and on noise none is left
+                    if (screened && !AnySurvivor(survivors.Slice(0, 2 * radius + 1)))
+                        break;
                 }
 
                 for (var ov = -ring; ov <= ring; ov++)
@@ -994,30 +1001,71 @@ internal static partial class RmQRImageDecoder
         if (!TryClassifySubFinderLattice(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, radius, mismatchIfDark, mismatchIfLight))
             return false;
 
-        // Per position row, all positions at once: a bit reaches "two" at its second mismatch
-        var positions = 2 * radius + 1;
+        CountSubFinderSurvivors(mismatchIfDark, mismatchIfLight, 2 * radius + 1, survivors);
+        return true;
+    }
+
+    /// <summary>The survivors of every position row, four rows a step on 256-bit vectors and the rest one at a time (<see cref="CountSubFinderSurvivorsScalar"/>).</summary>
+    internal static void CountSubFinderSurvivors(ReadOnlySpan<ulong> mismatchIfDark, ReadOnlySpan<ulong> mismatchIfLight, int positions, Span<ulong> survivors)
+    {
+        var counted = 0;
+#if NET8_0_OR_GREATER
+        if (Vector256.IsHardwareAccelerated)
+            counted = CountSubFinderSurvivorsVector256(mismatchIfDark, mismatchIfLight, positions, survivors);
+#endif
+        CountSubFinderSurvivorsScalar(mismatchIfDark, mismatchIfLight, positions, survivors, counted);
+    }
+
+    /// <summary>
+    /// The survivors of position rows <paramref name="start"/> to <paramref name="positions"/> - 1, all positions of a row at once: a bit reaches "two" at its second mismatch.
+    /// Position row p reads lattice rows p, p + 2, …, p + 8, one a template row, and template cell i of a row is the lattice point 2i columns on.
+    /// </summary>
+    internal static void CountSubFinderSurvivorsScalar(ReadOnlySpan<ulong> mismatchIfDark, ReadOnlySpan<ulong> mismatchIfLight, int positions, Span<ulong> survivors, int start)
+    {
         var positionMask = (1UL << positions) - 1;
-        for (var p = 0; p < positions; p++)
+        for (var p = start; p < positions; p++)
         {
             var one = 0UL;
             var two = 0UL;
-            for (var j = 0; j < 5; j++)
-            {
-                // Lattice row of template row j - 2 for position row p - radius
-                var ifDark = mismatchIfDark[p + 2 * j];
-                var ifLight = mismatchIfLight[p + 2 * j];
-                for (var i = 0; i < 5; i++)
-                {
-                    // Dark ring, light ring, dark centre
-                    var expectedDark = i == 0 || i == 4 || j == 0 || j == 4 || (i == 2 && j == 2);
-                    var mismatch = (expectedDark ? ifDark : ifLight) >> (2 * i);
-                    two |= one & mismatch;
-                    one |= mismatch;
-                }
-            }
+            // Dark ring, light ring, dark centre: rows 0 and 4 dark, rows 1 and 3 dark at the ends, row 2 dark at the ends and the centre
+            var dark0 = mismatchIfDark[p];
+            var dark2 = mismatchIfDark[p + 4];
+            var light2 = mismatchIfLight[p + 4];
+            var dark4 = mismatchIfDark[p + 8];
+            CountTemplateRow(ref one, ref two, dark0, dark0, dark0);
+            CountTemplateRow(ref one, ref two, mismatchIfDark[p + 2], mismatchIfLight[p + 2], mismatchIfLight[p + 2]);
+            CountTemplateRow(ref one, ref two, dark2, light2, dark2);
+            CountTemplateRow(ref one, ref two, mismatchIfDark[p + 6], mismatchIfLight[p + 6], mismatchIfLight[p + 6]);
+            CountTemplateRow(ref one, ref two, dark4, dark4, dark4);
             survivors[p] = ~two & positionMask;
         }
-        return true;
+    }
+
+    /// <summary>The mismatches of one template row: cells 0 and 4 from <paramref name="ends"/>, cells 1 and 3 from <paramref name="inner"/>, cell 2 from <paramref name="centre"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CountTemplateRow(ref ulong one, ref ulong two, ulong ends, ulong inner, ulong centre)
+    {
+        CountMismatch(ref one, ref two, ends);
+        CountMismatch(ref one, ref two, inner >> 2);
+        CountMismatch(ref one, ref two, centre >> 4);
+        CountMismatch(ref one, ref two, inner >> 6);
+        CountMismatch(ref one, ref two, ends >> 8);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CountMismatch(ref ulong one, ref ulong two, ulong mismatch)
+    {
+        two |= one & mismatch;
+        one |= mismatch;
+    }
+
+    /// <summary>Whether any position of the screen's rows survived.</summary>
+    private static bool AnySurvivor(ReadOnlySpan<ulong> survivors)
+    {
+        var any = 0UL;
+        foreach (var row in survivors)
+            any |= row;
+        return any != 0;
     }
 
     /// <summary>
@@ -1038,6 +1086,11 @@ internal static partial class RmQRImageDecoder
             return false; // NaN fails both comparisons
 
 #if NET8_0_OR_GREATER
+        if (Vector256.IsHardwareAccelerated)
+        {
+            ClassifySubFinderLatticeVector256(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, side, marginX, marginY, mismatchIfDark, mismatchIfLight);
+            return true;
+        }
         if (Vector128.IsHardwareAccelerated)
         {
             ClassifySubFinderLatticeVector128(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, side, marginX, marginY, mismatchIfDark, mismatchIfLight);
@@ -1179,9 +1232,79 @@ internal static partial class RmQRImageDecoder
         return raw;
     }
 
+    /// <summary>
+    /// <see cref="ReadFormatCopy"/> for a read that takes a valid word only: false at the first bit the copy is off it.
+    /// Bits 0-5 name the only word the copy can equal (<see cref="RmQRFormatInformationDecoder.WordOfLowBits"/>), so the bits after them are tested as they are read.
+    /// </summary>
+    internal static bool TryReadExactFormatCopy(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, bool subFinderSide, int symbolWidth, int symbolHeight, out int raw)
+    {
+        raw = 0;
+        RmQRConstants.GetFormatBlock(subFinderSide, symbolHeight, symbolWidth, out var rowBase, out var colBase);
+        var word = 0;
+        for (var bit = 0; bit < 18; bit++)
+        {
+            FormatBitModule(bit, subFinderSide, symbolWidth, symbolHeight, rowBase, colBase, out var row, out var col);
+            if (SampleDark(luminance, width, height, threshold, transform, col + 0.5f, row + 0.5f))
+                raw |= 1 << bit;
+            if (bit == 5)
+                word = RmQRFormatInformationDecoder.WordOfLowBits(raw, subFinderSide);
+            else if (bit > 5 && ((raw ^ word) >> bit & 1) != 0)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the copy is within a bit of <paramref name="version"/>'s word at either level, read in <see cref="ReadFormatCopy"/>'s order and given up once it is two bits off both.
+    /// Valid words are at least 7 bits apart, so a copy within a bit of one is nearer it than any other word, and <see cref="RmQRFormatInformationDecoder.TryDecodeCopy"/> would name that version at that distance.
+    /// </summary>
+    internal static bool IsFormatCopyWithinABit(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, bool subFinderSide, int symbolWidth, int symbolHeight, RmQRVersion version)
+    {
+        var wordM = RmQRFormatInformationDecoder.Word(version, RmQREccLevel.M, subFinderSide);
+        var wordH = RmQRFormatInformationDecoder.Word(version, RmQREccLevel.H, subFinderSide);
+        var offM = 0;
+        var offH = 0;
+        RmQRConstants.GetFormatBlock(subFinderSide, symbolHeight, symbolWidth, out var rowBase, out var colBase);
+        for (var bit = 0; bit < 18; bit++)
+        {
+            FormatBitModule(bit, subFinderSide, symbolWidth, symbolHeight, rowBase, colBase, out var row, out var col);
+            var dark = SampleDark(luminance, width, height, threshold, transform, col + 0.5f, row + 0.5f) ? 1 : 0;
+            offM += (wordM >> bit & 1) ^ dark;
+            offH += (wordH >> bit & 1) ^ dark;
+            if (offM > 1 && offH > 1)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>The module of format bit <paramref name="bit"/>, as <see cref="ReadFormatCopy"/> walks them, from the block's top-left module.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void FormatBitModule(int bit, bool subFinderSide, int symbolWidth, int symbolHeight, int rowBase, int colBase, out int row, out int col)
+    {
+        if (bit < 15)
+        {
+            row = rowBase + bit % 5;
+            col = colBase + bit / 5;
+        }
+        else
+        {
+            RmQRConstants.GetFormatTail(bit - 15, subFinderSide, symbolHeight, symbolWidth, out row, out col);
+        }
+    }
+
     private static bool SampleDark(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, float gridX, float gridY)
     {
-        transform.Transform(gridX, gridY, out var x, out var y);
+        float x, y;
+        // An affine frame's denominator is exactly 1 at any grid point, and a division by 1 returns its dividend bit for bit
+        if (transform.a13 == 0f && transform.a23 == 0f && transform.a33 == 1f)
+        {
+            x = transform.a11 * gridX + transform.a21 * gridY + transform.a31;
+            y = transform.a12 * gridX + transform.a22 * gridY + transform.a32;
+        }
+        else
+        {
+            transform.Transform(gridX, gridY, out x, out y);
+        }
         if (float.IsNaN(x) || float.IsNaN(y))
             return false;
         var px = (int)x;

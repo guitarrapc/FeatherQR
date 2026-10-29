@@ -52,24 +52,26 @@ internal static class MicroQRMatrixDecoder
     /// </summary>
     public static DecodeStatus DecodeMatrix<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
         where TModules : struct, IMicroQRModules
-        => Decode(pixels, modules, size, sampled: false, default, 0, 0, 0, new CountedQuietZone(0), destination, out charsWritten, out info);
+        => Decode(pixels, modules, size, sampled: false, default, 0, 0, 0, new CountedQuietZone(0), destination, out charsWritten, out info, out _);
 
     /// <summary>
     /// Decodes a grid sampled from an image, where the grid may lie on anything: the corrections a read may use are what its timing patterns, format word and quiet zone earn (<see cref="MicroQRGridEvidence"/>), and a read beyond what they earn fails as a correction failure does.
     /// </summary>
     /// <remarks>
     /// The structure is counted only for a grid Reed-Solomon reads, which texture rarely reaches, and the quiet zone, read from <paramref name="luminance"/>, only when the timing patterns and format word fall short.
+    /// <c>decidedByModules</c> holds when the modules alone decided the result: a format word that names no word of this size, or a block that did not correct. Such a grid fails the same wherever it was sampled. Once the block corrects, the quiet zone can decide.
     /// </remarks>
-    public static DecodeStatus DecodeSampledGrid<TModules, TQuietZone>(ReadOnlySpan<byte> pixels, in TModules modules, int size, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in TQuietZone quietZone, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+    public static DecodeStatus DecodeSampledGrid<TModules, TQuietZone>(ReadOnlySpan<byte> pixels, in TModules modules, int size, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in TQuietZone quietZone, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, out bool decidedByModules)
         where TModules : struct, IMicroQRModules
         where TQuietZone : struct, IMicroQRQuietZone
-        => Decode(pixels, modules, size, sampled: true, luminance, width, height, threshold, quietZone, destination, out charsWritten, out info);
+        => Decode(pixels, modules, size, sampled: true, luminance, width, height, threshold, quietZone, destination, out charsWritten, out info, out decidedByModules);
 
-    private static DecodeStatus Decode<TModules, TQuietZone>(ReadOnlySpan<byte> pixels, in TModules modules, int size, bool sampled, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in TQuietZone quietZone, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+    private static DecodeStatus Decode<TModules, TQuietZone>(ReadOnlySpan<byte> pixels, in TModules modules, int size, bool sampled, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in TQuietZone quietZone, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, out bool decidedByModules)
         where TModules : struct, IMicroQRModules
         where TQuietZone : struct, IMicroQRQuietZone
     {
         charsWritten = 0;
+        decidedByModules = true;
 
         var version = MicroQRConstants.VersionFromSize(size);
         if (version == 0)
@@ -102,8 +104,14 @@ internal static class MicroQRMatrixDecoder
         // The correction is capped at the ISO Table 9 capacity and, on a sampled grid, at what its structure earns.
         // The structure is counted only for a read, which texture rarely reaches, the quiet zone last.
         if (!EccBinaryDecoder.TryCorrect(block, eccCodewords, out var errorsCorrected)
-            || errorsCorrected > MicroQRConstants.GetErrorCorrectionCapacity(version, eccLevel)
-            || (sampled && !MicroQRGridEvidence.SuspendedOnThisThread && !Earns(pixels, modules, size, version, eccLevel, formatDistance, errorsCorrected, luminance, width, height, threshold, quietZone)))
+            || errorsCorrected > MicroQRConstants.GetErrorCorrectionCapacity(version, eccLevel))
+        {
+            info = new MicroQRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
+            return DecodeStatus.DataUncorrectable;
+        }
+
+        decidedByModules = false;
+        if (sampled && !MicroQRGridEvidence.SuspendedOnThisThread && !Earns(pixels, modules, size, version, eccLevel, formatDistance, errorsCorrected, luminance, width, height, threshold, quietZone))
         {
             info = new MicroQRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
             return DecodeStatus.DataUncorrectable;

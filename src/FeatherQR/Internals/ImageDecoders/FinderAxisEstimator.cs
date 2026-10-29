@@ -34,6 +34,21 @@ internal static class FinderAxisEstimator
     /// </summary>
     private const float MaxAngularSweepRunModules = 8f;
 
+    /// <summary>The cosine and sine of each whole degree the angular sweep measures, computed once rather than on every sweep.</summary>
+    private static readonly float[] SweepCos = SweepTable(cosine: true);
+    private static readonly float[] SweepSin = SweepTable(cosine: false);
+
+    private static float[] SweepTable(bool cosine)
+    {
+        var table = new float[90];
+        for (var degrees = 0; degrees < 90; degrees++)
+        {
+            var radians = degrees * (Math.PI / 180d);
+            table[degrees] = (float)(cosine ? Math.Cos(radians) : Math.Sin(radians));
+        }
+        return table;
+    }
+
     /// <summary>
     /// Refines the horizontal and vertical module sizes independently by walking dark-light-dark runs from the finder center.
     /// Keeping both estimates lets the decoder read symbols rendered into a non-square rectangle.
@@ -75,9 +90,8 @@ internal static class FinderAxisEstimator
         var maxRunLength = candidate.ModuleSize * MaxAngularSweepRunModules;
         for (var degrees = 0; degrees < 90; degrees++)
         {
-            var radians = degrees * (Math.PI / 180d);
-            var cos = (float)Math.Cos(radians);
-            var sin = (float)Math.Sin(radians);
+            var cos = SweepCos[degrees];
+            var sin = SweepSin[degrees];
             var uSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, cos, sin, maxRunLength);
             var vSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, -sin, cos, maxRunLength);
             uSizes[degrees] = uSize;
