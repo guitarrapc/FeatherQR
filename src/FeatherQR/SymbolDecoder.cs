@@ -18,6 +18,7 @@ public static class SymbolDecoder
     /// <summary>
     /// Finds and decodes every symbol of any symbology in a grayscale image.
     /// </summary>
+    /// <remarks>Allocates the array returned and the texts, and nothing else.</remarks>
     /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a symbol composited against black is not detected.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>

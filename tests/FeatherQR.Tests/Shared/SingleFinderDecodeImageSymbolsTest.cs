@@ -54,14 +54,14 @@ public class SingleFinderDecodeImageSymbolsTest
     [Arguments(TestSymbology.RmQR)]
     public async Task Array_GridOfMoreThanItsFirstRoom_ReadsEverySymbolOnce(TestSymbology symbology)
     {
-        // Twelve symbols, more than the array form's room holds before it grows
-        var (bitmap, luminance) = Sheet(symbology, 4, 3);
+        // Eighteen symbols, more than the array form's first room of sixteen holds
+        var (bitmap, luminance) = symbology == TestSymbology.MicroQR ? Sheet(symbology, 6, 3) : Sheet(symbology, 3, 6);
         using var _ = bitmap;
 
         var results = Array(symbology, luminance, bitmap.Width, bitmap.Height);
 
-        await Assert.That(results.Length).IsEqualTo(12);
-        await Assert.That(results.Select(static r => r.Text).Distinct().Count()).IsEqualTo(12);
+        await Assert.That(results.Length).IsEqualTo(18);
+        await Assert.That(results.Select(static r => r.Text).Distinct().Count()).IsEqualTo(18);
         await Assert.That(results.All(static r => r.Success && r.Status == DecodeStatus.Success)).IsTrue();
     }
 

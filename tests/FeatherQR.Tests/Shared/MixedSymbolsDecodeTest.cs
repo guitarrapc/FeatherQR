@@ -1,3 +1,4 @@
+using System.Buffers;
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.MicroQR;
 using FeatherQR.Internals.RmQR;
@@ -537,12 +538,33 @@ public class MixedSymbolsDecodeTest
         await Assert.That(room[1]).IsEqualTo(other);
         await Assert.That(room[2]).IsEqualTo(read.Single(r => r.Text == drawn[2].Text));
 
-        var growing = new QRCodeDecodeResult[2];
+        // The growing form's room is rented, as the array form rents it
+        var growing = ArrayPool<QRCodeDecodeResult>.Shared.Rent(2);
         growing[0] = first;
         growing[1] = other;
         var grownCount = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, Histogram(luminance), ref growing, seeded: 2, CancellationToken.None);
         await Assert.That(grownCount).IsEqualTo(3);
         await Assert.That(growing.Take(3)).IsEquivalentTo(room.Take(3), CollectionOrdering.Matching);
+        ArrayPool<QRCodeDecodeResult>.Shared.Return(growing, clearArray: true);
+    }
+
+    /// <summary>The growing form's room, rented and full, is replaced by a larger rental: eighteen Standard QR codes through a room of sixteen are all read, as the array form reads them.</summary>
+    [Test]
+    public async Task StandardQRBeside_RoomFull_GrowsFromThePool()
+    {
+        var symbols = Enumerable.Range(0, 18).Select(i => (Symbology.StandardQR, Text(Symbology.StandardQR, i))).ToList();
+        var (luminance, width, height, _) = RenderSheet(symbols, 6, 4f, 0f, 0f);
+        var entry = QRImageDecoder.DecodeSymbols(luminance, width, height);
+        await Assert.That(entry.Length).IsEqualTo(18);
+
+        var growing = ArrayPool<QRCodeDecodeResult>.Shared.Rent(16);
+        // The premise: the room holds sixteen, so the seventeenth read grows it
+        await Assert.That(growing.Length).IsEqualTo(16);
+        var count = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, Histogram(luminance), ref growing, seeded: 0, CancellationToken.None);
+
+        await Assert.That(count).IsEqualTo(18);
+        await Assert.That(growing.Take(count)).IsEquivalentTo(entry, CollectionOrdering.Matching);
+        ArrayPool<QRCodeDecodeResult>.Shared.Return(growing, clearArray: true);
     }
 
     private static int[] Histogram(byte[] luminance)
@@ -567,11 +589,12 @@ public class MixedSymbolsDecodeTest
 
         var room = new QRCodeDecodeResult[16];
         var count = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, Histogram(luminance), room, seeded: 0);
-        var growing = new QRCodeDecodeResult[1];
+        var growing = ArrayPool<QRCodeDecodeResult>.Shared.Rent(1);
         var grownCount = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, Histogram(luminance), ref growing, seeded: 0, CancellationToken.None);
 
         await Assert.That(room.Take(count)).IsEquivalentTo(entry, CollectionOrdering.Matching);
         await Assert.That(growing.Take(grownCount)).IsEquivalentTo(entry, CollectionOrdering.Matching);
+        ArrayPool<QRCodeDecodeResult>.Shared.Return(growing, clearArray: true);
     }
 
     /// <summary>

@@ -28,8 +28,8 @@ namespace FeatherQR;
 /// </remarks>
 internal static class MixedImageDecoder
 {
-    /// <summary>The room past the symbols read so far that Standard QR's second read starts with, doubled each time it fills.</summary>
-    private const int GrowingRoom = 8;
+    /// <summary>The room each read of the array form starts with, the smallest array the pool rents, doubled each time it fills.</summary>
+    private const int GrowingRoom = 16;
 
     /// <summary>
     /// Decodes every symbol of a grayscale image, of any of the three symbologies, into <paramref name="symbols"/>, as many as it has room for, each once.
@@ -89,39 +89,48 @@ internal static class MixedImageDecoder
         luminance = luminance.Slice(0, pixelCount);
 
         var rentedHistogram = ArrayPool<int>.Shared.Rent(Binarizer.HistogramBins);
+        // Standard QR's room, which its second read fills behind every symbol read before it, and the single-finder scan's
+        var standard = ArrayPool<QRCodeDecodeResult>.Shared.Rent(GrowingRoom);
+        var single = ArrayPool<SymbolDecodeResult>.Shared.Rent(GrowingRoom);
         try
         {
             var histogram = rentedHistogram.AsSpan(0, Binarizer.HistogramBins);
             Binarizer.FillHistogram(luminance, histogram);
-            var standard = new QRCodeDecodeResult[GrowingRoom];
             var standardCount = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, ref standard, seeded: 0, cancellationToken);
             var decoder = new SingleFinderDecoder(standard, standardCount, rentedHistogram);
-            var single = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, cancellationToken);
-            var read = standardCount + single.Length;
+            var singleCount = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, ref single, cancellationToken);
+            var read = standardCount + singleCount;
             if (read == 0)
                 return [];
 
             var total = read;
-            var room = standard;
-            if (single.Length != 0)
+            if (singleCount != 0)
             {
-                room = new QRCodeDecodeResult[read + GrowingRoom];
-                standard.AsSpan(0, standardCount).CopyTo(room);
-                for (var i = 0; i < single.Length; i++)
-                    room[standardCount + i] = TakenAsRead(single[i]);
-                total = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, ref room, read, cancellationToken);
+                if (standard.Length < read)
+                {
+                    var grown = ArrayPool<QRCodeDecodeResult>.Shared.Rent(read);
+                    standard.AsSpan(0, standardCount).CopyTo(grown);
+                    ArrayPool<QRCodeDecodeResult>.Shared.Return(standard, clearArray: true);
+                    standard = grown;
+                }
+                for (var i = 0; i < singleCount; i++)
+                    standard[standardCount + i] = TakenAsRead(single[i]);
+                total = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, ref standard, read, cancellationToken);
             }
 
             var symbols = new SymbolDecodeResult[total];
             for (var i = 0; i < standardCount; i++)
                 symbols[i] = new SymbolDecodeResult(standard[i]);
-            single.CopyTo(symbols, standardCount);
+            single.AsSpan(0, singleCount).CopyTo(symbols.AsSpan(standardCount));
             for (var i = read; i < total; i++)
-                symbols[i] = new SymbolDecodeResult(room[i]);
+                symbols[i] = new SymbolDecodeResult(standard[i]);
             return symbols;
         }
         finally
         {
+            // The rooms hold the texts, which the pool would otherwise keep alive
+            ArrayPool<SymbolDecodeResult>.Shared.Return(single, clearArray: true);
+            ArrayPool<QRCodeDecodeResult>.Shared.Return(standard, clearArray: true);
             ArrayPool<int>.Shared.Return(rentedHistogram);
         }
     }

@@ -4,17 +4,17 @@
 #
 #   dotnet run tools/mutation_check.cs -- run tools/mutants/mixed-symbology-read.tsv <out-dir> --allow-dirty --filter "/*/*/MixedSymbolsDecodeTest/*" --filter "/*/*/DecodeAllocationTest/Mixed*"
 #
-# Against those two filters 19 of the 20 faults are caught (2026-10-29). MX-histogram-refilled fills the single-finder scan's histogram from
+# Against those two filters 19 of the 20 faults are caught (2026-10-30; QB-grown-room-dropped by StandardQRBeside_RoomFull_GrowsFromThePool since the rooms are rented). MX-histogram-refilled fills the single-finder scan's histogram from
 # the pixels again in place of taking the one given, which changes the time only.
 MX-no-second-read-span	src/FeatherQR/MixedImageDecoder.cs	if (single == 0 || read == symbols.Length)	if (true)
-MX-no-second-read-array	src/FeatherQR/MixedImageDecoder.cs	if (single.Length != 0)	if (false)
+MX-no-second-read-array	src/FeatherQR/MixedImageDecoder.cs	if (singleCount != 0)	if (false)
 MX-second-read-seeds-standard-only-span	src/FeatherQR/MixedImageDecoder.cs	DecodeSymbolsBeside(luminance, width, height, histogram, room, read);	DecodeSymbolsBeside(luminance, width, height, histogram, room, count);
-MX-second-read-seeds-standard-only-array	src/FeatherQR/MixedImageDecoder.cs	ref room, read, cancellationToken);	ref room, standardCount, cancellationToken);
-MX-second-read-without-standard-array	src/FeatherQR/MixedImageDecoder.cs	                standard.AsSpan(0, standardCount).CopyTo(room);␤	
+MX-second-read-seeds-standard-only-array	src/FeatherQR/MixedImageDecoder.cs	ref standard, read, cancellationToken);	ref standard, standardCount, cancellationToken);
+MX-second-read-without-standard-array	src/FeatherQR/MixedImageDecoder.cs	                    standard.AsSpan(0, standardCount).CopyTo(grown);␤	
 MX-seeds-without-corners	src/FeatherQR/MixedImageDecoder.cs	WithCorners(symbol.Corners)	WithCorners(default)
 MX-second-read-not-copied-span	src/FeatherQR/MixedImageDecoder.cs	histogram, room, read);␤            for (var i = read; i < total; i++)	histogram, room, read);␤            for (var i = read; i < read; i++)
-MX-second-read-not-copied-array	src/FeatherQR/MixedImageDecoder.cs	single.CopyTo(symbols, standardCount);␤            for (var i = read; i < total; i++)	single.CopyTo(symbols, standardCount);␤            for (var i = read; i < read; i++)
-MX-single-not-copied-array	src/FeatherQR/MixedImageDecoder.cs	            single.CopyTo(symbols, standardCount);␤	
+MX-second-read-not-copied-array	src/FeatherQR/MixedImageDecoder.cs	CopyTo(symbols.AsSpan(standardCount));␤            for (var i = read; i < total; i++)	CopyTo(symbols.AsSpan(standardCount));␤            for (var i = read; i < read; i++)
+MX-single-not-copied-array	src/FeatherQR/MixedImageDecoder.cs	            single.AsSpan(0, singleCount).CopyTo(symbols.AsSpan(standardCount));␤	
 MX-no-skip-inside-standard	src/FeatherQR/MixedImageDecoder.cs	if (IsInsideStandardQR(candidate))	if (false)
 MX-standard-not-passed-span	src/FeatherQR/MixedImageDecoder.cs	new SingleFinderDecoder(rented, count, rentedHistogram)	new SingleFinderDecoder(rented, 0, rentedHistogram)
 MX-standard-not-passed-array	src/FeatherQR/MixedImageDecoder.cs	new SingleFinderDecoder(standard, standardCount, rentedHistogram)	new SingleFinderDecoder(standard, 0, rentedHistogram)
@@ -22,7 +22,7 @@ MX-micro-read-dropped	src/FeatherQR/MixedImageDecoder.cs	                info = 
 MX-rmqr-read-dropped	src/FeatherQR/MixedImageDecoder.cs	                info = new SingleFinderInfo(rmqrInfo);␤                return status;	                info = new SingleFinderInfo(rmqrInfo);␤                return DecodeStatus.NotDetected;
 MX-rmqr-not-tried	src/FeatherQR/MixedImageDecoder.cs	            result.Other(status, charsWritten, new SingleFinderInfo(microInfo));	            result.Other(status, charsWritten, new SingleFinderInfo(microInfo));␤            if (status != DecodeStatus.Success)␤                return result.Report(out charsWritten, out info);
 QB-seeds-not-counted	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	Symbols = symbols, Count = seeded, Growing	Symbols = symbols, Growing
-QB-grown-room-dropped	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	        room = grown;␤	
+QB-grown-room-dropped	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	histogram, room, seeded, ref growing, cancellationToken);␤        }␤        finally␤        {␤            room = growing!;	histogram, room, seeded, ref growing, cancellationToken);␤        }␤        finally␤        {
 MX-histogram-not-copied	src/FeatherQR/MixedImageDecoder.cs	=> _histogram.AsSpan(0, Binarizer.HistogramBins).CopyTo(histogram);	=> histogram.Clear();
 MX-histogram-refilled	src/FeatherQR/MixedImageDecoder.cs	=> _histogram.AsSpan(0, Binarizer.HistogramBins).CopyTo(histogram);	=> Binarizer.FillHistogram(luminance, histogram);
 QB-histogram-refilled	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	        imageHistogram.CopyTo(histogram);	        Binarizer.FillHistogram(luminance, histogram);

@@ -11,8 +11,8 @@ internal static partial class QRImageDecoder
     /// <summary>The candidates a reading's list has room for, every row scanned: 1,365 symbols' finders.</summary>
     private const int MaxSymbolCandidates = 4096;
 
-    /// <summary>The room the array form starts with, doubled each time it fills.</summary>
-    private const int GrowingRoom = 8;
+    /// <summary>The room the array form starts with, the smallest array the pool rents, doubled each time it fills.</summary>
+    private const int GrowingRoom = 16;
 
     /// <summary>How many times the passes are run over one image at most.</summary>
     private const int MaxSymbolRounds = 2;
@@ -25,7 +25,7 @@ internal static partial class QRImageDecoder
 
         public int Count;
 
-        /// <summary>The array form's room, which grows where the caller's room fills: <c>null</c> for the caller's room.</summary>
+        /// <summary>The array form's room, rented from the pool, which grows where the caller's room fills: <c>null</c> for the caller's room.</summary>
         public QRCodeDecodeResult[]? Growing;
 
         /// <summary>Checked before each symbol is tried, never inside one symbol's read.</summary>
@@ -50,8 +50,10 @@ internal static partial class QRImageDecoder
             if (Count == Symbols.Length)
             {
                 // Only the array form gets here: the passes stop before a symbol the caller's room has no space for
-                var grown = new QRCodeDecodeResult[Symbols.Length * 2];
+                var grown = ArrayPool<QRCodeDecodeResult>.Shared.Rent(Symbols.Length * 2);
                 Symbols.CopyTo(grown);
+                // The room holds the texts, which the pool would otherwise keep alive
+                ArrayPool<QRCodeDecodeResult>.Shared.Return(Growing!, clearArray: true);
                 Growing = grown;
                 Symbols = grown;
             }
@@ -104,7 +106,8 @@ internal static partial class QRImageDecoder
     {
         if (symbols.IsEmpty)
             return 0;
-        return DecodeSymbolsCore(luminance, width, height, symbols, growing: null, cancellationToken, out _);
+        QRCodeDecodeResult[]? none = null;
+        return DecodeSymbolsCore(luminance, width, height, symbols, ref none, cancellationToken);
     }
 
     /// <summary>
@@ -112,18 +115,45 @@ internal static partial class QRImageDecoder
     /// </summary>
     /// <remarks>
     /// The room grows as it fills instead of ending the passes, so the image is read once however many symbols it holds.
+    /// The array returned and the texts are allocated, and nothing else: the room is rented.
     /// </remarks>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check.</exception>
     internal static QRCodeDecodeResult[] DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, CancellationToken cancellationToken = default)
     {
-        var room = new QRCodeDecodeResult[GrowingRoom];
-        var count = DecodeSymbolsCore(luminance, width, height, room, room, cancellationToken, out var grown);
-        return count == grown.Length ? grown : grown.AsSpan(0, count).ToArray();
+        var room = ArrayPool<QRCodeDecodeResult>.Shared.Rent(GrowingRoom);
+        try
+        {
+            var count = DecodeSymbolsGrowing(luminance, width, height, ref room, cancellationToken);
+            return count == 0 ? [] : room.AsSpan(0, count).ToArray();
+        }
+        finally
+        {
+            // The room holds the texts, which the pool would otherwise keep alive
+            ArrayPool<QRCodeDecodeResult>.Shared.Return(room, clearArray: true);
+        }
     }
 
-    private static int DecodeSymbolsCore(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> symbols, QRCodeDecodeResult[]? growing, CancellationToken cancellationToken, out QRCodeDecodeResult[] grown)
+    /// <summary>
+    /// The array form's read into <paramref name="room"/>, an array rented from <see cref="ArrayPool{T}.Shared"/>: each time it fills, a rental of twice its length takes its place and it goes back to the pool cleared. The caller returns the last, after a cancel too.
+    /// </summary>
+    private static int DecodeSymbolsGrowing(ReadOnlySpan<byte> luminance, int width, int height, ref QRCodeDecodeResult[] room, CancellationToken cancellationToken)
     {
-        grown = growing ?? [];
+        QRCodeDecodeResult[]? growing = room;
+        try
+        {
+            return DecodeSymbolsCore(luminance, width, height, room, ref growing, cancellationToken);
+        }
+        finally
+        {
+            room = growing!;
+        }
+    }
+
+    /// <summary>
+    /// The rounds into <paramref name="symbols"/>. <paramref name="growing"/> is the array form's room, replaced by the one the rounds ended with, after a cancel too, so that the caller returns that one, and <c>null</c> for the caller's room.
+    /// </summary>
+    private static int DecodeSymbolsCore(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> symbols, ref QRCodeDecodeResult[]? growing, CancellationToken cancellationToken)
+    {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
             return 0;
         luminance = luminance.Slice(0, pixelCount);
@@ -131,10 +161,10 @@ internal static partial class QRImageDecoder
         // The version is not known before a symbol reads, so the text buffer is the largest symbol's
         var maxChars = QRMatrixDecoder.GetMaxCharCount(40);
         var rentedChars = ArrayPool<char>.Shared.Rent(maxChars);
+        Span<FinderPattern> left = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+        var search = new SymbolSearch { Symbols = symbols, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
         try
         {
-            Span<FinderPattern> left = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var search = new SymbolSearch { Symbols = symbols, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
             for (var round = 0; round < MaxSymbolRounds; round++)
             {
                 var before = search.Count;
@@ -144,11 +174,11 @@ internal static partial class QRImageDecoder
                 if (search.Count == before || search.IsFull || !IsWorthAnotherRound(search.Left.Slice(0, search.LeftCount), search.LeftOut, search.Read))
                     break;
             }
-            grown = search.Growing ?? [];
             return search.Count;
         }
         finally
         {
+            growing = search.Growing;
             ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
         }
     }
@@ -168,38 +198,50 @@ internal static partial class QRImageDecoder
     /// <param name="seeded">How many symbols at the start of <paramref name="symbols"/> are taken as read.</param>
     /// <returns>How many symbols the room holds, the seeded ones included.</returns>
     internal static int DecodeSymbolsBeside(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<int> histogram, Span<QRCodeDecodeResult> symbols, int seeded)
-        => seeded >= symbols.Length ? seeded : DecodeSymbolsBesideCore(luminance, width, height, histogram, symbols, seeded, growing: null, CancellationToken.None, out _);
+    {
+        if (seeded >= symbols.Length)
+            return seeded;
+        QRCodeDecodeResult[]? none = null;
+        return DecodeSymbolsBesideCore(luminance, width, height, histogram, symbols, seeded, ref none, CancellationToken.None);
+    }
 
     /// <summary>
     /// Decodes every QR code of a grayscale image that is not one of the first <paramref name="seeded"/> symbols of <paramref name="room"/>, as <see cref="DecodeSymbolsBeside(ReadOnlySpan{byte}, int, int, ReadOnlySpan{int}, Span{QRCodeDecodeResult}, int)"/> does in a room that grows as it fills.
     /// </summary>
-    /// <remarks><paramref name="room"/> holds the seeded symbols and at least one place more, and is replaced by one twice its size each time it fills.</remarks>
+    /// <remarks>
+    /// <paramref name="room"/> is an array rented from <see cref="ArrayPool{T}.Shared"/> holding the seeded symbols: each time it fills, a rental of twice its length takes its place and it goes back to the pool cleared. The caller returns the last, after a cancel too.
+    /// </remarks>
     /// <returns>How many symbols the room holds, the seeded ones included.</returns>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check.</exception>
     internal static int DecodeSymbolsBeside(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<int> histogram, ref QRCodeDecodeResult[] room, int seeded, CancellationToken cancellationToken)
     {
         // The room doubles as it fills, so an empty one could not grow
         System.Diagnostics.Debug.Assert(room.Length > 0);
-        var count = DecodeSymbolsBesideCore(luminance, width, height, histogram, room, seeded, room, cancellationToken, out var grown);
-        room = grown;
-        return count;
+        QRCodeDecodeResult[]? growing = room;
+        try
+        {
+            return DecodeSymbolsBesideCore(luminance, width, height, histogram, room, seeded, ref growing, cancellationToken);
+        }
+        finally
+        {
+            room = growing!;
+        }
     }
 
     /// <summary><see cref="DecodeSymbolsCore"/> with the first <paramref name="seeded"/> symbols of the room taken as read, and the image's histogram given.</summary>
     /// <remarks>The rounds are that method's, written out again: shared through a method the JIT inlines, they moved that method's stack frame.</remarks>
-    private static int DecodeSymbolsBesideCore(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<int> histogram, Span<QRCodeDecodeResult> symbols, int seeded, QRCodeDecodeResult[]? growing, CancellationToken cancellationToken, out QRCodeDecodeResult[] grown)
+    private static int DecodeSymbolsBesideCore(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<int> histogram, Span<QRCodeDecodeResult> symbols, int seeded, ref QRCodeDecodeResult[]? growing, CancellationToken cancellationToken)
     {
-        grown = growing ?? [];
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
             return seeded;
         luminance = luminance.Slice(0, pixelCount);
 
         var maxChars = QRMatrixDecoder.GetMaxCharCount(40);
         var rentedChars = ArrayPool<char>.Shared.Rent(maxChars);
+        Span<FinderPattern> left = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+        var search = new SymbolSearch { Symbols = symbols, Count = seeded, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
         try
         {
-            Span<FinderPattern> left = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var search = new SymbolSearch { Symbols = symbols, Count = seeded, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
             for (var round = 0; round < MaxSymbolRounds; round++)
             {
                 var before = search.Count;
@@ -209,11 +251,11 @@ internal static partial class QRImageDecoder
                 if (search.Count == before || search.IsFull || !IsWorthAnotherRound(search.Left.Slice(0, search.LeftCount), search.LeftOut, search.Read))
                     break;
             }
-            grown = search.Growing ?? [];
             return search.Count;
         }
         finally
         {
+            growing = search.Growing;
             ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
         }
     }

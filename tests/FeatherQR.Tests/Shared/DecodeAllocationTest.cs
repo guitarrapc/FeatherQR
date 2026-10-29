@@ -53,6 +53,14 @@ public class DecodeAllocationTest
         return fewest;
     }
 
+    /// <summary>What an array of <typeparamref name="T"/> with a place for each text and strings of <paramref name="lengths"/> cost, measured as the calls are: what an array form may allocate.</summary>
+    private static long ArrayAndTextsBytes<T>(int[] lengths) => SteadyStateBytes(() =>
+    {
+        GC.KeepAlive(new T[lengths.Length]);
+        foreach (var length in lengths)
+            GC.KeepAlive(new string('x', length));
+    });
+
     private static readonly int MaxStandardQRChars = QRCodeDecoder.GetMaxDecodedLength(40);
     private static readonly int MaxMicroQRChars = Enum.GetValues<MicroQRVersion>().Max(MicroQRCodeDecoder.GetMaxDecodedLength);
     private static readonly int MaxRmQRChars = Enum.GetValues<RmQRVersion>().Max(RmQRCodeDecoder.GetMaxDecodedLength);
@@ -778,6 +786,34 @@ public class DecodeAllocationTest
         await Assert.That(allocated).IsEqualTo(0);
     }
 
+    /// <summary>The array form allocates the array it returns and the texts, and nothing else: for a grid of nine symbols, one symbol, and eighteen, more than its first room holds.</summary>
+    [Test]
+    [Arguments(3, 3)]
+    [Arguments(1, 1)]
+    [Arguments(6, 3)]
+    public async Task StandardQR_SeveralSymbols_ArrayForm_AllocatesOnlyTheArrayAndTexts(int across, int down)
+    {
+        var (luminance, width, height, _) = TripleSelectionDecodeTest.RenderGrid(across, down, 0f, static i => $"FQR LOTS {i}");
+        var results = QRImageDecoder.DecodeSymbols(luminance, width, height);
+        await Assert.That(results.Length).IsEqualTo(across * down);
+
+        var expected = ArrayAndTextsBytes<QRCodeDecodeResult>([.. results.Select(static s => s.Text.Length)]);
+        var allocated = SteadyStateBytes(() => GC.KeepAlive(QRImageDecoder.DecodeSymbols(luminance, width, height)));
+
+        await Assert.That(allocated).IsEqualTo(expected);
+    }
+
+    /// <summary>The array form returns the empty array on an image with no symbol, and allocates nothing.</summary>
+    [Test]
+    [MethodDataSource(nameof(RejectedByStandardQR))]
+    public async Task StandardQR_SeveralSymbols_NoSymbol_ArrayForm_AllocatesNothing(RejectedImage rejected)
+    {
+        var (luminance, width, height) = Render(rejected);
+        await Assert.That(QRImageDecoder.DecodeSymbols(luminance, width, height)).IsEmpty();
+
+        await Assert.That(SteadyStateBytes(() => GC.KeepAlive(QRImageDecoder.DecodeSymbols(luminance, width, height)))).IsEqualTo(0L);
+    }
+
     #endregion
 
     #region Micro QR and rMQR: several symbols
@@ -837,6 +873,57 @@ public class DecodeAllocationTest
         await Assert.That(SteadyStateBytes(() => RmQRImageDecoder.DecodeSymbols(luminance, width, height, symbols))).IsEqualTo(0L);
     }
 
+    /// <summary>The array forms allocate the array they return and the texts, and nothing else: for a grid of nine symbols, one symbol, and eighteen, more than the first room holds.</summary>
+    [Test]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.MicroQR, 3, 3)]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.MicroQR, 1, 1)]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.MicroQR, 6, 3)]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.RmQR, 3, 3)]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.RmQR, 1, 1)]
+    [Arguments(SingleFinderSymbolsDecodeTest.Symbology.RmQR, 3, 6)]
+    public async Task SingleFinder_SeveralSymbols_ArrayForm_AllocatesOnlyTheArrayAndTexts(SingleFinderSymbolsDecodeTest.Symbology symbology, int across, int down)
+    {
+        var (luminance, width, height) = SingleFinderSymbolsDecodeTest.RenderGrid(symbology, across, down);
+        if (symbology == SingleFinderSymbolsDecodeTest.Symbology.MicroQR)
+        {
+            var results = MicroQRImageDecoder.DecodeSymbols(luminance, width, height);
+            await Assert.That(results.Length).IsEqualTo(across * down);
+            var expected = ArrayAndTextsBytes<MicroQRCodeDecodeResult>([.. results.Select(static s => s.Text.Length)]);
+
+            await Assert.That(SteadyStateBytes(() => GC.KeepAlive(MicroQRImageDecoder.DecodeSymbols(luminance, width, height)))).IsEqualTo(expected);
+        }
+        else
+        {
+            var results = RmQRImageDecoder.DecodeSymbols(luminance, width, height);
+            await Assert.That(results.Length).IsEqualTo(across * down);
+            var expected = ArrayAndTextsBytes<RmQRCodeDecodeResult>([.. results.Select(static s => s.Text.Length)]);
+
+            await Assert.That(SteadyStateBytes(() => GC.KeepAlive(RmQRImageDecoder.DecodeSymbols(luminance, width, height)))).IsEqualTo(expected);
+        }
+    }
+
+    /// <summary>The array forms return the empty array on an image with no symbol of the symbology, and allocate nothing.</summary>
+    [Test]
+    [MethodDataSource(nameof(RejectedByMicroQR))]
+    public async Task MicroQR_SeveralSymbols_NoSymbol_ArrayForm_AllocatesNothing(RejectedImage rejected)
+    {
+        var (luminance, width, height) = Render(rejected);
+        await Assert.That(MicroQRImageDecoder.DecodeSymbols(luminance, width, height)).IsEmpty();
+
+        await Assert.That(SteadyStateBytes(() => GC.KeepAlive(MicroQRImageDecoder.DecodeSymbols(luminance, width, height)))).IsEqualTo(0L);
+    }
+
+    /// <inheritdoc cref="MicroQR_SeveralSymbols_NoSymbol_ArrayForm_AllocatesNothing"/>
+    [Test]
+    [MethodDataSource(nameof(RejectedByRmQR))]
+    public async Task RmQR_SeveralSymbols_NoSymbol_ArrayForm_AllocatesNothing(RejectedImage rejected)
+    {
+        var (luminance, width, height) = Render(rejected);
+        await Assert.That(RmQRImageDecoder.DecodeSymbols(luminance, width, height)).IsEmpty();
+
+        await Assert.That(SteadyStateBytes(() => GC.KeepAlive(RmQRImageDecoder.DecodeSymbols(luminance, width, height)))).IsEqualTo(0L);
+    }
+
     #endregion
 
     #region Every symbology: several symbols
@@ -880,6 +967,38 @@ public class DecodeAllocationTest
         await Assert.That(MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols)).IsEqualTo(0);
 
         await Assert.That(SteadyStateBytes(() => MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols))).IsEqualTo(0L);
+    }
+
+    /// <summary>
+    /// The array form allocates the array it returns and the texts, and nothing else: on the sheets of the span form's test, and on sheets of eighteen, where Standard QR's room holds more than its first room with the seeds, and the scan's with its reads.
+    /// </summary>
+    [Test]
+    [Arguments(MixedSymbolsDecodeTest.Mix.AllThree, 3, 2)]
+    [Arguments(MixedSymbolsDecodeTest.Mix.StandardAndMicro, 1, 1)]
+    [Arguments(MixedSymbolsDecodeTest.Mix.MicroAndRmQR, 2, 1)]
+    [Arguments(MixedSymbolsDecodeTest.Mix.AllThree, 3, 6)]
+    [Arguments(MixedSymbolsDecodeTest.Mix.MicroAndRmQR, 3, 6)]
+    public async Task Mixed_SeveralSymbols_ArrayForm_AllocatesOnlyTheArrayAndTexts(MixedSymbolsDecodeTest.Mix mix, int across, int down)
+    {
+        var (luminance, width, height) = MixedSymbolsDecodeTest.RenderGrid(mix, across, down);
+        var results = MixedImageDecoder.DecodeSymbols(luminance, width, height);
+        await Assert.That(results.Length).IsEqualTo(across * down);
+
+        var expected = ArrayAndTextsBytes<SymbolDecodeResult>([.. results.Select(static s => s.Text.Length)]);
+        var allocated = SteadyStateBytes(() => GC.KeepAlive(MixedImageDecoder.DecodeSymbols(luminance, width, height)));
+
+        await Assert.That(allocated).IsEqualTo(expected);
+    }
+
+    /// <summary>The array form returns the empty array on an image with no symbol of any symbology, and allocates nothing.</summary>
+    [Test]
+    [MethodDataSource(nameof(RejectedByAll))]
+    public async Task Mixed_SeveralSymbols_NoSymbol_ArrayForm_AllocatesNothing(RejectedImage rejected)
+    {
+        var (luminance, width, height) = Render(rejected);
+        await Assert.That(MixedImageDecoder.DecodeSymbols(luminance, width, height)).IsEmpty();
+
+        await Assert.That(SteadyStateBytes(() => GC.KeepAlive(MixedImageDecoder.DecodeSymbols(luminance, width, height)))).IsEqualTo(0L);
     }
 
     #endregion

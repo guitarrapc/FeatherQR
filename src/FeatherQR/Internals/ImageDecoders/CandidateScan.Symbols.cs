@@ -32,8 +32,8 @@ internal static partial class CandidateScan
     /// </summary>
     private const int MaxSymbolCandidates = 4096;
 
-    /// <summary>The room the array form starts with, doubled each time it fills.</summary>
-    private const int GrowingRoom = 8;
+    /// <summary>The room the array form starts with, the smallest array the pool rents, doubled each time it fills.</summary>
+    private const int GrowingRoom = 16;
 
     /// <summary>What one call of <see cref="DecodeSymbols{TDecoder, TInfo, TResult}(ref TDecoder, ReadOnlySpan{byte}, int, int, Span{TResult}, CancellationToken)"/> carries through its passes.</summary>
     private ref struct SymbolSearch<TResult>
@@ -43,7 +43,7 @@ internal static partial class CandidateScan
 
         public int Count;
 
-        /// <summary>The array form's room, which grows where the caller's room fills: <c>null</c> for the caller's room.</summary>
+        /// <summary>The array form's room, rented from the pool, which grows where the caller's room fills: <c>null</c> for the caller's room.</summary>
         public TResult[]? Growing;
 
         /// <summary>Checked as each reading starts and before each candidate is decoded, never inside a candidate's decode.</summary>
@@ -67,8 +67,10 @@ internal static partial class CandidateScan
             if (Count == Symbols.Length)
             {
                 // Only the array form gets here: the passes stop before a symbol the caller's room has no space for
-                var grown = new TResult[Symbols.Length * 2];
+                var grown = ArrayPool<TResult>.Shared.Rent(Symbols.Length * 2);
                 Symbols.CopyTo(grown);
+                // The room holds the texts, which the pool would otherwise keep alive
+                ArrayPool<TResult>.Shared.Return(Growing!, clearArray: true);
                 Growing = grown;
                 Symbols = grown;
             }
@@ -96,26 +98,62 @@ internal static partial class CandidateScan
     {
         if (symbols.IsEmpty)
             return 0;
-        return DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, symbols, growing: null, cancellationToken, out _);
+        TResult[]? none = null;
+        return DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, symbols, ref none, cancellationToken);
     }
 
     /// <summary>
     /// Decodes every symbol of a grayscale image, as <see cref="DecodeSymbols{TDecoder, TInfo, TResult}(ref TDecoder, ReadOnlySpan{byte}, int, int, Span{TResult}, CancellationToken)"/> does with room for all of them.
     /// </summary>
-    /// <remarks>The room grows as it fills instead of ending the passes, so the image is read once however many symbols it holds.</remarks>
+    /// <remarks>
+    /// The room grows as it fills instead of ending the passes, so the image is read once however many symbols it holds.
+    /// The array returned and the texts are allocated, and nothing else: the room is rented.
+    /// </remarks>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check.</exception>
     internal static TResult[] DecodeSymbols<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, CancellationToken cancellationToken = default)
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
     {
-        var room = new TResult[GrowingRoom];
-        var count = DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, room, room, cancellationToken, out var grown);
-        return count == grown.Length ? grown : grown.AsSpan(0, count).ToArray();
+        var room = ArrayPool<TResult>.Shared.Rent(GrowingRoom);
+        try
+        {
+            var count = DecodeSymbols<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, ref room, cancellationToken);
+            return count == 0 ? [] : room.AsSpan(0, count).ToArray();
+        }
+        finally
+        {
+            // The room holds the texts, which the pool would otherwise keep alive
+            ArrayPool<TResult>.Shared.Return(room, clearArray: true);
+        }
     }
 
-    private static int DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, Span<TResult> symbols, TResult[]? growing, CancellationToken cancellationToken, out TResult[] grown)
+    /// <summary>
+    /// Decodes every symbol of a grayscale image into <paramref name="room"/>, an array rented from <see cref="ArrayPool{T}.Shared"/>, as <see cref="DecodeSymbols{TDecoder, TInfo, TResult}(ref TDecoder, ReadOnlySpan{byte}, int, int, CancellationToken)"/> does.
+    /// </summary>
+    /// <remarks>
+    /// Each time the room fills, a rental of twice its length takes its place and it goes back to the pool cleared. The caller returns the last, with its texts cleared, after a cancel too.
+    /// </remarks>
+    /// <returns>How many symbols the room holds.</returns>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check, the symbols read so far in <paramref name="room"/>.</exception>
+    internal static int DecodeSymbols<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, ref TResult[] room, CancellationToken cancellationToken)
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
     {
-        grown = growing ?? [];
+        TResult[]? growing = room;
+        try
+        {
+            return DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, room, ref growing, cancellationToken);
+        }
+        finally
+        {
+            room = growing!;
+        }
+    }
+
+    /// <summary>
+    /// The passes into <paramref name="symbols"/>. <paramref name="growing"/> is the array form's room, replaced by the one the passes ended with, after a cancel too, so that the caller returns that one, and <c>null</c> for the caller's room.
+    /// </summary>
+    private static int DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, Span<TResult> symbols, ref TResult[]? growing, CancellationToken cancellationToken)
+        where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
+    {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
             return 0;
         luminance = luminance.Slice(0, pixelCount);
@@ -132,26 +170,26 @@ internal static partial class CandidateScan
         var rowCount = FinderPatternFinder.StridedRowCount(height);
         var rentedRowEnds = growing is null ? ArrayPool<int>.Shared.Rent(rowCount) : null;
         var rentedImage = ArrayPool<byte>.Shared.Rent(pixelCount);
+        var search = new SymbolSearch<TResult>
+        {
+            Symbols = symbols,
+            Growing = growing,
+            Token = cancellationToken,
+            Chars = rentedChars.AsSpan(0, maxChars),
+            Modules = rentedModules.AsSpan(0, moduleLength),
+            Kept = rentedKept is null ? default : MemoryMarshal.Cast<byte, FinderPattern>(rentedKept.AsSpan()).Slice(0, MaxSymbolCandidates),
+            RowEnds = rentedRowEnds is null ? default : rentedRowEnds.AsSpan(0, rowCount),
+        };
         try
         {
-            var search = new SymbolSearch<TResult>
-            {
-                Symbols = symbols,
-                Growing = growing,
-                Token = cancellationToken,
-                Chars = rentedChars.AsSpan(0, maxChars),
-                Modules = rentedModules.AsSpan(0, moduleLength),
-                Kept = rentedKept is null ? default : MemoryMarshal.Cast<byte, FinderPattern>(rentedKept.AsSpan()).Slice(0, MaxSymbolCandidates),
-                RowEnds = rentedRowEnds is null ? default : rentedRowEnds.AsSpan(0, rowCount),
-            };
             var strided = MemoryMarshal.Cast<byte, FinderPattern>(rentedStrided.AsSpan()).Slice(0, MaxSymbolCandidates);
             var swept = MemoryMarshal.Cast<byte, FinderPattern>(rentedSwept.AsSpan()).Slice(0, MaxSymbolCandidates);
             DecodeSymbolsInPasses<TDecoder, TInfo, TResult>(ref decoder, ref search, luminance, width, height, rentedImage.AsSpan(0, pixelCount), strided, swept);
-            grown = search.Growing ?? [];
             return search.Count;
         }
         finally
         {
+            growing = search.Growing;
             ArrayPool<byte>.Shared.Return(rentedImage, clearArray: false);
             if (rentedRowEnds is not null)
                 ArrayPool<int>.Shared.Return(rentedRowEnds, clearArray: false);

@@ -188,7 +188,7 @@ public class SingleFinderSymbolsDecodeTest
         await AssertFirstIsTheOneSymbolRead(symbology, read, luminance, width, height);
     }
 
-    /// <summary>A grid of 60 through the array form, which starts with room for eight and grows: every symbol is read once.</summary>
+    /// <summary>A grid of 60 through the array form, which starts with room for sixteen and grows: every symbol is read once.</summary>
     [Test]
     [Arguments(Symbology.MicroQR)]
     [Arguments(Symbology.RmQR)]
