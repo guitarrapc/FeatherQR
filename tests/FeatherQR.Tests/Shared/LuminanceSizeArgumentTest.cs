@@ -1,7 +1,7 @@
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The luminance reads of the three symbologies refuse a width or height below one by naming it, apart from a buffer too short for the size.
+/// The luminance reads of the three symbologies, and the read for every symbology, refuse a width or height below one by naming it, apart from a buffer too short for the size.
 /// </summary>
 public class LuminanceSizeArgumentTest
 {
@@ -22,6 +22,8 @@ public class LuminanceSizeArgumentTest
             ("rMQR TryDecodeImage span", () => RmQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[64], out _, out _)),
             ("rMQR DecodeImageSymbols", () => RmQRCodeDecoder.DecodeImageSymbols(luminance, width, height)),
             ("rMQR DecodeImageSymbols span", () => RmQRCodeDecoder.DecodeImageSymbols(luminance, width, height, new RmQRCodeDecodeResult[4])),
+            ("Every symbology DecodeImageSymbols", () => SymbolDecoder.DecodeImageSymbols(luminance, width, height)),
+            ("Every symbology DecodeImageSymbols span", () => SymbolDecoder.DecodeImageSymbols(luminance, width, height, new SymbolDecodeResult[4])),
         ];
     }
 

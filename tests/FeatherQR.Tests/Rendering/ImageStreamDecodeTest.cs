@@ -419,6 +419,8 @@ public class ImageStreamDecodeTest
         yield return () => new("RmQR Decode", static (s, l) => Task.FromResult(RmQRCodeDecoder.Decode(s, l)));
         yield return () => new("RmQR DecodeSymbolsAsync", static (s, l) => RmQRCodeDecoder.DecodeSymbolsAsync(s, l));
         yield return () => new("RmQR DecodeSymbols", static (s, l) => Task.FromResult(RmQRCodeDecoder.DecodeSymbols(s, l)));
+        yield return () => new("Every symbology DecodeSymbolsAsync", static (s, l) => SymbolDecoder.DecodeSymbolsAsync(s, l));
+        yield return () => new("Every symbology DecodeSymbols", static (s, l) => Task.FromResult(SymbolDecoder.DecodeSymbols(s, l)));
     }
 
     [Test]

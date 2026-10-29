@@ -1,5 +1,5 @@
 // FeatherQR.SkiaSharp
-// 26 exported types
+// 27 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR.SkiaSharp
@@ -318,6 +318,15 @@ namespace FeatherQR.SkiaSharp
         public void SaveTo(Stream output);
         public void SaveToSvg(IBufferWriter<byte> writer);
         public void SaveToSvg(Stream output);
+    }
+
+    public static class SymbolImageDecoder
+    {
+        public static SymbolDecodeResult[] DecodeSymbols(SKBitmap bitmap);
+        public static SymbolDecodeResult[] DecodeSymbols(Stream image);
+        public static SymbolDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
+        public static Task<SymbolDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<SymbolDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
     }
 
     public static class SymbolRenderer

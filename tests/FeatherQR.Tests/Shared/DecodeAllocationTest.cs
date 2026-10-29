@@ -2,7 +2,7 @@ using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.MicroQR;
 using FeatherQR.Internals.RmQR;
 using FeatherQR.Internals.StandardQR;
-using Symbology = FeatherQR.Tests.UnevenLightingDecodeTest.Symbology;
+using TestSymbology = FeatherQR.Tests.UnevenLightingDecodeTest.Symbology;
 
 namespace FeatherQR.Tests;
 
@@ -60,11 +60,11 @@ public class DecodeAllocationTest
     #region Matrix level
 
     /// <summary>A module buffer from the generator's span overload, the smallest version or a large one, quiet zone as given, and which modules of its core are function modules.</summary>
-    private static (byte[] Modules, int Width, int Height, string Content, Func<int, int, bool> IsFunction) Matrix(Symbology symbology, bool large, int quietZone)
+    private static (byte[] Modules, int Width, int Height, string Content, Func<int, int, bool> IsFunction) Matrix(TestSymbology symbology, bool large, int quietZone)
     {
         switch (symbology)
         {
-            case Symbology.StandardQR:
+            case TestSymbology.StandardQR:
                 {
                     // Version 10 is past the matrix decoder's stack budget for its codewords, so its work buffer is rented
                     var (content, version) = large ? ("FQR 2.0 MATRIX LEVEL 0123456789", 10) : ("FQR 2.0", 1);
@@ -76,7 +76,7 @@ public class DecodeAllocationTest
                     var layout = ModulePlacer.GetLayout(version);
                     return (buffer, calculated.Size, calculated.Size, content, (row, column) => (layout.BlockedMask[(row * layout.Size + column) >> 3] & (1 << ((row * layout.Size + column) & 7))) != 0);
                 }
-            case Symbology.MicroQR:
+            case TestSymbology.MicroQR:
                 {
                     var (content, version, level) = large ? ("MICRO QR M4 TEST", MicroQRVersion.M4, MicroQREccLevel.M) : ("12345", MicroQRVersion.M1, MicroQREccLevel.ErrorDetectionOnly);
                     var options = new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone };
@@ -97,16 +97,16 @@ public class DecodeAllocationTest
         }
     }
 
-    private static bool DecodeMatrix(Symbology symbology, byte[] modules, int width, int height, char[] destination, out int charsWritten, out DecodeStatus status)
+    private static bool DecodeMatrix(TestSymbology symbology, byte[] modules, int width, int height, char[] destination, out int charsWritten, out DecodeStatus status)
     {
         bool success;
         switch (symbology)
         {
-            case Symbology.StandardQR:
+            case TestSymbology.StandardQR:
                 success = QRCodeDecoder.TryDecode(modules, width, destination, out charsWritten, out var info);
                 status = info.Status;
                 break;
-            case Symbology.MicroQR:
+            case TestSymbology.MicroQR:
                 success = MicroQRCodeDecoder.TryDecode(modules, width, destination, out charsWritten, out var microInfo);
                 status = microInfo.Status;
                 break;
@@ -118,24 +118,24 @@ public class DecodeAllocationTest
         return success;
     }
 
-    private static char[] Destination(Symbology symbology)
-        => new char[symbology switch { Symbology.StandardQR => MaxStandardQRChars, Symbology.MicroQR => MaxMicroQRChars, _ => MaxRmQRChars }];
+    private static char[] Destination(TestSymbology symbology)
+        => new char[symbology switch { TestSymbology.StandardQR => MaxStandardQRChars, TestSymbology.MicroQR => MaxMicroQRChars, _ => MaxRmQRChars }];
 
     /// <summary>A quiet zone makes the overload copy the core out of the bordered input before it decodes.</summary>
     [Test]
-    [Arguments(Symbology.StandardQR, false, 0)]
-    [Arguments(Symbology.StandardQR, true, 0)]
-    [Arguments(Symbology.StandardQR, false, 4)]
-    [Arguments(Symbology.StandardQR, true, 4)]
-    [Arguments(Symbology.MicroQR, false, 0)]
-    [Arguments(Symbology.MicroQR, true, 0)]
-    [Arguments(Symbology.MicroQR, false, 2)]
-    [Arguments(Symbology.MicroQR, true, 2)]
-    [Arguments(Symbology.RmQR, false, 0)]
-    [Arguments(Symbology.RmQR, true, 0)]
-    [Arguments(Symbology.RmQR, false, 2)]
-    [Arguments(Symbology.RmQR, true, 2)]
-    public async Task Matrix_ReadsWithoutAllocating(Symbology symbology, bool large, int quietZone)
+    [Arguments(TestSymbology.StandardQR, false, 0)]
+    [Arguments(TestSymbology.StandardQR, true, 0)]
+    [Arguments(TestSymbology.StandardQR, false, 4)]
+    [Arguments(TestSymbology.StandardQR, true, 4)]
+    [Arguments(TestSymbology.MicroQR, false, 0)]
+    [Arguments(TestSymbology.MicroQR, true, 0)]
+    [Arguments(TestSymbology.MicroQR, false, 2)]
+    [Arguments(TestSymbology.MicroQR, true, 2)]
+    [Arguments(TestSymbology.RmQR, false, 0)]
+    [Arguments(TestSymbology.RmQR, true, 0)]
+    [Arguments(TestSymbology.RmQR, false, 2)]
+    [Arguments(TestSymbology.RmQR, true, 2)]
+    public async Task Matrix_ReadsWithoutAllocating(TestSymbology symbology, bool large, int quietZone)
     {
         var (modules, width, height, content, _) = Matrix(symbology, large, quietZone);
         var destination = Destination(symbology);
@@ -151,13 +151,13 @@ public class DecodeAllocationTest
     /// Every data module in the lower half of the core inverted, function modules and the format and version information left as drawn: more codewords damaged than any level corrects, so the decode fails in the Reed-Solomon stage, past every buffer the matrix level takes.
     /// </summary>
     [Test]
-    [Arguments(Symbology.StandardQR, false, 0)]
-    [Arguments(Symbology.StandardQR, true, 4)]
-    [Arguments(Symbology.MicroQR, false, 0)]
-    [Arguments(Symbology.MicroQR, true, 2)]
-    [Arguments(Symbology.RmQR, false, 0)]
-    [Arguments(Symbology.RmQR, true, 2)]
-    public async Task Matrix_DamagedPastCorrection_FailsWithoutAllocating(Symbology symbology, bool large, int quietZone)
+    [Arguments(TestSymbology.StandardQR, false, 0)]
+    [Arguments(TestSymbology.StandardQR, true, 4)]
+    [Arguments(TestSymbology.MicroQR, false, 0)]
+    [Arguments(TestSymbology.MicroQR, true, 2)]
+    [Arguments(TestSymbology.RmQR, false, 0)]
+    [Arguments(TestSymbology.RmQR, true, 2)]
+    public async Task Matrix_DamagedPastCorrection_FailsWithoutAllocating(TestSymbology symbology, bool large, int quietZone)
     {
         var (modules, width, height, _, isFunction) = Matrix(symbology, large, quietZone);
         var coreWidth = width - 2 * quietZone;
@@ -189,13 +189,13 @@ public class DecodeAllocationTest
     public async Task Matrix_BadUtf8_ReadsWithoutAllocating(bool eci26, byte[] payload)
     {
         var modules = KanjiSymbolBuilder.StandardQr(NetStandardBuildParityTest.DataStream(eci26, payload, dataCodewords: 19), version: 1, QREccLevel.L, mask: 0);
-        var destination = Destination(Symbology.StandardQR);
+        var destination = Destination(TestSymbology.StandardQR);
 
-        var success = DecodeMatrix(Symbology.StandardQR, modules, 21, 21, destination, out var charsWritten, out var status);
+        var success = DecodeMatrix(TestSymbology.StandardQR, modules, 21, 21, destination, out var charsWritten, out var status);
         await Assert.That(success).IsTrue().Because(status.ToString());
         await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo(System.Text.Encoding.UTF8.GetString(eci26 ? payload : payload[3..]));
 
-        await Assert.That(SteadyStateBytes(() => DecodeMatrix(Symbology.StandardQR, modules, 21, 21, destination, out _, out _))).IsEqualTo(0L);
+        await Assert.That(SteadyStateBytes(() => DecodeMatrix(TestSymbology.StandardQR, modules, 21, 21, destination, out _, out _))).IsEqualTo(0L);
     }
 
     #endregion
@@ -531,7 +531,7 @@ public class DecodeAllocationTest
     }
 
     /// <summary>The scene's premise where the pipeline's own passes decide its path: the passes before the one it is about do not read it.</summary>
-    private static async Task AssertEarlierPassesFail(Symbology symbology, ImageScene scene, Scene image)
+    private static async Task AssertEarlierPassesFail(TestSymbology symbology, ImageScene scene, Scene image)
     {
         if (scene is ImageScene.LightOnDark or ImageScene.FineTexture)
         {
@@ -540,8 +540,8 @@ public class DecodeAllocationTest
             var destination = new char[MaxStandardQRChars];
             var positive = symbology switch
             {
-                Symbology.StandardQR => QRImageDecoder.DecodeLuminanceCore(image.Luminance, histogram, image.Width, image.Height, destination, out _, out _),
-                Symbology.MicroQR => MicroQRImageDecoder.DecodeLuminanceCore(image.Luminance, histogram, image.Width, image.Height, destination, out _, out _),
+                TestSymbology.StandardQR => QRImageDecoder.DecodeLuminanceCore(image.Luminance, histogram, image.Width, image.Height, destination, out _, out _),
+                TestSymbology.MicroQR => MicroQRImageDecoder.DecodeLuminanceCore(image.Luminance, histogram, image.Width, image.Height, destination, out _, out _),
                 _ => RmQRImageDecoder.DecodeLuminanceCore(image.Luminance, histogram, image.Width, image.Height, destination, out _, out _),
             };
             await Assert.That(positive).IsNotEqualTo(DecodeStatus.Success).Because("the global positive pass must not read it");
@@ -561,7 +561,7 @@ public class DecodeAllocationTest
     public async Task StandardQR_Image_ReadsWithoutAllocating(ImageScene scene)
     {
         var image = Render(scene);
-        await AssertEarlierPassesFail(Symbology.StandardQR, scene, image);
+        await AssertEarlierPassesFail(TestSymbology.StandardQR, scene, image);
         var destination = new char[MaxStandardQRChars];
 
         var success = QRCodeDecoder.TryDecodeImage(image.Luminance, image.Width, image.Height, destination, out var charsWritten, out var info);
@@ -576,7 +576,7 @@ public class DecodeAllocationTest
     public async Task MicroQR_Image_ReadsWithoutAllocating(ImageScene scene)
     {
         var image = RenderMicroQR(scene);
-        await AssertEarlierPassesFail(Symbology.MicroQR, scene, image);
+        await AssertEarlierPassesFail(TestSymbology.MicroQR, scene, image);
         var destination = new char[MaxMicroQRChars];
 
         var success = MicroQRCodeDecoder.TryDecodeImage(image.Luminance, image.Width, image.Height, destination, out var charsWritten, out var info);
@@ -591,7 +591,7 @@ public class DecodeAllocationTest
     public async Task RmQR_Image_ReadsWithoutAllocating(ImageScene scene)
     {
         var image = RenderRmQR(scene);
-        await AssertEarlierPassesFail(Symbology.RmQR, scene, image);
+        await AssertEarlierPassesFail(TestSymbology.RmQR, scene, image);
         var destination = new char[MaxRmQRChars];
 
         var success = RmQRCodeDecoder.TryDecodeImage(image.Luminance, image.Width, image.Height, destination, out var charsWritten, out var info);
@@ -852,7 +852,7 @@ public class DecodeAllocationTest
     public async Task Mixed_SeveralSymbols_AllocatesOnlyTheirTexts(MixedSymbolsDecodeTest.Mix mix, int across, int down)
     {
         var (luminance, width, height) = MixedSymbolsDecodeTest.RenderGrid(mix, across, down);
-        var symbols = new MixedSymbol[16];
+        var symbols = new SymbolDecodeResult[16];
         var count = MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols);
         await Assert.That(count).IsEqualTo(across * down);
         int[] lengths = [.. symbols.Take(count).Select(static s => s.Text.Length)];
@@ -876,7 +876,7 @@ public class DecodeAllocationTest
     public async Task Mixed_SeveralSymbols_NoSymbol_AllocatesNothing(RejectedImage rejected)
     {
         var (luminance, width, height) = Render(rejected);
-        var symbols = new MixedSymbol[16];
+        var symbols = new SymbolDecodeResult[16];
         await Assert.That(MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols)).IsEqualTo(0);
 
         await Assert.That(SteadyStateBytes(() => MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols))).IsEqualTo(0L);

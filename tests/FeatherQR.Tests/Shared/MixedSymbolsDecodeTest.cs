@@ -3,7 +3,6 @@ using FeatherQR.Internals.MicroQR;
 using FeatherQR.Internals.RmQR;
 using FeatherQR.Internals.StandardQR;
 using TUnit.Assertions.Enums;
-using Symbology = FeatherQR.SymbologyKind;
 
 namespace FeatherQR.Tests;
 
@@ -12,11 +11,6 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class MixedSymbolsDecodeTest
 {
-    /// <summary>The symbologies as a test argument: the entry's own enum is internal.</summary>
-    public enum Kind { StandardQR, MicroQR, RmQR }
-
-    private static Symbology Of(Kind kind) => kind switch { Kind.StandardQR => Symbology.StandardQR, Kind.MicroQR => Symbology.MicroQR, _ => Symbology.RmQR };
-
     /// <summary>A symbol drawn on a test image: its symbology, its text, its module-area corners in the drawn order, and its module size there.</summary>
     private sealed record Drawn(Symbology Symbology, string Text, (float X, float Y)[] Corners, float ModulePixels);
 
@@ -31,7 +25,7 @@ public class MixedSymbolsDecodeTest
 
     private static Read[] Decode(byte[] luminance, int width, int height, int room = 256)
     {
-        var symbols = new MixedSymbol[room];
+        var symbols = new SymbolDecodeResult[room];
         var count = MixedImageDecoder.DecodeSymbols(luminance, width, height, symbols);
         return [.. symbols.AsSpan(0, count).ToArray().Select(ToRead)];
     }
@@ -39,7 +33,7 @@ public class MixedSymbolsDecodeTest
     private static Read[] DecodeGrowing(byte[] luminance, int width, int height, CancellationToken cancellationToken = default)
         => [.. MixedImageDecoder.DecodeSymbols(luminance, width, height, cancellationToken).Select(ToRead)];
 
-    private static Read ToRead(MixedSymbol symbol) => new(symbol.Symbology, symbol.Text, symbol.Corners);
+    private static Read ToRead(SymbolDecodeResult symbol) => new(symbol.Symbology, symbol.Text, symbol.Corners);
 
     /// <summary>What the every-symbol entry of one symbology reads of the image.</summary>
     private static Read[] OwnEntry(Symbology symbology, byte[] luminance, int width, int height) => symbology switch
@@ -215,12 +209,11 @@ public class MixedSymbolsDecodeTest
 
     /// <summary>A sheet of one symbology is what that symbology's entry reads of it, to the order and the corners.</summary>
     [Test]
-    [Arguments(Kind.StandardQR)]
-    [Arguments(Kind.MicroQR)]
-    [Arguments(Kind.RmQR)]
-    public async Task SheetOfOneSymbology_IsThatSymbologysRead(Kind kind)
+    [Arguments(Symbology.StandardQR)]
+    [Arguments(Symbology.MicroQR)]
+    [Arguments(Symbology.RmQR)]
+    public async Task SheetOfOneSymbology_IsThatSymbologysRead(Symbology symbology)
     {
-        var symbology = Of(kind);
         var symbols = Enumerable.Range(0, 9).Select(i => (symbology, Text(symbology, i))).ToList();
         var (luminance, width, height, drawn) = RenderSheet(symbols, 3, 4f, 20f, 0f);
         var own = OwnEntry(symbology, luminance, width, height);
@@ -232,9 +225,9 @@ public class MixedSymbolsDecodeTest
     }
 
     /// <summary>An image of one symbol, named for the test's display.</summary>
-    public sealed record OneSymbolImage(Kind Kind, string Name, byte[] Luminance, int Width, int Height)
+    public sealed record OneSymbolImage(Symbology Symbology, string Name, byte[] Luminance, int Width, int Height)
     {
-        public override string ToString() => $"{Kind} {Name}";
+        public override string ToString() => $"{Symbology} {Name}";
     }
 
     /// <summary>One symbol and its quiet zone as a module grid, light on dark when <paramref name="reversed"/>.</summary>
@@ -272,7 +265,7 @@ public class MixedSymbolsDecodeTest
         {
             var (modules, columns, rows) = Symbol(Symbology.StandardQR, text);
             var photo = CameraRenderer.Render((r, c) => modules[r * columns + c], columns, rows, 4, new CameraRenderer.Shot(4f, 25f, 30f, 10f, BlurSigma: 0.8f, NoiseSigma: 4f, SceneScale: 2f, Seed: 7));
-            return new OneSymbolImage(Kind.StandardQR, "photograph in a scene", photo.Luminance, photo.Width, photo.Height);
+            return new OneSymbolImage(Symbology.StandardQR, "photograph in a scene", photo.Luminance, photo.Width, photo.Height);
         };
 
         foreach (var image in SingleFinderSymbolsDecodeTest.OneSymbolImages())
@@ -280,11 +273,11 @@ public class MixedSymbolsDecodeTest
             yield return () =>
             {
                 var one = image();
-                return new OneSymbolImage(one.Symbology == SingleFinderSymbolsDecodeTest.Symbology.MicroQR ? Kind.MicroQR : Kind.RmQR, one.Name, one.Luminance, one.Width, one.Height);
+                return new OneSymbolImage(one.Symbology == SingleFinderSymbolsDecodeTest.Symbology.MicroQR ? Symbology.MicroQR : Symbology.RmQR, one.Name, one.Luminance, one.Width, one.Height);
             };
         }
 
-        static OneSymbolImage Image(string name, (byte[] Luminance, int Width, int Height) image) => new(Kind.StandardQR, name, image.Luminance, image.Width, image.Height);
+        static OneSymbolImage Image(string name, (byte[] Luminance, int Width, int Height) image) => new(Symbology.StandardQR, name, image.Luminance, image.Width, image.Height);
     }
 
     /// <summary>
@@ -294,7 +287,7 @@ public class MixedSymbolsDecodeTest
     [MethodDataSource(nameof(OneSymbolImages))]
     public async Task OneSymbolImage_IsItsSymbologysRead_Alone(OneSymbolImage image)
     {
-        var own = OwnEntry(Of(image.Kind), image.Luminance, image.Width, image.Height);
+        var own = OwnEntry(image.Symbology, image.Luminance, image.Width, image.Height);
         await Assert.That(own.Length).IsLessThanOrEqualTo(1);
 
         var read = Decode(image.Luminance, image.Width, image.Height);
@@ -324,13 +317,12 @@ public class MixedSymbolsDecodeTest
     /// A symbol whose data does not read, alone and in a turned grid of 16, gives no result. Its finders are candidates of the other two decoders, whose searches must not read them as their own.
     /// </summary>
     [Test]
-    [Arguments(Kind.StandardQR, 1)]
-    [Arguments(Kind.StandardQR, 4)]
-    [Arguments(Kind.MicroQR, 4)]
-    [Arguments(Kind.RmQR, 4)]
-    public async Task SymbolsWhoseDataDoesNotRead_GiveNoResult(Kind kind, int side)
+    [Arguments(Symbology.StandardQR, 1)]
+    [Arguments(Symbology.StandardQR, 4)]
+    [Arguments(Symbology.MicroQR, 4)]
+    [Arguments(Symbology.RmQR, 4)]
+    public async Task SymbolsWhoseDataDoesNotRead_GiveNoResult(Symbology symbology, int side)
     {
-        var symbology = Of(kind);
         var cells = Enumerable.Range(0, side * side).Select(i => Unreadable(symbology, Text(symbology, i))).ToArray();
         var quiet = QuietZone(symbology);
         int cellColumns = cells.Max(static c => c.Columns) + 2 * quiet, cellRows = cells.Max(static c => c.Rows) + 2 * quiet;
@@ -399,7 +391,7 @@ public class MixedSymbolsDecodeTest
 
         for (var room = 1; room < all.Length; room++)
             await Assert.That(Decode(luminance, width, height, room)).IsEquivalentTo(all.Take(room), CollectionOrdering.Matching).Because($"room {room}");
-        await Assert.That(MixedImageDecoder.DecodeSymbols(luminance, width, height, Span<MixedSymbol>.Empty)).IsEqualTo(0);
+        await Assert.That(MixedImageDecoder.DecodeSymbols(luminance, width, height, Span<SymbolDecodeResult>.Empty)).IsEqualTo(0);
     }
 
     /// <summary>Paper and noise give no result through either form.</summary>

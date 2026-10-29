@@ -201,6 +201,7 @@ Start with an image builder for most applications. All generators and decoders a
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
 | Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
 | Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
+| Decode every symbol of an image, whatever its symbology | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
 
 Every method that writes an image to a `Stream` has an `...Async` twin, and the decoders read an encoded image from a `Stream`, asynchronously or not. See [Async and stream I/O](#async-and-stream-io).
 
@@ -552,6 +553,15 @@ foreach (var result in QRCodeImageDecoder.DecodeSymbols(sheet))
 }
 ```
 
+To read the codes of every symbology at once, such as an rMQR code beside a QR code on one label, call `DecodeSymbols` on `SymbolImageDecoder` with an `SKBitmap` or a stream, or `SymbolDecoder.DecodeImageSymbols` on luminance. Each result says which symbology it is in `Symbology`, gives its `Text` and `Corners`, and holds that symbology's own result in `StandardQR`, `MicroQR` or `RmQR`, the other two left default. The Standard QR codes are read first, and then every other finder of the image is searched for a Micro QR or an rMQR symbol, so this takes longer than the read for one symbology, the longest on an image whose finders read as nothing, such as a photograph of a QR code that does not read. When you know the symbology of your images, call its decoder.
+
+```csharp
+foreach (var symbol in SymbolImageDecoder.DecodeSymbols(sheet))
+{
+    Console.WriteLine($"{symbol.Symbology}: {symbol.Text}");
+}
+```
+
 ### Async and stream I/O
 
 Every method that writes an image to a `Stream` has an `...Async` twin, `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The decoders read an encoded image, a PNG, JPEG or WebP among others, from a `Stream`: `DecodeAsync` on the three and `DecodeSymbolsAsync` for every code of an image, and `Decode` and `DecodeSymbols` where the thread may wait.
@@ -900,7 +910,7 @@ No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional
 
 ### Does it read QR codes from images?
 
-Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)), screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. It reads an `SKBitmap`, a luminance span or an encoded image in a stream, one symbol a call or every code of the image at once, as do `MicroQRCodeDecoder` and `RmQRCodeDecoder`. Photographs are where it fails most often: glare, damage, blur, a curved surface, a steep tilt or strong lens distortion. A failed decode reports a status that says where it stopped.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)), screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. It reads an `SKBitmap`, a luminance span or an encoded image in a stream, one symbol a call or every code of the image at once, as do `MicroQRCodeDecoder` and `RmQRCodeDecoder`, and `SymbolDecoder` reads the codes of all three in one call. Photographs are where it fails most often: glare, damage, blur, a curved surface, a steep tilt or strong lens distortion. A failed decode reports a status that says where it stopped.
 
 ### What QR code style provides the best scan reliability?
 

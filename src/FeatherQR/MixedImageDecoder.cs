@@ -36,7 +36,7 @@ internal static class MixedImageDecoder
     /// </summary>
     /// <remarks>Nothing but the texts is allocated.</remarks>
     /// <returns>How many symbols were written.</returns>
-    internal static int DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<MixedSymbol> symbols)
+    internal static int DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<SymbolDecodeResult> symbols)
     {
         if (symbols.IsEmpty || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
             return 0;
@@ -53,12 +53,12 @@ internal static class MixedImageDecoder
             var room = rented.AsSpan(0, symbols.Length);
             var count = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, room, seeded: 0);
             for (var i = 0; i < count; i++)
-                symbols[i] = new MixedSymbol(room[i]);
+                symbols[i] = new SymbolDecodeResult(room[i]);
             if (count == symbols.Length)
                 return count;
 
             var decoder = new SingleFinderDecoder(rented, count, rentedHistogram);
-            var single = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, MixedSymbol>(ref decoder, luminance, width, height, symbols.Slice(count));
+            var single = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, symbols.Slice(count));
             var read = count + single;
             if (single == 0 || read == symbols.Length)
                 return read;
@@ -67,7 +67,7 @@ internal static class MixedImageDecoder
                 room[i] = TakenAsRead(symbols[i]);
             var total = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, room, read);
             for (var i = read; i < total; i++)
-                symbols[i] = new MixedSymbol(room[i]);
+                symbols[i] = new SymbolDecodeResult(room[i]);
             return total;
         }
         finally
@@ -79,10 +79,10 @@ internal static class MixedImageDecoder
     }
 
     /// <summary>
-    /// Decodes every symbol of a grayscale image, of any of the three symbologies, as <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{MixedSymbol})"/> does with room for all of them.
+    /// Decodes every symbol of a grayscale image, of any of the three symbologies, as <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{SymbolDecodeResult})"/> does with room for all of them.
     /// </summary>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check.</exception>
-    internal static MixedSymbol[] DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, CancellationToken cancellationToken = default)
+    internal static SymbolDecodeResult[] DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, CancellationToken cancellationToken = default)
     {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
             return [];
@@ -96,7 +96,7 @@ internal static class MixedImageDecoder
             var standard = new QRCodeDecodeResult[GrowingRoom];
             var standardCount = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, ref standard, seeded: 0, cancellationToken);
             var decoder = new SingleFinderDecoder(standard, standardCount, rentedHistogram);
-            var single = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, MixedSymbol>(ref decoder, luminance, width, height, cancellationToken);
+            var single = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, cancellationToken);
             var read = standardCount + single.Length;
             if (read == 0)
                 return [];
@@ -112,12 +112,12 @@ internal static class MixedImageDecoder
                 total = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, ref room, read, cancellationToken);
             }
 
-            var symbols = new MixedSymbol[total];
+            var symbols = new SymbolDecodeResult[total];
             for (var i = 0; i < standardCount; i++)
-                symbols[i] = new MixedSymbol(standard[i]);
+                symbols[i] = new SymbolDecodeResult(standard[i]);
             single.CopyTo(symbols, standardCount);
             for (var i = read; i < total; i++)
-                symbols[i] = new MixedSymbol(room[i]);
+                symbols[i] = new SymbolDecodeResult(room[i]);
             return symbols;
         }
         finally
@@ -129,7 +129,7 @@ internal static class MixedImageDecoder
     /// <summary>
     /// A symbol of another symbology as Standard QR's second read takes it, for its corners alone. It never leaves this class.
     /// </summary>
-    private static QRCodeDecodeResult TakenAsRead(in MixedSymbol symbol)
+    private static QRCodeDecodeResult TakenAsRead(in SymbolDecodeResult symbol)
         => new(symbol.Text, new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, 0, 0).WithCorners(symbol.Corners));
 
     /// <summary>A single-finder decode's diagnostics: Micro QR's, or rMQR's.</summary>
@@ -159,7 +159,7 @@ internal static class MixedImageDecoder
     /// A candidate inside a Standard QR symbol read before the scan, one of the first <paramref name="standardCount"/> of <paramref name="standard"/>, is decoded by neither.
     /// The scan's histogram is <paramref name="histogram"/>, the image's, which the Standard QR read was given.
     /// </summary>
-    private readonly struct SingleFinderDecoder(QRCodeDecodeResult[] standard, int standardCount, int[] histogram) : ISymbolsDecoder<SingleFinderInfo, MixedSymbol>
+    private readonly struct SingleFinderDecoder(QRCodeDecodeResult[] standard, int standardCount, int[] histogram) : ISymbolsDecoder<SingleFinderInfo, SymbolDecodeResult>
     {
         private static MicroQRImageDecoder.CandidateDecoder Micro => default;
 
@@ -171,10 +171,10 @@ internal static class MixedImageDecoder
 
         public int MaxChars => Math.Max(Micro.MaxChars, Rmqr.MaxChars);
 
-        public MixedSymbol Result(string text, in SingleFinderInfo info)
-            => info.IsRmQR ? new MixedSymbol(new RmQRCodeDecodeResult(text, info.RmQR)) : new MixedSymbol(new MicroQRCodeDecodeResult(text, info.MicroQR));
+        public SymbolDecodeResult Result(string text, in SingleFinderInfo info)
+            => info.IsRmQR ? new SymbolDecodeResult(new RmQRCodeDecodeResult(text, info.RmQR)) : new SymbolDecodeResult(new MicroQRCodeDecodeResult(text, info.MicroQR));
 
-        public SymbolCorners ResultCorners(in MixedSymbol result) => result.Corners;
+        public SymbolCorners ResultCorners(in SymbolDecodeResult result) => result.Corners;
 
         public void FillHistogram(ReadOnlySpan<byte> luminance, Span<int> histogram) => _histogram.AsSpan(0, Binarizer.HistogramBins).CopyTo(histogram);
 

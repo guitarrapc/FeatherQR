@@ -194,6 +194,7 @@ const decodePanelEl = document.getElementById('decode-panel');
 const decodeDropEl = document.getElementById('decode-drop');
 const decodeCornersCheck = document.getElementById('decode-corners-check');
 const decodeEveryCheck = document.getElementById('decode-every-check');
+const decodeMixedCheck = document.getElementById('decode-mixed-check');
 const decodeResultEl = document.getElementById('decode-result');
 const decodeSymbolsEl = document.getElementById('decode-symbols');
 const decodePreviewEl = document.getElementById('decode-preview');
@@ -917,13 +918,13 @@ function runVerifyDecode(pngBytes, request) {
 }
 
 /**
- * Calls the WASM decoder for one symbol, or with `every` for each QR Code of the image; returns the
- * parsed result, or null when the runtime died.
+ * Calls the WASM decoder for one symbol, or with `every` for each QR Code of the image, of every
+ * symbology together with `mixed`; returns the parsed result, or null when the runtime died.
  */
-function callDecode(bytes, every = false) {
+function callDecode(bytes, every = false, mixed = false) {
   try {
     const interop = exports.FeatherQR.Playground.QrInterop;
-    return JSON.parse(every ? interop.DecodeAll(bytes) : interop.Decode(bytes));
+    return JSON.parse(every ? interop.DecodeAll(bytes, mixed) : interop.Decode(bytes));
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -1205,7 +1206,7 @@ async function decodeImageFile(file) {
   if (superseded()) return;
 
   const every = decodeEveryCheck.checked;
-  const raw = callDecode(bytes, every);
+  const raw = callDecode(bytes, every, every && decodeMixedCheck.checked);
   if (!raw || superseded()) return;
   if (raw.error) {
     decodeResultEl.textContent = `Decode failed: ${raw.error}`;
@@ -1267,6 +1268,12 @@ decodeCornersCheck.addEventListener('change', () => {
 });
 
 decodeEveryCheck.addEventListener('change', async () => {
+  // Reading every symbology together is a way of reading every code, so it waits on that option
+  decodeMixedCheck.disabled = !decodeEveryCheck.checked;
+  if (lastDecodeFile) await decodeImageFile(lastDecodeFile);
+});
+
+decodeMixedCheck.addEventListener('change', async () => {
   if (lastDecodeFile) await decodeImageFile(lastDecodeFile);
 });
 

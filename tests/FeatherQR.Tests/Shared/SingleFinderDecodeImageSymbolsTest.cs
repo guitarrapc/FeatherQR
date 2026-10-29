@@ -4,7 +4,7 @@ using FeatherQR.SkiaSharp;
 using FeatherQR.SkiaSharp.Internals;
 using SkiaSharp;
 using TUnit.Assertions.Enums;
-using Symbology = FeatherQR.Tests.SingleFinderSymbolsDecodeTest.Symbology;
+using TestSymbology = FeatherQR.Tests.SingleFinderSymbolsDecodeTest.Symbology;
 
 namespace FeatherQR.Tests;
 
@@ -17,13 +17,13 @@ public class SingleFinderDecodeImageSymbolsTest
     /// <summary>A result in the parts both symbologies have.</summary>
     private sealed record Read(string Text, bool Success, DecodeStatus Status, SymbolCorners Corners);
 
-    private static Read[] Array(Symbology symbology, byte[] luminance, int width, int height) => symbology == Symbology.MicroQR
+    private static Read[] Array(TestSymbology symbology, byte[] luminance, int width, int height) => symbology == TestSymbology.MicroQR
         ? [.. MicroQRCodeDecoder.DecodeImageSymbols(luminance, width, height).Select(static r => new Read(r.Text, r.Success, r.Info.Status, r.Info.Corners))]
         : [.. RmQRCodeDecoder.DecodeImageSymbols(luminance, width, height).Select(static r => new Read(r.Text, r.Success, r.Info.Status, r.Info.Corners))];
 
-    private static Read[] Span(Symbology symbology, byte[] luminance, int width, int height, int room)
+    private static Read[] Span(TestSymbology symbology, byte[] luminance, int width, int height, int room)
     {
-        if (symbology == Symbology.MicroQR)
+        if (symbology == TestSymbology.MicroQR)
         {
             var micro = new MicroQRCodeDecodeResult[room];
             var count = MicroQRCodeDecoder.DecodeImageSymbols(luminance, width, height, micro);
@@ -34,12 +34,12 @@ public class SingleFinderDecodeImageSymbolsTest
         return [.. rmqr.AsSpan(0, rmqrCount).ToArray().Select(static r => new Read(r.Text, r.Success, r.Info.Status, r.Info.Corners))];
     }
 
-    private static Read[] Bitmap(Symbology symbology, SKBitmap bitmap) => symbology == Symbology.MicroQR
+    private static Read[] Bitmap(TestSymbology symbology, SKBitmap bitmap) => symbology == TestSymbology.MicroQR
         ? [.. MicroQRCodeDecoder.DecodeSymbols(bitmap).Select(static r => new Read(r.Text, r.Success, r.Info.Status, r.Info.Corners))]
         : [.. RmQRCodeDecoder.DecodeSymbols(bitmap).Select(static r => new Read(r.Text, r.Success, r.Info.Status, r.Info.Corners))];
 
     /// <summary>A grid of symbols as a grey bitmap, its pixels the luminance the reads are handed.</summary>
-    private static (SKBitmap Bitmap, byte[] Luminance) Sheet(Symbology symbology, int across, int down)
+    private static (SKBitmap Bitmap, byte[] Luminance) Sheet(TestSymbology symbology, int across, int down)
     {
         var (luminance, width, height) = SingleFinderSymbolsDecodeTest.RenderGrid(symbology, across, down);
         var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Gray8, SKAlphaType.Opaque));
@@ -50,9 +50,9 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task Array_GridOfMoreThanItsFirstRoom_ReadsEverySymbolOnce(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task Array_GridOfMoreThanItsFirstRoom_ReadsEverySymbolOnce(TestSymbology symbology)
     {
         // Twelve symbols, more than the array form's room holds before it grows
         var (bitmap, luminance) = Sheet(symbology, 4, 3);
@@ -66,9 +66,9 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task Array_ReadsWhatTheSpanFormReadsWithRoomForAll(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task Array_ReadsWhatTheSpanFormReadsWithRoomForAll(TestSymbology symbology)
     {
         var (bitmap, luminance) = Sheet(symbology, 4, 3);
         using var _ = bitmap;
@@ -80,9 +80,9 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task Span_RoomForOne_HoldsTheFirstSymbolTheArrayHolds(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task Span_RoomForOne_HoldsTheFirstSymbolTheArrayHolds(TestSymbology symbology)
     {
         var (bitmap, luminance) = Sheet(symbology, 3, 2);
         using var _ = bitmap;
@@ -95,9 +95,9 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task Span_EmptyRoom_ReadsNothing(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task Span_EmptyRoom_ReadsNothing(TestSymbology symbology)
     {
         var (bitmap, luminance) = Sheet(symbology, 2, 1);
         using var _ = bitmap;
@@ -106,9 +106,9 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task ImageWithNoSymbol_ReadsNone(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task ImageWithNoSymbol_ReadsNone(TestSymbology symbology)
     {
         var blank = new byte[300 * 200];
         blank.AsSpan().Fill(255);
@@ -132,9 +132,9 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task Array_GridThatFillsItsFirstRoom_ReadsEverySymbolOnce(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task Array_GridThatFillsItsFirstRoom_ReadsEverySymbolOnce(TestSymbology symbology)
     {
         // Eight symbols, as many as the array form's first room holds, so the room itself is returned
         var (bitmap, luminance) = Sheet(symbology, 4, 2);
@@ -149,9 +149,9 @@ public class SingleFinderDecodeImageSymbolsTest
 
     /// <summary>The public forms take a buffer longer than the image. Whether the bytes past it are left out is held by the internal entry's test on a symbol whose read depends on the thresholds.</summary>
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task BufferLongerThanTheImage_ReadsWhatTheImageHolds(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task BufferLongerThanTheImage_ReadsWhatTheImageHolds(TestSymbology symbology)
     {
         var (bitmap, luminance) = Sheet(symbology, 2, 1);
         using var _ = bitmap;
@@ -165,14 +165,14 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task InternalEntry_WritesTheResultsThePublicSpanFormReturns(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task InternalEntry_WritesTheResultsThePublicSpanFormReturns(TestSymbology symbology)
     {
         var (bitmap, luminance) = Sheet(symbology, 3, 2);
         using var _ = bitmap;
         int width = bitmap.Width, height = bitmap.Height;
-        if (symbology == Symbology.MicroQR)
+        if (symbology == TestSymbology.MicroQR)
         {
             MicroQRCodeDecodeResult[] internalRoom = new MicroQRCodeDecodeResult[16], publicRoom = new MicroQRCodeDecodeResult[16];
             var internalCount = MicroQRImageDecoder.DecodeSymbols(luminance, width, height, internalRoom);
@@ -189,9 +189,9 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task DecodeSymbols_Bitmap_ReadsWhatTheLuminanceFormReads(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task DecodeSymbols_Bitmap_ReadsWhatTheLuminanceFormReads(TestSymbology symbology)
     {
         var (bitmap, luminance) = Sheet(symbology, 3, 2);
         using var _ = bitmap;
@@ -207,9 +207,9 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task DecodeSymbols_Stream_ReadsWhatTheBitmapFormReads(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task DecodeSymbols_Stream_ReadsWhatTheBitmapFormReads(TestSymbology symbology)
     {
         var (bitmap, _) = Sheet(symbology, 3, 2);
         using var __ = bitmap;
@@ -218,7 +218,7 @@ public class SingleFinderDecodeImageSymbolsTest
         var expected = Bitmap(symbology, bitmap);
 
         Read[] viaAsync, viaSync;
-        if (symbology == Symbology.MicroQR)
+        if (symbology == TestSymbology.MicroQR)
         {
             viaAsync = [.. (await MicroQRCodeDecoder.DecodeSymbolsAsync(new ImageStreamDecodeTest.ReadStream(png, perRead: 4096, refuseSync: true))).Select(static r => new Read(r.Text, r.Success, r.Info.Status, r.Info.Corners))];
             viaSync = [.. MicroQRCodeDecoder.DecodeSymbols(new ImageStreamDecodeTest.ReadStream(png, perRead: 4096, refuseAsync: true)).Select(static r => new Read(r.Text, r.Success, r.Info.Status, r.Info.Corners))];
@@ -236,9 +236,9 @@ public class SingleFinderDecodeImageSymbolsTest
 
     /// <summary>A bitmap smaller than the smallest symbol gives no result and does not throw. A blank one reads nothing either way, so this holds the result, not the shortcut that skips the search.</summary>
     [Test]
-    [Arguments(Symbology.MicroQR, 10)]
-    [Arguments(Symbology.RmQR, 6)]
-    public async Task DecodeSymbols_BitmapTooSmallForASymbol_ReadsNone(Symbology symbology, int side)
+    [Arguments(TestSymbology.MicroQR, 10)]
+    [Arguments(TestSymbology.RmQR, 6)]
+    public async Task DecodeSymbols_BitmapTooSmallForASymbol_ReadsNone(TestSymbology symbology, int side)
     {
         using var tiny = new SKBitmap(side, side);
         tiny.Erase(SKColors.White);
@@ -247,9 +247,9 @@ public class SingleFinderDecodeImageSymbolsTest
     }
 
     [Test]
-    [Arguments(Symbology.MicroQR)]
-    [Arguments(Symbology.RmQR)]
-    public async Task Bitmap_TokenReachesTheSearch(Symbology symbology)
+    [Arguments(TestSymbology.MicroQR)]
+    [Arguments(TestSymbology.RmQR)]
+    public async Task Bitmap_TokenReachesTheSearch(TestSymbology symbology)
     {
         // The bitmap's conversion to luminance checks no token, so a canceled one is seen by the search alone
         var (bitmap, _) = Sheet(symbology, 2, 1);
@@ -257,7 +257,7 @@ public class SingleFinderDecodeImageSymbolsTest
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        if (symbology == Symbology.MicroQR)
+        if (symbology == TestSymbology.MicroQR)
             Assert.Throws<OperationCanceledException>(() => MicroQRCodeImageDecoder.DecodeEverySymbol(bitmap, cancellation.Token));
         else
             Assert.Throws<OperationCanceledException>(() => RmQRCodeImageDecoder.DecodeEverySymbol(bitmap, cancellation.Token));

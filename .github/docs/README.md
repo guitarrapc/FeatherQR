@@ -37,7 +37,6 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 | Document | Covers |
 |---|---|
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
-| [mixed-symbology-read-plan.md](plans/mixed-symbology-read-plan.md) | One call that reads every symbol of an image whatever its symbology, Standard QR, Micro QR and rMQR together over one finder scan: its price on photographs that hold Standard QR alone, the result type and the entry's name for the maintainer, and the Playground's fallback replaced. Builds on the Micro QR and rMQR reads for every symbol. Requested 2026-10-27 |
 
 The 2.0.0 core split plan (`FeatherQR` core, `FeatherQR.SkiaSharp` renderer, `SkiaSharp.QrCode` metapackage, repository rename) completed on 2026-09-06 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (package architecture, seam, graph, the "why three packages" record, scope decisions, lessons) and [DESIGN.md](DESIGN.md).
 
@@ -114,7 +113,7 @@ The image decode follow-ups plan (the photograph stages timed on WebAssembly, th
 - [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md): the `boofcv` command's codes column and the rules that score it, the read-again and entry tables, and the result lines that carry each read's centre.
 - [standardqr-spec-map.md](specs/standardqr-spec-map.md) ("Image level, every symbol"), [qrcode-simd-tiers.md](specs/qrcode-simd-tiers.md) (the kernel table), and the README and `docs/`, which the async API plan's Phase 4 wrote.
 
-It left out per-phase narration, test and planted-fault counts, timing tables that decided nothing, the forms of the edge extraction that were refused, and the commits each measurement was taken at. Micro QR and rMQR, out of it by the ruling of 2026-10-15, got the same calls from the plan folded below, and the mixed read of the three is the plan above.
+It left out per-phase narration, test and planted-fault counts, timing tables that decided nothing, the forms of the edge extraction that were refused, and the commits each measurement was taken at. Micro QR and rMQR, out of it by the ruling of 2026-10-15, got the same calls from the plan folded below, and the read of the three in one call from the plan folded after it.
 
 The async API plan (where generation and reading block a caller's thread, measured by setting; the fourteen async writes; the stream reads with their result types, limits and synchronous twins; cancellation between the symbols of a read for every symbol; the move off a UI context with copies of what the call was given; four review rounds and the safe default limits) completed on 2026-10-26 and was folded into:
 
@@ -132,3 +131,11 @@ The Micro QR and rMQR several-symbols plan (the ceiling and the price measured o
 - The two spec maps ("Image level, every symbol"), the README, `docs/migration.md`, the approved API listings and the API page.
 
 It left out per-phase narration, the per-sheet and per-kind tables, the Micro QR camera sheets' code-by-code difference, and the probe the listings were compared on. The planted faults are in [tools/mutants/single-finder-several-symbols.tsv](../../tools/mutants/single-finder-several-symbols.tsv).
+
+The mixed symbology read plan (one call for every symbol of an image whatever its symbology: the price and the ceiling measured first with no change to `src`, an internal entry, the maintainer's rulings on the result type, the entry's home, the order, where the single-finder decoders run, the Playground and the release, the price cut by sharing the histogram, then the public call, the Playground's checkbox and the docs) completed on 2026-10-29. On 432 sheets of two and three symbologies it reads 2,884 of 3,024 codes with no false read, 16 more than the three every-symbol calls in turn, and on BoofCV's photographs the Standard QR entry's 1,073 codes and nothing else, at 2.7 times that entry. It was folded into:
+
+- [qrcode-symbologies.md](specs/qrcode-symbologies.md): "Every symbol of any symbology" after the single-finder scan's every-symbol section, with the rules, the code paths, the listings check, the counts, the price, where the time goes, the shapes measured and not taken, and what is left. Also the internal organization, the package seam, the result type and the classes under Public API direction, and the scope rows "Image detection default" and "Several symbols in one image".
+- [standardqr-decoder.md](specs/standardqr-decoder.md) (the Decisions row "Several symbols of one image"), [microqr-decoder.md](specs/microqr-decoder.md) and [rmqr-decoder.md](specs/rmqr-decoder.md) (the image level paragraph): what of it reaches each.
+- The three spec maps ("Image level, every symbol"), the README, `docs/migration.md`, the approved API listings, the API page and the Playground.
+
+It left out per-phase narration, the per-sheet and per-order tables, the sheets traced for the second read, and the probes the sheets, the renders, the photographs and the listings were measured with, which no tool in the repository carries. The planted faults are in [tools/mutants/mixed-symbology-read.tsv](../../tools/mutants/mixed-symbology-read.tsv).
