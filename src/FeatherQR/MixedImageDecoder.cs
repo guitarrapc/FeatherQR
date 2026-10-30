@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.MicroQR;
 using FeatherQR.Internals.RmQR;
@@ -46,19 +48,21 @@ internal static class MixedImageDecoder
         var rented = ArrayPool<QRCodeDecodeResult>.Shared.Rent(symbols.Length);
         // Rented, not on the stack, since the single-finder decoder holds it
         var rentedHistogram = ArrayPool<int>.Shared.Rent(Binarizer.HistogramBins);
+        var rows = FinderRowRooms.Rent(height);
         try
         {
             var histogram = rentedHistogram.AsSpan(0, Binarizer.HistogramBins);
             Binarizer.FillHistogram(luminance, histogram);
             var room = rented.AsSpan(0, symbols.Length);
-            var count = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, room, seeded: 0);
+            var shared = rows.Over();
+            var count = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, room, seeded: 0, ref shared);
             for (var i = 0; i < count; i++)
                 symbols[i] = new SymbolDecodeResult(room[i]);
             if (count == symbols.Length)
                 return count;
 
             var decoder = new SingleFinderDecoder(rented, count, rentedHistogram);
-            var single = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, symbols.Slice(count));
+            var single = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, symbols.Slice(count), shared);
             var read = count + single;
             if (single == 0 || read == symbols.Length)
                 return read;
@@ -72,9 +76,40 @@ internal static class MixedImageDecoder
         }
         finally
         {
+            rows.Return();
             ArrayPool<int>.Shared.Return(rentedHistogram);
             // The room holds the texts, which the pool would otherwise keep alive
             ArrayPool<QRCodeDecodeResult>.Shared.Return(rented, clearArray: true);
+        }
+    }
+
+    /// <summary>
+    /// The rented rooms of the strided rows' hits Standard QR's first read keeps for the single-finder scan (<see cref="SharedRowHits"/>): a quarter of a candidate list of hits a reading, 65,536 bytes in all, under the large object heap's threshold, and the row ends of Standard QR's stride.
+    /// </summary>
+    private readonly struct FinderRowRooms(byte[] hits, int[] rowEnds, int[] strides)
+    {
+        private const int HitRoom = CandidateScan.MaxSymbolCandidates / SharedRowHits.Readings;
+
+        public static FinderRowRooms Rent(int height)
+        {
+            var rowCount = FinderPatternFinder.StridedRowCount(height, FinderPatternFinder.RowStride(height));
+            return new FinderRowRooms(
+                ArrayPool<byte>.Shared.Rent(SharedRowHits.Readings * HitRoom * Unsafe.SizeOf<FinderPattern>()),
+                ArrayPool<int>.Shared.Rent(SharedRowHits.Readings * rowCount),
+                ArrayPool<int>.Shared.Rent(SharedRowHits.Readings));
+        }
+
+        public SharedRowHits Over()
+            => SharedRowHits.OverEmptyRooms(
+                MemoryMarshal.Cast<byte, FinderPattern>(hits.AsSpan()).Slice(0, SharedRowHits.Readings * HitRoom),
+                rowEnds.AsSpan(0, rowEnds.Length / SharedRowHits.Readings * SharedRowHits.Readings),
+                strides.AsSpan(0, SharedRowHits.Readings));
+
+        public void Return()
+        {
+            ArrayPool<int>.Shared.Return(strides);
+            ArrayPool<int>.Shared.Return(rowEnds);
+            ArrayPool<byte>.Shared.Return(hits);
         }
     }
 
@@ -92,13 +127,15 @@ internal static class MixedImageDecoder
         // Standard QR's room, which its second read fills behind every symbol read before it, and the single-finder scan's
         var standard = ArrayPool<QRCodeDecodeResult>.Shared.Rent(GrowingRoom);
         var single = ArrayPool<SymbolDecodeResult>.Shared.Rent(GrowingRoom);
+        var rows = FinderRowRooms.Rent(height);
         try
         {
             var histogram = rentedHistogram.AsSpan(0, Binarizer.HistogramBins);
             Binarizer.FillHistogram(luminance, histogram);
-            var standardCount = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, ref standard, seeded: 0, cancellationToken);
+            var shared = rows.Over();
+            var standardCount = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, ref standard, seeded: 0, ref shared, cancellationToken);
             var decoder = new SingleFinderDecoder(standard, standardCount, rentedHistogram);
-            var singleCount = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, ref single, cancellationToken);
+            var singleCount = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, ref single, shared, cancellationToken);
             var read = standardCount + singleCount;
             if (read == 0)
                 return [];
@@ -128,6 +165,7 @@ internal static class MixedImageDecoder
         }
         finally
         {
+            rows.Return();
             // The rooms hold the texts, which the pool would otherwise keep alive
             ArrayPool<SymbolDecodeResult>.Shared.Return(single, clearArray: true);
             ArrayPool<QRCodeDecodeResult>.Shared.Return(standard, clearArray: true);

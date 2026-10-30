@@ -426,8 +426,11 @@ public class MixedSymbolsDecodeTest
 
     /// <summary>A sheet of symbols drawn upright at 4 px a module, for a test that only counts what it reads.</summary>
     internal static (byte[] Luminance, int Width, int Height) RenderGrid(Mix mix, int across, int down)
+        => RenderGrid(mix, across, down, 0f);
+
+    internal static (byte[] Luminance, int Width, int Height) RenderGrid(Mix mix, int across, int down, float degrees)
     {
-        var (luminance, width, height, _) = RenderSheet(Symbols(mix, across * down), across, 4f, 0f, 0f);
+        var (luminance, width, height, _) = RenderSheet(Symbols(mix, across * down), across, 4f, degrees, 0f);
         return (luminance, width, height);
     }
 

@@ -4,7 +4,7 @@
 #
 #   dotnet run tools/mutation_check.cs -- run tools/mutants/mixed-symbology-read.tsv <out-dir> --allow-dirty --filter "/*/*/MixedSymbolsDecodeTest/*" --filter "/*/*/DecodeAllocationTest/Mixed*"
 #
-# Against those two filters and the two below, 26 of the 28 faults are caught (2026-10-30; QB-grown-room-dropped by StandardQRBeside_RoomFull_GrowsFromThePool since the rooms are rented). MX-histogram-refilled fills the single-finder scan's histogram from
+# Against those two filters and the others below, 33 of the 37 faults are caught (2026-10-30; QB-grown-room-dropped by StandardQRBeside_RoomFull_GrowsFromThePool since the rooms are rented). MX-histogram-refilled fills the single-finder scan's histogram from
 # the pixels again in place of taking the one given, and EP-gate-always-searches runs the search the gate spares: both change the time only.
 MX-no-second-read-span	src/FeatherQR/MixedImageDecoder.cs	if (single == 0 || read == symbols.Length)	if (true)
 MX-no-second-read-array	src/FeatherQR/MixedImageDecoder.cs	if (singleCount != 0)	if (false)
@@ -22,7 +22,7 @@ MX-micro-read-dropped	src/FeatherQR/MixedImageDecoder.cs	                info = 
 MX-rmqr-read-dropped	src/FeatherQR/MixedImageDecoder.cs	                info = new SingleFinderInfo(rmqrInfo);␤                return status;	                info = new SingleFinderInfo(rmqrInfo);␤                return DecodeStatus.NotDetected;
 MX-rmqr-not-tried	src/FeatherQR/MixedImageDecoder.cs	            result.Other(status, charsWritten, new SingleFinderInfo(microInfo));	            result.Other(status, charsWritten, new SingleFinderInfo(microInfo));␤            if (status != DecodeStatus.Success)␤                return result.Report(out charsWritten, out info);
 QB-seeds-not-counted	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	Symbols = symbols, Count = seeded, Growing	Symbols = symbols, Growing
-QB-grown-room-dropped	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	histogram, room, seeded, ref growing, cancellationToken);␤        }␤        finally␤        {␤            room = growing!;	histogram, room, seeded, ref growing, cancellationToken);␤        }␤        finally␤        {
+QB-grown-room-dropped	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	histogram, room, seeded, ref growing, ref shared, cancellationToken);␤        }␤        finally␤        {␤            room = growing!;	histogram, room, seeded, ref growing, ref shared, cancellationToken);␤        }␤        finally␤        {
 MX-histogram-not-copied	src/FeatherQR/MixedImageDecoder.cs	=> _histogram.AsSpan(0, Binarizer.HistogramBins).CopyTo(histogram);	=> histogram.Clear();
 MX-histogram-refilled	src/FeatherQR/MixedImageDecoder.cs	=> _histogram.AsSpan(0, Binarizer.HistogramBins).CopyTo(histogram);	=> Binarizer.FillHistogram(luminance, histogram);
 QB-histogram-refilled	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	        imageHistogram.CopyTo(histogram);	        Binarizer.FillHistogram(luminance, histogram);
@@ -37,3 +37,15 @@ EP-shade-window-quartered	src/FeatherQR/Internals/ImageDecoders/FinderExtentProb
 EP-length-too-short	src/FeatherQR/MixedImageDecoder.cs	    private const int MicroQRLongestExtent = 15;	    private const int MicroQRLongestExtent = 5;
 EP-gate-always-searches	src/FeatherQR/MixedImageDecoder.cs	            => !FinderExtentProbe.ExtendsBeyond(image, centerX, centerY, orientations[0], MicroQRLongestExtent);	            => true;
 EP-gate-inverted	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	        if (orientationCount > 0 && !gate.Search(image, finder.X, finder.Y, orientations.Slice(0, orientationCount)))	        if (orientationCount > 0 && gate.Search(image, finder.X, finder.Y, orientations.Slice(0, orientationCount)))
+# The strided rows' hits Standard QR's first read keeps for the single-finder scan (2026-10-30). Run with the filters above and
+#   --filter "/*/*/SharedRowHitsTest/*" --filter "/*/*/FinderCandidatesOneRowPassParityTest/*"
+# RH-sweep-own-rows-only and RH-scan-takes-no-rows scan the kept rows again, which changes the time only. The other seven are caught by SharedRowHitsTest and FinderCandidatesOneRowPassParityTest (2026-10-30).
+RH-reader-start-not-advanced	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.KeptRows.cs	                        _start = rowEnds[_next];	                        _start = _start;
+RH-reader-any-row	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.KeptRows.cs	if (_next >= rowEnds.Length || _next * stride != y || rowEnds[_next] < 0)	if (_next >= rowEnds.Length || rowEnds[_next] < 0)
+RH-one-pass-given-into-strided-every-row	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.cs	                    var stridedRow = y % CandidateRowStride == 0;	                    var stridedRow = true;
+RH-keeping-given-row-kept-empty	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.cs	hit.ModuleSize);␤                    rowEnds[y / stride] = -1;	hit.ModuleSize);␤                    rowEnds[y / stride] = keptCount;
+RH-sweep-own-rows-only	src/FeatherQR/Internals/ImageDecoders/FinderPatternFinder.cs	if (ownRows.TryRow(y, out var hits) || givenRows.TryRow(y, out hits))	if (ownRows.TryRow(y, out var hits))
+RH-qr-keeps-at-the-scan-stride	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	                search.Shared.Keep(reading, stride);	                search.Shared.Keep(reading, FinderPatternFinder.CandidateRowStride);
+RH-qr-keeps-without-room	src/FeatherQR/Internals/ImageDecoders/SharedRowHits.cs	_strides[reading] != 0 || rowCount > RowRoom)	_strides[reading] != 0)
+RH-take-first-readings-hits	src/FeatherQR/Internals/ImageDecoders/SharedRowHits.cs	KeptRows(_hits.Slice(reading * HitRoom, HitRoom),	KeptRows(_hits.Slice(0, HitRoom),
+RH-scan-takes-no-rows	src/FeatherQR/Internals/ImageDecoders/CandidateScan.Symbols.cs	            search.Shared.TryTake(reading, image.Height, out var given);	            var given = default(FinderPatternFinder.KeptRows);

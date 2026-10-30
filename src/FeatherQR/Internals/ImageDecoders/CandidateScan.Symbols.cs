@@ -30,7 +30,7 @@ internal static partial class CandidateScan
     /// The candidates a finder scan's list has room for when every symbol is read. The one-symbol scan's 32 would leave finders of a large sheet unread.
     /// A finder past this many is dropped, and nothing reports it.
     /// </summary>
-    private const int MaxSymbolCandidates = 4096;
+    internal const int MaxSymbolCandidates = 4096;
 
     /// <summary>The room the array form starts with, the smallest array the pool rents, doubled each time it fills.</summary>
     private const int GrowingRoom = 16;
@@ -55,10 +55,13 @@ internal static partial class CandidateScan
         /// <summary>The module buffer every decode samples into: the largest symbol's.</summary>
         public Span<byte> Modules;
 
-        /// <summary>The strided rows' hits a reading keeps for its sweep, and the end of each row's hits (<see cref="FinderPatternFinder.FindCandidatesKeepingRowHits"/>). Empty where the room grows.</summary>
+        /// <summary>The strided rows' hits a reading keeps for its sweep, and the end of each row's hits (<see cref="FinderPatternFinder.FindCandidatesKeepingRowHits(ReadOnlySpan{byte}, int, int, byte, in GreyLevels, Span{FinderPattern}, out int, Span{FinderPattern}, Span{int}, int, FinderPatternFinder.KeptRows)"/>). Empty where the room grows.</summary>
         public Span<FinderPattern> Kept;
 
         public Span<int> RowEnds;
+
+        /// <summary>The strided rows' hits a read of the same readings kept for this one (<see cref="SharedRowHits"/>). Empty when there are none.</summary>
+        public SharedRowHits Shared;
 
         public readonly bool IsFull => Growing is null && Count == Symbols.Length;
 
@@ -99,7 +102,35 @@ internal static partial class CandidateScan
         if (symbols.IsEmpty)
             return 0;
         TResult[]? none = null;
-        return DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, symbols, ref none, cancellationToken);
+        return DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, symbols, ref none, default, cancellationToken);
+    }
+
+    /// <summary>
+    /// <see cref="DecodeSymbols{TDecoder, TInfo, TResult}(ref TDecoder, ReadOnlySpan{byte}, int, int, Span{TResult}, CancellationToken)"/> given the strided rows' hits a read of the same readings kept (<see cref="SharedRowHits"/>): a reading whose rows are there scans them no more.
+    /// </summary>
+    internal static int DecodeSymbols<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, Span<TResult> symbols, in SharedRowHits shared, CancellationToken cancellationToken = default)
+        where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
+    {
+        if (symbols.IsEmpty)
+            return 0;
+        TResult[]? none = null;
+        return DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, symbols, ref none, shared, cancellationToken);
+    }
+
+    /// <summary>The array form given the strided rows' hits a read of the same readings kept (<see cref="SharedRowHits"/>).</summary>
+    internal static TResult[] DecodeSymbols<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, in SharedRowHits shared, CancellationToken cancellationToken)
+        where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
+    {
+        var room = ArrayPool<TResult>.Shared.Rent(GrowingRoom);
+        try
+        {
+            var count = DecodeSymbols<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, ref room, shared, cancellationToken);
+            return count == 0 ? [] : room.AsSpan(0, count).ToArray();
+        }
+        finally
+        {
+            ArrayPool<TResult>.Shared.Return(room, clearArray: true);
+        }
     }
 
     /// <summary>
@@ -136,11 +167,16 @@ internal static partial class CandidateScan
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check, the symbols read so far in <paramref name="room"/>.</exception>
     internal static int DecodeSymbols<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, ref TResult[] room, CancellationToken cancellationToken)
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
+        => DecodeSymbols<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, ref room, default, cancellationToken);
+
+    /// <summary>The rented-room form given the strided rows' hits a read of the same readings kept (<see cref="SharedRowHits"/>).</summary>
+    internal static int DecodeSymbols<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, ref TResult[] room, in SharedRowHits shared, CancellationToken cancellationToken)
+        where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
     {
         TResult[]? growing = room;
         try
         {
-            return DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, room, ref growing, cancellationToken);
+            return DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref decoder, luminance, width, height, room, ref growing, shared, cancellationToken);
         }
         finally
         {
@@ -151,7 +187,7 @@ internal static partial class CandidateScan
     /// <summary>
     /// The passes into <paramref name="symbols"/>. <paramref name="growing"/> is the array form's room, replaced by the one the passes ended with, after a cancel too, so that the caller returns that one, and <c>null</c> for the caller's room.
     /// </summary>
-    private static int DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, Span<TResult> symbols, ref TResult[]? growing, CancellationToken cancellationToken)
+    private static int DecodeSymbolsCore<TDecoder, TInfo, TResult>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, int width, int height, Span<TResult> symbols, ref TResult[]? growing, in SharedRowHits shared, CancellationToken cancellationToken)
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
     {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
@@ -179,6 +215,7 @@ internal static partial class CandidateScan
             Modules = rentedModules.AsSpan(0, moduleLength),
             Kept = rentedKept is null ? default : MemoryMarshal.Cast<byte, FinderPattern>(rentedKept.AsSpan()).Slice(0, MaxSymbolCandidates),
             RowEnds = rentedRowEnds is null ? default : rentedRowEnds.AsSpan(0, rowCount),
+            Shared = shared,
         };
         try
         {
@@ -212,7 +249,7 @@ internal static partial class CandidateScan
         Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
         decoder.FillHistogram(luminance, histogram);
         var positiveThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var positiveGrey);
-        var noFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveThreshold, positiveGrey), strided, swept, sweepOnly: false);
+        var noFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveThreshold, positiveGrey), strided, swept, sweepOnly: false, SharedRowHits.Positive);
         if (search.IsFull)
             return;
 
@@ -220,7 +257,7 @@ internal static partial class CandidateScan
         LuminanceInverter.Invert(luminance, inverted);
         Binarizer.InvertHistogram(histogram);
         var negativeThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var negativeGrey);
-        var invertedNoFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, negativeThreshold, negativeGrey), strided, swept, sweepOnly: false);
+        var invertedNoFinder = DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, negativeThreshold, negativeGrey), strided, swept, sweepOnly: false, SharedRowHits.Negative);
         if (search.IsFull)
             return;
 
@@ -243,7 +280,7 @@ internal static partial class CandidateScan
                     histogram[LocalBinarizer.Dark] = darkCount;
                     histogram[LocalBinarizer.Light] = inverted.Length - darkCount;
                     var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
-                    DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, threshold, grey), strided, swept, sweepOnly: false);
+                    DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, threshold, grey), strided, swept, sweepOnly: false, SharedRowHits.RegionalPositive + polarity);
                 }
             }
             finally
@@ -253,12 +290,12 @@ internal static partial class CandidateScan
         }
 
         if (noFinder && !search.IsFull && ImageDecodePasses.TryMidpoint(positiveThreshold, positiveGrey, out var positiveMidpoint))
-            DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveMidpoint, positiveGrey), strided, swept, sweepOnly: true);
+            DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(luminance, width, height, positiveMidpoint, positiveGrey), strided, swept, sweepOnly: true, reading: -1);
         if (invertedNoFinder && !search.IsFull && ImageDecodePasses.TryMidpoint(negativeThreshold, negativeGrey, out var negativeMidpoint))
         {
             // The regional pass wrote its binarization into this buffer
             LuminanceInverter.Invert(luminance, inverted);
-            DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, negativeMidpoint, negativeGrey), strided, swept, sweepOnly: true);
+            DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref decoder, ref search, new ImageView(inverted, width, height, negativeMidpoint, negativeGrey), strided, swept, sweepOnly: true, reading: -1);
         }
     }
 
@@ -266,11 +303,11 @@ internal static partial class CandidateScan
     /// One reading of the image: the strided scan's candidates, then the full sweep's less those the strided scan found, each list decoded in turn (<see cref="DecodeSymbolsOfScan"/>). With <paramref name="sweepOnly"/>, the sweep alone, as the midpoint pass scans.
     /// </summary>
     /// <remarks>
-    /// A room that grows never fills, so the sweep runs whatever the strided candidates read, and both lists come from one pass over the rows (<see cref="FinderPatternFinder.FindCandidatesStridedAndFullSweep"/>).
-    /// A caller's room can fill on the strided candidates, so the sweep is scanned only after them, and it merges the hits the strided scan kept in those rows' places (<see cref="FinderPatternFinder.FindCandidatesKeepingRowHits"/>).
+    /// A room that grows never fills, so the sweep runs whatever the strided candidates read, and both lists come from one pass over the rows (<see cref="FinderPatternFinder.FindCandidatesStridedAndFullSweep(ReadOnlySpan{byte}, int, int, byte, in GreyLevels, Span{FinderPattern}, out int, Span{FinderPattern}, out int, FinderPatternFinder.KeptRows)"/>).
+    /// A caller's room can fill on the strided candidates, so the sweep is scanned only after them, and it merges the hits the strided scan kept in those rows' places (<see cref="FinderPatternFinder.FindCandidatesKeepingRowHits(ReadOnlySpan{byte}, int, int, byte, in GreyLevels, Span{FinderPattern}, out int, Span{FinderPattern}, Span{int}, int, FinderPatternFinder.KeptRows)"/>).
     /// </remarks>
     /// <returns>Whether neither scan found a finder candidate.</returns>
-    private static bool DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref TDecoder decoder, ref SymbolSearch<TResult> search, scoped ImageView image, scoped Span<FinderPattern> strided, scoped Span<FinderPattern> swept, bool sweepOnly)
+    private static bool DecodeSymbolsOfReading<TDecoder, TInfo, TResult>(ref TDecoder decoder, ref SymbolSearch<TResult> search, scoped ImageView image, scoped Span<FinderPattern> strided, scoped Span<FinderPattern> swept, bool sweepOnly, int reading)
         where TDecoder : struct, ISymbolsDecoder<TInfo, TResult>
     {
         // Every reading checks once at least, so an image where nothing is decoded still sees the token
@@ -280,16 +317,18 @@ internal static partial class CandidateScan
         if (!sweepOnly)
         {
             var onePass = search.Growing is not null;
+            // The rows a read before this one kept of this reading, merged by both scans where they come to one, so neither scans it
+            search.Shared.TryTake(reading, image.Height, out var given);
             if (onePass)
-                FinderPatternFinder.FindCandidatesStridedAndFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, strided, out stridedCount, swept, out sweptCount);
+                FinderPatternFinder.FindCandidatesStridedAndFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, strided, out stridedCount, swept, out sweptCount, given);
             else
-                FinderPatternFinder.FindCandidatesKeepingRowHits(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, strided, out stridedCount, search.Kept, search.RowEnds);
+                FinderPatternFinder.FindCandidatesKeepingRowHits(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, strided, out stridedCount, search.Kept, search.RowEnds, FinderPatternFinder.CandidateRowStride, given);
             FinderPatternFinder.RankByConfirmation(strided.Slice(0, stridedCount));
             DecodeSymbolsOfScan<TDecoder, TInfo, TResult>(ref decoder, ref search, image, strided.Slice(0, stridedCount), skip: default);
             if (search.IsFull)
                 return false;
             if (!onePass)
-                sweptCount = FinderPatternFinder.FindCandidatesFullSweepReplaying(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, swept, search.Kept, search.RowEnds);
+                sweptCount = FinderPatternFinder.FindCandidatesFullSweepReplaying(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, swept, new FinderPatternFinder.KeptRows(search.Kept, search.RowEnds, FinderPatternFinder.CandidateRowStride), given);
         }
         else
         {
