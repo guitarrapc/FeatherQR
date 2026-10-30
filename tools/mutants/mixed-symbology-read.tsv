@@ -4,8 +4,8 @@
 #
 #   dotnet run tools/mutation_check.cs -- run tools/mutants/mixed-symbology-read.tsv <out-dir> --allow-dirty --filter "/*/*/MixedSymbolsDecodeTest/*" --filter "/*/*/DecodeAllocationTest/Mixed*"
 #
-# Against those two filters 19 of the 20 faults are caught (2026-10-30; QB-grown-room-dropped by StandardQRBeside_RoomFull_GrowsFromThePool since the rooms are rented). MX-histogram-refilled fills the single-finder scan's histogram from
-# the pixels again in place of taking the one given, which changes the time only.
+# Against those two filters and the two below, 26 of the 28 faults are caught (2026-10-30; QB-grown-room-dropped by StandardQRBeside_RoomFull_GrowsFromThePool since the rooms are rented). MX-histogram-refilled fills the single-finder scan's histogram from
+# the pixels again in place of taking the one given, and EP-gate-always-searches runs the search the gate spares: both change the time only.
 MX-no-second-read-span	src/FeatherQR/MixedImageDecoder.cs	if (single == 0 || read == symbols.Length)	if (true)
 MX-no-second-read-array	src/FeatherQR/MixedImageDecoder.cs	if (singleCount != 0)	if (false)
 MX-second-read-seeds-standard-only-span	src/FeatherQR/MixedImageDecoder.cs	DecodeSymbolsBeside(luminance, width, height, histogram, room, read);	DecodeSymbolsBeside(luminance, width, height, histogram, room, count);
@@ -26,3 +26,14 @@ QB-grown-room-dropped	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.
 MX-histogram-not-copied	src/FeatherQR/MixedImageDecoder.cs	=> _histogram.AsSpan(0, Binarizer.HistogramBins).CopyTo(histogram);	=> histogram.Clear();
 MX-histogram-refilled	src/FeatherQR/MixedImageDecoder.cs	=> _histogram.AsSpan(0, Binarizer.HistogramBins).CopyTo(histogram);	=> Binarizer.FillHistogram(luminance, histogram);
 QB-histogram-refilled	src/FeatherQR/Internals/StandardQR/QRImageDecoder.Symbols.cs	        imageHistogram.CopyTo(histogram);	        Binarizer.FillHistogram(luminance, histogram);
+# The gate on Micro QR's orientation search and the extent probe it reads (2026-10-30). Run with the filters above and
+#   --filter "/*/*/FinderExtentProbeTest/*" --filter "/*/*/SingleFinderSymbolsDecodeTest/*"
+# EP-gate-always-searches runs the search the gate would spare, which changes the time only.
+EP-walk-from-the-finder-edge	src/FeatherQR/Internals/ImageDecoders/FinderExtentProbe.cs	    private const float Start = 4.5f;	    private const float Start = 3.5f;
+EP-dark-from-three-quarters	src/FeatherQR/Internals/ImageDecoders/FinderExtentProbe.cs	    private const float DarkShare = 0.25f;	    private const float DarkShare = 0.75f;
+EP-gap-past-the-quiet-zone	src/FeatherQR/Internals/ImageDecoders/FinderExtentProbe.cs	    private const int GapSteps = 3;	    private const int GapSteps = 5;
+EP-shade-never	src/FeatherQR/Internals/ImageDecoders/FinderExtentProbe.cs	    private const float ShadeShare = 0.9f;	    private const float ShadeShare = 1.1f;
+EP-shade-window-quartered	src/FeatherQR/Internals/ImageDecoders/FinderExtentProbe.cs	        var shadeSteps = 2 * modules;	        var shadeSteps = modules / 2;
+EP-length-too-short	src/FeatherQR/MixedImageDecoder.cs	    private const int MicroQRLongestExtent = 15;	    private const int MicroQRLongestExtent = 5;
+EP-gate-always-searches	src/FeatherQR/MixedImageDecoder.cs	            => !FinderExtentProbe.ExtendsBeyond(image, centerX, centerY, orientations[0], MicroQRLongestExtent);	            => true;
+EP-gate-inverted	src/FeatherQR/Internals/MicroQR/MicroQRImageDecoder.cs	        if (orientationCount > 0 && !gate.Search(image, finder.X, finder.Y, orientations.Slice(0, orientationCount)))	        if (orientationCount > 0 && gate.Search(image, finder.X, finder.Y, orientations.Slice(0, orientationCount)))

@@ -163,9 +163,23 @@ internal static class MixedImageDecoder
         public SingleFinderInfo WithoutCorners() => IsRmQR ? new SingleFinderInfo(RmQR.WithCorners(default)) : new SingleFinderInfo(MicroQR.WithCorners(default));
     }
 
+    /// <summary>Past this many modules from the finder's separator no Micro QR symbol reaches: 17 modules a side at most, 4.5 of them the finder and its separator, and a margin for a module size read large.</summary>
+    private const int MicroQRLongestExtent = 15;
+
+    /// <summary>
+    /// Micro QR's gate on a finder's orientation search: not where the finder's symbol extends past <see cref="MicroQRLongestExtent"/> modules along one of its axes (<see cref="FinderExtentProbe"/>),
+    /// which a Standard QR code does along both and an rMQR symbol along its width. Those finders cost Micro QR its whole search budget for nothing.
+    /// </summary>
+    private readonly struct NotMicroQRGate : IOrientationSearchGate
+    {
+        public bool Search(in ImageView image, float centerX, float centerY, ReadOnlySpan<OrientationCandidate> orientations)
+            => !FinderExtentProbe.ExtendsBeyond(image, centerX, centerY, orientations[0], MicroQRLongestExtent);
+    }
+
     /// <summary>
     /// Micro QR's decode of a finder candidate, then rMQR's when that does not end the candidate, for the scan that returns every symbol: one scan of the passes serves both.
     /// A candidate inside a Standard QR symbol read before the scan, one of the first <paramref name="standardCount"/> of <paramref name="standard"/>, is decoded by neither.
+    /// Micro QR's search of a finder's orientations is spared where the finder's symbol is too long to be a Micro QR symbol (<see cref="NotMicroQRGate"/>).
     /// The scan's histogram is <paramref name="histogram"/>, the image's, which the Standard QR read was given.
     /// </summary>
     private readonly struct SingleFinderDecoder(QRCodeDecodeResult[] standard, int standardCount, int[] histogram) : ISymbolsDecoder<SingleFinderInfo, SymbolDecodeResult>
@@ -202,7 +216,7 @@ internal static class MixedImageDecoder
 
             // Each decoder sees the buffers its own scan gives it
             var micro = new SearchResult<MicroQRCodeDecodeInfo>(ReportRule.Furthest, Micro.NotDetected);
-            var status = Micro.DecodeCandidate(image, candidate, modules.Slice(0, Micro.ModuleBufferLength), destination.Slice(0, Micro.MaxChars), out charsWritten, out var microInfo, ref micro);
+            var status = MicroQRImageDecoder.DecodeCandidate(image, candidate, modules.Slice(0, Micro.ModuleBufferLength), destination.Slice(0, Micro.MaxChars), out charsWritten, out var microInfo, ref micro, default(NotMicroQRGate));
             if (AttemptStatus.IsTerminal(status))
             {
                 info = new SingleFinderInfo(microInfo);
