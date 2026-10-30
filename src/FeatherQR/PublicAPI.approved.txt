@@ -1,5 +1,5 @@
 // FeatherQR
-// 40 exported types
+// 43 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR
@@ -431,5 +431,29 @@ namespace FeatherQR
         public ImagePoint TopLeft { get; }
         public ImagePoint TopRight { get; }
         public bool IsEmpty { get; }
+    }
+
+    public readonly struct SymbolDecodeResult : IEquatable<SymbolDecodeResult>
+    {
+        public MicroQRCodeDecodeResult MicroQR { get; }
+        public QRCodeDecodeResult StandardQR { get; }
+        public RmQRCodeDecodeResult RmQR { get; }
+        public SymbolCorners Corners { get; }
+        public Symbology Symbology { get; }
+        public bool Success { get; }
+        public string Text { get; }
+    }
+
+    public static class SymbolDecoder
+    {
+        public static SymbolDecodeResult[] DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height);
+        public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<SymbolDecodeResult> destination);
+    }
+
+    public enum Symbology : int
+    {
+        StandardQR = 0,
+        MicroQR = 1,
+        RmQR = 2,
     }
 }

@@ -37,9 +37,10 @@ internal static class Sheets
     private static float Range(Random random, float lo, float hi) => lo + (float)random.NextDouble() * (hi - lo);
 
     /// <summary>How a sheet is drawn: the module grid of the whole sheet, quiet zones included, into an image.</summary>
-    private sealed record SheetKind(string Name, Func<Func<int, int, bool>, int, int, Random, (byte[] Luminance, int Width, int Height)> Render);
+    internal sealed record SheetKind(string Name, Func<Func<int, int, bool>, int, int, Random, (byte[] Luminance, int Width, int Height)> Render);
 
-    private static readonly SheetKind[] Kinds =
+    /// <summary>The four ways a sheet is drawn, shared with <see cref="MixedSheets"/>.</summary>
+    internal static readonly SheetKind[] Kinds =
     [
         new("01 crisp nearest-neighbour 2.00-4.00", static (isDark, columns, rows, random) =>
             NearestNeighbourRenderer.Render(isDark, columns, rows, Range(random, 2f, 4f), (float)random.NextDouble(), (float)random.NextDouble())),
@@ -77,7 +78,7 @@ internal static class Sheets
                         if (texts.Add(definition.Text))
                             symbols.Add((definition.Text, Encode(definition)));
                     }
-                    var (isDark, columns, rows) = Layout(symbols.Select(static s => s.Symbol).ToArray(), across, down);
+                    var (isDark, columns, rows) = Layout(symbols.Select(static s => s.Symbol).ToArray(), static _ => 2, across, down);
                     var random = new Random(((l * 31) + k) * 1009 + n * 7 + symbology.Length);
                     var (luminance, width, height) = Kinds[k].Render(isDark, columns, rows, random);
                     yield return new Sheet(symbology, Kinds[k].Name, $"{across} x {down}", n, luminance, width, height, [.. symbols.Select(static s => s.Text)]);
@@ -107,11 +108,11 @@ internal static class Sheets
     }
 
     /// <summary>
-    /// The symbols in rows of <paramref name="across"/>, each in a cell of its own size plus a two-module quiet zone all round, each row as tall as its tallest cell.
+    /// The symbols in rows of <paramref name="across"/>, each in a cell of its own size plus its quiet zone all round, each row as tall as its tallest cell.
     /// </summary>
-    private static (Func<int, int, bool> IsDark, int Columns, int Rows) Layout(Symbol[] symbols, int across, int down)
+    /// <param name="quietZone">The quiet zone of symbol <c>i</c>, in modules.</param>
+    internal static (Func<int, int, bool> IsDark, int Columns, int Rows) Layout(Symbol[] symbols, Func<int, int> quietZone, int across, int down)
     {
-        const int QuietZone = 2;
         var placed = new (int Left, int Top, Symbol Symbol)[symbols.Length];
         int top = 0, columns = 0;
         for (var row = 0; row < down; row++)
@@ -119,9 +120,10 @@ internal static class Sheets
             int left = 0, tallest = 0;
             for (var i = row * across; i < (row + 1) * across; i++)
             {
-                placed[i] = (left + QuietZone, top + QuietZone, symbols[i]);
-                left += symbols[i].Width + 2 * QuietZone;
-                tallest = Math.Max(tallest, symbols[i].Height + 2 * QuietZone);
+                var quiet = quietZone(i);
+                placed[i] = (left + quiet, top + quiet, symbols[i]);
+                left += symbols[i].Width + 2 * quiet;
+                tallest = Math.Max(tallest, symbols[i].Height + 2 * quiet);
             }
             columns = Math.Max(columns, left);
             top += tallest;

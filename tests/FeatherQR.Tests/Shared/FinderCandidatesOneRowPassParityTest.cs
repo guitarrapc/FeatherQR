@@ -51,6 +51,35 @@ public class FinderCandidatesOneRowPassParityTest
     }
 
     /// <summary>
+    /// The rows a scan of another stride kept, given to both scans: each merges a kept row's hits where it would scan the row, and both lists are still the two scans', at the stride of the Standard QR read for every symbol (3 on these scenes, 12 on a 12-megapixel photograph), the scan's own, and strides sharing no row but the first.
+    /// </summary>
+    [Test]
+    [Arguments(3, KeptRoom)]
+    [Arguments(4, KeptRoom)]
+    [Arguments(5, KeptRoom)]
+    [Arguments(7, KeptRoom)]
+    [Arguments(12, KeptRoom)]
+    [Arguments(3, SmallRoom)]
+    [Arguments(12, SmallRoom)]
+    public async Task GivenRowsOfAnotherStride_BothListsAreTheTwoScans(int givenStride, int givenRoom)
+    {
+        var scenes = 0;
+        var rowsGiven = 0;
+        foreach (var (name, luminance, width, height) in Scenes())
+        {
+            var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+            var mismatch = CompareGiven(luminance, width, height, threshold, grey, givenStride, givenRoom, out var kept);
+            await Assert.That(mismatch).IsNull().Because($"{name}, given stride {givenStride}, room {givenRoom}");
+            scenes++;
+            rowsGiven += kept;
+        }
+
+        await Assert.That(scenes).IsGreaterThan(100);
+        // Rows with hits have to be given, or nothing was merged from them. The wider strides reach fewer rows of these small scenes
+        await Assert.That(rowsGiven).IsGreaterThan(givenRoom < KeptRoom ? 10 : 40);
+    }
+
+    /// <summary>
     /// A strided row with more hits than the list one row's hits are gathered in is scanned into each list on its own, so no hit past the room is lost.
     /// </summary>
     [Test]
@@ -168,6 +197,52 @@ public class FinderCandidatesOneRowPassParityTest
             ?? Mismatch("one pass, full sweep", onePassSwept, onePassSweptCount, sweptAlone, sweptAloneCount)
             ?? Mismatch("kept hits, strided", strided, stridedCount, stridedAlone, stridedAloneCount)
             ?? Mismatch("kept hits, full sweep", swept, sweptCount, sweptAlone, sweptAloneCount);
+    }
+
+    /// <remarks><c>rowsWithHits</c> counts the given rows kept with a hit in them.</remarks>
+    private static string? CompareGiven(byte[] luminance, int width, int height, byte threshold, in GreyLevels grey, int givenStride, int givenRoom, out int rowsWithHits)
+    {
+        var stridedAlone = new FinderPattern[4096];
+        var sweptAlone = new FinderPattern[4096];
+        var stridedAloneCount = FinderPatternFinder.FindCandidates(luminance, width, height, threshold, stridedAlone, grey);
+        var sweptAloneCount = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, sweptAlone, grey);
+
+        // The other scan, at its stride, keeping its rows
+        var givenStridedAlone = new FinderPattern[4096];
+        var givenStridedAloneCount = FinderPatternFinder.FindCandidatesWith(luminance, width, height, threshold, givenStridedAlone, grey, givenStride, FinderRowKernel.Auto);
+        var givenHits = new FinderPattern[givenRoom];
+        var givenRowEnds = new int[FinderPatternFinder.StridedRowCount(height, givenStride)];
+        var givenStrided = new FinderPattern[4096];
+        FinderPatternFinder.FindCandidatesKeepingRowHits(luminance, width, height, threshold, grey, givenStrided, out var givenStridedCount, givenHits, givenRowEnds, givenStride, given: default);
+        var given = new FinderPatternFinder.KeptRows(givenHits, givenRowEnds, givenStride);
+        rowsWithHits = 0;
+        var start = 0;
+        foreach (var end in givenRowEnds)
+        {
+            if (end > start)
+                rowsWithHits++;
+            if (end >= 0)
+                start = end;
+        }
+
+        var onePassStrided = new FinderPattern[4096];
+        var onePassSwept = new FinderPattern[4096];
+        FinderPatternFinder.FindCandidatesStridedAndFullSweep(luminance, width, height, threshold, grey, onePassStrided, out var onePassStridedCount, onePassSwept, out var onePassSweptCount, given);
+        var strided = new FinderPattern[4096];
+        var swept = new FinderPattern[4096];
+        var kept = new FinderPattern[KeptRoom];
+        var rowEnds = new int[FinderPatternFinder.StridedRowCount(height)];
+        FinderPatternFinder.FindCandidatesKeepingRowHits(luminance, width, height, threshold, grey, strided, out var stridedCount, kept, rowEnds, FinderPatternFinder.CandidateRowStride, given);
+        var sweptCount = FinderPatternFinder.FindCandidatesFullSweepReplaying(luminance, width, height, threshold, grey, swept, new FinderPatternFinder.KeptRows(kept, rowEnds, FinderPatternFinder.CandidateRowStride), given);
+        var sweptFromGiven = new FinderPattern[4096];
+        var sweptFromGivenCount = FinderPatternFinder.FindCandidatesFullSweepReplaying(luminance, width, height, threshold, grey, sweptFromGiven, own: default, given);
+
+        return Mismatch($"kept hits at stride {givenStride}", givenStrided, givenStridedCount, givenStridedAlone, givenStridedAloneCount)
+            ?? Mismatch("one pass given rows, strided", onePassStrided, onePassStridedCount, stridedAlone, stridedAloneCount)
+            ?? Mismatch("one pass given rows, full sweep", onePassSwept, onePassSweptCount, sweptAlone, sweptAloneCount)
+            ?? Mismatch("kept hits given rows, strided", strided, stridedCount, stridedAlone, stridedAloneCount)
+            ?? Mismatch("kept hits given rows, full sweep", swept, sweptCount, sweptAlone, sweptAloneCount)
+            ?? Mismatch("full sweep from the given rows alone", sweptFromGiven, sweptFromGivenCount, sweptAlone, sweptAloneCount);
     }
 
     private static string? Mismatch(string list, FinderPattern[] actual, int count, FinderPattern[] expected, int expectedCount)

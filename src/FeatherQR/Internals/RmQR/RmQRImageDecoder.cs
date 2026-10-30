@@ -131,13 +131,15 @@ internal static partial class RmQRImageDecoder
     }
 
     /// <summary>This decoder's part of the shared candidate scan: a candidate's decode (<see cref="DecodeCandidate"/>), the corners of its results, and what a symbol of every symbol's read is returned as.</summary>
-    private readonly struct CandidateDecoder : ISymbolsDecoder<RmQRCodeDecodeInfo, RmQRCodeDecodeResult>
+    internal readonly struct CandidateDecoder : ISymbolsDecoder<RmQRCodeDecodeInfo, RmQRCodeDecodeResult>
     {
         public int MaxChars => RmQRMatrixDecoder.GetMaxCharCount(RmQRVersion.R17x139);
 
         public RmQRCodeDecodeResult Result(string text, in RmQRCodeDecodeInfo info) => new(text, info);
 
         public SymbolCorners ResultCorners(in RmQRCodeDecodeResult result) => result.Info.Corners;
+
+        public void FillHistogram(ReadOnlySpan<byte> luminance, Span<int> histogram) => Binarizer.FillHistogram(luminance, histogram);
 
         public RmQRCodeDecodeInfo NotDetected => RmQRImageDecoder.NotDetected();
 

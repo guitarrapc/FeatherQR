@@ -17,8 +17,8 @@
 /// </summary>
 public class SingleFinderDecodeImageSymbols
 {
-    private const int Width = 1280;
-    private const int Height = 960;
+    internal const int Width = 1280;
+    internal const int Height = 960;
     private const int PixelsPerModule = 4;
 
     private static readonly string[] shapeKeys = ["one-symbol", "sheet-12", "no-symbol", "qr-page-12"];
@@ -79,11 +79,11 @@ public class SingleFinderDecodeImageSymbols
         ? Matrix(MicroQRCodeGenerator.Create($"MICRO {index:00}", MicroQREccLevel.L))
         : Matrix(RmQRCodeGenerator.Create($"RMQR SHEET {index:00}", RmQREccLevel.M));
 
-    private static bool[,] Matrix(MicroQRCodeData data) => Matrix(data.Size, data.Size, (r, c) => data[r, c]);
+    internal static bool[,] Matrix(MicroQRCodeData data) => Matrix(data.Size, data.Size, (r, c) => data[r, c]);
 
-    private static bool[,] Matrix(RmQRCodeData data) => Matrix(data.Height, data.Width, (r, c) => data[r, c]);
+    internal static bool[,] Matrix(RmQRCodeData data) => Matrix(data.Height, data.Width, (r, c) => data[r, c]);
 
-    private static bool[,] Matrix(QRCodeData data) => Matrix(data.Size, data.Size, (r, c) => data[r, c]);
+    internal static bool[,] Matrix(QRCodeData data) => Matrix(data.Size, data.Size, (r, c) => data[r, c]);
 
     private static bool[,] Matrix(int rows, int columns, Func<int, int, bool> dark)
     {
@@ -99,7 +99,7 @@ public class SingleFinderDecodeImageSymbols
     /// <summary>
     /// A page with each symbol drawn at <see cref="PixelsPerModule"/>, quiet zone included: one placed off centre, or each in its own cell of a 4 x 3 grid.
     /// </summary>
-    private static byte[] Page(bool texture, IEnumerable<bool[,]> symbols, bool grid)
+    internal static byte[] Page(bool texture, IEnumerable<bool[,]> symbols, bool grid)
     {
         var state = 20261029u;
         uint Next() => state = state * 1664525u + 1013904223u;

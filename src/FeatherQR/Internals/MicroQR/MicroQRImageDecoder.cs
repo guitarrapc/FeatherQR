@@ -96,13 +96,15 @@ internal static partial class MicroQRImageDecoder
     }
 
     /// <summary>This decoder's part of the shared candidate scan: a candidate's decode (<see cref="DecodeCandidate"/>), the corners of its results, and what a symbol of every symbol's read is returned as.</summary>
-    private readonly struct CandidateDecoder : ISymbolsDecoder<MicroQRCodeDecodeInfo, MicroQRCodeDecodeResult>
+    internal readonly struct CandidateDecoder : ISymbolsDecoder<MicroQRCodeDecodeInfo, MicroQRCodeDecodeResult>
     {
         public int MaxChars => MicroQRMatrixDecoder.GetMaxCharCount(MicroQRVersion.M4);
 
         public MicroQRCodeDecodeResult Result(string text, in MicroQRCodeDecodeInfo info) => new(text, info);
 
         public SymbolCorners ResultCorners(in MicroQRCodeDecodeResult result) => result.Info.Corners;
+
+        public void FillHistogram(ReadOnlySpan<byte> luminance, Span<int> histogram) => Binarizer.FillHistogram(luminance, histogram);
 
         public MicroQRCodeDecodeInfo NotDetected => new(DecodeStatus.NotDetected, 0, default, -1, 0);
 
@@ -124,13 +126,17 @@ internal static partial class MicroQRImageDecoder
         return CandidateScan.Decode<CandidateDecoder, MicroQRCodeDecodeInfo>(ref decoder, luminance, histogram, width, height, destination, out charsWritten, out info, out _, out _, out _);
     }
 
+    private static DecodeStatus DecodeCandidate(in ImageView image, FinderPattern candidate, Span<byte> modules, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> best)
+        => DecodeCandidate(image, candidate, modules, destination, out charsWritten, out info, ref best, default(SearchAlways));
+
     /// <summary>
-    /// One finder candidate: the frames along the image axes at each right angle, then the arbitrary-orientation path.
+    /// One finder candidate: the frames along the image axes at each right angle, then the arbitrary-orientation path, which <paramref name="gate"/> may spare (<see cref="IOrientationSearchGate"/>).
     /// A terminal result ends the candidate, a read that does not fit the destination as well as one that does: its grids are
     /// tried in the same order whatever the destination, so the read that does not fit is the one a sized call returns, its content permitting (<see cref="AttemptStatus.Progress"/>), and a
     /// later grid could only read something else.
     /// </summary>
-    private static DecodeStatus DecodeCandidate(in ImageView image, FinderPattern candidate, Span<byte> modules, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> best)
+    internal static DecodeStatus DecodeCandidate<TGate>(in ImageView image, FinderPattern candidate, Span<byte> modules, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> best, in TGate gate)
+        where TGate : struct, IOrientationSearchGate
     {
         Span<int> boundaryColumns = stackalloc int[18];
         Span<int> boundaryRows = stackalloc int[18];
@@ -204,7 +210,7 @@ internal static partial class MicroQRImageDecoder
 
         // The frames above cover the axis-aligned case. A symbol they do not read
         // may be turned, so the finder's own axes are searched.
-        return TryDecodeArbitraryOrientation(image, candidate, modules, destination, out charsWritten, out info, ref best);
+        return TryDecodeArbitraryOrientation(image, candidate, modules, destination, out charsWritten, out info, ref best, gate);
     }
 
     /// <summary>
@@ -212,17 +218,22 @@ internal static partial class MicroQRImageDecoder
     /// For a concentric square finder, a center ray crosses the shortest dark-light-dark span when it follows one of the square's local axes.
     /// An angular sweep therefore supplies the two grid-axis directions without the three finder centers available to Standard QR.
     /// </summary>
-    private static DecodeStatus TryDecodeArbitraryOrientation(
+    private static DecodeStatus TryDecodeArbitraryOrientation<TGate>(
         in ImageView image,
         in FinderPattern finder,
         Span<byte> modules,
         Span<char> destination,
         out int charsWritten,
         out MicroQRCodeDecodeInfo info,
-        ref SearchResult<MicroQRCodeDecodeInfo> best)
+        ref SearchResult<MicroQRCodeDecodeInfo> best,
+        in TGate gate)
+        where TGate : struct, IOrientationSearchGate
     {
         Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];
         var orientationCount = FinderAxisEstimator.FindOrientationCandidates(image.Luminance, image.Width, image.Height, image.Threshold, finder, orientations);
+        // The whole budget below goes on a finder of another symbology's symbol, which the gate of the read of every symbology tells from the axes found
+        if (orientationCount > 0 && !gate.Search(image, finder.X, finder.Y, orientations.Slice(0, orientationCount)))
+            return best.Report(out charsWritten, out info);
         var attemptsRemaining = MaxArbitraryOrientationDecodeAttempts;
         Span<ulong> failedKeys = stackalloc ulong[(MicroQRFailedGrids.Capacity + 1) * MicroQRFailedGrids.Words];
         Span<ulong> failedPrints = stackalloc ulong[MicroQRFailedGrids.Capacity];

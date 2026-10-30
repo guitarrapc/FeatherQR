@@ -83,7 +83,7 @@ public record struct RmQRCodeGeneratorOptions
     /// <para>
     /// The mode costs 3 bits in first position and 11 in second (the 3-bit indicator and the 8-bit application indicator), which can move content at a version's edge to another version under the fit strategy, or out of a requested version. Size a destination buffer with the same value you encode with.
     /// Whether the data is valid GS1 data is not checked here. The <c>FeatherQR.Gs1</c> package checks element strings and builds them from <c>(AI)</c> text.
-    /// Few readers read rMQR at all. Of those, zxing-cpp reads both modes, and no other writer is known to write second position in rMQR.
+    /// Few readers read rMQR at all, and no other writer is known to write second position in rMQR.
     /// </para>
     /// </remarks>
     public Fnc1Mode Fnc1

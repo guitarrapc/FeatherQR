@@ -38,8 +38,8 @@ public class DecodeImageSymbolsTest
     [Test]
     public async Task Array_SheetOfMoreThanItsFirstRoom_ReadsEverySymbolOnce()
     {
-        // Twelve codes, more than the array form's room holds before it grows
-        var (sheet, texts) = Sheet(4, 3);
+        // Eighteen codes, more than the array form's first room of sixteen holds
+        var (sheet, texts) = Sheet(6, 3);
         using var _ = sheet;
         var luminance = Luminance(sheet);
 

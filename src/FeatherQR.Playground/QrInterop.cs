@@ -172,13 +172,15 @@ public static partial class QrInterop
     /// <summary>
     /// Decodes every QR code in encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string (see <see cref="DecodeSymbolsPayload"/>): <c>{"ok":true,"symbols":[...],"totalMs":N,"imageWidth":N,"imageHeight":N,"orientation":N}</c>, each symbol shaped as a <see cref="Decode"/> success, <c>{"ok":false,"symbols":[],...}</c> when none decodes, or <c>{"error":"..."}</c> on unexpected failure.
     /// <para>
-    /// Standard QR codes are read with <see cref="QRCodeImageDecoder.DecodeSymbols(SKBitmap)"/>, each once, in the order found.
+    /// With <paramref name="everySymbology"/>, the symbols of every symbology are read together with <see cref="SymbolImageDecoder.DecodeSymbols(SKBitmap)"/>, each once, the Standard QR codes first.
+    /// Without it, Standard QR codes are read with <see cref="QRCodeImageDecoder.DecodeSymbols(SKBitmap)"/>, each once, in the order found.
     /// That read covers Standard QR alone, so an image with none is read for every Micro QR symbol, and an image with none of those for every rMQR symbol.
     /// </para>
     /// </summary>
     /// <param name="imageBytes">Encoded image file bytes.</param>
+    /// <param name="everySymbology">Whether to read the symbols of every symbology together.</param>
     [JSExport]
-    public static string DecodeAll(byte[] imageBytes)
+    public static string DecodeAll(byte[] imageBytes, bool everySymbology)
     {
         try
         {
@@ -190,8 +192,18 @@ public static partial class QrInterop
             var image = new DecodedImage(bitmap.Width, bitmap.Height, ReadOrigin(imageBytes));
 
             DecodePayload[] symbols;
-            var results = QRCodeDecoder.DecodeSymbols(bitmap);
-            if (results.Length > 0)
+            if (everySymbology)
+            {
+                var all = SymbolDecoder.DecodeSymbols(bitmap);
+                var ms = ElapsedMs(stopwatch);
+                symbols = Array.ConvertAll(all, r => r.Symbology switch
+                {
+                    Symbology.StandardQR => StandardPayload(r.StandardQR.Text, r.StandardQR.Info, ms, image),
+                    Symbology.MicroQR => MicroPayload(r.MicroQR.Text, r.MicroQR.Info, ms, image),
+                    _ => RmqrPayload(r.RmQR.Text, r.RmQR.Info, ms, image),
+                });
+            }
+            else if (QRCodeDecoder.DecodeSymbols(bitmap) is { Length: > 0 } results)
             {
                 var ms = ElapsedMs(stopwatch);
                 symbols = Array.ConvertAll(results, r => StandardPayload(r.Text, r.Info, ms, image));

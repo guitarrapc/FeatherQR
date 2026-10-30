@@ -39,6 +39,41 @@ public class NetStandardBuildParityTest
         }
     }
 
+    [Test]
+    [MethodDataSource(nameof(Frameworks))]
+    public async Task MixedImageSymbols_MatchesThisHostsBuild(string targetFramework)
+    {
+        var (build, _) = await LoadBuild(targetFramework);
+        var (luminance, width, height) = MixedSymbolsDecodeTest.RenderGrid(MixedSymbolsDecodeTest.Mix.AllThree, 3, 2, 20f);
+        var expected = SymbolDecoder.DecodeImageSymbols(luminance, width, height);
+        await Assert.That(expected.Length).IsEqualTo(6);
+
+        // Bridge only the public span entry; the result array belongs to the loaded build.
+        var target = build.GetType("FeatherQR.SymbolDecoder", throwOnError: true)!
+            .GetMethod("DecodeImageSymbols", [typeof(ReadOnlySpan<byte>), typeof(int), typeof(int)])!;
+        var method = new DynamicMethod("SymbolDecoder.DecodeImageSymbols", typeof(Array),
+            [typeof(byte[]), typeof(int), typeof(int)], typeof(NetStandardBuildParityTest).Module);
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(ReadOnlySpan<byte>).GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, target);
+        il.Emit(OpCodes.Ret);
+        var decode = method.CreateDelegate<Func<byte[], int, int, Array>>();
+        var actual = decode(luminance, width, height);
+
+        await Assert.That(actual.Length).IsEqualTo(expected.Length);
+        for (var i = 0; i < actual.Length; i++)
+        {
+            var symbol = actual.GetValue(i)!;
+            var type = symbol.GetType();
+            await Assert.That(type.GetProperty("Text")!.GetValue(symbol)).IsEqualTo(expected[i].Text);
+            await Assert.That(type.GetProperty("Symbology")!.GetValue(symbol)!.ToString()).IsEqualTo(expected[i].Symbology.ToString());
+            await Assert.That(type.GetProperty("Corners")!.GetValue(symbol)!.ToString()).IsEqualTo(expected[i].Corners.ToString());
+        }
+    }
+
     /// <summary>
     /// Which netstandard build keeps Standard QR's pooled quiet-zone path. netstandard2.0, which .NET Framework runs, keeps the pooled core
     /// copied into the cleared destination, since the move in place is slower on .NET Framework 4.8. netstandard2.1, which .NET 6

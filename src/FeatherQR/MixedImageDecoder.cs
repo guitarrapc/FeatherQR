@@ -1,0 +1,286 @@
+using System.Buffers;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using FeatherQR.Internals.ImageDecoders;
+using FeatherQR.Internals.MicroQR;
+using FeatherQR.Internals.RmQR;
+using FeatherQR.Internals.StandardQR;
+
+namespace FeatherQR;
+
+/// <summary>
+/// Reads every symbol of an image whatever its symbology: Standard QR's read for every symbol, then Micro QR and rMQR on one scan of their passes, then Standard QR again when either read anything.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Standard QR comes first, since a triple that reads is the strongest claim on three finders, and its passes are its own: its candidate list and the rows it scans between differ from those of the single-finder scan.
+/// Micro QR and rMQR scan the same passes, so they share one scan of each (<see cref="CandidateScan"/>), and each candidate is decoded as a Micro QR symbol, then as an rMQR one if that does not read.
+/// A candidate inside a symbol read so far, by either scan, is decoded by neither: it is that symbol's finder or a finder-like pattern in its data.
+/// </para>
+/// <para>
+/// The finders of Micro QR and rMQR symbols can keep the Standard QR stages from reading a QR code that they read once those finders are gone. So when either reads anything, Standard QR reads again with every symbol read so far taken as read (<see cref="QRImageDecoder.DecodeSymbolsBeside(ReadOnlySpan{byte}, int, int, ReadOnlySpan{int}, Span{QRCodeDecodeResult}, int)"/>).
+/// An image where neither reads, a photograph of Standard QR codes among them, pays nothing for it.
+/// </para>
+/// <para>
+/// The results are in that order: Standard QR's first reads, then Micro QR's and rMQR's as found, then the codes Standard QR's second read adds.
+/// </para>
+/// <para>
+/// The image's histogram is filled once and given to every read, since each would fill it from the same pixels at full size.
+/// </para>
+/// </remarks>
+internal static class MixedImageDecoder
+{
+    /// <summary>The room each read of the array form starts with, the smallest array the pool rents, doubled each time it fills.</summary>
+    private const int GrowingRoom = 16;
+
+    /// <summary>
+    /// Decodes every symbol of a grayscale image, of any of the three symbologies, into <paramref name="symbols"/>, as many as it has room for, each once.
+    /// </summary>
+    /// <remarks>Nothing but the texts is allocated.</remarks>
+    /// <returns>How many symbols were written.</returns>
+    internal static int DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<SymbolDecodeResult> symbols)
+    {
+        if (symbols.IsEmpty || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
+            return 0;
+        luminance = luminance.Slice(0, pixelCount);
+
+        // Standard QR reads into a room of its own result type. Its second read holds every symbol read before it, so the room is the caller's size
+        var rented = ArrayPool<QRCodeDecodeResult>.Shared.Rent(symbols.Length);
+        // Rented, not on the stack, since the single-finder decoder holds it
+        var rentedHistogram = ArrayPool<int>.Shared.Rent(Binarizer.HistogramBins);
+        var rows = FinderRowRooms.Rent(height);
+        try
+        {
+            var histogram = rentedHistogram.AsSpan(0, Binarizer.HistogramBins);
+            Binarizer.FillHistogram(luminance, histogram);
+            var room = rented.AsSpan(0, symbols.Length);
+            var shared = rows.Over();
+            var count = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, room, seeded: 0, ref shared);
+            for (var i = 0; i < count; i++)
+                symbols[i] = new SymbolDecodeResult(room[i]);
+            if (count == symbols.Length)
+                return count;
+
+            var decoder = new SingleFinderDecoder(rented, count, rentedHistogram);
+            var single = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, symbols.Slice(count), shared);
+            var read = count + single;
+            if (single == 0 || read == symbols.Length)
+                return read;
+
+            for (var i = count; i < read; i++)
+                room[i] = TakenAsRead(symbols[i]);
+            var total = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, room, read);
+            for (var i = read; i < total; i++)
+                symbols[i] = new SymbolDecodeResult(room[i]);
+            return total;
+        }
+        finally
+        {
+            rows.Return();
+            ArrayPool<int>.Shared.Return(rentedHistogram);
+            // The room holds the texts, which the pool would otherwise keep alive
+            ArrayPool<QRCodeDecodeResult>.Shared.Return(rented, clearArray: true);
+        }
+    }
+
+    /// <summary>
+    /// The rented rooms of the strided rows' hits Standard QR's first read keeps for the single-finder scan (<see cref="SharedRowHits"/>): a quarter of a candidate list of hits a reading, 65,536 bytes in all, under the large object heap's threshold, and the row ends of Standard QR's stride.
+    /// </summary>
+    private readonly struct FinderRowRooms(byte[] hits, int[] rowEnds, int[] strides)
+    {
+        private const int HitRoom = CandidateScan.MaxSymbolCandidates / SharedRowHits.Readings;
+
+        public static FinderRowRooms Rent(int height)
+        {
+            var rowCount = FinderPatternFinder.StridedRowCount(height, FinderPatternFinder.RowStride(height));
+            return new FinderRowRooms(
+                ArrayPool<byte>.Shared.Rent(SharedRowHits.Readings * HitRoom * Unsafe.SizeOf<FinderPattern>()),
+                ArrayPool<int>.Shared.Rent(SharedRowHits.Readings * rowCount),
+                ArrayPool<int>.Shared.Rent(SharedRowHits.Readings));
+        }
+
+        public SharedRowHits Over()
+            => SharedRowHits.OverEmptyRooms(
+                MemoryMarshal.Cast<byte, FinderPattern>(hits.AsSpan()).Slice(0, SharedRowHits.Readings * HitRoom),
+                rowEnds.AsSpan(0, rowEnds.Length / SharedRowHits.Readings * SharedRowHits.Readings),
+                strides.AsSpan(0, SharedRowHits.Readings));
+
+        public void Return()
+        {
+            ArrayPool<int>.Shared.Return(strides);
+            ArrayPool<int>.Shared.Return(rowEnds);
+            ArrayPool<byte>.Shared.Return(hits);
+        }
+    }
+
+    /// <summary>
+    /// Decodes every symbol of a grayscale image, of any of the three symbologies, as <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{SymbolDecodeResult})"/> does with room for all of them.
+    /// </summary>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check.</exception>
+    internal static SymbolDecodeResult[] DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, CancellationToken cancellationToken = default)
+    {
+        if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
+            return [];
+        luminance = luminance.Slice(0, pixelCount);
+
+        var rentedHistogram = ArrayPool<int>.Shared.Rent(Binarizer.HistogramBins);
+        // Standard QR's room, which its second read fills behind every symbol read before it, and the single-finder scan's
+        var standard = ArrayPool<QRCodeDecodeResult>.Shared.Rent(GrowingRoom);
+        var single = ArrayPool<SymbolDecodeResult>.Shared.Rent(GrowingRoom);
+        var rows = FinderRowRooms.Rent(height);
+        try
+        {
+            var histogram = rentedHistogram.AsSpan(0, Binarizer.HistogramBins);
+            Binarizer.FillHistogram(luminance, histogram);
+            var shared = rows.Over();
+            var standardCount = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, ref standard, seeded: 0, ref shared, cancellationToken);
+            var decoder = new SingleFinderDecoder(standard, standardCount, rentedHistogram);
+            var singleCount = CandidateScan.DecodeSymbols<SingleFinderDecoder, SingleFinderInfo, SymbolDecodeResult>(ref decoder, luminance, width, height, ref single, shared, cancellationToken);
+            var read = standardCount + singleCount;
+            if (read == 0)
+                return [];
+
+            var total = read;
+            if (singleCount != 0)
+            {
+                if (standard.Length < read)
+                {
+                    var grown = ArrayPool<QRCodeDecodeResult>.Shared.Rent(read);
+                    standard.AsSpan(0, standardCount).CopyTo(grown);
+                    ArrayPool<QRCodeDecodeResult>.Shared.Return(standard, clearArray: true);
+                    standard = grown;
+                }
+                for (var i = 0; i < singleCount; i++)
+                    standard[standardCount + i] = TakenAsRead(single[i]);
+                total = QRImageDecoder.DecodeSymbolsBeside(luminance, width, height, histogram, ref standard, read, cancellationToken);
+            }
+
+            var symbols = new SymbolDecodeResult[total];
+            for (var i = 0; i < standardCount; i++)
+                symbols[i] = new SymbolDecodeResult(standard[i]);
+            single.AsSpan(0, singleCount).CopyTo(symbols.AsSpan(standardCount));
+            for (var i = read; i < total; i++)
+                symbols[i] = new SymbolDecodeResult(standard[i]);
+            return symbols;
+        }
+        finally
+        {
+            rows.Return();
+            // The rooms hold the texts, which the pool would otherwise keep alive
+            ArrayPool<SymbolDecodeResult>.Shared.Return(single, clearArray: true);
+            ArrayPool<QRCodeDecodeResult>.Shared.Return(standard, clearArray: true);
+            ArrayPool<int>.Shared.Return(rentedHistogram);
+        }
+    }
+
+    /// <summary>
+    /// A symbol of another symbology as Standard QR's second read takes it, for its corners alone. It never leaves this class.
+    /// </summary>
+    private static QRCodeDecodeResult TakenAsRead(in SymbolDecodeResult symbol)
+        => new(symbol.Text, new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, 0, 0).WithCorners(symbol.Corners));
+
+    /// <summary>A single-finder decode's diagnostics: Micro QR's, or rMQR's.</summary>
+    private readonly struct SingleFinderInfo
+    {
+        public SingleFinderInfo(in MicroQRCodeDecodeInfo info) => MicroQR = info;
+
+        public SingleFinderInfo(in RmQRCodeDecodeInfo info)
+        {
+            IsRmQR = true;
+            RmQR = info;
+        }
+
+        public bool IsRmQR { get; }
+
+        public MicroQRCodeDecodeInfo MicroQR { get; }
+
+        public RmQRCodeDecodeInfo RmQR { get; }
+
+        public SymbolCorners Corners => IsRmQR ? RmQR.Corners : MicroQR.Corners;
+
+        public SingleFinderInfo WithoutCorners() => IsRmQR ? new SingleFinderInfo(RmQR.WithCorners(default)) : new SingleFinderInfo(MicroQR.WithCorners(default));
+    }
+
+    /// <summary>Past this many modules from the finder's separator no Micro QR symbol reaches: 17 modules a side at most, 4.5 of them the finder and its separator, and a margin for a module size read large.</summary>
+    private const int MicroQRLongestExtent = 15;
+
+    /// <summary>
+    /// Micro QR's gate on a finder's orientation search: not where the finder's symbol extends past <see cref="MicroQRLongestExtent"/> modules along one of its axes (<see cref="FinderExtentProbe"/>),
+    /// which a Standard QR code does along both and an rMQR symbol along its width. Those finders cost Micro QR its whole search budget for nothing.
+    /// </summary>
+    private readonly struct NotMicroQRGate : IOrientationSearchGate
+    {
+        public bool Search(in ImageView image, float centerX, float centerY, ReadOnlySpan<OrientationCandidate> orientations)
+            => !FinderExtentProbe.ExtendsBeyond(image, centerX, centerY, orientations[0], MicroQRLongestExtent);
+    }
+
+    /// <summary>
+    /// Micro QR's decode of a finder candidate, then rMQR's when that does not end the candidate, for the scan that returns every symbol: one scan of the passes serves both.
+    /// A candidate inside a Standard QR symbol read before the scan, one of the first <paramref name="standardCount"/> of <paramref name="standard"/>, is decoded by neither.
+    /// Micro QR's search of a finder's orientations is spared where the finder's symbol is too long to be a Micro QR symbol (<see cref="NotMicroQRGate"/>).
+    /// The scan's histogram is <paramref name="histogram"/>, the image's, which the Standard QR read was given.
+    /// </summary>
+    private readonly struct SingleFinderDecoder(QRCodeDecodeResult[] standard, int standardCount, int[] histogram) : ISymbolsDecoder<SingleFinderInfo, SymbolDecodeResult>
+    {
+        private static MicroQRImageDecoder.CandidateDecoder Micro => default;
+
+        private static RmQRImageDecoder.CandidateDecoder Rmqr => default;
+
+        private readonly QRCodeDecodeResult[] _standard = standard;
+        private readonly int _standardCount = standardCount;
+        private readonly int[] _histogram = histogram;
+
+        public int MaxChars => Math.Max(Micro.MaxChars, Rmqr.MaxChars);
+
+        public SymbolDecodeResult Result(string text, in SingleFinderInfo info)
+            => info.IsRmQR ? new SymbolDecodeResult(new RmQRCodeDecodeResult(text, info.RmQR)) : new SymbolDecodeResult(new MicroQRCodeDecodeResult(text, info.MicroQR));
+
+        public SymbolCorners ResultCorners(in SymbolDecodeResult result) => result.Corners;
+
+        public void FillHistogram(ReadOnlySpan<byte> luminance, Span<int> histogram) => _histogram.AsSpan(0, Binarizer.HistogramBins).CopyTo(histogram);
+
+        public SingleFinderInfo NotDetected => new(Micro.NotDetected);
+
+        public int ModuleBufferLength => Math.Max(Micro.ModuleBufferLength, Rmqr.ModuleBufferLength);
+
+        public SymbolCorners Corners(in SingleFinderInfo info) => info.Corners;
+
+        public SingleFinderInfo WithoutCorners(in SingleFinderInfo info) => info.WithoutCorners();
+
+        public DecodeStatus DecodeCandidate(in ImageView image, FinderPattern candidate, Span<byte> modules, Span<char> destination, out int charsWritten, out SingleFinderInfo info, ref SearchResult<SingleFinderInfo> result)
+        {
+            if (IsInsideStandardQR(candidate))
+                return result.Report(out charsWritten, out info);
+
+            // Each decoder sees the buffers its own scan gives it
+            var micro = new SearchResult<MicroQRCodeDecodeInfo>(ReportRule.Furthest, Micro.NotDetected);
+            var status = MicroQRImageDecoder.DecodeCandidate(image, candidate, modules.Slice(0, Micro.ModuleBufferLength), destination.Slice(0, Micro.MaxChars), out charsWritten, out var microInfo, ref micro, default(NotMicroQRGate));
+            if (AttemptStatus.IsTerminal(status))
+            {
+                info = new SingleFinderInfo(microInfo);
+                return status;
+            }
+            result.Other(status, charsWritten, new SingleFinderInfo(microInfo));
+
+            var rmqr = new SearchResult<RmQRCodeDecodeInfo>(ReportRule.Furthest, Rmqr.NotDetected);
+            status = Rmqr.DecodeCandidate(image, candidate, modules.Slice(0, Rmqr.ModuleBufferLength), destination.Slice(0, Rmqr.MaxChars), out charsWritten, out var rmqrInfo, ref rmqr);
+            if (AttemptStatus.IsTerminal(status))
+            {
+                info = new SingleFinderInfo(rmqrInfo);
+                return status;
+            }
+            result.Other(status, charsWritten, new SingleFinderInfo(rmqrInfo));
+            return result.Report(out charsWritten, out info);
+        }
+
+        private bool IsInsideStandardQR(in FinderPattern candidate)
+        {
+            for (var i = 0; i < _standardCount; i++)
+            {
+                if (SymbolGeometry.Contains(_standard[i].Info.Corners, candidate.X, candidate.Y))
+                    return true;
+            }
+            return false;
+        }
+    }
+}
