@@ -139,7 +139,7 @@ internal static class BoofCv
 
     /// <summary>
     /// Every symbol this library reads of an image through its one-symbol call: each read symbol is painted over and the image read again, until a call reads nothing.
-    /// It is what a caller can do today. Each read after the first pays for the whole image again.
+    /// Each read after the first pays for the whole image again.
     /// </summary>
     /// <param name="luminance">The image, painted in place.</param>
     /// <param name="firstStatus">The first call's status, which is the one-symbol call's.</param>

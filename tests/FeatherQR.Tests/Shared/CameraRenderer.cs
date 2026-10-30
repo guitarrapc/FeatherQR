@@ -383,7 +383,11 @@ internal static class CameraRenderer
                 var slope = 1 + 3 * distortion * ru * ru;
                 if (slope <= 0)
                     return false;
-                ru -= (ru + distortion * ru * ru * ru - rd) / slope;
+                var next = ru - (ru + distortion * ru * ru * ru - rd) / slope;
+                // A fixed point stays fixed, so stopping here draws the same pixels as all 12 steps
+                if (next == ru)
+                    break;
+                ru = next;
             }
             if (Math.Abs(ru + distortion * ru * ru * ru - rd) > 1e-6)
                 return false;

@@ -48,7 +48,7 @@ internal sealed record Fnc1StreamShape(IReadOnlyList<string> Headers, IReadOnlyL
             mode => mode == EncodingMode.Kanji ? RmQRConstants.GetKanjiCountIndicatorLength(version) : RmQRConstants.GetCountIndicatorLength(version, mode));
     }
 
-    /// <summary>The data codewords of an rMQR symbol, read with the naive reference extraction (uncorrected, so a freshly written symbol), so a stream can be compared byte for byte.</summary>
+    /// <summary>The data codewords of an rMQR symbol, read with the naive reference extraction, so a stream can be compared byte for byte. Nothing is corrected, so the symbol has to be freshly written.</summary>
     public static byte[] DataCodewordsOfRmQr(byte[] modules, int width, int height, RmQRVersion version, RmQREccLevel eccLevel)
     {
         var eccInfo = RmQRConstants.GetEccInfo(version, eccLevel);

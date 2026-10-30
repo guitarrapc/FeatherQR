@@ -162,8 +162,7 @@ public class QRSegmentPlannerUnitTest
 
     /// <summary>
     /// The premise of the second header the scan adds to the bound: below the single-mode fit a plan of one run is the single-mode
-    /// stream itself, which does not fit there, so every plan that fits below it has two runs or more. Held at every level over the
-    /// brute-force corpus and the longer labels the scan sees, at every version below the fit.
+    /// stream itself, which does not fit there, so every plan that fits below it has two runs or more.
     /// </summary>
     [Test]
     public async Task BelowTheSingleModeFit_EveryPlanThatFits_HasTwoRunsOrMore()
@@ -208,7 +207,7 @@ public class QRSegmentPlannerUnitTest
 
     /// <summary>
     /// With that second header the scan makes no run on content that clears the one-header bound by a few bits and splits to no
-    /// gain. The GS1 retail label clears version 1-M by two bits with one header, and its run found nothing. A run writes its
+    /// gain. The GS1 retail label clears version 1-M by two bits with one header. A run writes its
     /// predecessors into the table, so a table left at its sentinel shows the scan made none.
     /// </summary>
     [Test]

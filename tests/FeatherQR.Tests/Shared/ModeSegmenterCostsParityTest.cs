@@ -5,10 +5,9 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The lane tiers of the cost run (<see cref="ModeSegmenter.CostsLatinSse41"/> and <see cref="ModeSegmenter.TrackedLatinSse41"/> on x64,
-/// <see cref="ModeSegmenter.CostsLatinAdvSimd"/> on ARM64, which has no tracked form) against the scalar loops,
-/// cost, final state and the parent table byte for byte, on every class mix the scans see, at every length to the tier's limit and past it, under both
-/// one-byte charsets, with and without Alphanumeric, at the three Standard QR bands, an rMQR triple and a narrow shape. The dispatch is held to the same on
-/// both sides of the tier's limit. <c>ModeSegmenterPlanParityTest</c> holds the dispatch to an all-states reference besides.
+/// <see cref="ModeSegmenter.CostsLatinAdvSimd"/> on ARM64, which has no tracked form) against the scalar loops, with the cost, the final state
+/// and the parent table compared byte for byte. The dispatch is held to the same on both sides of the tier's limit.
+/// <c>ModeSegmenterPlanParityTest</c> holds the dispatch to an all-states reference besides.
 /// </summary>
 public class ModeSegmenterCostsParityTest
 {

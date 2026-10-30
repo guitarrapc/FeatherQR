@@ -9,19 +9,16 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// <c>spot-check-gs1</c>: the symbols the GS1 entry points write, read by the pinned zxing-cpp reader. The inputs
-/// are the bracketed and element string inputs of the committed GS1 fixtures, each text once. For every input each
-/// size form, in both symbologies, is asked twice: under the options the symbols are written with, and under the
-/// smallest version, which most data does not fit, so that the fit decides answers too. Each answer and its size
-/// must be what the data layer and the core give together: -1 where the data is not valid or, for a Digital Link
-/// form, no URI can carry it, and otherwise what the core sizes the element string under FNC1 or the URI at under
-/// the same options. An answer that differs fails the run, so a member that refuses what it should write cannot
-/// shorten it. Each input the Standard QR size form takes is written by <c>CreateGs1</c> as a Standard QR symbol
-/// and, where the rMQR size form takes it, an rMQR symbol, under <c>Single</c> and <c>Optimal</c> at level M, and
-/// zxing-cpp must report <c>]Q3</c>, GS1 content, no ECI header, the element string in <c>TextMode.Plain</c> and,
-/// in <c>TextMode.HRI</c>, the (AI) text <c>TryToHri</c> gives without its escapes (zxing-cpp writes a parenthesis
-/// in a value as it is), where its own table can split the data (it falls back to escaped text otherwise, and
-/// those are counted, not compared). Each input a URI can carry is also written by <c>CreateGs1DigitalLink</c>,
-/// and zxing-cpp must report <c>]Q1</c>, text content, no ECI header and the URI. Findings go to the fixture spec.
+/// are the bracketed and element string inputs of the committed GS1 fixtures, each text once. Each size form, in both
+/// symbologies, is asked under the options the symbols are written with and under the smallest version, so that the
+/// fit decides answers too. Its answer must be what the data layer and the core give together: -1 where the data is
+/// not valid or no URI can carry it, and otherwise what the core sizes the element string under FNC1 or the URI at.
+/// An answer that differs fails the run, so a member that refuses what it should write cannot shorten it.
+/// Each input a size form takes is written by <c>CreateGs1</c> as that symbology's symbol, under <c>Single</c> and
+/// <c>Optimal</c> at level M. zxing-cpp must report <c>]Q3</c>, GS1 content, no ECI header and the element string in
+/// <c>TextMode.Plain</c>, and in <c>TextMode.HRI</c> the (AI) text <c>TryToHri</c> gives where its own table can split
+/// the data. Each input a URI can carry is also written by <c>CreateGs1DigitalLink</c>, and zxing-cpp must report
+/// <c>]Q1</c>, text content, no ECI header and the URI. Findings go to the fixture spec.
 /// </summary>
 public static class Gs1SpotCheck
 {
@@ -45,7 +42,6 @@ public static class Gs1SpotCheck
         var versionOne = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(1) };
 
         // One size form's answer against the expected one, each as the symbol's size in bytes, or -1 for false.
-        // A difference is reported and fails the run.
         bool Differs(string id, string member, int actual, int expected)
         {
             compared++;

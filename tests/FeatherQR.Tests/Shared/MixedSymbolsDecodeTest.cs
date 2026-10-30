@@ -97,7 +97,7 @@ public class MixedSymbolsDecodeTest
         }
     }
 
-    /// <summary>Texts of several versions: Standard QR's are versions 1 to 3, Micro QR's M2 to M4, rMQR's three widths.</summary>
+    /// <summary>Texts of several versions: Standard QR's are versions 1 to 3, Micro QR's M2 and M3, rMQR's three widths.</summary>
     private static string Text(Symbology symbology, int index) => symbology switch
     {
         Symbology.StandardQR => $"FQR MIXED QR {index}" + new string('Q', index % 3 * 12),

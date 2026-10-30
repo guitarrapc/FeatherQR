@@ -6,11 +6,11 @@ namespace QRInteropFixtures;
 /// FNC1 fixture generator backed by libzint (zxing-cpp's writer, compiled into the pinned ZXingCpp
 /// native binary), a zint-lineage encoder independent of both this library and the zxing-cpp
 /// reader used as the sanity gate. Its <c>gs1</c> option takes bracketed or parenthesized AI
-/// syntax, refuses an unknown or malformed AI, a wrong length, an empty field and a control character such as a
-/// raw separator, writes the symbol despite its linter's other findings, and writes FNC1 in first position for
-/// Standard QR and rMQR (<c>version=N</c> is the ISO/IEC 23941 version index + 1). It writes FNC1 before an ECI
-/// header (<c>eci=26</c>). An AI typed with a leading zero gets past some of these checks (the fixture spec's
-/// oracle matrix records how).
+/// syntax and writes FNC1 in first position for Standard QR and rMQR (<c>version=N</c> is the ISO/IEC 23941 version
+/// index + 1). It writes FNC1 before an ECI header (<c>eci=26</c>). It refuses an unknown or malformed AI, a wrong
+/// length, an empty field and a control character such as a raw separator, and writes the symbol despite its linter's
+/// other findings. An AI typed with a leading zero gets past some of these checks (the fixture spec's oracle matrix
+/// records how).
 /// </summary>
 public sealed class ZintFnc1FixtureGenerator : IFnc1FixtureGenerator
 {

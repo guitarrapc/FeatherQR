@@ -5,12 +5,9 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// Generated content through both generators and this library's decoders, with no FNC1 mode, first position and
 /// second position, under <c>Single</c> and <c>Optimal</c>. The texts are drawn to meet the FNC1 <c>%</c> rule from
-/// every side (a literal <c>%</c> and the separator U+001D alone, doubled and beside each other, between digits,
-/// capitals and lowercase, with Latin-1 and kana among them), and the same texts run without FNC1, where a
-/// <c>%</c> is one character and the separator a byte. Each case holds what needs no second implementation to
-/// state: the text and the mode read back, sizing agrees with <c>Create</c>, the span form is the data form, and
-/// <c>Optimal</c> writes <c>Single</c>'s symbol where it keeps <c>Single</c>'s version and a smaller one otherwise.
-/// The sequence is a function of the seed, so a failure names its case.
+/// every side, and the same texts run without FNC1, where a <c>%</c> is one character and the separator a byte. Each
+/// case checks only what needs no second implementation to state. The sequence is a function of the seed, so a
+/// failure names its case.
 /// </summary>
 public class Fnc1RoundTripSweepTest
 {

@@ -230,7 +230,7 @@ public class Fnc1FixtureTest
     }
 #endif
 
-    // rMQR: both writers of the corpus that produce rMQR FNC1 symbols write first position only, and neither writes second.
+    // rMQR: both writers of the corpus write FNC1 in first position only.
 
     /// <summary>Two lineages, first position only (no writer of the corpus produces rMQR second position), an ECI case, the separator carried, and a bracketed input recorded.</summary>
     [Test]

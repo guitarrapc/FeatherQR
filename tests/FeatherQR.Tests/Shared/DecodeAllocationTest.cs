@@ -970,7 +970,7 @@ public class DecodeAllocationTest
     }
 
     /// <summary>
-    /// The array form allocates the array it returns and the texts, and nothing else: on the sheets of the span form's test, and on sheets of eighteen, where Standard QR's room holds more than its first room with the seeds, and the scan's with its reads.
+    /// The array form allocates the array it returns and the texts, and nothing else: on the sheets of the span form's test, and on sheets of eighteen, more than a first room holds. Standard QR's room grows to hold the seeds of its second read, and the scan's room grows with its reads.
     /// </summary>
     [Test]
     [Arguments(MixedSymbolsDecodeTest.Mix.AllThree, 3, 2)]

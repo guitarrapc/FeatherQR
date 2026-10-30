@@ -8,14 +8,12 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// <c>spot-check-fnc1</c>: every FNC1 symbol this library writes, read by the two pinned readers. Each case is
-/// written under <see cref="QRSegmentation.Single"/> and <see cref="QRSegmentation.Optimal"/> at each level, and
-/// zxing-cpp (<c>TextMode.Plain</c>) must report the identifier of the mode (<c>]Q3</c> or <c>]Q5</c>, with an ECI
-/// header reported apart, through <c>HasECI</c>), GS1 content for first position, and the text, with the application
+/// written under <see cref="QRSegmentation.Single"/> and <see cref="QRSegmentation.Optimal"/> at each level.
+/// zxing-cpp (<c>TextMode.Plain</c>) must report the mode's identifier, <c>]Q3</c> or <c>]Q5</c> with an ECI header
+/// reported apart through <c>HasECI</c>, GS1 content for first position, and the text, with the application
 /// indicator before it in second position. ZXing.Net must read first position with <c>]Q3</c>, or <c>]Q4</c> under an
-/// ECI header, and the text. The cases are the FNC1 fixture
-/// corpus's data (the GS1 examples, each data mode under FNC1, a literal <c>%</c>, the two separator pairs, FNC1
-/// beside an ECI header, each indicator form), the two examples of ISO/IEC 18004 6.4.8, and adversarial <c>%</c>
-/// and separator sequences. Findings go to the fixture spec.
+/// ECI header, and the text. The cases are the FNC1 fixture corpus's data, the two examples of ISO/IEC 18004 6.4.8,
+/// and adversarial <c>%</c> and separator sequences. Findings go to the fixture spec.
 /// </summary>
 public static class Fnc1SpotCheck
 {
@@ -126,7 +124,6 @@ public static class Fnc1SpotCheck
                             {
                                 var identifier = result.ResultMetadata is not null && result.ResultMetadata.TryGetValue(ZXing.ResultMetadataType.SYMBOLOGY_IDENTIFIER, out var value) ? value?.ToString() ?? "" : "";
                                 net = $"{identifier} \"{Fnc1Writers.Escape(result.Text ?? "")}\"";
-                                // ZXing.Net reports ]Q4 for first position under an ECI header where zxing-cpp reports ]Q3 with HasECI.
                                 netOk = identifier == (expectsEci ? "]Q4" : "]Q3") && result.Text == text;
                             }
                         }

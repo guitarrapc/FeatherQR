@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The format reads that stop early against the full read they replace: <see cref="RmQRImageDecoder.TryReadExactFormatCopy"/> where only a valid word is taken,
-/// and <see cref="RmQRImageDecoder.IsFormatCopyWithinABit"/> where the copy has to name the version within a bit. And the full read through an affine frame against the frame's general transform.
+/// and <see cref="RmQRImageDecoder.IsFormatCopyWithinABit"/> where the copy has to name the version within a bit. The full read through an affine frame is checked against the frame's general transform.
 /// </summary>
 /// <remarks>
 /// Each copy the early reads are checked on is drawn module by module, so the full read returns the drawn bits and both reads see the same pixels.
@@ -82,7 +82,6 @@ public class RmQRFormatCopyEarlyExitTest
             var full = RmQRImageDecoder.ReadFormatCopy(luminance, width, height, 128, transform, subFinderSide, symbolWidth, symbolHeight);
             await Assert.That(full).IsEqualTo(raw);
 
-            // The version asked about is the drawn one, or another half the time
             var asked = random.Next(2) == 0 ? version : (RmQRVersion)random.Next(1, 33);
             var want = RmQRFormatInformationDecoder.TryDecodeCopy(full, subFinderSide, out var named, out _, out var distance) && named == asked && distance <= 1;
             var got = RmQRImageDecoder.IsFormatCopyWithinABit(luminance, width, height, 128, transform, subFinderSide, symbolWidth, symbolHeight, asked);

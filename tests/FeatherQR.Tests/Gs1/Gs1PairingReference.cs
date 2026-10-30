@@ -7,8 +7,8 @@ namespace FeatherQR.Tests;
 /// The rules between the elements of an element string in their plainest form, as the reference the library's
 /// <see cref="Gs1Validator.CheckPairings"/> is held to: each exclusion and each requisite is asked of every element
 /// by a scan of the whole string, a repeated AI is found by comparing every element with every later one, and the
-/// serialised key is one scan for (8030) and one pass. It keeps no state between elements, so its cost is the square
-/// of the number of elements, and its answer and the place of its error follow from the order of the scans alone:
+/// serialised key is one scan for (8030) and one pass. It keeps no state between elements, so its answer and the
+/// place of its error follow from the order of the scans alone:
 /// the first element with an exclusion that is met, then the first element with a requisite that is not, then the
 /// first element that a later one repeats with another value, then the digital signature's serialised key.
 /// </summary>

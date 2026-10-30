@@ -116,7 +116,7 @@ public class Gs1FixtureTest
         await Assert.That(byId["genspecs-figure-4-15-1-2-photograph"].SyntaxEngine.Hri).IsEquivalentTo(["(01) 09504000059101", "(21) 12345678p901", "(10) 1234567p", "(17) 141120", "(8200) http://www.gs1.org/demo/"]);
         await Assert.That(byId["genspecs-figure-4-15-1-2-photograph"].Reader!.Hri).IsEqualTo("(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/");
         await Assert.That(byId["genspecs-section-5-7-4-3-scan"].SyntaxEngine.ElementString).IsEqualTo("0110012345678902");
-        // The missing-separator trap the release decision rests on (FNC1 encode ships with the GS1 builders): valid data with another meaning.
+        // The missing-separator trap: valid data with another meaning.
         await Assert.That(byId["eq-sep-missing-after-variable"].SyntaxEngine.Valid).IsTrue();
         await Assert.That(byId["eq-sep-missing-after-variable"].SyntaxEngine.Bracketed).IsEqualTo("(01)09520123456788(10)ABC17251231");
         // Separator tolerance on read (7.8.6.3), where the oracles differ.

@@ -13,7 +13,7 @@ public class LocalBinarizerParityTest
 {
     private static readonly string[] Contents = ["noise", "blurred noise", "ramp", "symbol under a shadow", "two levels", "flat grey", "flat black", "flat white", "flat block edges", "levels 24 apart", "levels 25 apart", "flat at its neighbours' level", "one pixel apart"];
 
-    // Block columns on their own columns from 4 to 37, so the four-block and two-block steps end on every remainder, and each width's last step overlaps by another count
+    // Rows of 4 to 37 blocks on their own columns, so the four-block and two-block steps end on every remainder, and each width's last step overlaps by another count
     private static readonly (int Width, int Height)[] Sizes =
     [
         (33, 33), (40, 40), (41, 43), (47, 40), (48, 56), (63, 65), (64, 64), (72, 40), (79, 47), (80, 41), (95, 41), (96, 48), (97, 49), (100, 37),
@@ -43,7 +43,7 @@ public class LocalBinarizerParityTest
                 }
             }
         }
-        // Rows of more steps than a byte counter holds, in both vector widths. A counter only runs over where one column is the counted class in every step, so two of them are all light and all dark.
+        // Rows of more steps than a byte counter holds, in both vector widths. A counter runs over only where its lane is the counted class in every step, so some of these rows are all light and some all dark.
         yield return (8200, 40, "noise", 128, false);
         yield return (8200, 40, "symbol under a shadow", 128, true);
         yield return (8231, 41, "blurred noise", 128, false);

@@ -15,7 +15,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class MicroQRSegmentationTest
 {
-    // The one-mode stream, which the default no longer is.
+    // The one-mode stream, named because the default is Optimal.
     private static readonly MicroQRCodeGeneratorOptions MicroSingle = new() { Segmentation = MicroQRSegmentation.Single };
 
     /// <summary>

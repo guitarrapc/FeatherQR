@@ -43,9 +43,8 @@ public class Gs1AllocationTest
     }
 
     /// <summary>
-    /// The check character pair (AI 8013) weights the data by a table of primes. As a span property written as a collection
-    /// expression the table read from a fresh array on every access on .NET 8, so a validation allocated once per data character;
-    /// the table is an array built once, and this holds it there on both frameworks. The GMN is the one GS1's own examples use.
+    /// The check character pair (AI 8013) reads its table of prime weights once per data character, so a table that
+    /// allocated on access would allocate here once per character. The GMN is the one GS1's own examples use.
     /// </summary>
     [Test]
     public async Task CheckCharacterPair_AllocatesNothing()

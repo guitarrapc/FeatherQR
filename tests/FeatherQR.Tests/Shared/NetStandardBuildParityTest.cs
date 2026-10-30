@@ -6,10 +6,8 @@ using System.Runtime.Loader;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The netstandard builds' span API against this host's build: encode on a dirty destination for each symbology, both segmentations and
-/// quiet zones from 0 up, then sizing, encode, matrix decode and image decode on the paths a netstandard build has code of its own for,
-/// each allocating nothing once warm. No test host runs a netstandard build, so this loads the build beside the core project into a load
-/// context of its own and calls its public span API.
+/// The netstandard builds' span API against this host's build, on the paths a netstandard build has code of its own for. No test host
+/// runs a netstandard build, so this loads the build beside the core project into a load context of its own and calls its public span API.
 /// </summary>
 /// <remarks>
 /// The builds are found and checked for staleness as <see cref="CoreAssemblyDependencyTest"/> finds them: <c>dotnet build</c> of the
@@ -48,7 +46,7 @@ public class NetStandardBuildParityTest
         var expected = SymbolDecoder.DecodeImageSymbols(luminance, width, height);
         await Assert.That(expected.Length).IsEqualTo(6);
 
-        // Bridge only the public span entry; the result array belongs to the loaded build.
+        // Only the span entry needs a bridge. The result array belongs to the loaded build and is read through reflection.
         var target = build.GetType("FeatherQR.SymbolDecoder", throwOnError: true)!
             .GetMethod("DecodeImageSymbols", [typeof(ReadOnlySpan<byte>), typeof(int), typeof(int)])!;
         var method = new DynamicMethod("SymbolDecoder.DecodeImageSymbols", typeof(Array),
@@ -292,7 +290,7 @@ public class NetStandardBuildParityTest
         new("RmQR UTF-8", "RmQR", Utf8Text, "M"),
         // These runs hold more chars than a third of rMQR's 160-byte budget, and the netstandard builds transcode them through refs into a
         // buffer of three bytes a char. The indexer loop would write the same bytes, so these hold the refs' output on long runs at each
-        // site, and the buffer's size only its speed.
+        // site. The buffer's size changes only the speed.
         new("RmQR UTF-8 long", "RmQR", "12345678901234567890" + new string('k', 80) + "あ", "M"),
         new("RmQR UTF-8 long Single", "RmQR", new string('k', 100) + "あ", "M", ("Segmentation", "Single")),
         new("RmQR UTF-8 long FNC1", "RmQR", "0109521234543213\u001d10" + new string('k', 80) + "あ", "M", ("Fnc1", Fnc1First())),
@@ -536,9 +534,7 @@ public class NetStandardBuildParityTest
     /// <summary>
     /// Random Byte segments read through each netstandard build's own UTF-8 decoder give this host's build's text and decode info, which
     /// are <c>Utf8.ToUtf16</c>'s: under ECI 26 and behind a byte order mark with replacement, and with no ECI as UTF-8 only where the
-    /// bytes are well formed, else as Shift_JIS or ISO-8859-1. Half the segments are bytes drawn at each range's bounds, half valid UTF-8
-    /// cut to at most 45 bytes, which can end inside a sequence, each into a destination of room to spare, of its text's length and of
-    /// one char less.
+    /// bytes are well formed, else as Shift_JIS or ISO-8859-1.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(Frameworks))]

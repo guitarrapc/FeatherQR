@@ -154,7 +154,7 @@ public class Fnc1RmQRDecodeTest
         await Assert.That(Decode("001 0000 " + indicator + " 001 0001 0111 000").Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
-    /// <summary>A Kanji segment marks the stream as begun apart from the other three data modes, so an indicator after it needs a stream of its own.</summary>
+    /// <summary>The Kanji branch marks a data segment as seen apart from the other three data modes, so it needs a stream of its own.</summary>
     [Test]
     [Arguments("101")]
     [Arguments("110 00100101")]
@@ -317,7 +317,7 @@ public class Fnc1RmQRDecodeTest
     }
 
 #if !DEBUG
-    /// <summary>The FNC1 decode allocates nothing once warm, in second position through a literal %% (Release only, as the other allocation tests are).</summary>
+    /// <summary>The stream is in second position and holds a literal %%, so the indicator read and the % rule both run.</summary>
     [Test]
     [NotInParallel]
     public async Task SecondPosition_Decode_AllocatesNothing()

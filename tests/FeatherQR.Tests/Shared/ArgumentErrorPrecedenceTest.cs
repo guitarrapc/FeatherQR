@@ -159,9 +159,8 @@ public class ArgumentErrorPrecedenceTest
         ("CreateStructuredAppend", () => QRCodeGenerator.CreateStructuredAppend(text, level, options)),
     ];
 
-    // Only Single takes these routes, and it is always defined, so they check no segmentation. The helper sets it in place of the
-    // options' segmentation. With any version and no boost, each entry point validates in its own code. A narrowed range or a boost
-    // sends both Create overloads through one shared step instead.
+    // Only Single takes these routes, and it is always defined, so they check no segmentation. With any version and no boost, each
+    // entry point validates in its own code. A narrowed range or a boost sends both Create overloads through one shared step instead.
     private static IEnumerable<(string Route, Action Call)> SingleRoutes(string text, QREccLevel level, QRCodeGeneratorOptions options)
     {
         var single = options with { Segmentation = QRSegmentation.Single };
