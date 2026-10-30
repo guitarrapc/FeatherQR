@@ -37,7 +37,6 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 | Document | Covers |
 |---|---|
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
-| [mixed-read-foreign-finder-plan.md](plans/mixed-read-foreign-finder-plan.md) | The read of every symbology: a cheap test of the symbol's extent at a finder candidate that says which of Micro QR and rMQR need not decode it, the candidates, the first probe and the measurement plan, the gate it became, and the strided rows Standard QR's read keeps for the scan that follows |
 
 The 2.0.0 core split plan (`FeatherQR` core, `FeatherQR.SkiaSharp` renderer, `SkiaSharp.QrCode` metapackage, repository rename) completed on 2026-09-06 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (package architecture, seam, graph, the "why three packages" record, scope decisions, lessons) and [DESIGN.md](DESIGN.md).
 
