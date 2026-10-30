@@ -52,8 +52,8 @@ internal static class FinderExtentProbe
         var luminance = image.Luminance;
         int width = image.Width, height = image.Height;
         var threshold = image.Threshold;
-        var alongLength = MathF.Sqrt(ux * ux + uy * uy);
-        var acrossLength = MathF.Sqrt(vx * vx + vy * vy);
+        var alongLength = (float)Math.Sqrt(ux * ux + uy * uy);
+        var acrossLength = (float)Math.Sqrt(vx * vx + vy * vy);
         if (alongLength < 0.5f || acrossLength < 0.5f)
             return false;
 
@@ -74,8 +74,8 @@ internal static class FinderExtentProbe
             {
                 for (var across = -HalfBand + acrossStep * 0.5f; across < HalfBand; across += acrossStep)
                 {
-                    var x = (int)MathF.Floor(centerX + along * ux + across * vx);
-                    var y = (int)MathF.Floor(centerY + along * uy + across * vy);
+                    var x = (int)Math.Floor(centerX + along * ux + across * vx);
+                    var y = (int)Math.Floor(centerY + along * uy + across * vy);
                     // Off the image inside the modules the walk cannot tell, inside a light run the symbol has ended
                     if (x < 0 || y < 0 || x >= width || y >= height)
                         return false;
