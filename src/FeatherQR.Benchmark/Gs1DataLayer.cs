@@ -51,9 +51,9 @@ public class Gs1DataLayer
         if (!Gs1Validator.Validate(_hri).IsValid)
             throw new InvalidOperationException($"CodeGlyphX refuses shape {Shape}");
 
-        // Each call has its own buffer, of the length its twin gives. The setup's own text of the form a call
-        // writes does not serve: the element string read back from a URI has its elements in the URI's order, and
-        // for the retail label that takes a separator the original element string has no need of.
+        // Each call has its own buffer, of the length its twin gives. The setup's own texts cannot size them,
+        // because the element string read back from a URI keeps the URI's element order. For the retail label
+        // that order needs a separator the original element string does not.
         _hriBuffer = Sized(Gs1ElementString.TryGetToHriLength(_elementString, out var length, out _), length, "TryGetToHriLength");
         _fromHriBuffer = Sized(Gs1ElementString.TryGetFromHriLength(_hri, out length, out _), length, "TryGetFromHriLength");
         _uriBuffer = Sized(Gs1ElementString.TryGetToDigitalLinkLength(_elementString, out length, out _), length, "TryGetToDigitalLinkLength");

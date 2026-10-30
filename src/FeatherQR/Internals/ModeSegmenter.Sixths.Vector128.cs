@@ -8,7 +8,7 @@ namespace FeatherQR.Internals;
 internal static partial class ModeSegmenter
 {
     /// <summary>
-    /// The bound 8 characters a step on the portable 128-bit vectors, the tier of ARM64 and WebAssembly: the discounts by range compares, the last block overlapped and masked, a block holding a surrogate half priced one character at a time.
+    /// The bound priced 8 characters a step by range compares on the portable 128-bit vectors, the tier of ARM64 and WebAssembly.
     /// </summary>
     internal static int CheapestSixthsVector128(ReadOnlySpan<char> text, EciMode charset)
     {

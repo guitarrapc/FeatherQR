@@ -91,7 +91,7 @@ internal static class MicroQRSegmentPlanner
                 continue;
 
             // Two cheapest headers at this version, each the (version - 1)-bit mode indicator plus the narrowest count indicator,
-            // version + 1 bits (Alphanumeric/Byte): a plan of one run is the single-mode stream, which does not fit below its fit.
+            // version + 1 bits (Alphanumeric/Byte). A plan of one run is the single-mode stream, which does not fit at these versions.
             var trivialBits = (cheapestSixths + 5) / 6 + 4 * (int)candidate;
             if (MicroQRConstants.GetDataBitCapacity(candidate, eccLevel) < trivialBits)
                 continue; // no split of this content could fit, whatever the plan

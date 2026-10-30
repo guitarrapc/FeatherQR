@@ -12,7 +12,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// <para>
 /// The walk along a direction starts 4.5 modules from the finder's centre, past the separator, in half-module steps, each step a band 7 modules across, the finder's width: the whole height of the lowest rMQR symbol, so a timing module alone or an alignment ring keeps a step dark where a quiet zone of 2 modules does not.
 /// A step is dark when a quarter or more of its pixels are, and three light steps in a row are the gap the symbol ends at. Each step is sampled at least twice along and fourteen times across, since below 2 pixels a module a half-module step has no pixel of its own.
-/// The walk gives no answer where it cannot tell: when it leaves the image inside the modules, when the axes are shorter than half a pixel a module, and when two steps in a row are nine tenths dark or more within the first 15 modules, which a symbol's modules never are and a shadowed background under the global threshold is, where the walk would otherwise run on past the quiet zone.
+/// The walk gives no answer where it cannot tell: when it leaves the image inside the modules, when the axes are shorter than half a pixel a module, and when two steps in a row are nine tenths dark or more within the length asked about, which a symbol's modules never are and a shadowed background under the global threshold is, where the walk would otherwise run on past the quiet zone.
 /// </para>
 /// </remarks>
 internal static class FinderExtentProbe

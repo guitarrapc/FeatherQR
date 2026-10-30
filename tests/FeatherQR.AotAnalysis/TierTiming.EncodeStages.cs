@@ -49,7 +49,7 @@ internal static partial class TierTiming
         .. RmQRStageShapes("rmqr-r7x43-num", "012345678901", RmQRVersion.R7x43),
         .. RmQRStageShapes("rmqr-r11x59-alnum", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-.", RmQRVersion.R11x59),
         .. RmQRStageShapes("rmqr-r17x139-byte", RmQRByte, RmQRVersion.R17x139),
-        // The cost run of the Optimal scans alone, on the paired timing harness's texts, beside the scalar loops it dispatches past.
+        // The cost run of the Optimal scans alone, beside the scalar loops the dispatch skips.
         .. CostStageShapes("logistics-57", "00195201234567891232" + "0209520123456788" + "11250504" + "3725X" + "10ABC123", 3, 5, 5, 4),
         .. CostStageShapes("url-58", "https://example.com/item?id=123456789012345678901234567890", 4, 10, 9, 8),
         .. CostStageShapes("mixed-120", string.Concat(Enumerable.Repeat("order 20260915 item 0000123456 qty 42 ", 4))[..120], 4, 10, 9, 8),
@@ -59,8 +59,8 @@ internal static partial class TierTiming
     ];
 
     /// <summary>
-    /// The cost run on one text at one width triple (mode indicator, count indicators for Numeric, Alphanumeric and Byte): costs only and with the parents, through the dispatch and
-    /// on the scalar loops. The scans run the former per count indicator band or rMQR width triple and the latter once for the plan.
+    /// The cost run on one text at one set of widths (the mode indicator, then the Numeric, Alphanumeric and Byte count indicators), costs only and with the parents, through the
+    /// dispatch and on the scalar loops. A scan runs the costs-only form per count indicator band or rMQR width set, and the tracked form once for the plan.
     /// </summary>
     private static Shape[] CostStageShapes(string name, string text, int mode, int cciN, int cciA, int cciB)
     {

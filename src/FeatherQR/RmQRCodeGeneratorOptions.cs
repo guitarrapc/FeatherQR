@@ -93,11 +93,10 @@ public record struct RmQRCodeGeneratorOptions
     }
 
     // One field holds the segmentation (the low 22 bits) and the FNC1 mode (the top 10 bits), so the generator
-    // tells "Single and no FNC1" from everything else with the one compare it already made on the segmentation
-    // alone: any other field sends the call to the planning route, which reads both out.
-    // An undefined segmentation value is kept as given when the 22 bits hold it and saturated to the mask when
-    // they do not, so the planning route refuses either (a masked value could read back as a defined one). Declared where
-    // the segmentation's own field was, so the struct keeps its layout.
+    // tells "Single and no FNC1" from everything else with the one compare it made on the segmentation alone.
+    // A segmentation value the 22 bits cannot hold saturates to the mask rather than being masked, because a
+    // masked value could read back as a defined one and pass validation. Declared where the segmentation's own
+    // field was, so the struct keeps its layout.
     private int _route;
     private const int SegmentationMask = (1 << Fnc1Shift) - 1;
     private const int Fnc1Shift = 22;

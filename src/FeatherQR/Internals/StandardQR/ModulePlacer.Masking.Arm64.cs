@@ -16,14 +16,11 @@ namespace FeatherQR.Internals.StandardQR;
 /// - Versions 12-40: the transposed scorer (the design is in ModulePlacer.Masking.Transposed.cs). It masks and scores with the 128-bit tier's
 ///   code (ModulePlacer.Masking.Transposed.Vector128.cs).
 /// What this file adds to them:
-/// - Byte&lt;-&gt;bit edges of 16 modules a step in both tiers, where the 128-bit tier packs with a compare and movemask, which ARM64 has no
+/// - Byte&lt;-&gt;bit edges of 16 modules a step in both tiers. The 128-bit tier packs with a compare and movemask, which ARM64 has no
 ///   instruction for, and unpacks eight modules a step. Packing gathers per-byte bit weights (cmeq+bic) and reduces with a uaddlp chain.
 ///   Unpacking broadcasts the 16-bit delta chunk and replicates bytes with tbl + cmtst (the same sequence as MicroQRModulePlacer.Unpack16).
 ///   The single-word tier takes them from inside <see cref="PackRows64Vector128"/> and <see cref="MaskCode64Vector128"/>.
 /// - The popcount both scorers accumulate is cnt and uadalp, in <see cref="AddPopCount"/>.
-///
-/// The single-word tier replaced a lane-per-row form, two rows a vector and one candidate at a time, which took about twice as long on
-/// Apple M2 (Lessons Learned, Performance in specs/standardqr-encoder.md).
 ///
 /// This file only executes under AdvSimd.Arm64.IsSupported, so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
 /// </summary>
@@ -32,7 +29,6 @@ internal static partial class ModulePlacer
     /// <summary>Entry point for the ARM64 tiers. Caller guarantees AdvSimd.Arm64.IsSupported.</summary>
     internal static int MaskCodeAdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        // Versions 1-11 take the 128-bit lane-per-pattern tier, which packs and unpacks with this file's NEON edges on ARM64.
         return size <= 64
             ? MaskCode64Vector128(buffer, size, version, blockedMask, eccLevel)
             : MaskCodeTransposedAdvSimd(buffer, size, version, blockedMask, eccLevel);

@@ -17,7 +17,7 @@ internal static partial class FinderPatternFinder
     /// Ends are exclusive: run k is ends[k] - starts[k] pixels long, and the light gap after it is starts[k + 1] - ends[k].
     /// Both spans need room for <see cref="EdgeRunCapacity"/> runs, and the row has to be shorter than <see cref="EdgeListWidthLimit"/>: positions are stored in sixteen bits.
     /// </remarks>
-    // Not inlined: written into the row kernel it gave back most of what it saves
+    // Inlined into the row kernel it gives back most of what it saves, so it stays a call
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static int ExtractRowEdges(ReadOnlySpan<byte> row, byte threshold, Span<short> starts, Span<short> ends)
     {

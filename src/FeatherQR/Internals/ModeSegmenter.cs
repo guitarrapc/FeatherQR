@@ -101,14 +101,14 @@ internal static partial class ModeSegmenter
         var openAlnum = modeIndicatorBits + cciAlnum + 6;
         var openByte = modeIndicatorBits + cciByte;
 #if NET8_0_OR_GREATER
-        // The lane form holds the six states in one vector and takes the cheapest state by one horizontal minimum, which the scalar loops' minimum trees do not match on any text a scan sees (specs/standardqr-encoder.md, "Mixed-mode segmentation").
+        // The lane form holds the six states in one vector, so one horizontal minimum replaces the scalar loops' minimum trees.
         if (charset != EciMode.Utf8 && allowByte && TakesLaneCosts(text.Length))
         {
             return parents.IsEmpty
                 ? CostsLatinSse41(text, openNumeric, openAlnum, openByte + 8, allowAlnum, out finalState)
                 : TrackedLatinSse41(text, openNumeric, openAlnum, openByte + 8, allowAlnum, parents, out finalState);
         }
-        // ARM64 takes the lane form for costs only, the tracked run staying on the scalar loop (ModeSegmenter.Costs.Arm64.cs).
+        // ARM64 takes the lane form for costs only. NEON's minimum across a vector gives no index, which the tracked run needs every character.
         if (parents.IsEmpty && charset != EciMode.Utf8 && allowByte && TakesLaneCostsAdvSimd(text.Length))
             return CostsLatinAdvSimd(text, openNumeric, openAlnum, openByte + 8, allowAlnum, out finalState);
 #endif
@@ -265,9 +265,9 @@ internal static partial class ModeSegmenter
     /// The widths are keys already (bits times eight), <paramref name="openByte"/> with its first character in. The table is written <paramref name="stride"/> bytes a character.
     /// </summary>
     /// <remarks>
-    /// The shape of <see cref="CostsLatin"/>: the six keys are updated in place. Keys built beside the old ones for the next character would keep both sets live.
-    /// A run opens from the cheapest of the six keys, which can be a state of the run's own mode. That opening can be cheaper than an opening from another mode. The table can then hold other parents than those <see cref="TrackedGeneral"/> and the vector steps of <c>ComputeCostsLanes</c> write, since they open each mode from the other modes only.
-    /// An opening from the run's own mode never lies on a cheapest plan, since merging the two runs saves a header. So the cost, the final state and the walk back from that state agree with what TrackedGeneral and the vector steps give. One cheapest key then serves every mode, where TrackedGeneral keeps a minimum per mode.
+    /// The six keys are updated in place, as in <see cref="CostsLatin"/>, since keys built beside the old ones for the next character would keep both sets live.
+    /// A run opens from the cheapest of the six keys, which can be a state of the run's own mode. The table can then hold other parents than those <see cref="TrackedGeneral"/> and the vector steps of <c>ComputeCostsLanes</c> write, since they open each mode from the other modes only.
+    /// An opening from the run's own mode never lies on a cheapest plan, since merging the two runs saves a header. So the cost, the final state and the walk back agree with theirs, and one cheapest key serves every mode.
     /// </remarks>
     private static int TrackedLatin(ReadOnlySpan<char> text, int n1, int a1, int b, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> table, int stride)
     {
@@ -285,7 +285,7 @@ internal static partial class ModeSegmenter
             if (cls == ClassOther)
             {
                 // Only Byte encodes this character, so it alone stays reachable and every
-                // further such character extends its run: one add and one byte each.
+                // further such character extends its run.
                 n0 = U | StateNumeric0; n1 = U | StateNumeric1; n2 = U | StateNumeric2; a0 = U | StateAlnum0; a1 = U | StateAlnum1;
                 while (i + 1 < length && ClassOf(text[i + 1]) == ClassOther)
                 {
@@ -300,7 +300,7 @@ internal static partial class ModeSegmenter
             var parents = 0;
             if (cls == ClassDigit)
             {
-                // The first digit of a group costs 4 bits, continued from Numeric0 or opened from the cheapest state, the next two 3 each.
+                // A group's first digit costs 4 bits and is continued from Numeric0 or opened from the cheapest state. The next two cost 3 bits each.
                 var wrapped = n2 + 22; // 3 bits, and Numeric2 becomes Numeric0
                 n2 = n1 + 25; // 3 bits, and Numeric1 becomes Numeric2
                 key = Math.Min(n0 + 32, cheapest + openNumeric);
@@ -314,7 +314,7 @@ internal static partial class ModeSegmenter
             }
             if (allowAlnum)
             {
-                // 11 bits per pair: 6 for the first character, continued from Alnum0 or opened from the cheapest state, 5 for the second.
+                // A pair costs 11 bits. The first character costs 6 and is continued from Alnum0 or opened from the cheapest state. The second costs 5.
                 var paired = a1 + 39; // 5 bits, and Alnum1 becomes Alnum0
                 key = Math.Min(a0 + 48, cheapest + openAlnum);
                 parents |= (key & 7) << 3;

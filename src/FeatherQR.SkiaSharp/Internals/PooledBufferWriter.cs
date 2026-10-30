@@ -3,10 +3,10 @@ using System.Buffers;
 namespace FeatherQR.SkiaSharp.Internals;
 
 /// <summary>
-/// A buffer that grows as it is written, from the pool but for a last growth to the most room past 1 MiB, for an image that has to be whole before an async write sends it.
+/// A buffer that grows as it is written, from the pool but for a buffer of the most room past 1 MiB, for an image that has to be whole before an async write sends it or a read decodes it.
 /// </summary>
 /// <remarks>
-/// The buffer is held across the write's await, so this class owns it. <see cref="Dispose"/> returns a buffer the pool lent, and a use after that throws instead of reaching an array the pool has handed on.
+/// The buffer is held across an await, so this class owns it. <see cref="Dispose"/> returns a buffer the pool lent, and a use after that throws instead of reaching an array the pool has handed on.
 /// </remarks>
 internal sealed class PooledBufferWriter : IBufferWriter<byte>, IDisposable
 {

@@ -550,7 +550,6 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
         }
     }
 
-    /// <summary>Encodes the rendered image in the format the builder was given.</summary>
     private SKData Encode(SKImage image)
         => image.Encode(_format, _quality) ?? throw new NotSupportedException($"Skia has no encoder for {_format}.");
 

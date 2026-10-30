@@ -235,10 +235,8 @@ public static partial class QRCodeGenerator
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
     {
-        // One compare, on the field that holds the segmentation and the FNC1 mode together: the
-        // default (Optimal, no FNC1) and every FNC1 call take the planning route, and Single
-        // without FNC1 keeps its one-pass route with nothing else read on the way in. Validation
-        // of the values lives in the planning method.
+        // One compare on the field that packs the segmentation and the FNC1 mode, so Single
+        // without FNC1 reads no other option on its way in. The planning method validates the values.
         if (!options.TakesSingleRoute)
             return CreateOptimal(textSpan, eccLevel, in options);
 
@@ -1433,7 +1431,7 @@ public static partial class QRCodeGenerator
         byte[]? rentedTable = null;
         var tableLength = PlanTableLength(textSpan, in analysis, fnc1);
 
-        // Content whose scan keeps no table and plans no Kanji selects the single-mode fit, so it is written from here: the planned route's two frames and the scan's call are what Optimal would cost it over Single.
+        // Content whose scan keeps no table and plans no Kanji ends at the single-mode fit anyway. Writing it here spares the planned route's two frames and the scan call.
         if (tableLength == 0 && !analysis.KanjiPlannable)
         {
             var single = SelectSingleVersion(eccLevel, in analysis, in options, fnc1);
@@ -1526,7 +1524,7 @@ public static partial class QRCodeGenerator
         byte[]? rentedTable = null;
         var tableLength = PlanTableLength(textSpan, in analysis, fnc1);
 
-        // Content whose scan keeps no table and plans no Kanji selects the single-mode fit, so it is written from here: the planned route's two frames and the scan's call are what Optimal would cost it over Single.
+        // Content whose scan keeps no table and plans no Kanji ends at the single-mode fit anyway. Writing it here spares the planned route's two frames and the scan call.
         if (tableLength == 0 && !analysis.KanjiPlannable)
         {
             var single = SelectSingleVersion(eccLevel, in analysis, in options, fnc1);

@@ -52,7 +52,7 @@ public class QRCodeImageStreamDecode
         return info;
     }
 
-    // A stream a call of its own, since SKBitmap.Decode(Stream) disposes the stream it is given
+    // Each call gets a new stream, since SKBitmap.Decode(Stream) disposes the stream it is given
     private static MemoryStream Exposed(byte[] bytes) => new(bytes, 0, bytes.Length, writable: false, publiclyVisible: true);
 
     private static byte[] Photograph()
@@ -62,7 +62,7 @@ public class QRCodeImageStreamDecode
         var canvas = surface.Canvas;
         canvas.Clear(new SKColor(180, 170, 160));
 
-        // Texture, so the JPEG carries what a photograph's does rather than flat colour
+        // Texture gives the JPEG a photograph's detail to compress rather than flat colour
         var random = new Random(42);
         using var paint = new SKPaint { IsAntialias = true };
         for (var i = 0; i < 20_000; i++)

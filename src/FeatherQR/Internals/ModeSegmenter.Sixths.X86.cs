@@ -9,9 +9,8 @@ namespace FeatherQR.Internals;
 internal static partial class ModeSegmenter
 {
     /// <summary>
-    /// The bound 32 characters a step: the characters saturated to bytes (a character above 255 lands on 0 or 255 through the signed saturation, neither in a class), each byte's row and column
-    /// of the alphanumeric alphabet looked up by nibble shuffles, and the discounts widened and summed in 16-bit lanes. Then one 16-lane block by range compares
-    /// and the overlapped last block.
+    /// The bound priced 32 characters a step. The characters are saturated to bytes, and the signed saturation sends a character above 255 to 0 or 255, neither in a class.
+    /// Nibble shuffles look up each byte's row of the alphanumeric alphabet. One 16-lane block by range compares and the overlapped last block finish the text.
     /// </summary>
     internal static int CheapestSixthsAvx2(ReadOnlySpan<char> text, EciMode charset)
     {
@@ -22,7 +21,7 @@ internal static partial class ModeSegmenter
         ref var start = ref MemoryMarshal.GetReference(text);
         var length = text.Length;
         // Row membership of each low nibble as bits 2 to 5 for rows 0x2 to 0x5 (space $ % * + - . /, digits and colon, A-O, P-Z), and the row bit of each high nibble.
-        // A byte is in the alphabet where the two agree on a row. The tables live in locals: a helper taking them was not inlined.
+        // A byte is in the alphabet where the two agree on a row. The tables are locals because a helper taking them does not inline.
         var loBits = Vector256.Create(
             (byte)0x2C, 0x38, 0x38, 0x38, 0x3C, 0x3C, 0x38, 0x38, 0x38, 0x38, 0x3C, 0x14, 0x10, 0x14, 0x14, 0x14,
             0x2C, 0x38, 0x38, 0x38, 0x3C, 0x3C, 0x38, 0x38, 0x38, 0x38, 0x3C, 0x14, 0x10, 0x14, 0x14, 0x14);
@@ -97,7 +96,7 @@ internal static partial class ModeSegmenter
         }
         if (i < length)
         {
-            // The last 16 characters, the first of them priced already and masked out. The sum is not idempotent, so an overlapped read needs the mask.
+            // The sum is not idempotent, so the overlapped last block masks out the characters already priced.
             var skip = Vector256<ushort>.Count - (length - i);
             var c = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref start, length - Vector256<ushort>.Count)));
             if (utf8 && AnySurrogate(c))

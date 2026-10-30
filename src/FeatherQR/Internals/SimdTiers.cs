@@ -193,7 +193,7 @@ internal static class SimdTiers
         new("ModeSegmenterLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // ModeSegmenter.CheapestSixths: the trivial lower bound of every Optimal version scan, each character priced at its cheapest mode. The AVX2 tier classifies 32 characters a step by byte shuffles, the 128-bit tier 8 by range compares.
         new("ModeSegmenterSixths", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Vector128, Isa.Vector128)),
-        // ModeSegmenter.ComputeCosts: the cost run of the Optimal version scans on a one-byte charset, the six states as 16-bit lanes of one vector, the cheapest state by one horizontal minimum. ARM64 prices costs only, the cheapest state from the old one and the class's smallest opening.
+        // ModeSegmenter.ComputeCosts: the cost run of the Optimal version scans on a one-byte charset. The six states are 16-bit lanes of one vector, and one horizontal minimum finds the cheapest. ARM64 prices costs only and takes the cheapest state from the old one and the class's smallest opening.
         new("ModeSegmenterCosts", (SimdTier.Sse41, Isa.Sse41), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // EccBinaryEncoder.CalculateEcc / CalculateECCBlocks: Reed-Solomon remainder, a group's blocks side by side in one loop on x86 (from .NET 8 two with SSSE3 up to 16 codewords, and on .NET 10 up to four with GFNI, above 16 codewords only with 256-bit GFNI and AVX2). GFNI runs inside the SSSE3 entry, and its 256-bit form, for blocks over 16 codewords, also asks for AVX2. WebAssembly runs the NEON kernel with its swizzle for the table lookup.
         new("EccBinaryEncoder", (SimdTier.GfniV256, Isa.GfniV256 && Isa.Avx2), (SimdTier.Gfni, Isa.Gfni), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
@@ -288,7 +288,7 @@ internal static class SimdTiers
         new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
         new("ModeSegmenterLanes",      [Sse2],          [Vector256],          [AdvSimd],            [PackedSimd]),
         new("ModeSegmenterSixths",     [Vector128],     [Avx2],               [Vector128],          [Vector128]),
-        // ModeSegmenterCosts: the horizontal minimum with its index is one SSE4.1 instruction. WebAssembly has no minimum across a vector, and its lane form, three swizzles and three minimums a character, loses to the scalar loops on the interpreter while winning under AOT, which the library cannot tell apart at run time. ARM64 has uminv without the index and takes the lane form for costs only: its tracked form lost to the scalar loop on alternating text (specs/standardqr-encoder.md, "Mixed-mode segmentation").
+        // ModeSegmenterCosts: the horizontal minimum with its index is one SSE4.1 instruction. WebAssembly stays scalar: it has no minimum across a vector, and its lane form loses on the interpreter and wins under AOT, which the library cannot tell apart at run time. ARM64's uminv gives no index, so it takes the lane form for costs only.
         new("ModeSegmenterCosts",      [Sse41],         [Sse41],              [AdvSimd],            [Scalar]),
         new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [PackedSimd]),
         new("EccBinaryDecoder",        [Vector128],     [GfniV256, Vector128], [AdvSimd],           [Vector128]),
@@ -312,7 +312,7 @@ internal static class SimdTiers
         new("QRNumericWriter",         [Ssse3],         [Ssse3],              [AdvSimd],            [Scalar]),
         // WebAssembly keeps the 128-bit tier though the interpreter runs it slower than scalar: AOT-compiled it is faster, and the search is a small share of a decode there
         new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
-        // ARM64 takes the 128-bit tier: a tier of its own intrinsics ran no faster on either JIT and 2 % slower as NativeAOT code
+        // ARM64 takes the 128-bit tier: a tier of its own intrinsics ran no faster
         new("QRSampleGridPiecewise",   [Sse2],          [Avx2],               [Vector128],          [PackedSimd]),
         new("StructuredAppendLanes",   [Sse2],          [Vector256],          [AdvSimd],            [PackedSimd]),
         // x64 and WebAssembly stay scalar: the parity pass is too small a share of a Structured Append encode there

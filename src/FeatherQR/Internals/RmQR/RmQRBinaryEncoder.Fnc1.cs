@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// The data codeword streams under FNC1 (ISO/IEC 23941 7.4.8, specs/rmqr-encoder.md FNC1): the headers in the
-/// standard's order (the 11-bit ECI prefix when a charset is declared, the FNC1 indicator <c>101</c> or <c>110</c>
-/// with its 8-bit application indicator, then the data), and the <c>%</c> rule applied in reverse in an
-/// Alphanumeric run (the separator U+001D written as <c>%</c>, a literal <c>%</c> as <c>%%</c>). Written as its own
-/// methods, reusing the run writers, so the streams without FNC1 keep their code.
+/// The data codeword streams under FNC1 (ISO/IEC 23941 7.4.8). The headers come in the standard's order: the 11-bit
+/// ECI prefix when a charset is declared, the FNC1 indicator <c>101</c>, or <c>110</c> with its 8-bit application
+/// indicator, then the data. An Alphanumeric run applies the <c>%</c> rule in reverse, writing the separator U+001D
+/// as <c>%</c> and a literal <c>%</c> as <c>%%</c>. These are methods of their own that reuse the run writers, so the
+/// streams without FNC1 keep their code.
 /// </summary>
 internal static partial class RmQRBinaryEncoder
 {
@@ -179,8 +179,8 @@ internal static partial class RmQRBinaryEncoder
 
     /// <summary>
     /// The Alphanumeric payload under FNC1 (7.4.8): a separator is written as <c>%</c> and a literal <c>%</c> as
-    /// <c>%%</c>, and the values pair into 11 bits as in any Alphanumeric run. The caller keeps a separator pair out
-    /// of the run (a reader would take the <c>%%</c> first). Scalar: the vectorized writer never sees a separator.
+    /// <c>%%</c>, and the values pair into 11 bits as in any Alphanumeric run. The caller never puts a separator and a
+    /// following separator or literal <c>%</c> in one run, since a reader takes <c>%%</c> first. It is scalar because the vectorized writer has no separator case.
     /// </summary>
     private static void WriteAlphanumericFnc1(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> chars)
     {

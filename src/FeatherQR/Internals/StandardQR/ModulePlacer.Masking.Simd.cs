@@ -18,9 +18,9 @@ namespace FeatherQR.Internals.StandardQR;
 /// Popcounts accumulate in 16-bit lanes and reduce to totals only at the checkpoint and the end of a scoring call (a group of two
 /// candidates in the single-word tier, one candidate in the transposed one): WebAssembly's byte popcount and pairwise widening add, the
 /// nibble-table popcount and psadbw with SSSE3, cnt and uadalp on ARM64, a SWAR count of each 16-bit lane elsewhere.
-/// ARM64 enters the single-word tier through <see cref="MaskCodeAdvSimd"/> and runs it with NEON's sixteen-module row packing and
-/// winner unpack (ModulePlacer.Masking.Arm64.cs) in place of the compare and movemask, which ARM64 has no instruction for, and the
-/// eight-module unpack. Its transposed tier takes these counts and the rules of ModulePlacer.Masking.Transposed.Vector128.cs.
+/// ARM64 enters the single-word tier through <see cref="MaskCodeAdvSimd"/>. It has no movemask instruction, so it packs the rows and
+/// unpacks the winner sixteen modules a step with NEON (ModulePlacer.Masking.Arm64.cs). Its transposed tier takes these counts and the
+/// rules of ModulePlacer.Masking.Transposed.Vector128.cs.
 /// </remarks>
 internal static partial class ModulePlacer
 {

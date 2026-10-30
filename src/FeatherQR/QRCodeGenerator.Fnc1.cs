@@ -6,12 +6,8 @@ using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR;
 
-/// <summary>
-/// The FNC1 half of the generator (ISO/IEC 18004 6.4.8, specs/standardqr-encoder.md FNC1). The single-mode route under
-/// FNC1 is the resolved route with the indicator's bits in every version fit and the indicator in the stream, written
-/// as its own methods rather than as parameters of the route without FNC1, so that route keeps its instructions.
-/// The mixed-mode route takes the mode from the options it already carries.
-/// </summary>
+// The FNC1 half of the generator (ISO/IEC 18004 6.4.8). The single-mode route under FNC1 is its own methods
+// rather than parameters on the route without FNC1, so that route keeps its instructions.
 public static partial class QRCodeGenerator
 {
     /// <summary><see cref="QRSegmentation.Single"/> with an FNC1 mode: the resolved route's steps with the indicator's bits.</summary>
@@ -38,7 +34,7 @@ public static partial class QRCodeGenerator
     /// <summary><see cref="ResolveVersionAndEcc"/> with the FNC1 indicator's bits in every fit, and the same two errors when nothing fits.</summary>
     private static (int Version, QREccLevel EccLevel) ResolveVersionAndEccFnc1(in TextAnalysisResult analysis, QREccLevel eccLevel, in QRCodeGeneratorOptions options, int fnc1HeaderBits)
     {
-        // Without FNC1 the route's own resolution, so its errors stay the captured ones to the letter.
+        // Without FNC1 the route's own resolution runs, so its error messages stay word for word.
         if (fnc1HeaderBits == 0)
             return ResolveVersionAndEcc(in analysis, eccLevel, in options);
 

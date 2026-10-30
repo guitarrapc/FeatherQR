@@ -11,7 +11,6 @@ namespace FeatherQR.SkiaSharp.Internals;
 /// </remarks>
 internal sealed class EncodedImage : IDisposable
 {
-    // Where the room starts for a stream that cannot say its length
     private const int UnknownLengthCapacity = 64 * 1024;
 
     private readonly PooledBufferWriter? _owned;

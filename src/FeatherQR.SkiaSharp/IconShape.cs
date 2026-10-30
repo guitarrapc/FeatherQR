@@ -55,7 +55,7 @@ public abstract class IconShape
             return none;
         }
 
-        // The pixels read as they are. SKBitmap.Copy draws them, which clears the colour of an unpremultiplied pixel of no alpha and takes several times as long
+        // The pixels are read as they are. SKBitmap.Copy draws them, which clears the colour of an unpremultiplied pixel with no alpha
         var copy = new SKBitmap(image.Info);
         owned.Add(copy);
         using var source = image.PeekPixels();

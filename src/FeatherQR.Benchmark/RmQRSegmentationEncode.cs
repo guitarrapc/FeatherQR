@@ -14,7 +14,8 @@
 ///   Length, shape held fixed   : mixed-20 / -60 / -120 / -150 (half letters, half digits)
 ///   Shape, length held at 120  : numeric / alnum / byte / mixed / alt1 / alt10
 ///
-/// and to cover every way the scan can end (cost runs per encode in brackets. A run writes the table the build walks back, so a shape accepted by its last run pays no run for the build):
+/// and to cover every way the scan can end. Cost runs per encode are in brackets.
+/// A run writes the table the build walks back, so a shape accepted by its last run pays no extra run for the build:
 ///
 ///   numeric-*  : all digits, so one mode is provably optimal and the short-circuit
 ///                returns before any bound is computed [0 runs]

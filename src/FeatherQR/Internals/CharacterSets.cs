@@ -54,9 +54,8 @@ internal static class CharacterSets
         // Encoding.UTF8 allocates a fallback buffer in each call that meets a lone surrogate. This one keeps the thread's.
         return ThreadBufferFallback.Utf8.GetByteCount(text);
 #else
-        // netstandard2.0's Encoder has no span overloads, the pointer overloads would be unsafe code, and a pooled copy counted slower on
-        // non-ASCII text, so the count is the one EncodeUtf8 writes. Refs, not the span indexer, which is slow on the portable span
-        // .NET Framework runs.
+        // netstandard2.0's Encoder has no span overloads, and the pointer overloads would be unsafe code, so the count is the one EncodeUtf8 writes.
+        // The span indexer is slow on the portable span .NET Framework runs, so this reads through refs.
         ref var start = ref MemoryMarshal.GetReference(text);
         var length = text.Length;
         var n = 0;
@@ -106,9 +105,8 @@ internal static class CharacterSets
     internal static int EncodeUtf8(ReadOnlySpan<char> text, Span<byte> utf8)
     {
 #if !NET8_0_OR_GREATER
-        // Three bytes a char hold any text's UTF-8, so the netstandard builds write it through refs then: the span indexers are slow on the
-        // portable span .NET Framework runs. The narrowing reads the chars as a little-endian machine lays them out. .NET 8 and later keep
-        // this loop, where the other form wrote Micro QR's payloads no faster.
+        // The span indexers are slow on the portable span .NET Framework runs, so the netstandard builds write through refs when three bytes
+        // a char fit, which holds any text's UTF-8. The narrowing reads the chars as a little-endian machine lays them out.
         if (BitConverter.IsLittleEndian && utf8.Length / 3 >= text.Length)
             return EncodeUtf8ThroughRefs(text, utf8);
 #endif

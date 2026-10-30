@@ -15,7 +15,6 @@ internal static partial class QRImageDecoder
     /// <remarks>
     /// The same float operations in the reference's order, and each coordinate to its pixel through <see cref="VectorCast.ToPixel"/>,
     /// which lands where the reference's <see cref="PixelIndex.Clamp(float, int)"/> does for every float.
-    /// ARM64 had a tier of its own, these steps with its intrinsics. It ran no faster on an Apple M2, and was removed (standardqr-decoder.md, Performance).
     /// </remarks>
     internal static void SampleGridPiecewiseVector128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {

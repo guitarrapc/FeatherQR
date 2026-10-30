@@ -19,7 +19,7 @@ internal static partial class ModeSegmenter
     /// runs beside each character's chain instead of on it. Only the final state needs the index. Same answer as <see cref="CostsLatin"/>, including the lowest state among equal final costs.
     /// </summary>
     /// <remarks>
-    /// There is no tracked form: one that takes the index every character for the parents ran slower than the scalar loop on alternating text on Apple M2, where this one ran 0.51 to 0.87 of it.
+    /// There is no tracked form. The parents need the cheapest state's index every character, which makes it slower than the scalar loop on alternating text.
     /// </remarks>
     internal static int CostsLatinAdvSimd(ReadOnlySpan<char> text, int openNumeric, int openAlnum, int openByte, bool allowAlnum, out int finalState)
     {

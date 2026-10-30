@@ -19,7 +19,7 @@ internal static partial class Binarizer
     /// </summary>
     /// <remarks>
     /// From its first stretch on, an image of <see cref="LanedPixels"/> or more counts those groups into four sub-histograms, pixel i of a group into lane i % 4: an increment to a bin waits on the last increment to it, and neighbouring pixels of a photograph are often the same bin.
-    /// The lanes are rented, cleared, merged into the bins at the end and returned. A smaller image, and one with no stretch, counts into the bins alone and rents nothing.
+    /// A smaller image, and one with no stretch, counts into the bins alone and rents nothing.
     /// </remarks>
     internal static void FillHistogramVector256(ReadOnlySpan<byte> luminance, Span<int> histogram)
     {

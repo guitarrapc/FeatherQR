@@ -416,7 +416,7 @@ internal static class SegmentDecoders
     /// </remarks>
     private static OperationStatus DecodeUtf8(ReadOnlySpan<byte> source, Span<char> destination, out int charsWritten, bool replaceInvalidSequences)
     {
-        // Refs, not the span indexers, which are slow on the portable span .NET Framework runs.
+        // The span indexers are slow on the portable span .NET Framework runs, so this reads through refs.
         ref var src = ref MemoryMarshal.GetReference(source);
         ref var dst = ref MemoryMarshal.GetReference(destination);
         var length = source.Length;

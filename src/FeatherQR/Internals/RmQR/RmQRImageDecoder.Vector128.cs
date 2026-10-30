@@ -59,7 +59,7 @@ internal static partial class RmQRImageDecoder
                 var certainBits = certain.ExtractMostSignificantBits();
                 if (certainBits == 0)
                     continue;
-                // Every lane is read, not only the certain ones: a loop over the certain lanes spills the indices and branches on a count that varies.
+                // Every lane is read, since a loop over the certain lanes spills the indices and branches on a count that varies.
                 // A lane that is not certain may hold no pixel, so it reads pixel 0 and its bit is masked off.
                 var index = Vector128.ConditionalSelect(certain, pyLow * stride + pxLow, Vector128<int>.Zero);
                 var dark = (uint)(luminance[index.GetElement(0)] - level) >> 31

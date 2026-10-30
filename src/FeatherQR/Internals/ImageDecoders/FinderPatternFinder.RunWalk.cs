@@ -327,7 +327,7 @@ internal static partial class FinderPatternFinder
 
     /// <summary>
     /// <see cref="MeasureAxisRunsReference"/> held to the bounds <see cref="MeasureRunsBounded"/> stops at, so that a cross-check refuses the same lines and reports the same total through either walk.
-    /// Not inlined. Written into <see cref="CrossCheck"/> it slowed the calls that take the other walk too.
+    /// Not inlined, since inside <see cref="CrossCheck"/> it slows the calls that take the other walk too.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static bool MeasureAxisRunsReferenceWithinBounds(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, bool vertical, int expectedTotal, Span<int> runs, out int end)

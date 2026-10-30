@@ -4,12 +4,12 @@ using System.Diagnostics;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// The version scan and the plan under FNC1 (specs/rmqr-encoder.md, FNC1): the indicator's bits (3 in first
-/// position, 11 in second) join the ECI prefix in every capacity check, the single-mode ceiling is the fit with
-/// those bits, the costs come from the FNC1 program (<see cref="ModeSegmenter.ComputeCostsFnc1"/>), whose Alphanumeric runs count a literal
-/// <c>%</c> twice and never hold a separator pair, and no Kanji plan is priced. The scan has the shape of the scan without
-/// FNC1 and without Kanji: the trivial bound, a memoised cost run per width triple and the kept table. A floor run
-/// counting runs would read the other program's packed table. The route is cold, so the exact cost run can decide alone.
+/// The version scan and the plan under FNC1 (specs/rmqr-encoder.md, FNC1). The indicator's bits, 3 in first
+/// position and 11 in second, join the ECI prefix in every capacity check, and the single-mode ceiling is the fit with
+/// those bits. The costs come from the FNC1 program (<see cref="ModeSegmenter.ComputeCostsFnc1"/>), whose Alphanumeric runs count a literal
+/// <c>%</c> twice and never hold a separator pair. No Kanji plan is priced. The scan has the shape of the scan without
+/// FNC1 and without Kanji: the trivial bound, a memoised cost run per width triple and the kept table. It has no floor run,
+/// since one counting runs would read the other program's packed table, and the route is cold enough for the exact cost run to decide alone.
 /// With a table, the scan leaves the predecessors of its last run there and says whether that run priced the
 /// candidate it accepted. A remembered cost accepts a candidate priced by an earlier run, whose table is gone,
 /// and a requested version is accepted unpriced. Both build their plan with a run of their own.
@@ -78,7 +78,7 @@ internal static partial class RmQRSegmentPlanner
 
         var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
-        // The one-header bound: under FNC1 a literal percent costs two Alphanumeric units and one byte, so one Byte run can undercut the Alphanumeric stream the fit priced and fit a candidate ahead of it.
+        // The bound carries one header only. Under FNC1 a literal percent costs two Alphanumeric units and one byte, so one Byte run can undercut the Alphanumeric stream the fit priced and fit a candidate ahead of it.
         var trivialBits = TrivialLowerBoundBitsFnc1(text, charset) + headerBits;
 
         Span<int> memoKeys = stackalloc int[MemoCapacity];

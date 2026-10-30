@@ -107,7 +107,7 @@ internal static partial class QRImageDecoder
     /// </para>
     /// </remarks>
     /// <returns>How many symbols were written.</returns>
-    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check, the symbols read so far left in <paramref name="symbols"/>.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled, at the next check. The symbols read so far stay in <paramref name="symbols"/>.</exception>
     internal static int DecodeSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> symbols, CancellationToken cancellationToken = default)
     {
         if (symbols.IsEmpty)
@@ -253,7 +253,7 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary><see cref="DecodeSymbolsCore"/> with the first <paramref name="seeded"/> symbols of the room taken as read, the image's histogram given, and the first round's strided rows kept in <paramref name="shared"/>.</summary>
-    /// <remarks>The rounds are that method's, written out again: shared through a method the JIT inlines, they moved that method's stack frame.</remarks>
+    /// <remarks>The rounds are that method's, written out again, since a shared method the JIT inlines grows that method's stack frame.</remarks>
     private static int DecodeSymbolsBesideCore(ReadOnlySpan<byte> luminance, int width, int height, ReadOnlySpan<int> histogram, Span<QRCodeDecodeResult> symbols, int seeded, ref QRCodeDecodeResult[]? growing, ref SharedRowHits shared, CancellationToken cancellationToken)
     {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
@@ -687,7 +687,7 @@ internal static partial class QRImageDecoder
         static float DistanceSquared(ImagePoint a, ImagePoint b) => (a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y);
     }
 
-    /// <summary>Takes the candidates inside the outline of any of <paramref name="symbols"/> out of the list, the others keeping their order. True when any left.</summary>
+    /// <summary>Takes the candidates inside the outline of any of <paramref name="symbols"/> out of the list, the others keeping their order. True when any was taken out.</summary>
     private static bool RemoveCandidatesOfSymbols(Span<FinderPattern> candidates, ref int candidateCount, ReadOnlySpan<QRCodeDecodeResult> symbols, int scale)
     {
         var before = candidateCount;

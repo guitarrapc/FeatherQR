@@ -10,7 +10,7 @@ public enum RmQRSegmentation
     /// Never selects a symbol with more core modules than <see cref="Single"/>, emits the <see cref="Single"/> bit stream verbatim when a split would not shrink it, and additionally encodes content that overflows every version in a single mode. A U+FEFF inside UTF-8 content never opens a Byte run, where a reader would drop it as a byte order mark: the run opens a character early and keeps it interior.
     /// </summary>
     /// <remarks>
-    /// The search prices candidate versions; it allocates nothing, and content no split can help is ruled out before it starts. <see cref="Single"/> skips it.
+    /// The search prices candidate versions. It allocates nothing, and content no split can help is ruled out before it starts. <see cref="Single"/> skips it.
     /// Fewer core modules is not the same as a smaller image: <see cref="RmQRFitStrategy"/> ranks by core modules while the quiet zone adds to each dimension, so a flatter symbol can render onto a larger grid.
     /// Size buffers with the same segmentation you encode with.
     /// </remarks>

@@ -8,7 +8,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// The Standard QR read for every symbol and the single-finder scan read the same four binarizations at the same thresholds, and each begins a reading with a strided scan of its rows and may sweep every row after it. The two stride differently, so neither's list is the other's, but a row's hits are the row's: the first keeps the hits of the rows its stride reached (<see cref="FinderPatternFinder.KeptRows"/>), and the second merges them wherever its own strided scan or sweep comes to one of those rows, scanning only the rows between. Each of its lists stays bit for bit what its own scan leaves.
 /// </para>
 /// <para>
-/// A reading the first read did not reach, or whose rows did not fit the room, is not kept, and the second scans it as before. The rooms are the caller's, rented: a quarter of a candidate list of hits a reading, 65,536 bytes in all, under the large object heap's threshold, and the row ends of the first read's stride.
+/// A reading the first read did not reach, or whose rows did not fit the room, is not kept, and the second scans it itself. The rooms are the caller's, rented: a quarter of a candidate list of hits a reading, 65,536 bytes in all, under the large object heap's threshold, and the row ends of the first read's stride.
 /// </para>
 /// </remarks>
 internal readonly ref struct SharedRowHits

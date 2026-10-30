@@ -32,7 +32,7 @@ internal static partial class RmQRSegmentPlanner
 
     /// <summary>
     /// Count indicator triples memoised during a version scan.
-    /// The 32 versions share 13 distinct triples, but the trivial bound and the skip on a priced triple leave few to price: at most 4 over 3,909 random texts, and at most 5 for a Kanji-eligible text, whose two programs share the store, over 19,221 (specs/rmqr-encoder.md). Undersizing is safe, not wrong, because the store is guarded and a miss simply recomputes.
+    /// The 32 versions share 13 distinct triples, but the trivial bound and the skip on a priced triple leave few to price, even where a Kanji-eligible text's two programs share the store (specs/rmqr-encoder.md). Undersizing is safe, not wrong, because the store is guarded and a miss simply recomputes.
     /// </summary>
     private const int MemoCapacity = 8;
 
@@ -46,7 +46,7 @@ internal static partial class RmQRSegmentPlanner
     private const int MinCountBitsAny = 3;
 
     /// <summary>
-    /// The header a split's second run pays, which the scan without FNC1 or Kanji adds to the trivial bound: a plan of one run is the single-mode stream, which no candidate ahead of the single-mode fit holds, so every plan that fits one has a second header.
+    /// The header a split's second run pays, which the scan without FNC1 or Kanji adds to the trivial bound. A plan of one run is the single-mode stream, which no candidate ahead of the single-mode fit holds, so every plan that fits one has a second header.
     /// </summary>
     public const int SecondRunHeaderBits = RmQRConstants.ModeIndicatorLength + MinCountBitsAny;
 
@@ -145,8 +145,7 @@ internal static partial class RmQRSegmentPlanner
         // Two filters ahead of a cost run. The trivial bound is a lower bound for every version. A priced width triple is a lower bound for every
         // version whose three widths are at least its, since widening a count indicator only raises the price of the run that carries it.
         // A candidate neither filter rejects is priced at its own widths, with its predecessors kept, so the accepting run's table is the plan's.
-        // A floor run at the narrowest widths, with the floor plan re-priced as an upper bound, decided most candidates without a run of their own
-        // but left the build to run the program again. Rationale and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
+        // No upper bound accepts a candidate unpriced, since the build would then run the program again (specs/rmqr-encoder.md, "Mixed-mode segmentation").
         var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits + SecondRunHeaderBits;
 
         Span<int> memoKeys = stackalloc int[MemoCapacity];

@@ -283,9 +283,9 @@ const DATA_FORMATS = ['text', 'gs1', 'link', 'aim'];
  * The WASM request for a playground state. The data format names the route: a GS1 format goes through
  * the GS1 entry points, which check the data and set the mode, and an AIM format is plain text under
  * FNC1 in second position. First position is written through the GS1 entry point alone, so a symbol
- * that claims GS1 data has passed the checks. In every format but plain text each ␝ of the content, the
- * stand-in the page shows for the separator, is sent as U+001D, the separator a reader returns. Micro QR
- * has neither FNC1 nor a GS1 carrier, so its request is plain text whatever the hidden control holds.
+ * that claims GS1 data has passed the checks. The page shows the separator as ␝, so in every format but
+ * plain text each ␝ is sent as U+001D, the separator a reader returns. Micro QR has neither FNC1 nor a
+ * GS1 carrier, so its request is plain text whatever the hidden control holds.
  */
 function requestFor(state) {
   const format = state.symbology === 'microqr' ? 'text' : state.dataFormat;
@@ -314,7 +314,7 @@ function renderDecodedGs1(result) {
   decodeGs1El.hidden = !fillGs1View(decodeGs1El, result);
 }
 
-/** Writes a symbol's GS1 view into `container`; false, with nothing written, for a symbol with no GS1 data. */
+/** Writes a symbol's GS1 view into `container`. Returns false, with nothing written, for a symbol with no GS1 data. */
 function fillGs1View(container, result) {
   if (!(result?.gs1Hri || result?.gs1Error)) return false;
   const heading = document.createElement('div');
@@ -918,8 +918,8 @@ function runVerifyDecode(pngBytes, request) {
 }
 
 /**
- * Calls the WASM decoder for one symbol, or with `every` for each QR Code of the image, of every
- * symbology together with `mixed`; returns the parsed result, or null when the runtime died.
+ * Calls the WASM decoder for one symbol. With `every` it reads each QR Code of the image, and with
+ * `mixed` too, those of every symbology together. Returns the parsed result, or null when the runtime died.
  */
 function callDecode(bytes, every = false, mixed = false) {
   try {
@@ -1061,10 +1061,10 @@ function drawDecodePreview(bitmap, result, view = decodeView) {
   }
 
   for (const outline of outlines) {
-    // Corners arrive in stored pixels; the canvas shows the oriented picture.
+    // Corners arrive in stored pixels, and the canvas shows the oriented picture.
     const corners = orientCorners(outline.symbol.corners, orientation, result.imageWidth, result.imageHeight);
-    // y grows downward, so a printed symbol winds clockwise and a mirrored one reverses it; that is
-    // the whole mirror test. Computed after orienting, so it describes the picture on screen.
+    // y grows downward, so a printed symbol winds clockwise and a mirrored one reverses it.
+    // Computed after orienting, so it describes the picture on screen.
     const cross = (corners[2] - corners[0]) * (corners[7] - corners[1])
       - (corners[3] - corners[1]) * (corners[6] - corners[0]);
     outline.corners = corners;
@@ -1134,7 +1134,7 @@ function shortestSide(at) {
   return shortest;
 }
 
-/** The list number at the outline's centre, sized to fit inside it; false when the outline is too small to hold it legibly. */
+/** The list number at the outline's centre, sized to fit inside it. Returns false when the outline is too small to hold it legibly. */
 function drawOutlineNumber(ctx, number, at, side) {
   const size = Math.min(13, Math.floor(side * 0.45));
   if (size < 8) return false;
@@ -1161,7 +1161,7 @@ function drawOutlineNumber(ctx, number, at, side) {
 
 /**
  * Resolves once what the page just wrote has been painted, before a call that blocks the main thread.
- * One rAF resolves before the frame it schedules paints, so nest two; the timer covers a hidden tab, where rAF never fires.
+ * One rAF resolves before the frame it schedules paints, so two are nested. The timer covers a hidden tab, where rAF never fires.
  */
 function afterPaint() {
   return Promise.race([
@@ -1392,7 +1392,7 @@ function readsAsGenerated(read, expected) {
   return Boolean(read?.ok) && read.text === expected.content && decodedModeMatches(read, expected);
 }
 
-/** Hands the last generated image to the WASM side as the card; false, with the reason shown, when it cannot. */
+/** Hands the last generated image to the WASM side as the card. Returns false, with the reason shown, when it cannot. */
 function ensurePhotoCard(statusEl) {
   if (!photoCardStale) return true;
   if (!lastPngBytes || !photoSource) {
@@ -1640,7 +1640,6 @@ function limitSummary(effect, results, seeds, varied) {
   if (firstMiss < 0) {
     return `Reads at every step, up to ${effect.show(results[results.length - 1].value)}.${sameSeeds}`;
   }
-  // The trailing run of steps where no seed reads
   let noneFrom = results.length;
   while (noneFrom > 0 && results[noneFrom - 1].reads === 0) noneFrom--;
   const upTo = firstMiss === 0 ? '' : `Reads every seed up to ${effect.show(results[firstMiss - 1].value)}`;
