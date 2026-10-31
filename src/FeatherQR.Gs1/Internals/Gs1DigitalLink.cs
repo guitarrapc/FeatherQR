@@ -48,7 +48,8 @@ internal static class Gs1DigitalLink
             var slash = text.Slice(hostStart).IndexOf('/');
             var hostEnd = slash < 0 ? text.Length : hostStart + slash;
             valid = IsAuthority(text.Slice(hostStart, hostEnd - hostStart));
-            for (var i = 0; valid && i < text.Length; i++)
+            // Scheme and authority checks already restrict their characters to URI-safe ASCII.
+            for (var i = hostEnd; valid && i < text.Length; i++)
                 valid = IsUriCharacter(text[i]) && text[i] != '?' && text[i] != '#';
         }
         if (!valid)
@@ -59,7 +60,7 @@ internal static class Gs1DigitalLink
 
     /// <summary>
     /// Whether a stem's authority is a host with an optional port (RFC 3986 section 3.2): a bracketed IPv6
-    /// address of hexadecimal digits, colons and dots, or a registered name or IPv4 address of letters, digits,
+    /// address, optionally ending in dotted-decimal IPv4, or a registered name or IPv4 address of letters, digits,
     /// dots and hyphens, then nothing or a colon and one or more digits. Stricter than the reader, which follows
     /// the Syntax Engine and refuses only a short list of characters, because the stem is the caller's option and
     /// the contract promises a host.
@@ -73,14 +74,8 @@ internal static class Gs1DigitalLink
         if (authority[0] == '[')
         {
             var close = authority.IndexOf(']');
-            if (close < 2)
+            if (close < 2 || !IsIpv6Address(authority.Slice(1, close - 1)))
                 return false;
-            for (var i = 1; i < close; i++)
-            {
-                var c = authority[i];
-                if (HexValue(c) < 0 && c != ':' && c != '.')
-                    return false;
-            }
             rest = authority.Slice(close + 1);
         }
         else
@@ -103,6 +98,80 @@ internal static class Gs1DigitalLink
         if (rest[0] != ':' || rest.Length < 2)
             return false;
         return IsAllDigits(rest.Slice(1));
+    }
+
+    // Validate the span directly because constructing an address would allocate on each conversion.
+    private static bool IsIpv6Address(ReadOnlySpan<char> address)
+    {
+        if (address.Length < 2 || address.Length > 45)
+            return false;
+
+        var index = 0;
+        var groups = 0;
+        var compressed = false;
+        if (address[0] == ':')
+        {
+            if (address[1] != ':')
+                return false;
+            compressed = true;
+            index = 2;
+        }
+
+        while (index < address.Length)
+        {
+            var start = index;
+            while (index < address.Length && HexValue(address[index]) >= 0)
+                index++;
+            var digits = index - start;
+            if (digits < 1 || digits > 4)
+                return false;
+
+            if (index < address.Length && address[index] == '.')
+            {
+                groups += 2;
+                return (compressed ? groups < 8 : groups == 8) && IsIpv4Tail(address.Slice(start));
+            }
+
+            if (++groups > 8)
+                return false;
+            if (index == address.Length)
+                break;
+            if (address[index++] != ':' || index == address.Length)
+                return false;
+            if (address[index] == ':')
+            {
+                if (compressed)
+                    return false;
+                compressed = true;
+                index++;
+            }
+        }
+
+        // A double colon must replace at least one of the eight groups.
+        return compressed ? groups < 8 : groups == 8;
+    }
+
+    private static bool IsIpv4Tail(ReadOnlySpan<char> address)
+    {
+        var index = 0;
+        for (var octet = 0; octet < 4; octet++)
+        {
+            var start = index;
+            var value = 0;
+            while (index < address.Length && (uint)(address[index] - '0') <= 9)
+            {
+                value = value * 10 + address[index++] - '0';
+                if (value > 255 || index - start > 3)
+                    return false;
+            }
+            if (index == start || (index - start > 1 && address[start] == '0'))
+                return false;
+            if (octet == 3)
+                return index == address.Length;
+            if (index == address.Length || address[index++] != '.')
+                return false;
+        }
+        return false;
     }
 
     // ----- element string -> URI -----
