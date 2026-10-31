@@ -138,3 +138,23 @@ the module size, since the camera traces nine rays a pixel on the page's thread.
 The Share button stores the full playground state (compressed with `CompressionStream`,
 base64url) in the URL hash, nothing is sent to a server. Uploaded logo images are excluded
 from share links; the link falls back to the built-in logo.
+
+The wire format remains `#1.<base64url>` for deflate-raw UTF-8 JSON and `#0.<base64url>` for
+plain UTF-8 JSON. The prefix selects the encoding, while the JSON's `v: 1` selects the state
+schema. Versionless links are read as v1 for compatibility. Missing fields keep the current
+defaults and unknown fields are ignored, but unsupported schema versions and invalid known
+fields are refused before controls change. A failed restore shows a message and starts the
+Playground with defaults instead of stopping WebAssembly initialization.
+
+The decoder limits the hash to 16,384 characters and the decompressed JSON to 256 KiB of
+UTF-8. The Share button also limits the complete URL to 8,192 characters. A different binary
+or query-string encoding would still require the same state validation, so the existing
+format is retained to keep old links readable.
+
+Run the dependency-free codec and schema regression tests with Node.js 22 or later:
+
+```bash
+node --experimental-default-type=module --test tests/FeatherQR.Playground.Tests/*.test.mjs
+```
+
+The `build-playground` CI job runs these tests before publishing.

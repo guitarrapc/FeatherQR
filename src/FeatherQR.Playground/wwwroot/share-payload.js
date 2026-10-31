@@ -8,17 +8,22 @@
  * The JSON payload is the playground state object plus a "v" schema version.
  */
 
-export const SHARE_PAYLOAD_VERSION = 1;
+import { SHARE_PAYLOAD_VERSION, validateShareState } from './share-state.js';
+export { SHARE_PAYLOAD_VERSION } from './share-state.js';
 export const MAX_SHARE_HASH_LENGTH = 16384;
 export const MAX_SHARE_URL_LENGTH = 8192;
+export const MAX_SHARE_JSON_BYTES = 256 * 1024;
 
 /**
  * @param {object} state playground state (must be JSON-serializable)
  * @returns {Promise<string>} hash segment (no leading #)
  */
 export async function encodeShareState(state) {
-  const payload = { v: SHARE_PAYLOAD_VERSION, ...state };
+  const error = validateShareState(state);
+  if (error) throw new Error(error);
+  const payload = { ...state, v: SHARE_PAYLOAD_VERSION };
   const jsonUtf8 = new TextEncoder().encode(JSON.stringify(payload));
+  if (jsonUtf8.length > MAX_SHARE_JSON_BYTES) throw new Error('share payload too large');
   if (typeof CompressionStream === 'function') {
     try {
       const compressed = await pipeThrough(jsonUtf8, new CompressionStream('deflate-raw'));
@@ -60,23 +65,23 @@ export async function decodeShareHash(hashSegment) {
       return { ok: false, error: 'this browser cannot decompress the shared link' };
     }
     try {
-      bytes = await pipeThrough(bytes, new DecompressionStream('deflate-raw'));
+      bytes = await pipeThrough(bytes, new DecompressionStream('deflate-raw'), MAX_SHARE_JSON_BYTES);
     } catch (e) {
       return { ok: false, error: `corrupted share payload: ${e?.message ?? e}` };
     }
   } else if (mode !== '0') {
     return { ok: false, error: `unknown payload mode '${mode}'` };
   }
+  if (bytes.length > MAX_SHARE_JSON_BYTES) return { ok: false, error: 'share payload too large' };
 
   let state;
   try {
-    state = JSON.parse(new TextDecoder().decode(bytes));
+    state = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch (e) {
     return { ok: false, error: `invalid share JSON: ${e?.message ?? e}` };
   }
-  if (!state || typeof state !== 'object') {
-    return { ok: false, error: 'share payload is not an object' };
-  }
+  const error = validateShareState(state);
+  if (error) return { ok: false, error };
   return { ok: true, state };
 }
 
@@ -92,12 +97,35 @@ export function isShareWithinLimits(hashSegment, fullUrl) {
 /**
  * @param {Uint8Array} input
  * @param {CompressionStream | DecompressionStream} transform
+ * @param {number} maxBytes maximum output bytes retained
  * @returns {Promise<Uint8Array>}
  */
-async function pipeThrough(input, transform) {
+async function pipeThrough(input, transform, maxBytes = Infinity) {
   const stream = new Blob([input]).stream().pipeThrough(transform);
-  const buffer = await new Response(stream).arrayBuffer();
-  return new Uint8Array(buffer);
+  const reader = stream.getReader();
+  const chunks = [];
+  let length = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.length;
+      if (length > maxBytes) {
+        await reader.cancel();
+        throw new Error('share payload too large');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const result = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
 }
 
 /** @param {Uint8Array} bytes */

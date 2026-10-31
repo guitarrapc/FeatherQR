@@ -704,7 +704,7 @@ function syncGradientButtons() {
 
 /** <input type=color> requires #rrggbb; anything unparsable falls back to black. */
 function normalizeHexColor(value) {
-  return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : '#000000';
+  return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : '#000000';
 }
 
 gradientAddBtn.addEventListener('click', () => {
@@ -1989,14 +1989,21 @@ async function runBenchmark() {
 async function restoreFromLocationHash() {
   const raw = window.location.hash;
   if (!raw || raw.length <= 1) return false;
-  const decoded = await decodeShareHash(raw.slice(1));
-  if (!decoded.ok) {
-    showToast(`Could not restore from URL: ${decoded.error}. Showing defaults.`, 'info', 6000);
+  const previous = collectState();
+  try {
+    const decoded = await decodeShareHash(raw.slice(1));
+    if (!decoded.ok) {
+      showToast(`Could not restore from URL: ${decoded.error}. Showing defaults.`, 'info', 6000);
+      return false;
+    }
+    applyStateToControls(decoded.state);
+    presetSelect.value = 'custom';
+    return true;
+  } catch (error) {
+    applyStateToControls(previous);
+    showToast(`Could not restore from URL: ${error?.message ?? error}. Showing defaults.`, 'info', 6000);
     return false;
   }
-  applyStateToControls(decoded.state);
-  presetSelect.value = 'custom';
-  return true;
 }
 
 async function initializeRuntime() {
