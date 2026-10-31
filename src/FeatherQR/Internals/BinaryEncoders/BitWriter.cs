@@ -27,9 +27,6 @@ internal ref struct BitWriter
     /// <summary>
     /// Number of bytes written (rounded up to nearest byte)
     /// </summary>
-    /// <remarks>
-    /// If written 9 bits, this will be 2
-    /// </remarks>
     public readonly int ByteCount => _bytePosition + (_accumulatorBits + 7) / 8;
 
     public BitWriter(Span<byte> buffer)

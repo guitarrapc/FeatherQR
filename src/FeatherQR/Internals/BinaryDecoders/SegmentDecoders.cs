@@ -233,7 +233,7 @@ internal static class SegmentDecoders
     }
 
     /// <summary>
-    /// Decodes a byte segment payload of <paramref name="count"/> bytes, resolving the effective charset (UTF-8 heuristic / BOM handling / ISO-8859-1 widening).
+    /// Decodes <paramref name="count"/> bytes using the declared character set, or infers it when unspecified.
     /// </summary>
     /// <param name="reader">Reader positioned at the first byte of the segment. It is advanced past the segment.</param>
     /// <param name="totalBits">Length of the whole bitstream, in bits. Used to reject a segment that runs past the end.</param>
@@ -265,7 +265,7 @@ internal static class SegmentDecoders
             var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
 
             // One pass: the transcoder validates as it writes. A declared charset or a BOM
-            // substitutes what is invalid. Undeclared, an invalid sequence means ISO-8859-1.
+            // substitutes what is invalid. Undeclared, an invalid sequence falls through to charset detection.
 #if NET8_0_OR_GREATER
             var status = Utf8.ToUtf16(hasBom ? bytes.Slice(3) : bytes, destination.Slice(charsWritten), out _, out var written, replaceInvalidSequences: hasBom || charset == ByteSegmentCharset.Utf8);
 #else

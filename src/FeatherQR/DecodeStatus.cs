@@ -21,8 +21,7 @@ public enum DecodeStatus
     InvalidBitstream,
 
     /// <summary>
-    /// The bitstream is well-formed but uses a feature this decoder does not support: an ECI assignment it does not map to a charset (it reads 1, 3 and 27 as ISO-8859-1, 26 as UTF-8 and 20 as Shift_JIS).
-    /// A property of the symbol's structure, not of its text. See <see cref="UnmappedCharacter"/> for the per-character case.
+    /// The bitstream declares an unsupported character set. See <see cref="UnmappedCharacter"/> for an unmapped character within a supported set.
     /// </summary>
     UnsupportedContent,
 

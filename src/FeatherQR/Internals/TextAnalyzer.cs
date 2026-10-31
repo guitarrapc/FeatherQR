@@ -22,12 +22,12 @@ namespace FeatherQR.Internals;
 internal readonly record struct TextAnalysisResult(EncodingMode EncodingMode, EciMode EciMode, int DataLength, bool KanjiPlannable = false);
 
 /// <summary>
-/// Text analyzer for automatic encoding and ECI mode detection in single pass.
+/// Selects the encoding mode and character set for a text.
 /// </summary>
 internal static partial class TextAnalyzer
 {
     /// <summary>
-    /// Analyzes the input text to determine the most efficient encoding mode (Numeric, Alphanumeric, Byte). If SIMD is supported, uses SIMD instructions for faster analysis.
+    /// Selects a single encoding mode (Numeric, Alphanumeric or Byte) and character set for the input text.
     /// </summary>
     /// <param name="text">The text to inspect.</param>
     /// <param name="requestedEciMode">The character encoding the caller asked for, or Default to choose one from the text.</param>

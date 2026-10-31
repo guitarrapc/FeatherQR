@@ -22,7 +22,7 @@ internal static class KanjiCells
         throw new ArgumentException("A Kanji run was refused although every character has a cell.", nameof(chars));
     }
 
-    /// <summary>Kanji beside an ECI header is not written: whether readers apply JIS X 0208 to a Kanji segment that follows one has not been measured.</summary>
+    /// <summary>Rejects a Kanji run under an ECI header because readers differ in how they interpret that combination.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static void ThrowKanjiUnderEci(EciMode eci)
         => throw new ArgumentException($"A Kanji run is written only in a stream without an ECI header, not under {eci}.", nameof(eci));

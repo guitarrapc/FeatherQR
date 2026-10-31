@@ -841,7 +841,7 @@ internal static partial class ModeSegmenter
 
     /// <summary>
     /// Whether the plan opens a Byte run at a mid-content U+FEFF.
-    /// The shared byte-segment decoder consumes a leading BOM of every segment without an explicit ISO-8859-1 declaration, so such a plan would decode with the character silently dropped.
+    /// When reading a Byte segment as UTF-8, the decoder consumes its leading BOM, so such a plan would silently drop the character.
     /// Under UTF-8 the program builds no such plan (<see cref="ByteOrderMark"/>), and the rMQR and Micro QR planners keep this as the refusal of a model that disagreed. Neither plans a text holding the mark under any other charset.
     /// (A run at offset 0 is exempt: there the single-mode stream starts with the same bytes and behaves identically.)
     /// </summary>

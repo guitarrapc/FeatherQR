@@ -200,11 +200,11 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Draws the modules as a shape other than plain squares.
     /// </summary>
     /// <remarks>
-    /// Styles the data modules only. The finder patterns keep their solid shape whatever is asked for here, because a decoder locates the symbol by scanning for their 1:1:3:1:1 run of dark and light, and gaps between modules erase it: a symbol whose finders are drawn as separated shapes is not read by anything, this library or a phone. Use <c>WithFinderPatternShape</c> to style them in a way that keeps them detectable.
-    /// Every custom shape costs scan margin, and below 0.8 the symbol may stop scanning reliably, so test what you ship.
+    /// Styles the data modules only; finder patterns keep their shape so module gaps do not disrupt detection. Use <c>WithFinderPatternShape</c> to style the finder patterns.
+    /// Shapes and gaps can affect readability; test the rendered symbol with the intended readers.
     /// </remarks>
     /// <param name="moduleShape">The shape to draw. <see cref="RectangleModuleShape.Default"/> for the plain squares a builder starts with.</param>
-    /// <param name="sizePercent">How much of its cell a data module fills, 0.5 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="sizePercent">Scale of each data module relative to its cell, 0.5 to 1.0. The default is 1.0.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="moduleShape"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the size is outside 0.5 to 1.0.</exception>
     public TSelf WithModuleShape(ModuleShape moduleShape, float sizePercent = 1.0f)
@@ -225,7 +225,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Draws the finder patterns as a shape of their own.
     /// </summary>
     /// <remarks>
-    /// The built-in shapes reshape the concentric rings without breaking them, so they stay detectable. What a decoder needs is that the rings are continuous, not that they are square. Not calling this leaves the plain square the standards define, which is always the safest to scan, and it is also what a styled symbol gets: a shaped module never reaches a finder pattern.
+    /// The default is a square finder pattern, independent of the data module shape. Custom finder shapes can affect readability; test them with the intended readers.
     /// A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.
     /// </remarks>
     /// <param name="finderPatternShape">The shape to draw. <see cref="RectangleFinderPatternShape.Default"/> for the plain squares a builder starts with. It renders pixel for pixel as not calling this at all, on any background, though the two take different paths, so an SVG names the finder patterns as five rectangles each instead of merging them into the module runs.</param>

@@ -22,7 +22,6 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// - PALIGNR(hi, lo, n) → EXT(lo, hi, n), ARM's operand order is (lower, upper, index).
 ///
 /// The factor tables (nibble-split multiply, quad factors T, composed T∘U) are ISA-independent and shared with the x86 kernels.
-/// GFNI has no NEON equivalent (SVE2's GF ops have no .NET API and no Apple hardware), so the TBL nibble-split kernel is the ARM64 ceiling for now.
 /// </remarks>
 internal static partial class EccBinaryEncoder
 {

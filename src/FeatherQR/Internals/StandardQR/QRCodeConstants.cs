@@ -649,10 +649,6 @@ internal static class QRCodeConstants
 
     // Lookup Table Initialization
 
-    /// <summary>
-    /// Initializes alignment pattern lookup table from base values.
-    /// Computes actual (x, y) coordinates for each version's alignment patterns.
-    /// </summary>
     private static IReadOnlyList<AlignmentPattern> CreateAlignmentPatternTable()
     {
         var table = new List<AlignmentPattern>(40); // 40 versions
@@ -703,10 +699,6 @@ internal static class QRCodeConstants
         }
     }
 
-    /// <summary>
-    /// Initializes error correction configuration table from base values.
-    /// Creates ECCInfo entries for all version/ECC level combinations.
-    /// </summary>
     private static ECCInfo[] CreateCapacityECCTable()
     {
         // The base values are already in table order, six per entry, so the table is filled in place: no list, no copy.
@@ -728,10 +720,6 @@ internal static class QRCodeConstants
         return table;
     }
 
-    /// <summary>
-    /// Initializes capacity lookup table from base values.
-    /// Creates VersionInfo entries mapping version/ECC/mode to max capacity.
-    /// </summary>
     private static IReadOnlyList<VersionInfo> CreateCapacityTable()
     {
         var table = new List<VersionInfo>(40); // 40 versions

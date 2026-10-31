@@ -566,7 +566,7 @@ public static partial class QrInterop
 
     /// <summary>
     /// Builds the Micro QR image builder from request options.
-    /// Micro QR has no icon overlay (no ECC headroom), so those request fields are ignored, the page hides the controls.
+    /// Icon options are ignored because the Micro QR builder does not support overlays.
     /// </summary>
     private static MicroQRCodeImageBuilder CreateMicroBuilder(QrRequest request, MicroQRCodeData data)
     {

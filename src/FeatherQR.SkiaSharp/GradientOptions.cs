@@ -21,7 +21,6 @@ public sealed record class GradientOptions
     public static readonly GradientOptions Default = new([SKColors.DarkOrange, SKColors.Firebrick], GradientDirection.TopLeftToBottomRight);
 
     /// <summary>
-    /// Initializes a new instance of <see cref="GradientOptions"/>.
     /// Both spans are copied, so the caller keeps ownership of whatever it passed.
     /// </summary>
     /// <remarks>

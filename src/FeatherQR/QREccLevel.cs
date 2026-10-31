@@ -1,25 +1,25 @@
 namespace FeatherQR;
 
 /// <summary>
-/// The error correction level: how much of a symbol can be damaged, dirty or covered while the code still scans.
+/// The error correction level used to recover damaged data.
 /// Higher levels leave less room for content, so the same text may need a larger symbol.
 /// </summary>
 public enum QREccLevel
 {
     /// <summary>
-    /// 7% may be lost before recovery is not possible
+    /// Low error correction.
     /// </summary>
     L,
     /// <summary>
-    /// 15% may be lost before recovery is not possible
+    /// Medium error correction.
     /// </summary>
     M,
     /// <summary>
-    /// 25% may be lost before recovery is not possible
+    /// Quartile error correction.
     /// </summary>
     Q,
     /// <summary>
-    /// 30% may be lost before recovery is not possible
+    /// High error correction.
     /// </summary>
     H
 }

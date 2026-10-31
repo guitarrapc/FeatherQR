@@ -23,7 +23,6 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     private int? _maskPattern;
     private QRSegmentation _segmentation = QRSegmentation.Optimal;
 
-    // rendering (Standard QR-only option, since Micro QR and rMQR have no ECC headroom for overlays)
     private IconData? _iconData;
 
     /// <summary>

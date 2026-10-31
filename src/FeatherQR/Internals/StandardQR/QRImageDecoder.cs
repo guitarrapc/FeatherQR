@@ -30,7 +30,6 @@ namespace FeatherQR.Internals.StandardQR;
 /// 3. When that does not settle, a-d from each other corner whose timing patterns read
 /// 4. When the selected triple does not settle and more than three candidates were found, the next two triples: each a-d once, from the first of its corners whose timing patterns read, or skipped when none does
 /// </code>
-/// Out of scope (documented, by design): strong perspective where the four-point transform no longer models the surface, hard-edged shadows, blur, and multiple QR codes per image.
 /// </remarks>
 internal static partial class QRImageDecoder
 {
