@@ -11,13 +11,16 @@ internal static class QRImageLayout
     private const double CenteringEpsilon = 1e-6;
 
     /// <summary>
-    /// Rectangular-aware layout.
-    /// With a module pixel size the content is exactly <c>matrixWidth × matrixHeight</c> modules at that size (centered in an explicit canvas on whole pixels).
-    /// With only an explicit canvas size the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox), never stretched non-uniformly: a symbol whose modules are not square stops being findable well before it stops being drawn.
-    /// With neither, <paramref name="defaultSize"/> is the symbology's own aspect-derived canvas and the content rectangle is the whole canvas: the renderer paints the background over all of it and draws the symbol at a uniform module scale inside (rMQR: <c>SymbolRenderer.GetLetterboxedArea</c>), so the height rounding costs at most a few pixels of background at the sides. Letterboxing here again would only turn that background into a padded band on a canvas the caller never asked for.
+    /// Calculates a centered layout with square modules for square or rectangular symbols.
     /// </summary>
+    /// <remarks>
+    /// A module pixel size fixes the content dimensions. An explicit canvas is fitted uniformly and centered on whole pixels.
+    /// With neither, defaultSize supplies the aspect-derived canvas and the content rectangle covers it.
+    /// </remarks>
     internal static (SKImageInfo info, SKRect contentRect) CreateLayout(int matrixWidth, int matrixHeight, Vector2Slim? explicitSize, int? modulePixelSize, Vector2Slim defaultSize)
     {
+        // The default canvas is already aspect-derived. Letterboxing it here again would turn rounding slack into padding.
+        // The renderer instead paints the full background and fits the modules uniformly inside it.
         if (modulePixelSize is null)
         {
             var size = explicitSize ?? defaultSize;

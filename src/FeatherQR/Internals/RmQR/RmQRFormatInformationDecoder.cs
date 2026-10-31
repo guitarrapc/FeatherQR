@@ -1,12 +1,16 @@
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// rMQR format information decoding (ISO/IEC 23941 7.9): each 18-bit copy is matched against the 64 valid words of its side (the finder-side and sub-finder-side copies carry different XOR masks), correcting up to 3 bit errors (BCH(18,6) minimum distance ≥ 7, verified in RmQRConstantsUnitTest).
-/// The matrix decoder knows the version from the physical dimensions, so with both copies available only the copies naming that version count, the closer of those wins, ties prefer the finder side (a copy miscorrected toward another version's word cannot veto the valid one).
-/// The image decoder reads the finder-side copy alone through <see cref="TryDecodeCopy"/> to learn the version before sampling.
+/// Decodes rMQR format information with up to three bit errors per copy (ISO/IEC 23941 7.9).
 /// </summary>
+/// <remarks>
+/// Matrix decoding accepts only copies matching the physically known version. The closer copy wins, with finder-side ties.
+/// Image decoding uses <see cref="TryDecodeCopy"/> on the finder side to discover the version before sampling.
+/// </remarks>
 internal static class RmQRFormatInformationDecoder
 {
+    // Each side has 64 BCH(18,6) codewords with a distinct XOR mask and minimum distance at least seven.
+    // Checking the physical version prevents a miscorrected copy from vetoing the other valid copy.
     private const int MaxCorrectableBits = 3;
 
     // 64 valid words per side, index = eccBit << 5 | versionIndex, built from the

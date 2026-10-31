@@ -1,18 +1,10 @@
 /// <summary>
-/// What <c>MicroQRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same content through the same zero-allocation span path.
-///
-/// Micro QR content never exceeds 35 characters and there are at most three candidate versions below the single-mode fit, so planning is a handful of tiny dynamic-program passes. The shapes separate the scan's paths:
-///
-///   numeric-20 : all digits, one mode is provably optimal, no cost run at all
-///   alnum-15   : single-mode content the trivial bound rules out without a cost run
-///   byte-12    : the same, in Byte mode (M2 additionally lacks Byte entirely)
-///   mixed-8    : "A" + 7 digits, wins M3 -> M2 (the version without Byte mode)
-///   mixed-19   : "AB" + 17 digits, wins M4 -> M3
-///   kanji-8    : "日本語" + 5 digits with AllowKanji, a Kanji plan wins M4 -> M3
-///
-/// Every fixture fits under Single too, so no row compares a success with a throw.
-/// ECC L only.
+/// Compares Micro QR Optimal and Single segmentation through the allocation-free span API.
 /// </summary>
+/// <remarks>
+/// Cases cover single-mode shortcuts and mixed or Kanji plans that select a smaller version.
+/// Both arms must encode every fixture successfully at ECC L. Ratio includes the change in symbol-generation cost.
+/// </remarks>
 public class MicroQRSegmentationEncode
 {
     private static readonly string[] shapeKeys =

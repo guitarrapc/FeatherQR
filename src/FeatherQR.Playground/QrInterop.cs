@@ -116,17 +116,16 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Decodes a QR code from encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string: <c>{"ok":true,"text":"...","qrVersion":N,"ecc":"M","maskPattern":N,"errorsCorrected":N,"totalMs":N,"corners":[x,y,...],"imageWidth":N,"imageHeight":N}</c> on success, <c>{"ok":false,"status":"NotDetected","totalMs":N,"imageWidth":N,"imageHeight":N}</c> when no QR decodes, or <c>{"error":"..."}</c> on unexpected failure.
-    /// A Standard QR or rMQR symbol with FNC1 adds <c>"fnc1":"first"</c> (GS1 data) or <c>"fnc1":"second"</c> with <c>"applicationIndicator":N</c> (the 8-bit codeword), and its text is the data with each separator as U+001D.
-    /// GS1 data, an element string in first position or a Digital Link URI without FNC1, adds <c>"gs1Hri"</c> and <c>"gs1Elements"</c>, and <c>"gs1Check"</c> when its element string fails the checks. Text in first position that does not read as GS1 data adds <c>"gs1Error"</c>.
-    /// <para>
-    /// <c>"corners"</c> is the located symbol as eight numbers (top-left, top-right, bottom-right, bottom-left, each x then y) in the decoded image's pixel space, which <c>"imageWidth"</c> and <c>"imageHeight"</c> describe so the page can scale the overlay to whatever size it displays the image at. That space is the file's <em>stored</em> pixels: <c>"orientation"</c> carries the EXIF tag (1-8) the decoder ignored, and the page must map the corners through it, because every browser decode path applies the tag to the picture it shows.
-    /// </para>
-    /// <para>
-    /// Uses the library's built-in image decoders, Standard QR first, then Micro QR, then rMQR (<c>"symbology"</c> reports which one matched, and rMQR has a single fixed mask, so <c>"maskPattern"</c> is -1 for it): rendered images, scans and photographs, at any rotation, mirrored or tilted.
-    /// Heavily stylized codes (low-contrast colors, inverted palettes, strong decoration) may report NotDetected even when a computer-vision grade phone scanner reads them.
-    /// </para>
+    /// Decodes an encoded image and returns the result as JSON.
     /// </summary>
+    /// <remarks>
+    /// Success contains text, symbology, decode diagnostics, timing and image geometry. No match returns <c>ok:false</c> and status; unexpected failure returns <c>error</c>.
+    /// Corners are ordered top-left, top-right, bottom-right, bottom-left, as x/y pairs in stored-image pixels.
+    /// The page must apply the reported EXIF orientation before drawing them over the browser-oriented image.
+    /// Standard QR, Micro QR and rMQR are tried in that order. rMQR reports maskPattern as -1.
+    /// FNC1 results include their mode and second-position application indicator. Separators remain U+001D in text.
+    /// GS1 interpretation adds HRI and elements, plus validation errors when applicable. See the payload types for JSON fields.
+    /// </remarks>
     /// <param name="imageBytes">Encoded image file bytes.</param>
     [JSExport]
     public static string Decode(byte[] imageBytes)
@@ -170,13 +169,13 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Decodes every QR code in encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string (see <see cref="DecodeSymbolsPayload"/>): <c>{"ok":true,"symbols":[...],"totalMs":N,"imageWidth":N,"imageHeight":N,"orientation":N}</c>, each symbol shaped as a <see cref="Decode"/> success, <c>{"ok":false,"symbols":[],...}</c> when none decodes, or <c>{"error":"..."}</c> on unexpected failure.
-    /// <para>
-    /// With <paramref name="everySymbology"/>, the symbols of every symbology are read together with <see cref="SymbolImageDecoder.DecodeSymbols(SKBitmap)"/>, each once, the Standard QR codes first.
-    /// Without it, Standard QR codes are read with <see cref="QRCodeImageDecoder.DecodeSymbols(SKBitmap)"/>, each once, in the order found.
-    /// That read covers Standard QR alone, so an image with none is read for every Micro QR symbol, and an image with none of those for every rMQR symbol.
-    /// </para>
+    /// Decodes symbols from an encoded image and returns <see cref="DecodeSymbolsPayload"/> as JSON.
     /// </summary>
+    /// <remarks>
+    /// With <paramref name="everySymbology"/>, the shared scan returns all symbologies, Standard QR first, without duplicates.
+    /// Otherwise it scans Standard QR, then Micro QR if none decoded, then rMQR if neither decoded, in discovery order.
+    /// Each symbol has the diagnostics of <see cref="Decode"/>. No match returns <c>ok:false</c> and an empty symbols array; unexpected failure returns <c>error</c>.
+    /// </remarks>
     /// <param name="imageBytes">Encoded image file bytes.</param>
     /// <param name="everySymbology">Whether to read the symbols of every symbology together.</param>
     [JSExport]

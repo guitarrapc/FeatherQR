@@ -2,23 +2,13 @@ using SkiaSharp;
 using System.Text;
 
 /// <summary>
-/// End-to-end QR matrix decoding through the public API (QRCodeDecoder).
-/// Payloads mirror QRCodeEncodeEndToEnd so encode and decode costs are directly comparable.
-/// Matrices are quiet-zone-free (the decoder's in-place fast path).
-///
-/// Scenarios:
-///   Numeric_V1_L : version 1, numeric mode (digits only)
-///   Alphanumeric_V1_M : version 1, alphanumeric mode (uppercase / punctuation subset)
-///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
-///   Byte_V40_L : version 40-L, byte mode (largest data volume)
-///   Byte_V40_H : version 39-H, byte mode (77 blocks x 30 ecc). Named V40 before 1,200 bytes was found to fit version 39
-///   Kanji_V6_M : version 6-M, Kanji mode (capacity boundary, 65 characters)
-///   Kanji_Long_V15_L : version 15-L, Kanji mode (capacity boundary, 320 characters)
-///   Image_Byte_Url_V6_M : rendered bitmap luminance -> text (binarize + finder detection + sampling)
-///   *_Corrected : Numeric_V1_L (2 errors) and Byte_V40_H (81 errors, one a block on average) with damage the decoder confirms as exactly that many corrected errors, so the correction path runs rather than syndrome generation alone (the clean cases exit early)
-///
-/// Byte_Url_V6_M and Kanji_V6_M share version and level, so they differ in mode, not in symbol size.
+/// Measures Standard QR matrix decoding on the payloads of <see cref="QRCodeEncodeEndToEnd"/>.
 /// </summary>
+/// <remarks>
+/// Matrices have no quiet zone. The image row additionally includes detection and sampling.
+/// Corrected rows verify the intended error count in setup, ensuring Reed-Solomon correction actually runs.
+/// Byte_V40_H retains its historical name but fits version 39. Byte_Url_V6_M and Kanji_V6_M compare modes at the same version and level.
+/// </remarks>
 public class QRCodeDecodeEndToEnd
 {
     private byte[] _numericModules = default!;

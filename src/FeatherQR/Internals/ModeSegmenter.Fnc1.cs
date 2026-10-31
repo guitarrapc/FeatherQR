@@ -4,15 +4,7 @@ using System.Runtime.CompilerServices;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// The scalar cost walk under FNC1 (specs/standardqr-encoder.md, FNC1). The character classes change: the
-/// separator U+001D is an Alphanumeric character (written <c>%</c>), a literal <c>%</c> costs two Alphanumeric
-/// characters (written <c>%%</c>), and the Alphanumeric states split into "the last character was a separator"
-/// and "it was not", because a separator followed by a separator or a literal <c>%</c> cannot share a run (a
-/// reader takes <c>%%</c> first): from the separator states those two characters can only open a new run or go
-/// to Byte, which is how the program prices a break against a Byte run. The parent table keeps one byte per
-/// character and state, the predecessor state with a flag for a run opened there, so it does not share the
-/// packed table of the program without FNC1, whose eight states fill its three bits. Kanji is not planned
-/// under FNC1.
+/// Computes segmentation costs under FNC1 without planning Kanji runs.
 /// </summary>
 /// <remarks>
 /// A charset of one byte a character takes loops that keep the eight states in locals, as the program without FNC1
@@ -32,6 +24,11 @@ namespace FeatherQR.Internals;
 /// </remarks>
 internal static partial class ModeSegmenter
 {
+    // U+001D uses one Alphanumeric character (%), while a literal % uses two (%%).
+    // A reader consumes %% first, so a separator followed by a separator or % must open another run or use Byte mode.
+    // Alphanumeric states therefore distinguish whether the preceding character was a separator.
+    // The parent table uses one byte per character and state, including a run-opening flag.
+    // It cannot reuse the ordinary program's packed three-bit predecessor representation.
     private const int Fnc1StateNumeric0 = 0;
     private const int Fnc1StateNumeric1 = 1;
     private const int Fnc1StateNumeric2 = 2;

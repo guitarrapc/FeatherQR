@@ -13,16 +13,17 @@ internal static partial class ModeSegmenter
     private static bool TakesLaneCostsAdvSimd(int length) => AdvSimd.Arm64.IsSupported && length <= MaxLaneCostChars;
 
     /// <summary>
-    /// <see cref="CostsLatinSse41"/> in NEON, on the same lanes and continuation table: tbl moves the states to the lanes they continue into, a saturating add a class, one more for the
-    /// openings from the cheapest state, and a lane minimum. NEON's minimum across a vector (uminv) has no index, so the cheapest state is carried as a broadcast and taken from the old states:
-    /// the cheapest opened lane is the old cheapest plus the class's smallest opening, and the new cheapest is the smaller of that and the minimum of the continued lanes, a reduction that
-    /// runs beside each character's chain instead of on it. Only the final state needs the index. Same answer as <see cref="CostsLatin"/>, including the lowest state among equal final costs.
+    /// Computes Latin-text costs with NEON, matching CostsLatin and its lowest-state tie-break.
     /// </summary>
     /// <remarks>
     /// There is no tracked form. The parents need the cheapest state's index every character, which makes it slower than the scalar loop on alternating text.
     /// </remarks>
     internal static int CostsLatinAdvSimd(ReadOnlySpan<char> text, int openNumeric, int openAlnum, int openByte, bool allowAlnum, out int finalState)
     {
+        // tbl routes continuation states. Saturating adds price continuations and openings, followed by lane minima.
+        // NEON uminv returns a value without its lane index, so the cheapest cost is carried as a broadcast.
+        // The next minimum is the smaller of continued costs and the old minimum plus the cheapest opening.
+        // This reduction runs beside the character dependency chain. Only the final state needs an index.
         const ushort F = 0xFFFF;
         var oN = (ushort)openNumeric;
         var oA = allowAlnum ? (ushort)openAlnum : F;

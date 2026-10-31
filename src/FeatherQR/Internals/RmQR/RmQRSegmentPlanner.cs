@@ -83,11 +83,14 @@ internal static partial class RmQRSegmentPlanner
         => TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, default, out selected, out useSegments, out kanjiPlan, out _, out _, out _);
 
     /// <summary>
-    /// The same, keeping the last cost run's predecessors in <paramref name="table"/> (<see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character, or empty to keep nothing).
-    /// <paramref name="tableHoldsPlan"/> says whether that run priced the candidate accepted. Then the table ended in <paramref name="tableFinalState"/> at <paramref name="tablePlannedBits"/>, and
-    /// <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, RmQRVersion, RmQREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
-    /// For a Kanji-eligible text the table is its Kanji plan's where <paramref name="kanjiPlan"/> says so, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, RmQRVersion, RmQREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds that one.
+    /// Selects an rMQR version and optionally retains the predecessor table for the accepted plan.
     /// </summary>
+    /// <remarks>
+    /// An empty <paramref name="table"/> keeps nothing. Otherwise it needs <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes per character.
+    /// <paramref name="tableHoldsPlan"/> is true only when the retained run priced the accepted candidate.
+    /// Use <paramref name="tableFinalState"/> and <paramref name="tablePlannedBits"/> to reconstruct it without another cost run.
+    /// <paramref name="kanjiPlan"/> selects Kanji reconstruction; otherwise use ordinary reconstruction.
+    /// </remarks>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<byte> table, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan, out bool tableHoldsPlan, out int tableFinalState, out int tablePlannedBits)
     {
         useSegments = false;

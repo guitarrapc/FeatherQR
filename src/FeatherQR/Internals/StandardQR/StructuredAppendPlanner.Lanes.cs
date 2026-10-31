@@ -71,12 +71,17 @@ internal static partial class StructuredAppendPlanner
 #endif
 
     /// <summary>
-    /// Narrows [<paramref name="low"/>, <paramref name="high"/>] by a batch of walks limited to <paramref name="limit"/> chunks, or two from the floor: the cheapest budget that held them becomes the ceiling and the settled walk, its neighbour below the floor and the failed walk.
-    /// Budgets are taken strictly inside (<paramref name="floor"/>, <paramref name="ceiling"/>): at the charset's offsets above the floor when <paramref name="fromFloor"/> (and when every one of those fails, a second batch above the highest, spread across the most a cut kept off a run of U+FEFF leaves unused: whenever two of its budgets fit below a ceiling that <paramref name="ceilingHolds"/> the count, and below one that may not only when at least half its budgets do), else all of them when there are at most eight, else eight that cut the bracket into nine.
-    /// False when no batch was walked (no acceleration, short chunks, fewer than two budgets, or a character that fits no chunk), and then nothing is changed.
+    /// Narrows the budget search with batched chunk walks and records the best successful and failed walks.
     /// </summary>
+    /// <remarks>
+    /// Returns false without changing the search when no batch can run, including unsupported hardware, short chunks or fewer than two budgets.
+    /// </remarks>
     internal static bool TryNarrowWithLanes(ReadOnlySpan<char> text, EciMode charset, int version, int floor, int ceiling, int limit, ref int low, ref int high, Span<int> settledEnds, ref int settledBudget, ref int settledCount, Span<int> failedEnds, ref int failedBudget, bool fromFloor = false, bool ceilingHolds = false)
     {
+        // From the floor, probe charset-specific offsets. If all fail, a second batch spreads over the slack left by U+FEFF-safe cuts.
+        // The second batch needs two candidates below a known holding ceiling, or half the lanes below an unproven ceiling.
+        // Otherwise probe the available budgets, or evenly spread lanes across a wider bracket.
+        // The cheapest holding budget updates the ceiling and settled walk; its failed predecessor updates the floor and failed walk.
 #if NET8_0_OR_GREATER
         if (!Vector128.IsHardwareAccelerated || text.Length < limit * LaneChunkChars)
             return false;

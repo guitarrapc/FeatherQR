@@ -24,20 +24,23 @@ internal static class MicroQRSegmentPlanner
     public const int MaxPlannableChars = 35;
 
     /// <summary>
-    /// Version fit for mixed-mode segmentation, restricted to <paramref name="range"/>.
-    /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit. When <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="MicroQRSegmentation.Single"/>.
-    /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, MicroQRVersion, MicroQREccLevel, Span{ModeSegment}, out int)"/> and written under <see cref="EciMode.Default"/>.
-    /// <c>false</c> means the content fits neither one mode nor a mixed plan in the range. The caller owns the error.
-    /// Throws exactly what the single-mode selector throws for argument errors.
+    /// Selects a Micro QR version within <paramref name="range"/> and reports whether segmentation is needed.
     /// </summary>
+    /// <remarks>
+    /// When <paramref name="useSegments"/> is false, emit the bit-identical Single stream.
+    /// When <paramref name="kanjiPlan"/> is true, build the Kanji plan and encode it under <see cref="EciMode.Default"/>.
+    /// Returns false if neither representation fits. Argument errors throw as in the single-mode selector.
+    /// </remarks>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan)
         => TrySelectVersion(text, in analysis, eccLevel, range, default, out selected, out useSegments, out kanjiPlan, out _, out _);
 
     /// <summary>
-    /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, MicroQREccLevel, MicroQRVersionRange, out MicroQRVersion, out bool, out bool)"/>, keeping the run that priced the Kanji plan it chose.
-    /// When <paramref name="kanjiPlan"/> is true, <paramref name="kanjiTable"/> holds that program's predecessors at the selected version's widths, which ended in <paramref name="kanjiFinalState"/> at <paramref name="kanjiPlannedBits"/>, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, MicroQRVersion, MicroQREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
-    /// An empty <paramref name="kanjiTable"/> keeps nothing. Otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character.
+    /// Selects a Micro QR version while retaining the cost run for a chosen Kanji plan.
     /// </summary>
+    /// <remarks>
+    /// An empty <paramref name="kanjiTable"/> keeps nothing. Otherwise it needs <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes per character.
+    /// When <paramref name="kanjiPlan"/> is true, reconstruct from that table, <paramref name="kanjiFinalState"/> and <paramref name="kanjiPlannedBits"/> without repeating the cost run.
+    /// </remarks>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, Span<byte> kanjiTable, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
         useSegments = false;

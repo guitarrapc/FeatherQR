@@ -1,20 +1,11 @@
 /// <summary>
-/// The every-symbol calls of Micro QR and rMQR, against their one-symbol call on the same image.
-///
-/// The every-symbol call does not stop at the first symbol, so its cost depends on what else the image holds.
-/// The shapes are 1,280 x 960 pages, the symbols drawn crisp at 4 px a module.
-///
-///   one-symbol : one symbol on a smooth texture
-///   sheet-12   : twelve symbols of the symbology in a 4 x 3 grid on a light page
-///   no-symbol  : the same texture with no symbol
-///   qr-page-12 : twelve Standard QR codes in a 4 x 3 grid, whose 36 finders the decoder takes for its own
-///
-///   IntoArray     : DecodeImageSymbols into a new array, whose room never fills
-///   IntoRoomOfOne : DecodeImageSymbols into a span of one, which stops once a symbol fills it
-///   OneSymbol     : TryDecodeImage into a char buffer, the baseline
-///
-/// The span forms allocate only the texts read.
+/// Compares Micro QR and rMQR multi-symbol scans with their single-symbol calls.
 /// </summary>
+/// <remarks>
+/// Cases include one symbol, a sheet, no symbols and Standard QR finders that resemble candidates.
+/// The array call scans without a destination limit. A span of one stops when filled, as does the single-symbol baseline.
+/// Multi-symbol span calls allocate the returned texts.
+/// </remarks>
 public class SingleFinderDecodeImageSymbols
 {
     internal const int Width = 1280;

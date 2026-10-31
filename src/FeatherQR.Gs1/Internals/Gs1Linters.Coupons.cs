@@ -93,17 +93,19 @@ internal static partial class Gs1Linters
     private const int Digits0To6Or9 = 0b10_0111_1111;
 
     /// <summary>
-    /// AI (8110), the North American Coupon Code: a GS1 Company Prefix (VLI 0-6, 6 to 12 digits), a 6-digit
-    /// offer code, a save value (VLI 1-5), a primary purchase requirement (VLI 1-5), its code (0-4 or 9) and a
-    /// 3-digit family code, then optional fields in ascending order, each announced by its number: 1 (additional
-    /// purchase rules 0-3, a second purchase requirement with code and family code, and its GCP with VLI 0-6 or
-    /// 9 for the primary one), 2 (a third purchase requirement, the same way), 3 (expiration date YYMMDD),
-    /// 4 (start date YYMMDD, not after the expiration), 5 (a serial number, VLI 0-9 for 6 to 15 digits),
-    /// 6 (a retailer prefix or GLN, VLI 1-7 for 7 to 13 digits), 9 (a save value code 0, 1, 2, 5 or 6, what
-    /// it applies to 0-2, a store coupon flag and a do-not-multiply flag 0 or 1).
+    /// Validates AI (8110), the North American Coupon Code.
     /// </summary>
     private static Gs1ErrorKind Couponcode(ReadOnlySpan<char> value, int year, ref int offset, ref int length)
     {
+        // Required fields: GS1 Company Prefix (VLI 0-6 gives 6-12 digits), six-digit offer code,
+        // save value (VLI 1-5), and purchase requirement (VLI 1-5, code 0-4 or 9, three-digit family).
+        // Optional fields must appear in ascending ID order:
+        // 1: additional purchase rules (0-3), second requirement and GCP (VLI 0-6, or 9 to reuse the primary).
+        // 2: third purchase requirement and GCP.
+        // 3/4: expiration/start dates (YYMMDD), with start no later than expiration.
+        // 5: serial number (VLI 0-9 gives 6-15 digits).
+        // 6: retailer prefix or GLN (VLI 1-7 gives 7-13 digits).
+        // 9: save-value code (0,1,2,5,6), applicability (0-2), store-coupon and do-not-multiply flags (0/1).
         var reader = new CouponReader(value);
         var gcpLength = reader.DigitIn(Digits0To6);
         if (gcpLength >= 0)

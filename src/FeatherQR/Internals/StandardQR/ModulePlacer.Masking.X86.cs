@@ -7,36 +7,18 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Vectorized mask pattern selection for x86/x64 with AVX2.
-/// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>. It produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskSimdParityTest).
-///
-/// Architecture:
-/// - Versions 1-11 (one ulong per row) run lane-per-PATTERN: a Vector256&lt;ulong&gt;
-///   holds the same row of four candidates, so every scoring pass is a plain
-///   row loop with no scalar tail and no per-pattern reduction. Masking and
-///   format bits are one XOR / OR per row from per-version tables (see the
-///   single-word tier below).
-/// - Versions 12-40 (two or three words per row) hold each candidate as row
-///   words and as column words and score every rule along the word index
-///   (ModulePlacer.Masking.Transposed.X86.cs).
-/// - .NET has no VPOPCNTDQ intrinsic, so vector popcount is the Mula sequence
-///   (2x vpshufb nibble LUT + vpsadbw), accumulated in weight-grouped vector
-///   accumulators and reduced once per score.
-/// - Byte&lt;-&gt;bit edges are native SIMD: packing 0/1 bytes is pcmpeqb+pmovmskb
-///   (32 modules per step), unpacking the winner's XOR delta is
-///   broadcast+vpshufb+vpcmpeqb (32 modules per step).
-/// - Abort: no per-row threshold, since reducing the accumulators every row costs
-///   more than the abort saves. Each scorer checkpoints once before its last finder-window loop. The partial
-///   score is a lower bound (the remaining terms are non-negative), so a pattern
-///   already above the best total skips that loop without changing the selection
-///   (the lane-per-pattern tier skips only when all four candidates in the
-///   group are above). Evaluation order stays 0..7: mask totals sit too close
-///   together for win-frequency ordering to matter.
-///
-/// This file only executes under Avx2.IsSupported (x86/x64), so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
+/// Selects and applies a Standard QR mask using AVX2, matching the scalar scorer.
 /// </summary>
 internal static partial class ModulePlacer
 {
+    // Versions 1-11 place four candidate patterns in vector lanes. Larger versions use row and column planes
+    // from ModulePlacer.Masking.Transposed.X86.cs, avoiding cross-word shifts along the scoring direction.
+    // Pop256 uses nibble lookups and vpsadbw; packed-byte conversion uses 32-module SIMD chunks.
+    // Each scorer checks its partial score before the final finder-window loop. Remaining penalties are nonnegative,
+    // so it may skip that loop only when the candidate (every lane in a grouped scorer) already exceeds the best score.
+    // Per-row reductions cost more than they save. Candidates retain order 0..7 to preserve selection behavior.
+    // This tier requires Avx2.IsSupported, so its SWAR tails can assume little-endian byte order.
+    // ModulePlacerMaskSimdParityTest checks patterns and matrices against the scalar implementation.
     /// <summary>Entry point for the vectorized tiers. Caller guarantees Avx2.IsSupported.</summary>
     internal static int MaskCodeSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {

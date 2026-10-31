@@ -81,14 +81,18 @@ internal static class ModuleBoundaryReader
     }
 
     /// <summary>
-    /// Walks a timing line from a pixel on the finder's edge row: back to the finder's outer edge, then forward over the separator and the timing modules, recording every boundary crossed at its module index.
-    /// The line ends on a far finder's edge row, seven modules of dark, when <paramref name="endsOnFinder"/>, and otherwise at the quiet zone after a dark module.
-    /// With <paramref name="allowTriples"/> a dark run of three modules is part of the line (rMQR's alignment and corner patterns sit on its timing rows), and its two inner boundaries stay unknown.
-    /// A crisp module is 1 or 2 px below <see cref="MaxModuleSize"/>, three are 3 to 6 and seven are 7 or more, so a run's length says which it is.
-    /// <paramref name="maxPosition"/> is how far past the starting pixel the line may run, and <paramref name="count"/> the number of modules it crossed: the last boundary's index.
+    /// Walks a timing line from a finder edge and records module boundaries.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="endsOnFinder"/> selects a far finder edge rather than a quiet-zone terminator.
+    /// <paramref name="allowTriples"/> permits three-module dark runs, leaving their inner boundaries unknown.
+    /// <paramref name="maxPosition"/> bounds travel from the start; <paramref name="count"/> is the last boundary's module index.
+    /// </remarks>
     public static bool TryReadTimingLine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int startX, int startY, int dirX, int dirY, float moduleSize, bool endsOnFinder, bool allowTriples, int maxPosition, Span<int> boundaries, out int count)
     {
+        // Walk back to the finder's outer edge, then forward through the separator and timing line.
+        // Below MaxModuleSize, a crisp module occupies 1-2 pixels, a triple 3-6 and a far finder at least seven.
+        // These disjoint lengths identify runs. rMQR alignment and corner patterns require the triple-run case.
         count = 0;
         boundaries.Fill(Unknown);
 

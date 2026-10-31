@@ -594,14 +594,18 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Samples the module grid at the given dimension and decodes it, retrying once transposed for mirrored images (e.g. front-camera captures): finder geometry is identical but data is transposed.
-    /// The mirror retry triggers on any unsettled decode failure, because a permuted format pattern may fall within BCH distance of a wrong candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
-    /// DestinationTooSmall is terminal because the non-mirrored symbol has already been read successfully through RS correction.
-    /// On failure, versionDimension is the dimension the sampled version information names when it differs from the one sampled, else 0.
-    /// <paramref name="finderFallback"/> allows the resample through the finders alone, their parallelogram when the alignment-anchored grid fails and their frame when nothing anchored the fourth corner. It is off for a dimension that is only a guess.
+    /// Samples and decodes a module grid, including the mirror retry and optional finder-only resampling.
     /// </summary>
+    /// <remarks>
+    /// On failure, versionDimension reports a different dimension named by the sampled version information, or zero.
+    /// <paramref name="finderFallback"/> enables finder-only resampling and is disabled for speculative dimensions.
+    /// </remarks>
     private static DecodeStatus SampleAndDecode(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderFrame frame, int dimension, float moduleSize, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension, bool finderFallback = true)
     {
+        // Mirroring leaves finder geometry unchanged but transposes data. Retry every unsettled decode failure:
+        // a transposed format can match the wrong BCH word and fail later as DataUncorrectable.
+        // DestinationTooSmall is terminal because Reed-Solomon correction has already succeeded.
+        // Finder fallback uses the parallelogram after an anchored-grid failure, or the finder frame when no fourth corner was anchored.
         versionDimension = 0;
         var transform = BuildGridTransform(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, frame, dimension, moduleSize, out var alignmentAnchored);
 

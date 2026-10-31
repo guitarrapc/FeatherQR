@@ -7,25 +7,16 @@ using System.Runtime.Intrinsics.Arm;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Vectorized mask pattern selection for ARM64 with AdvSimd (NEON).
-/// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>. It produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskAdvSimdParityTest).
-///
-/// Two tiers, split at 64 modules as <see cref="MaskCodeAdvSimd"/> does, both on the 128-bit tier's scorers:
-/// - Versions 1-11: the lane-per-pattern scorer (<see cref="MaskCode64Vector128"/> in ModulePlacer.Masking.Simd.cs), two candidates a
-///   vector and four groups a call, with that tier's per-version pre-masked templates, format overlays and checkpoint.
-/// - Versions 12-40: the transposed scorer (the design is in ModulePlacer.Masking.Transposed.cs). It masks and scores with the 128-bit tier's
-///   code (ModulePlacer.Masking.Transposed.Vector128.cs).
-/// What this file adds to them:
-/// - Byte&lt;-&gt;bit edges of 16 modules a step in both tiers. The 128-bit tier packs with a compare and movemask, which ARM64 has no
-///   instruction for, and unpacks eight modules a step. Packing gathers per-byte bit weights (cmeq+bic) and reduces with a uaddlp chain.
-///   Unpacking broadcasts the 16-bit delta chunk and replicates bytes with tbl + cmtst (the same sequence as MicroQRModulePlacer.Unpack16).
-///   The single-word tier takes them from inside <see cref="PackRows64Vector128"/> and <see cref="MaskCode64Vector128"/>.
-/// - The popcount both scorers accumulate is cnt and uadalp, in <see cref="AddPopCount"/>.
-///
-/// This file only executes under AdvSimd.Arm64.IsSupported, so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
+/// Selects and applies a Standard QR mask using ARM64 AdvSimd, matching the scalar scorer.
 /// </summary>
 internal static partial class ModulePlacer
 {
+    // Versions 1-11 reuse MaskCode64Vector128 with two patterns per vector; larger versions reuse the transposed
+    // 128-bit scorer. This file supplies ARM64 packing, unpacking and popcount for both tiers.
+    // Without movemask, packing gathers byte weights with cmeq/bic and reduces them with uaddlp.
+    // Unpacking uses tbl/cmtst on 16 modules; popcount uses cnt/uadalp. The shared scorers retain their checkpoints.
+    // This tier requires AdvSimd.Arm64.IsSupported, so its SWAR tails assume little-endian byte order.
+    // ModulePlacerMaskAdvSimdParityTest checks patterns and matrices against the scalar implementation.
     /// <summary>Entry point for the ARM64 tiers. Caller guarantees AdvSimd.Arm64.IsSupported.</summary>
     internal static int MaskCodeAdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {

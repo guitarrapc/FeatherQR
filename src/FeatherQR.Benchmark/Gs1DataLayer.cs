@@ -2,18 +2,13 @@ using CodeGlyphX.Gs1Data;
 using FeatherQR.Gs1;
 
 /// <summary>
-/// What the GS1 data layer costs on three typical element strings: every check (<c>TryValidate</c>), the (AI) text
-/// in both directions, the Digital Link URI in both directions and the decode-side <c>TryRead</c> of the URI, each
-/// through its span form into a buffer sized by the length twin, so the Allocated column is the layer's own.
-/// <c>TryToHri</c> and <c>TryToDigitalLink</c> also have a row for their string form, which sizes its result in the
-/// same pass that writes it. Their Allocated column is the returned string.
-/// CodeGlyphX's validator on the same data as (AI) text stands beside <c>TryValidate</c> for scale, not as a baseline:
-/// it also builds its element list, so the two do not do the same work.
-///
-///   retail    : (01) GTIN, (17) expiry, (10) lot, the point-of-sale label
-///   logistics : (00) SSCC, (02) content GTIN, (11) production date, (37) count, (10) lot, a logistic label
-///   weighed   : (01) GTIN, (3103) net weight, (3922) price, (17) expiry, the Digital Link standard's variable-measure example
+/// Measures GS1 validation, HRI and Digital Link conversion, and decode-side interpretation.
 /// </summary>
+/// <remarks>
+/// Span rows use destinations sized in advance, so their allocations belong to the data layer.
+/// String rows also allocate the returned string. CodeGlyphX validation is a comparison, not a baseline: it additionally builds an element list.
+/// Retail, logistics and variable-measure data exercise different AI combinations.
+/// </remarks>
 public class Gs1DataLayer
 {
     private static readonly string[] shapeKeys = ["retail", "logistics", "weighed"];

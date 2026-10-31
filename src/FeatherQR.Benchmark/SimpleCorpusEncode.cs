@@ -2,15 +2,13 @@ using System.Text;
 using SkiaSharp;
 
 /// <summary>
-/// Cross-library Standard QR encoding over a generated corpus: 400 payloads at all four ECC levels, timed by the version range FeatherQR selects for each pair.
-/// <see cref="SimpleEncode"/> times five short payloads at ECC L, all in versions 1 to 4.
-/// The ratio between libraries moves with the version, so those five do not show how an encoder does on large symbols.
-///
-/// Every row encodes the same (payload, level) pairs with the library's defaults.
-/// The span row writes each symbol into one caller buffer sized for the range's largest, the zero-allocation path.
-/// ZXing gets the charset this library chooses: ISO-8859-1 where it holds the text, UTF-8 otherwise.
-/// The baseline's setup for the whole corpus prints the average version each library selects per range, since a larger symbol is more work.
+/// Compares Standard QR encoders over a corpus grouped by the version range FeatherQR selects.
 /// </summary>
+/// <remarks>
+/// Each library receives the same payload and ECC-level pairs with its default fitting behavior.
+/// Setup reports each library's average selected version because symbol size affects cost.
+/// The span row reuses a buffer sized for the range. ZXing uses FeatherQR's selected Latin-1 or UTF-8 charset.
+/// </remarks>
 [MemoryDiagnoser]
 [Config(typeof(CodesConfig))]
 public class SimpleCorpusEncode

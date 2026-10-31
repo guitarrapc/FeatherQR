@@ -1,34 +1,11 @@
 /// <summary>
-/// What <c>QRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same content through the same zero-allocation span path.
-///
-/// The Ratio column is the end-to-end multiplier a caller actually pays, but note it is not the planning cost in isolation.
-/// On the rows where the split wins, the Optimal arm lands on a smaller version and therefore also does less ECC, placement and module writing, so the ratio nets planning against a cheaper encode.
-///
-/// Count indicator widths are constant within the three version bands (1-9 / 10-26 / 27-40), so the planner prices each band at most once per program, and a trivial single-pass bound rejects candidates no split could fit before any cost pass runs.
-/// A Kanji-eligible text has two programs.
-/// The plan is walked back from the accepting run's table. Only a Kanji-eligible text's UTF-8 plan is built by a run of its own, and no shape below takes that path.
-/// The shapes separate the paths the scan can take:
-///
-///   numeric-*  : all digits, one mode is provably optimal, no cost run at all
-///   alnum-120  : single-mode content the trivial bound rules out without a cost run
-///   byte-120   : the same, in Byte mode
-///   alt1-120   : alternating every character, the bound's blind spot: it pays for
-///                a cost run (one, within the 1-9 band its scan window spans) and
-///                gains nothing
-///   mixed-*    : half letters half digits. 120/1000 win a version, mixed-20 does
-///                not (its 140-bit optimum misses v1-M's 128 bits) and emits the
-///                Single stream, the priced-but-no-candidate-fits path
-///   url-58     : a realistic payload (version 4-M as one run, version 3-M split)
-///   utf8-60    : Japanese with digits, UTF-8 behind an ECI prefix under both (6-M):
-///                no split of it is smaller
-///   kanji-60   : the same text with AllowKanji: Single still writes UTF-8 (6-M), since
-///                the digits are ASCII. Optimal writes a Kanji plan, Kanji runs beside Numeric runs (5-M)
-///   kanji-prose-66 : Japanese prose with two ASCII letters a sentence, with AllowKanji:
-///                Single writes UTF-8 (10-M), Optimal Kanji runs beside the ASCII (7-M)
-///
-/// Every fixture fits under Single too, so no row compares a success with a throw.
-/// ECC M only: other levels shift which version wins but not the shape of the work.
+/// Compares Standard QR Optimal and Single segmentation through the allocation-free span API.
 /// </summary>
+/// <remarks>
+/// Ratio measures the whole encode, including any reduction in ECC and placement work from selecting a smaller symbol.
+/// Cases cover single-mode shortcuts, splits that do or do not shrink the symbol, UTF-8 and Kanji plans.
+/// Both arms must encode every fixture successfully at ECC M. Planner details belong beside QRSegmentPlanner.
+/// </remarks>
 public class QRCodeSegmentationEncode
 {
     private static readonly string[] shapeKeys =

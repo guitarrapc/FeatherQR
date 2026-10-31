@@ -14,13 +14,13 @@ internal static partial class Binarizer
     private const int ZeroCounterBlocks = 120;
 
     /// <summary>
-    /// ARM64 tier: the vector tier's blocks on two 128-bit loads, with what ARM64 makes cheap and dear taken into account.
-    /// There is no movemask, so the extremes of a block are counted by one add across its two compare masks, the zeros are summed in byte counters, and a mask of the other pixels is built, one bit a byte by a narrowing shift, only for a sparse block that has any.
-    /// The dense blocks and the untested stretch count into four sub-histograms, pixel i of a group into lane i % 4: an increment to a bin waits on the last increment to it, and four lanes cut that chain to a quarter.
-    /// The lanes are rented, cleared, merged into the bins at the end and returned.
+    /// Builds the luminance histogram using the ARM64 block-classification tier.
     /// </summary>
     internal static void FillHistogramAdvSimd(ReadOnlySpan<byte> luminance, Span<int> histogram)
     {
+        // ARM64 has no movemask. Sum the two comparison masks for extremes and construct a bit mask only for nonempty sparse blocks.
+        // Dense blocks use four cleared, pooled sub-histograms, with pixel i assigned to i % 4.
+        // Independent bins shorten the dependency chain of repeated increments; merge the lanes before returning the rental.
         // Each 32-pixel block (two 128-bit loads) takes one of three paths:
         //   pure   (all 0 or 255)   : counted in registers only, nothing stored
         //   sparse (1-12 others)    : 0 and 255 counted in registers, the others walked one by one

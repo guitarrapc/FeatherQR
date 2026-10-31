@@ -668,41 +668,41 @@ internal static partial class ModulePlacer
     // var nextMultipleOf5 = Math.Abs((int)Math.Ceiling(percent / 5) * 5 - 50) / 5;
     // score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
 
+    // Mask scoring derivation (checked by ModulePlacerMaskPackedParityTest):
+    // Rule 1 (runs >= 5, rows): y5 = x & (x>>1) & ... & (x>>4) marks every
+    //   position where 5 consecutive equal bits start. A run of length L
+    //   contributes popcount L-4 and its total penalty is 3+(L-5) = L-2, so
+    //   score = popcount(y5) + 2 * runs, runs isolated via y5 & ~(y5<<1).
+    //   Computed for dark bits and for light bits (~x within the row).
+    //   This scorer takes both colours at once, from the equalities rule 2 needs:
+    //   eqh[c] = (x[c] == x[c+1]) for c up to n-2, and v5 = eqh & (eqh>>1) &
+    //   (eqh>>2) & (eqh>>3) marks five equal modules from c, dark or light. A
+    //   dark and a light run never share a position, nor their starts, so
+    //   popcount(v5) + 2 * popcount(v5 & ~(v5<<1)) is the two colours' sum, in two
+    //   popcounts a word where the colours take four.
+    // Rule 1 (columns): eq[y] = ~(row[y] ^ row[y-1]) marks columns whose
+    //   vertical run continues at row y. v5[y] = eq[y] & eq[y-1] & eq[y-2] & eq[y-3]
+    //   is the vertical analog of y5, kept in a 4-deep rolling window. Vertical
+    //   run starts are isolated against the previous v5.
+    // Rule 2 (2x2 blocks): all-equal(a[x], a[x+1], b[x], b[x+1]) ⟺
+    //   eqh_a[x] & eqv[x] & eqv[x+1], eqh = ~(a ^ (a>>1)), eqv = ~(a ^ b).
+    // Rule 3 (finder windows): the forward window [0,0,0,0,1,0,1,1,1,0,1] is
+    //   four light modules followed by the 7-module core [1,0,1,1,1,0,1], and the
+    //   backward window is the core followed by four light modules. With
+    //   n4 = nx & (nx>>1) & (nx>>2) & (nx>>3), the light run rule 1's per-colour
+    //   form builds, and core = x & (nx>>1) & (x>>2) & (x>>3) & (x>>4) & (nx>>5) & (x>>6),
+    //   the window starts are n4 & (core>>4) and core & (n4>>7): two ANDs over
+    //   shared terms instead of two 11-term chains. A forward window starts light
+    //   and a backward one dark, so the two never share a start and one popcount
+    //   of their OR counts both. The column direction takes the same two terms
+    //   once per row (n4 over rows y..y+3, the core over rows y..y+6), so each is
+    //   built once and read by both windows that use it. Matches are counted per
+    //   start position, same as the sliding-window scan.
+    // Rule 4 (balance): popcount per row, then the shared closest-multiple-of-5
+    //   deviation formula.
     /// <summary>
-    /// Bit-parallel implementation of all four ISO/IEC 18004 Section 8.8.2 penalty rules over packed rows.
-    /// Produces scores identical to the plain byte-per-module formulation (see the reference block above and ModulePlacerMaskPackedParityTest).
-    ///
-    /// Rule 1 (runs >= 5, rows): y5 = x &amp; (x>>1) &amp; ... &amp; (x>>4) marks every
-    ///   position where 5 consecutive equal bits start. A run of length L
-    ///   contributes popcount L-4 and its total penalty is 3+(L-5) = L-2, so
-    ///   score = popcount(y5) + 2 * runs, runs isolated via y5 &amp; ~(y5&lt;&lt;1).
-    ///   Computed for dark bits and for light bits (~x within the row).
-    ///   This scorer takes both colours at once, from the equalities rule 2 needs:
-    ///   eqh[c] = (x[c] == x[c+1]) for c up to n-2, and v5 = eqh &amp; (eqh>>1) &amp;
-    ///   (eqh>>2) &amp; (eqh>>3) marks five equal modules from c, dark or light. A
-    ///   dark and a light run never share a position, nor their starts, so
-    ///   popcount(v5) + 2 * popcount(v5 &amp; ~(v5&lt;&lt;1)) is the two colours' sum, in two
-    ///   popcounts a word where the colours take four.
-    /// Rule 1 (columns): eq[y] = ~(row[y] ^ row[y-1]) marks columns whose
-    ///   vertical run continues at row y. v5[y] = eq[y] &amp; eq[y-1] &amp; eq[y-2] &amp; eq[y-3]
-    ///   is the vertical analog of y5, kept in a 4-deep rolling window. Vertical
-    ///   run starts are isolated against the previous v5.
-    /// Rule 2 (2x2 blocks): all-equal(a[x], a[x+1], b[x], b[x+1]) ⟺
-    ///   eqh_a[x] &amp; eqv[x] &amp; eqv[x+1], eqh = ~(a ^ (a>>1)), eqv = ~(a ^ b).
-    /// Rule 3 (finder windows): the forward window [0,0,0,0,1,0,1,1,1,0,1] is
-    ///   four light modules followed by the 7-module core [1,0,1,1,1,0,1], and the
-    ///   backward window is the core followed by four light modules. With
-    ///   n4 = nx &amp; (nx>>1) &amp; (nx>>2) &amp; (nx>>3), the light run rule 1's per-colour
-    ///   form builds, and core = x &amp; (nx>>1) &amp; (x>>2) &amp; (x>>3) &amp; (x>>4) &amp; (nx>>5) &amp; (x>>6),
-    ///   the window starts are n4 &amp; (core>>4) and core &amp; (n4>>7): two ANDs over
-    ///   shared terms instead of two 11-term chains. A forward window starts light
-    ///   and a backward one dark, so the two never share a start and one popcount
-    ///   of their OR counts both. The column direction takes the same two terms
-    ///   once per row (n4 over rows y..y+3, the core over rows y..y+6), so each is
-    ///   built once and read by both windows that use it. Matches are counted per
-    ///   start position, same as the sliding-window scan.
-    /// Rule 4 (balance): popcount per row, then the shared closest-multiple-of-5
-    ///   deviation formula.
+    /// Scores the four ISO/IEC 18004 Section 8.8.2 mask penalties over packed rows.
+    /// Matches the byte-per-module reference scorer.
     /// </summary>
     /// <param name="words">
     /// The rows from <paramref name="rows"/>, three words a row (entry <paramref name="rows"/> + 3y + k holds columns 64k.. of row y), with

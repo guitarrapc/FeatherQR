@@ -1,46 +1,11 @@
 /// <summary>
-/// What <c>RmQRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same content through the same zero-allocation span path.
-///
-/// The Ratio column is the end-to-end multiplier a caller actually pays, which is the number worth quoting. But note it is not the planning cost in isolation.
-/// On the rows where the split wins, the Optimal arm lands on a smaller version and therefore also does less ECC, placement and module writing, so the ratio nets planning against a cheaper encode and understates the planning overhead.
-/// Seven of the thirteen shapes below change version between the two arms.
-///
-/// This is a separate class from <see cref="RmQREncodeEndToEnd"/> on purpose.
-/// That one varies version and mode, and ranks everything against one baseline row. This one varies content shape, and every row is meaningless without its same-run partner.
-/// Mixing them would make both tables harder to read and both filters slower to run.
-///
-/// The shapes are chosen to separate the two things that drive planning cost:
-///
-///   Length, shape held fixed   : mixed-20 / -60 / -120 / -150 (half letters, half digits)
-///   Shape, length held at 120  : numeric / alnum / byte / mixed / alt1 / alt10
-///
-/// and to cover every way the scan can end. Cost runs per encode are in brackets.
-/// A run writes the table the build walks back, so a shape accepted by its last run pays no extra run for the build:
-///
-///   numeric-*  : all digits, so one mode is provably optimal and the short-circuit
-///                returns before any bound is computed [0 runs]
-///   alnum-120  : the trivial O(n) bound rejects every better-ranked version, so no
-///                cost run happens [0 runs]
-///   byte-150   : the same, at the byte capacity boundary [0 runs]
-///   alt1-120   : alternating every character. The trivial bound cannot rule this out
-///                (it prices each digit at the numeric rate, ignoring that switching
-///                every character never pays), so the first candidate past it is priced,
-///                rejected, and the rest skipped on that cost. It plans and gains nothing [1 run]
-///   alt10-120  : alternating every ten, where the first candidate priced rejects and a
-///                second width triple decides the version [2 runs]
-///   mixed-*    : the common shape. The first candidate past the bound is priced at its
-///                own widths and fits, and the build walks that run back [1 run]
-///   url-38     : a realistic payload (R11x77 as one run, R15x43 split) [1 run]
-///   utf8-60    : Japanese with digits, UTF-8 behind an ECI prefix under both (R13x139):
-///                no split of it is smaller. The first candidate past the trivial bound is priced and rejected
-///                and the rest are skipped on that cost [1 run]
-///   kanji-60   : the same text with AllowKanji: Single still writes UTF-8 (R13x139), since
-///                the digits are ASCII. Optimal writes a Kanji plan, Kanji runs beside Numeric runs (R17x77),
-///                taken on a remembered cost after two candidates were priced, so the build runs the program [3 runs]
-///
-/// Every fixture fits under Single too, so no row is comparing a success with a throw.
-/// ECC M only: the H capacities shift which version wins but not the shape of the work.
+/// Compares rMQR Optimal and Single segmentation through the allocation-free span API.
 /// </summary>
+/// <remarks>
+/// Ratio includes the whole encode: a smaller selected symbol can offset planning cost, so it is not an isolated planner measurement.
+/// Cases vary length and character layout, including numeric shortcuts, unsuccessful splits, UTF-8 and Kanji plans.
+/// Both arms must encode every fixture successfully at ECC M.
+/// </remarks>
 public class RmQRSegmentationEncode
 {
     private static readonly string[] shapeKeys =

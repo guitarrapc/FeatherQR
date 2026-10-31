@@ -4,18 +4,15 @@ using System.Diagnostics;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// The version scan and the plan under FNC1 (specs/rmqr-encoder.md, FNC1). The indicator's bits, 3 in first
-/// position and 11 in second, join the ECI prefix in every capacity check, and the single-mode ceiling is the fit with
-/// those bits. The costs come from the FNC1 program (<see cref="ModeSegmenter.ComputeCostsFnc1"/>), whose Alphanumeric runs count a literal
-/// <c>%</c> twice and never hold a separator pair. No Kanji plan is priced. The scan has the shape of the scan without
-/// FNC1 and without Kanji: the trivial bound, a memoised cost run per width triple and the kept table. It has no floor run,
-/// since one counting runs would read the other program's packed table, and the route is cold enough for the exact cost run to decide alone.
-/// With a table, the scan leaves the predecessors of its last run there and says whether that run priced the
-/// candidate it accepted. A remembered cost accepts a candidate priced by an earlier run, whose table is gone,
-/// and a requested version is accepted unpriced. Both build their plan with a run of their own.
+/// Selects an rMQR version and builds a segmentation plan under FNC1.
 /// </summary>
 internal static partial class RmQRSegmentPlanner
 {
+    // Capacity checks include the FNC1 indicator (3 or 11 bits) and ECI prefix, including the single-mode ceiling.
+    // ComputeCostsFnc1 handles escaped percent characters and separator boundaries; no Kanji plan is considered.
+    // The scan caches costs per width triple. It omits the floor run, whose ordinary packed table is incompatible with FNC1.
+    // A retained predecessor table is reusable only if its last run priced the accepted candidate.
+    // A cached earlier cost or an unpriced requested version requires a fresh plan-building run.
     /// <summary><see cref="SelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, out bool, out bool)"/> under FNC1, throwing what <see cref="RmQRVersionSelector.SelectFnc1"/> throws when nothing fits.</summary>
     public static RmQRVersion SelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, out bool useSegments)
         => SelectVersionFnc1(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, default, out useSegments, out _, out _, out _);
