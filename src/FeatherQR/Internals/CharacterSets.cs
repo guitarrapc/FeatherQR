@@ -363,7 +363,6 @@ internal static class CharacterSets
     /// ISO-8859-1 supports U+0000 to U+00FF only.
     /// </summary>
     /// <param name="text">The string to check for ISO-8859-1-only characters.</param>
-    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsValidISO88591(string text) => IsValidISO88591(text.AsSpan());
 
@@ -372,7 +371,6 @@ internal static class CharacterSets
     /// ISO-8859-1 supports U+0000 to U+00FF only.
     /// </summary>
     /// <param name="textSpan">The char span to check for ISO-8859-1-only characters.</param>
-    /// <returns></returns>
     public static bool IsValidISO88591(ReadOnlySpan<char> textSpan)
     {
         // Four chars a ulong, sixteen ORed together, so the high bytes are tested once a block. The mask is the same in every 16-bit lane,

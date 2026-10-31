@@ -383,9 +383,6 @@ internal static partial class ModulePlacer
         }
     }
 
-    /// <summary>
-    /// Checks if two rectangles intersect.
-    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool Intersects(Rectangle r1, Rectangle r2)
     {
@@ -395,12 +392,8 @@ internal static partial class ModulePlacer
             && r1.Y < r2.Y + r2.Height;
     }
 
-    /// <summary>
-    /// Check if a module at given bit index is blocked using a bitmask.
-    /// </summary>
     /// <param name="mask">Bitmask buffer</param>
     /// <param name="bitIndex">Linear index of module</param>
-    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsModuleBlocked(ReadOnlySpan<byte> mask, int bitIndex)
     {

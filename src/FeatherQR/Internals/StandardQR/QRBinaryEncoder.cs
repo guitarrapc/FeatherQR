@@ -20,9 +20,6 @@ internal ref partial struct QRBinaryEncoder
 
     private BitWriter _writer;
 
-    /// <summary>
-    /// Gets the current bit position (actual number of bits written).
-    /// </summary>
     public readonly int BitPosition => _writer.BitPosition;
 
     /// <summary>
@@ -125,9 +122,6 @@ internal ref partial struct QRBinaryEncoder
         }
     }
 
-    /// <summary>
-    /// Writes encoded data byte based on mode
-    /// </summary>
     /// <param name="textSpan">Input text to encode</param>
     /// <param name="encoding">Encoding mode</param>
     /// <param name="eci">ECI mode for character encoding</param>
@@ -266,9 +260,6 @@ internal ref partial struct QRBinaryEncoder
         }
     }
 
-    /// <summary>
-    /// Writes byte mode data based on ECI mode.
-    /// </summary>
     private void EncodeByte(ReadOnlySpan<char> textSpan, EciMode eci, bool utf8Bom)
     {
         if (eci is EciMode.Default or EciMode.Iso8859_1)
@@ -612,10 +603,6 @@ internal ref partial struct QRBinaryEncoder
         }
     }
 
-    /// <summary>
-    /// Gets the encoded data.
-    /// </summary>
-    /// <returns></returns>
     public ReadOnlySpan<byte> GetEncodedData() => _writer.GetData();
 
     /// <summary>

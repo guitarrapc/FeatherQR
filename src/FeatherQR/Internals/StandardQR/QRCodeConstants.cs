@@ -528,7 +528,6 @@ internal static class QRCodeConstants
     /// </summary>
     /// <param name="version"></param>
     /// <param name="eccLevel"></param>
-    /// <returns></returns>
     /// <exception cref="ArgumentException"></exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static ECCInfo GetEccInfo(int version, QREccLevel eccLevel)

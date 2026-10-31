@@ -518,7 +518,6 @@ public sealed class QRCodeData
     /// Calculate version from size (without quiet zone) Formula: size = 21 + (version - 1) * 4 Inverse: version = (size - 21) / 4 + 1
     /// </summary>
     /// <param name="sizeWithoutQuietZone"></param>
-    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int VersionFromSize(int sizeWithoutQuietZone) => (sizeWithoutQuietZone - 21) / 4 + 1;
 
@@ -526,7 +525,6 @@ public sealed class QRCodeData
     /// Calculate number of padding bits needed to align totalBits to next byte boundary.
     /// </summary>
     /// <param name="totalBits"></param>
-    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GetPaddingBits(int totalBits)
     {

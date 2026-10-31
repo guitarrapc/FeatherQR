@@ -17,7 +17,6 @@ internal static class BinaryInterleaver
     /// <param name="ecc">Array of ECC codewords to interleave.</param>
     /// <param name="output">Output buffer for interleaved bits.</param>
     /// <param name="eccInfo">ECC information for the QR code version.</param>
-    /// <returns></returns>
     public static void InterleaveCodewords(ReadOnlySpan<byte> data, ReadOnlySpan<byte> ecc, Span<byte> output, in ECCInfo eccInfo)
     {
         // The interleaving process distributes data across blocks to improve error resilience:
@@ -144,7 +143,6 @@ internal static class BinaryInterleaver
     /// - ECC codewords (ECCPerBlock * TotalBlocks bytes)
     /// - Remainder bits space (0-7 bits, rounded up to nearest byte)
     /// </remarks>
-    /// <returns></returns>
     public static int CalculateInterleavedSize(in ECCInfo eccInfo, int remainderBits)
     {
         // -----------------------------------------------------

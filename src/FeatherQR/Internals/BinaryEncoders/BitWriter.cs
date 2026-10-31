@@ -183,7 +183,6 @@ internal ref struct BitWriter
     /// <summary>
     /// Gets the written data as a read-only span (flushes pending bits first).
     /// </summary>
-    /// <returns></returns>
     public ReadOnlySpan<byte> GetData()
     {
         Flush();
