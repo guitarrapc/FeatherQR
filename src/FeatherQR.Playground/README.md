@@ -151,7 +151,12 @@ UTF-8. The Share button also limits the complete URL to 8,192 characters. A diff
 or query-string encoding would still require the same state validation, so the existing
 format is retained to keep old links readable.
 
-Run the dependency-free codec and schema regression tests with Node.js 22 or later:
+State collection, control application, derived visibility and preset conversion live in
+`wwwroot/state-controls.js`. The host in `main.js` supplies select and gradient rendering
+hooks and connects events to WebAssembly. This keeps state handling testable without
+starting the runtime.
+
+Run the dependency-free codec, schema and control-state regression tests with Node.js 22 or later:
 
 ```bash
 node --experimental-default-type=module --test tests/FeatherQR.Playground.Tests/*.test.mjs

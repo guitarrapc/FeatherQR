@@ -1,3 +1,4 @@
+import { createStateControls, presetToState } from './state-controls.js';
 import { dotnet } from './_framework/dotnet.js';
 import {
   decodeShareHash,
@@ -277,8 +278,6 @@ function displayText(text) {
   return text.replace(/\u001d/g, '␝');
 }
 
-const DATA_FORMATS = ['text', 'gs1', 'link', 'aim'];
-
 /**
  * The WASM request for a playground state. The data format names the route: a GS1 format goes through
  * the GS1 entry points, which check the data and set the mode, and an AIM format is plain text under
@@ -497,158 +496,10 @@ const PRESETS = {
 const EMPTY_BYTES = new Uint8Array(0);
 /** Uploaded logo image bytes (not part of share links). */
 let customLogoBytes = EMPTY_BYTES;
-/** True while applyStateToControls runs, so input events do not flip the preset to (custom). */
-let applyingState = false;
-
-/** @returns {object} playground state; doubles as the WASM QrRequest payload (camelCase) */
-function collectState() {
-  return {
-    content: contentEl.value,
-    symbology: symbologySelect.value,
-    ecc: eccSelect.value,
-    eccBoost: eccBoostCheck.checked,
-    allowKanji: allowKanjiCheck.checked,
-    dataFormat: formatSelect.value,
-    applicationIndicator: appIndicatorInput.value,
-    gs1Stem: gs1StemInput.value,
-    size: Number(sizeRange.value),
-    quietZone: Number(quietRange.value),
-    version: Number(versionSelect.value),
-    fitStrategy: rmqrFitSelect.value,
-    // A fixed version already pins the height; sending both would be rejected
-    // as contradictory when they disagree, so the height applies to Auto only.
-    height: versionSelect.value === '-1' ? Number(rmqrHeightSelect.value) : 0,
-    moduleShape: moduleShapeSelect.value,
-    moduleSizePercent: Number(moduleSizeRange.value) / 100,
-    moduleCornerRadius: Number(cornerRange.value) / 100,
-    finderShape: finderSelect.value,
-    foreground: fgColor.value,
-    background: bgTransparent.checked ? 'transparent' : bgColor.value,
-    gradient: {
-      enabled: gradientToggle.checked,
-      colors: getGradientColors(),
-      direction: gradientDirection.value,
-    },
-    logo: {
-      mode: logoModeSelect.value,
-      sizePercent: Number(logoSizeRange.value),
-      borderWidth: Number(logoBorderRange.value),
-    },
-  };
-}
-
-/** @param {object} state partial state (missing fields keep current control values) */
-function applyStateToControls(state) {
-  applyingState = true;
-  try {
-    if (typeof state.content === 'string') contentEl.value = state.content;
-    if (state.symbology === 'qr' || state.symbology === 'microqr' || state.symbology === 'rmqr') symbologySelect.value = state.symbology;
-    // Symbology decides the legal ECC / version option sets, rebuild before applying values
-    populateEccSelect();
-    populateVersionSelect();
-    if (state.ecc) eccSelect.value = state.ecc;
-    if (typeof state.eccBoost === 'boolean') eccBoostCheck.checked = state.eccBoost;
-    if (typeof state.allowKanji === 'boolean') allowKanjiCheck.checked = state.allowKanji;
-    if (DATA_FORMATS.includes(state.dataFormat)) formatSelect.value = state.dataFormat;
-    if (typeof state.applicationIndicator === 'string') appIndicatorInput.value = state.applicationIndicator.slice(0, 2);
-    if (typeof state.gs1Stem === 'string') gs1StemInput.value = state.gs1Stem;
-    if (state.fitStrategy === 'area' || state.fitStrategy === 'height' || state.fitStrategy === 'width') rmqrFitSelect.value = state.fitStrategy;
-    if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
-    if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
-    if (Number.isFinite(state.quietZone)) quietRange.value = String(clamp(state.quietZone, 0, 10));
-    if (Number.isFinite(state.version)) versionSelect.value = String(state.version);
-    if (state.moduleShape) moduleShapeSelect.value = state.moduleShape;
-    if (Number.isFinite(state.moduleSizePercent)) moduleSizeRange.value = String(Math.round(clamp(state.moduleSizePercent, 0.5, 1) * 100));
-    if (Number.isFinite(state.moduleCornerRadius)) cornerRange.value = String(Math.round(clamp(state.moduleCornerRadius, 0, 1) * 100));
-    if (state.finderShape) finderSelect.value = state.finderShape;
-    if (state.foreground) fgColor.value = state.foreground;
-    if (state.background === 'transparent') {
-      bgTransparent.checked = true;
-    } else if (state.background) {
-      bgTransparent.checked = false;
-      bgColor.value = state.background;
-    }
-    if (state.gradient) {
-      if (typeof state.gradient.enabled === 'boolean') gradientToggle.checked = state.gradient.enabled;
-      if (Array.isArray(state.gradient.colors) && state.gradient.colors.length >= 2) {
-        renderGradientColors(state.gradient.colors);
-      }
-      if (state.gradient.direction) gradientDirection.value = state.gradient.direction;
-    }
-    if (state.logo) {
-      if (state.logo.mode) logoModeSelect.value = state.logo.mode;
-      if (Number.isFinite(state.logo.sizePercent)) logoSizeRange.value = String(clamp(state.logo.sizePercent, 5, 35));
-      if (Number.isFinite(state.logo.borderWidth)) logoBorderRange.value = String(clamp(state.logo.borderWidth, 0, 24));
-    }
-    syncDerivedControls();
-  } finally {
-    applyingState = false;
-  }
-}
-
-/** Flat preset entry → state shape used by applyStateToControls / share links. */
-function presetToState(preset) {
-  return {
-    ecc: preset.ecc,
-    moduleShape: preset.moduleShape,
-    moduleSizePercent: preset.moduleSizePercent,
-    moduleCornerRadius: preset.moduleCornerRadius,
-    finderShape: preset.finderShape,
-    foreground: preset.foreground,
-    background: preset.background,
-    gradient: {
-      enabled: preset.gradientEnabled,
-      colors: preset.gradientColors,
-      direction: preset.gradientDirection,
-    },
-    logo: {
-      mode: preset.logoMode,
-      sizePercent: preset.logoSizePercent,
-      borderWidth: preset.logoBorderWidth,
-    },
-  };
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-/** Updates range outputs and conditional row visibility from current control values. */
-function syncDerivedControls() {
-  sizeOut.textContent = sizeRange.value;
-  quietOut.textContent = quietRange.value;
-  moduleSizeOut.textContent = moduleSizeRange.value;
-  cornerOut.textContent = cornerRange.value;
-  logoSizeOut.textContent = logoSizeRange.value;
-  logoBorderOut.textContent = logoBorderRange.value;
-  cornerRow.hidden = moduleShapeSelect.value !== 'rounded';
-  // Micro QR and rMQR have no ECC headroom for overlays, so the logo options do not apply, and
-  // ECC boost is Standard QR only for the same reasons the library scopes it there. The finder
-  // shape does apply to them now; wiring the control up for both is still to do.
-  eccBoostRow.hidden = isMicroSymbology() || isRmqrSymbology();
-  finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
-  logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();
-  // Micro QR has neither FNC1 nor a GS1 carrier. The stem belongs to a Digital Link and the indicator
-  // to an AIM format alone.
-  const format = isMicroSymbology() ? 'text' : formatSelect.value;
-  formatRow.hidden = isMicroSymbology();
-  gs1StemRow.hidden = format !== 'link';
-  appIndicatorRow.hidden = format !== 'aim';
-  gs1ExampleBtn.hidden = format !== 'gs1' && format !== 'link';
-  separatorRow.hidden = format === 'text';
-  // rMQR fit options apply only to automatic version selection.
-  rmqrFitRow.hidden = !isRmqrSymbology();
-  rmqrHeightRow.hidden = !isRmqrSymbology();
-  // A fixed version already pins both dimensions: fit strategy and fixed height
-  // only apply to automatic selection (the library rejects a disagreeing pair).
-  rmqrFitSelect.disabled = versionSelect.value !== '-1';
-  rmqrHeightSelect.disabled = versionSelect.value !== '-1';
-  gradientPanel.hidden = !gradientToggle.checked;
-  fgRow.classList.toggle('field--disabled', gradientToggle.checked);
-  fgColor.disabled = gradientToggle.checked;
-  bgColor.disabled = bgTransparent.checked;
-  logoFileRow.hidden = logoModeSelect.value !== 'custom';
-}
+const stateControls = createStateControls(document, {
+  populateEccSelect, populateVersionSelect, getGradientColors, renderGradientColors,
+});
+const { collectState, applyStateToControls, syncDerivedControls } = stateControls;
 
 /* ─── Gradient color list ─── */
 
@@ -1675,7 +1526,7 @@ function formatBytes(n) {
 /* ─── Control events ─── */
 
 function markCustomPreset() {
-  if (!applyingState) presetSelect.value = 'custom';
+  if (!stateControls.applyingState) presetSelect.value = 'custom';
 }
 
 for (const el of [
