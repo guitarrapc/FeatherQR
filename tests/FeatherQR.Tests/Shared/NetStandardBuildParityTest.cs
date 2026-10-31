@@ -618,6 +618,9 @@ public class NetStandardBuildParityTest
         };
         foreach (var (symbology, eccLevel, maxLength, options) in shapes)
         {
+            // Reuse the span bridges so each random input exercises the API without generating and JIT-compiling new wrappers.
+            var hostEncoder = BindEncoder(host, symbology, host.Location);
+            var buildEncoder = BindEncoder(build, symbology, path);
             for (var round = 0; round < 500 && mismatch is null; round++)
             {
                 var text = new System.Text.StringBuilder();
@@ -625,8 +628,8 @@ public class NetStandardBuildParityTest
                     text.Append(TextPieces[random.Next(TextPieces.Length)]);
                 var c = new SpanCase($"{symbology} random {round}", symbology, text.ToString(0, Math.Min(text.Length, maxLength)), eccLevel, options);
 
-                var expected = Encode(host, host.Location, c);
-                var actual = Encode(build, path, c);
+                var expected = Encode(host, c, hostEncoder);
+                var actual = Encode(build, c, buildEncoder);
                 if (actual.Fits != expected.Fits || !actual.Matrix.AsSpan().SequenceEqual(expected.Matrix))
                     mismatch = $"{c.Name}, \"{c.Text}\": a symbol other than this host's build's";
             }
@@ -699,22 +702,30 @@ public class NetStandardBuildParityTest
 
     private sealed record EncodeOutcome(bool Fits, int BufferSize, int Width, int Height, byte[] Matrix, string? Text, string? Info);
 
+    private sealed record SpanEncoder(SpanSizing Size, SpanCreate Create, SpanDecode Decode);
+
+    private static SpanEncoder BindEncoder(Assembly assembly, string symbology, string path)
+        => new(BindSizing(assembly, symbology, path), BindSpanCreate(assembly, symbology, path), BindDecode(assembly, symbology, image: false, path));
+
     /// <summary>Sizes, writes and decodes <paramref name="c"/> through <paramref name="assembly"/>'s span API.</summary>
     private static EncodeOutcome Encode(Assembly assembly, string path, SpanCase c)
+        => Encode(assembly, c, BindEncoder(assembly, c.Symbology, path));
+
+    private static EncodeOutcome Encode(Assembly assembly, SpanCase c, SpanEncoder encoder)
     {
         var options = Options(assembly, c.Symbology, c.Options);
         var eccLevel = EccLevel(assembly, c.Symbology, c.EccLevel);
-        if (!BindSizing(assembly, c.Symbology, path)(c.Text, eccLevel, options, out var bufferSize, out var width, out var height))
+        if (!encoder.Size(c.Text, eccLevel, options, out var bufferSize, out var width, out var height))
             return new(false, 0, 0, 0, [], null, null);
 
         // A dirty destination, so that a module the encoder leaves unwritten shows.
         var matrix = new byte[bufferSize];
         matrix.AsSpan().Fill(0xA5);
-        var written = BindSpanCreate(assembly, c.Symbology, path)(c.Text, eccLevel, matrix, options);
+        var written = encoder.Create(c.Text, eccLevel, matrix, options);
         if (written != bufferSize)
             throw new InvalidOperationException($"{c.Name}: wrote {written} bytes where sizing gave {bufferSize}");
 
-        var (text, info) = Decode(BindDecode(assembly, c.Symbology, image: false, path), matrix, width, height);
+        var (text, info) = Decode(encoder.Decode, matrix, width, height);
         return new(true, bufferSize, width, height, matrix, text, info);
     }
 

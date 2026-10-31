@@ -42,12 +42,15 @@ jobs:
           persist-credentials: false
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
-          restore-wasm-workload: true
           dotnet-version: |
             10.0.x
             8.0.x
       - name: Build
-        run: dotnet build -c Release
+        # Remove WASM projects only from this job's checkout; the dedicated jobs build them below.
+        shell: bash
+        run: |
+          dotnet sln FeatherQR.slnx remove samples/BlazorWasm/BlazorWasm.csproj src/FeatherQR.Playground/FeatherQR.Playground.csproj tests/FeatherQR.WasmReport/FeatherQR.WasmReport.csproj
+          dotnet build -c Release
       # Same step release.yaml runs before packing, so a break shows up on the PR that caused it.
       - name: Trim XML documentation to the public surface
         shell: bash
@@ -75,7 +78,7 @@ jobs:
         run: dotnet run tools/check_package_deps.cs -- ./artifacts
       - name: Test
         # skip output with multiple modules may stuck test
-        run: dotnet test -c Release --no-build --max-parallel-test-modules 1 --timeout 8m
+        run: dotnet test --project tests/FeatherQR.Tests -c Release --no-build --max-parallel-test-modules 1 --timeout 8m
         env:
           # Cap TUnit parallelism to match typical GHA runner cores (avoids CPU-heavy QR/Skia tests oversubscribing).
           TUNIT_MAX_PARALLEL_TESTS: 4
@@ -134,8 +137,8 @@ jobs:
           chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
           ./ConsoleAppNativeAOT${{ matrix.ext }}
 
-  # Playground native relink (SkiaSharp + Emscripten) only happens on publish, so the
-  # matrix `dotnet build` above stays managed-only. Verify the publish path on one leg.
+  # WebAssembly projects build on this Linux job and wasm-simd, so the desktop matrix
+  # does not need to install Emscripten or relink WebAssembly.
   # AOT is disabled here for speed; the Deploy Playground workflow publishes with full AOT.
   build-playground:
     runs-on: ubuntu-24.04
@@ -151,6 +154,8 @@ jobs:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
         run: dotnet workload install wasm-tools
+      - name: Build BlazorWasm sample
+        run: dotnet build samples/BlazorWasm/BlazorWasm.csproj -c Release
       # No -r browser-wasm: it would propagate to the multi-targeted library reference
       # and require the wasm-tools-net8 workload; the WebAssembly SDK defaults the RID anyway.
       - name: Publish Playground (browser-wasm Release, no AOT)
