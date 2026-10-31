@@ -100,6 +100,9 @@ public class Gs1DigitalLinkTest
             await Assert.That(read).IsTrue().Because($"{c.Id}: {error}");
             await Assert.That(elementString).IsEqualTo(c.ElementString).Because(c.Id);
             await Assert.That(error).IsEqualTo(default(Gs1Error));
+            var fixture = Gs1FixtureLoader.EnumerateCases().First(f => f.Id == c.Id);
+            await Assert.That(Gs1DigitalLink.TryToDigitalLink(elementString, Year, null, out var uri, out error)).IsTrue().Because($"{c.Id}: {error}");
+            await Assert.That(uri).IsEqualTo(Canonical(fixture.SyntaxEngine.DigitalLink!)).Because(c.Id);
             return;
         }
         if (AcceptDifferences.Contains(c.Id))
@@ -214,6 +217,9 @@ public class Gs1DigitalLinkTest
             await Assert.That(uri).IsEqualTo(Canonical(c.Uri)).Because(c.Id);
             if (c.CodeGlyphXUri is not null)
                 await Assert.That(uri).IsEqualTo(c.CodeGlyphXUri).Because($"{c.Id} (CodeGlyphX)");
+            await Assert.That(Gs1ElementString.TryFromDigitalLink(uri, out var roundTrip, out error)).IsTrue().Because($"{c.Id}: {error}");
+            await Assert.That(Pairs(roundTrip)).IsEquivalentTo(Pairs(c.ElementString)).Because(c.Id);
+            await Assert.That(Gs1Validator.TryValidate(roundTrip, Year, out error)).IsTrue().Because($"{c.Id}: {error}");
             return;
         }
         if (BuildDifferences.Contains(c.Id))
@@ -226,32 +232,6 @@ public class Gs1DigitalLinkTest
         await Assert.That(built).IsFalse().Because(c.Id);
         var expected = c.UriError!.Contains("without a primary key", StringComparison.Ordinal) ? Gs1ErrorKind.MissingPrimaryKey : Gs1ErrorKind.AiNotAllowedInUri;
         await Assert.That(error.Kind).IsEqualTo(expected).Because($"{c.Id}: {c.UriError}");
-    }
-
-    /// <summary>A URI the engine read, read here and built again, is the engine's canonical URI of that data.</summary>
-    [Test]
-    [MethodDataSource(nameof(UriCases))]
-    public async Task RoundTrip_UriThroughElementString((string Id, string Uri, bool Valid, string? ElementString, string? Error) c)
-    {
-        if (!c.Valid || string.IsNullOrEmpty(c.ElementString) || ReadDifferences.ContainsKey(c.Id))
-            return;
-        var fixture = Gs1FixtureLoader.EnumerateCases().First(f => f.Id == c.Id);
-        await Assert.That(Gs1ElementString.TryFromDigitalLink(c.Uri, out var elementString, out _)).IsTrue();
-        await Assert.That(Gs1DigitalLink.TryToDigitalLink(elementString, Year, null, out var uri, out var error)).IsTrue().Because($"{c.Id}: {error}");
-        await Assert.That(uri).IsEqualTo(Canonical(fixture.SyntaxEngine.DigitalLink!)).Because(c.Id);
-    }
-
-    /// <summary>An element string a URI can carry comes back with the same (AI, value) pairs, in the URI's order.</summary>
-    [Test]
-    [MethodDataSource(nameof(BuildCases))]
-    public async Task RoundTrip_ElementStringThroughUri((string Id, string ElementString, string? Uri, string? UriError, string? CodeGlyphXUri) c)
-    {
-        if (c.Uri is null)
-            return;
-        await Assert.That(Gs1DigitalLink.TryToDigitalLink(c.ElementString, Year, null, out var uri, out _)).IsTrue();
-        await Assert.That(Gs1ElementString.TryFromDigitalLink(uri, out var back, out var error)).IsTrue().Because($"{c.Id}: {error}");
-        await Assert.That(Pairs(back)).IsEquivalentTo(Pairs(c.ElementString)).Because(c.Id);
-        await Assert.That(Gs1Validator.TryValidate(back, Year, out error)).IsTrue().Because($"{c.Id}: {error}");
     }
 
     [Test]

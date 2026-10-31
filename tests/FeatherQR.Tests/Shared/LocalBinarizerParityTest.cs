@@ -76,23 +76,15 @@ public class LocalBinarizerParityTest
             await Assert.That(differs).IsEqualTo(expected.Differs).Because($"{kernel}");
             await Assert.That(measured).IsTrue();
         }
-    }
 
-    [Test]
-    [MethodDataSource(nameof(Cases))]
-    public async Task TryBinarize_AndItsScalarEntry_MatchReference(int width, int height, string content, byte globalThreshold, bool negative)
-    {
-        var luminance = Render(content, width, height);
-        var seen = negative ? Negated(luminance) : luminance;
-        var expected = Reference(seen, seen, width, height, globalThreshold);
-
-        var scratch = new int[LocalBinarizer.ScratchLength(width, height)];
+        // The convenience entries must also recompute statistics when the caller reuses scratch.
+        var entryScratch = new int[LocalBinarizer.ScratchLength(width, height)];
         var vector = new byte[width * height];
         var scalar = new byte[width * height];
-        var vectorDiffers = LocalBinarizer.TryBinarize(luminance, width, height, negative, globalThreshold, vector, scratch, out var vectorDark);
+        var vectorDiffers = LocalBinarizer.TryBinarize(luminance, width, height, negative, globalThreshold, vector, entryScratch, out var vectorDark);
         // The statistics of one call are not the next call's: each entry without the flag reads them again
-        Array.Fill(scratch, -1);
-        var scalarDiffers = LocalBinarizer.TryBinarizeScalar(luminance, width, height, negative, globalThreshold, scalar, scratch, out var scalarDark);
+        Array.Fill(entryScratch, -1);
+        var scalarDiffers = LocalBinarizer.TryBinarizeScalar(luminance, width, height, negative, globalThreshold, scalar, entryScratch, out var scalarDark);
 
         await Assert.That(FirstDifference(scalar, expected.Binarized)).IsEqualTo(-1);
         await Assert.That(scalarDark).IsEqualTo(expected.Dark);
