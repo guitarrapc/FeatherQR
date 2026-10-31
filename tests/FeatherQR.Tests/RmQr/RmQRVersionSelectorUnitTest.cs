@@ -240,10 +240,8 @@ public class RmQRVersionSelectorUnitTest
         await Assert.That(checks).IsGreaterThan(1000);
     }
     /// <summary>
-    /// An unsupported mode (ECI / Kanji never come out of the analyzer, but the internal
-    /// contract is one exception on every path): the auto-fit path (table index) and
-    /// the requested-version path (count-indicator lookup) must throw the same type,
-    /// parameter name and message.
+    /// ECI is not a data encoding mode. Automatic and requested-version selection
+    /// must reject it with the same exception type, parameter name and message.
     /// </summary>
     [Test]
     public async Task Select_UnsupportedMode_ThrowsTheSameOnAutoFitAndRequestedVersion()

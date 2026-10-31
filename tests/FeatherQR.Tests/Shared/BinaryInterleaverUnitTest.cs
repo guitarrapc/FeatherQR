@@ -11,7 +11,6 @@ public class BinaryInterleaverUnitTest
     internal async Task InterleaveCodewords_TwoBlocks_CorrectOrder()
     {
         var version = 1;
-        // Arrange
         var eccInfo = new ECCInfo(version, QREccLevel.M, 6, 2, 2, 3, 0, 0);
 
         // data: Block1 (D1,D2,D3) + Block2 (D4,D5,D6)
@@ -23,10 +22,8 @@ public class BinaryInterleaverUnitTest
         var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
         byte[] output = new byte[size];
 
-        // Act
         BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, eccInfo);
 
-        // Assert
         // Expected: D1, D4, D2, D5, D3, D6 | E1, E3, E2, E4
         await Assert.That(output[0]).IsEqualTo((byte)0xD1);
         await Assert.That(output[1]).IsEqualTo((byte)0xD4);
@@ -56,10 +53,8 @@ public class BinaryInterleaverUnitTest
         var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
         byte[] output = new byte[size];
 
-        // Act
         BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, eccInfo);
 
-        // Assert
         // Expected: 01, 04, 02, 05, 03, 06, 07 | E1, E3, E2, E4
         await Assert.That(output[0]).IsEqualTo((byte)0x01);
         await Assert.That(output[1]).IsEqualTo((byte)0x04);
@@ -96,7 +91,6 @@ public class BinaryInterleaverUnitTest
         var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
         byte[] output = new byte[size];
 
-        // Act
         BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, eccInfo);
 
         // Assert - No interleaving, data and ECC remain in original order
@@ -114,13 +108,11 @@ public class BinaryInterleaverUnitTest
     public async Task InterleaveCodewords_MaximumBlocks_Version40()
     {
         var version = 40;
-        // Arrange: Version 40 (maximum 30 blocks)
         var eccInfo = GetEccInfo(version, QREccLevel.H);
 
         byte[] allData = new byte[eccInfo.TotalDataCodewords];
         byte[] allEcc = new byte[(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock];
 
-        // Generate data
         for (int i = 0; i < allData.Length; i++)
         {
             allData[i] = (byte)((i + 1) % 256); // 1,2,3,...255,0,1,2...
@@ -133,10 +125,8 @@ public class BinaryInterleaverUnitTest
         var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
         byte[] output = new byte[size];
 
-        // Act
         BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, eccInfo);
 
-        // Assert
         await Assert.That(output.Length).IsEqualTo(size);
         await Assert.That(output[0]).IsNotEqualTo((byte)0);
     }
@@ -148,13 +138,10 @@ public class BinaryInterleaverUnitTest
     [Arguments(40, QREccLevel.H)]
     public async Task CalculateInterleavedSize_AllVersions_CorrectSize(int version, QREccLevel level)
     {
-        // Arrange
         var eccInfo = GetEccInfo(version, level);
 
-        // Act
         var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
 
-        // Assert
         int expectedDataBytes = eccInfo.TotalDataCodewords;
         int expectedEccBytes = (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
         int expectedSize = expectedDataBytes + expectedEccBytes;

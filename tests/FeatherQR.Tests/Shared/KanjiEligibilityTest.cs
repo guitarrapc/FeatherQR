@@ -11,7 +11,7 @@ namespace FeatherQR.Tests;
 /// Every expectation is a whole symbol built from a stream <see cref="KanjiStreamReference"/> writes from the standards, with the mask pinned, so "UTF-8" is checked as exactly as "Kanji".
 /// </summary>
 /// <remarks>
-/// Kanji mode is written only when the caller sets <c>AllowKanji</c>: Android's own scanners read none of it, so by default every generator writes what it wrote before Kanji mode existed, UTF-8 behind an ECI header (none on Micro QR, which has no ECI).
+/// Kanji mode requires <c>AllowKanji</c>; leaving it off preserves the normal encoding choice.
 /// With the option a text is eligible when the library chose the charset and chose UTF-8, and every character is ASCII or has an encoder cell.
 /// A single mode writes Kanji only when every character has a cell. An eligible text with ASCII in it stays UTF-8 under <see cref="QRSegmentation.Single"/>, and under <see cref="QRSegmentation.Optimal"/> takes a Kanji plan where that plan needs a smaller version. <c>KanjiOptimalTest</c> holds that rule whole.
 /// </remarks>

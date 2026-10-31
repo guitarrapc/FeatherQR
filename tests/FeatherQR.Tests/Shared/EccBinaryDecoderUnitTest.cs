@@ -12,10 +12,8 @@ public class EccBinaryDecoderUnitTest
         // Arrange - ISO/IEC 18004 Annex I example
         var codeword = BuildCodeword([64, 86, 134, 86], 10);
 
-        // Act
         var result = EccBinaryDecoder.TryCorrect(codeword, 10, out var errorsCorrected);
 
-        // Assert
         await Assert.That(result).IsTrue();
         await Assert.That(errorsCorrected).IsEquivalentTo(0);
         await Assert.That(codeword.AsSpan(0, 4).ToArray()).IsEquivalentTo(new byte[] { 64, 86, 134, 86 }, CollectionOrdering.Matching);
@@ -38,10 +36,8 @@ public class EccBinaryDecoderUnitTest
         var random = new Random(42);
         CorruptDistinctPositions(codeword, errorCount, random);
 
-        // Act
         var result = EccBinaryDecoder.TryCorrect(codeword, 10, out var errorsCorrected);
 
-        // Assert
         await Assert.That(result).IsTrue();
         await Assert.That(errorsCorrected).IsEquivalentTo(errorCount);
         await Assert.That(codeword).IsEquivalentTo(expected, CollectionOrdering.Matching);
@@ -57,10 +53,8 @@ public class EccBinaryDecoderUnitTest
         var random = new Random(42);
         CorruptDistinctPositions(codeword, 6, random);
 
-        // Act
         var result = EccBinaryDecoder.TryCorrect(codeword, 10, out _);
 
-        // Assert - must fail, never silently miscorrect to the original
         await Assert.That(result).IsFalse();
     }
 
@@ -71,7 +65,6 @@ public class EccBinaryDecoderUnitTest
     [Arguments(30)]  // H (max per QR spec)
     public async Task TryCorrect_EveryQrEccCount_RoundTrips(int eccCount)
     {
-        // Arrange
         var data = new byte[20];
         var random = new Random(1234);
         random.NextBytes(data);
@@ -81,10 +74,8 @@ public class EccBinaryDecoderUnitTest
         var capacity = eccCount / 2;
         CorruptDistinctPositions(codeword, capacity, random);
 
-        // Act
         var result = EccBinaryDecoder.TryCorrect(codeword, eccCount, out var errorsCorrected);
 
-        // Assert
         await Assert.That(result).IsTrue();
         await Assert.That(errorsCorrected).IsEquivalentTo(capacity);
         await Assert.That(codeword).IsEquivalentTo(expected, CollectionOrdering.Matching);
@@ -109,10 +100,8 @@ public class EccBinaryDecoderUnitTest
             var errors = random.Next(0, eccCount / 2 + 1);
             CorruptDistinctPositions(codeword, errors, random);
 
-            // Act
             var result = EccBinaryDecoder.TryCorrect(codeword, eccCount, out var errorsCorrected);
 
-            // Assert
             await Assert.That(result).IsTrue().Because($"round {round}: dataLength={dataLength}, eccCount={eccCount}, errors={errors}");
             await Assert.That(errorsCorrected).IsEquivalentTo(errors);
             await Assert.That(codeword).IsEquivalentTo(expected, CollectionOrdering.Matching);

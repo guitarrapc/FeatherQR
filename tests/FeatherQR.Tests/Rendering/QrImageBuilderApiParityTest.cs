@@ -16,13 +16,8 @@ namespace FeatherQR.Tests;
 public class QrImageBuilderApiParityTest
 {
     /// <summary>
-    /// Standard QR-only fluent options: Micro QR and rMQR have no ECC headroom for
-    /// overlays, so an icon is Standard QR-only. ECC boost is Standard QR-only for
-    /// related reasons: Micro QR ties the legal ECC levels to the version (M1 has
-    /// none, M4 alone offers Q), and rMQR's two levels leave a single M→H step that
-    /// has not been asked for. Both can join later without changing the contract.
-    /// <c>WithFinderPatternShape</c> is not here. It is the only way to style a finder
-    /// pattern without destroying it, and every symbology has one to protect.
+    /// Icon overlays and ECC boosting are Standard QR-only API options.
+    /// Finder styling is shared and must remain covered by the parity check.
     /// </summary>
     private static readonly string[] standardOnlyMembers =
     [
