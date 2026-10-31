@@ -7,7 +7,7 @@ namespace FeatherQR.SkiaSharp;
 /// <para>
 /// A read past either limit throws <see cref="InvalidDataException"/> before any pixel is allocated, and the message names the limit to raise.
 /// The pixel limit bounds the image, not the stream: an image cut short after its header decodes too, so a stream of a few dozen bytes can declare an image at the limit.
-/// An interlaced PNG of 16 bits a channel took 192 MiB to decode at the default limit and 3,078 MiB at 16,384 × 16,384, so a caller raises the limits only as far as the images it expects.
+/// The decode allocates for every pixel the header declares, so a caller raises the limits only as far as the images it expects.
 /// </para>
 /// <para>
 /// The defaults hold an image of 4,032 × 3,024 pixels, a 12-megapixel photograph.
@@ -27,12 +27,10 @@ public sealed record class ImageStreamReadLimits
     private readonly int _maxBytes;
     private readonly long _maxPixels;
 
+    // An object initializer binds to this constructor. Bound to the optional parameters below, it would keep the defaults it was compiled with when a later version changes them
     /// <summary>
     /// Creates the default limits, which an object initializer then sets.
     /// </summary>
-    /// <remarks>
-    /// Declared beside the constructor below so that <c>new ImageStreamReadLimits { MaxPixels = 4096 * 4096 }</c> binds to it. Bound to the optional parameters, the call would hold the defaults it was compiled with when a later version changes them.
-    /// </remarks>
     public ImageStreamReadLimits()
     {
         _maxBytes = DefaultMaxBytes;

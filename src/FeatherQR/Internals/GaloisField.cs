@@ -95,7 +95,6 @@ internal static class GaloisField
     /// </summary>
     /// <param name="a"></param>
     /// <param name="b"></param>
-    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static byte Multiply(byte a, byte b)
     {
@@ -114,7 +113,6 @@ internal static class GaloisField
     /// </summary>
     /// <param name="a"></param>
     /// <param name="b"></param>
-    /// <returns></returns>
     /// <exception cref="DivideByZeroException"></exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static byte Divide(byte a, byte b)
@@ -129,9 +127,6 @@ internal static class GaloisField
         return expSpan[(logSpan[a] + 255 - logSpan[b]) % 255];
     }
 
-    /// <summary>
-    /// Initialize the exponent and logarithm tables
-    /// </summary>
     private static void InitializeTables()
     {
         var expSpan = expTable.AsSpan();

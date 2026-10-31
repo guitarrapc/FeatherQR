@@ -34,7 +34,7 @@ public class InferredFinderDecodeTest
     }
 
     /// <summary>
-    /// Under keystone the perpendicular construction lands further from the drawn centre than the centre refinement moves a finder (three quarters of a module), and the symbol still reads: the search of the timing patterns around it.
+    /// Under keystone the perpendicular construction lands further from the drawn centre than the centre refinement moves a finder (three quarters of a module), and the symbol still reads through the search of the timing patterns around it.
     /// The frame is flat along the lines to the inferred finder, so it follows the symbol less as the keystone grows. For that reason the corner reported at the inferred finder is held to three modules here, not the half module of the other three.
     /// </summary>
     [Test]

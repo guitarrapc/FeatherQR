@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 /// Parity test for the bounded walk of the axis cross-checks.
 /// <see cref="FinderPatternFinder.MeasureRunsBounded"/> measures the centre run first and gives the walk up the moment a run passes what any accepted cross section allows. The reference walks all five runs and lets the verdict refuse.
 /// The two may differ only where the verdict is a refusal, so they are compared at the cross-check itself (the returned centre and total, bit for bit) and at the walk (equal runs whenever the bounded walk finishes, a refusal by the reference whenever it does not).
-/// A refused cross-check still reports its total, 0 unless the walk measured five runs inside its bounds, and the row beside the centre row is asked on it. So the total is compared on a refusal too, and the bounds are held to admit the reference's runs exactly where the bounded walk finishes.
+/// A refused cross-check still reports its total, 0 unless the walk measured five runs inside its bounds, and that total decides whether a row beside the centre row is tried. So the total is compared on a refusal too, and the bounds are held to admit the reference's runs exactly where the bounded walk finishes.
 /// </summary>
 public class FinderCrossCheckParityTest
 {

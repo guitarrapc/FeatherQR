@@ -174,7 +174,6 @@ internal static partial class Gs1AiTable
         /// <summary>The first AI the entry covers (the only one, unless it is a range).</summary>
         public Gs1AiPattern FirstAi => new((ushort)ReadUInt16(Bytes, 0), 0);
 
-        /// <summary>The last AI the entry covers.</summary>
         public Gs1AiPattern LastAi => new((ushort)ReadUInt16(Bytes, 2), 0);
 
         /// <summary>The dictionary's <c>*</c>: the element string has a predefined length and takes no separator (Table 7-6).</summary>

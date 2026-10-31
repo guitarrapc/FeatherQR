@@ -93,11 +93,10 @@ public record struct RmQRCodeGeneratorOptions
     }
 
     // One field holds the segmentation (the low 22 bits) and the FNC1 mode (the top 10 bits), so the generator
-    // tells "Single and no FNC1" from everything else with the one compare it already made on the segmentation
-    // alone: any other field sends the call to the planning route, which reads both out.
-    // An undefined segmentation value is kept as given when the 22 bits hold it and saturated to the mask when
-    // they do not, so the planning route refuses either (a masked value could read back as a defined one). Declared where
-    // the segmentation's own field was, so the struct keeps its layout.
+    // tells "Single and no FNC1" from everything else with the one compare it made on the segmentation alone.
+    // A segmentation value the 22 bits cannot hold saturates to the mask rather than being masked, because a
+    // masked value could read back as a defined one and pass validation. Declared where the segmentation's own
+    // field was, so the struct keeps its layout.
     private int _route;
     private const int SegmentationMask = (1 << Fnc1Shift) - 1;
     private const int Fnc1Shift = 22;
@@ -109,20 +108,13 @@ public record struct RmQRCodeGeneratorOptions
     internal readonly bool TakesSingleRoute => _route == (int)RmQRSegmentation.Single;
 
     /// <summary>
-    /// Write text in Kanji mode where it can be: 13 bits a character and no ECI header, where UTF-8 takes 24 bits a kana or kanji behind an 11-bit ECI header.
-    /// Off by default.
+    /// Allows Kanji mode for eligible text to reduce symbol size. Off by default.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Applies only where the charset is the library's choice (<see cref="EciMode.Default"/>). A charset the caller names is written as named.
-    /// Then text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) is one Kanji segment, and under <see cref="RmQRSegmentation.Optimal"/> text that is so apart from its ASCII can be Kanji runs beside runs of that ASCII, where that is the smaller symbol.
-    /// Seven JIS X 0208 characters that Windows code page 932 reads differently, among them the wave dash 〜, keep a text in UTF-8, as does any character outside the table.
-    /// The capacity can matter more than in Standard QR: R7x43-M holds 3 characters in Kanji mode and 1 in UTF-8.
-    /// </para>
-    /// <para>
-    /// Off by default, as on the other two symbologies, because not every reader reads Kanji mode: in Standard QR an Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it.
-    /// Neither phone's own scanner reads rMQR at all. The dedicated readers tried read it in Kanji mode and in UTF-8 alike.
-    /// </para>
+    /// Applies only with <see cref="EciMode.Default"/>.
+    /// Uses supported JIS X 0208 characters, excluding those that CP932 interprets differently.
+    /// Mixing Kanji with ASCII requires <see cref="RmQRSegmentation.Optimal"/>. Text with characters outside the supported set keeps its normal encoding.
+    /// Off by default for reader compatibility. Enable it when the intended readers support Kanji mode.
     /// </remarks>
     public bool AllowKanji { get; set; }
 }

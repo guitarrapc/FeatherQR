@@ -1,54 +1,15 @@
 using System.Text;
 
 /// <summary>
-/// What <c>QRCodeGenerator.CreateStructuredAppend</c> costs over the symbols it produces.
-///
-/// The baseline arm encodes the same chunks the balanced split produces, one <c>Create</c> per chunk at the set's version, so the Ratio column of the Single and Optimal arms is the planning overhead directly: the split search, the charset decision and the parity, net of the symbol work every path pays.
-/// Allocations are the same on every arm but the result array, because every symbol is one <c>QRCodeData</c> either way.
-///
-/// The shapes separate the costs the planner can pay:
-///
-///   byte-45k-any    : ASCII prose, 16 symbols at version 40. The version range is open, so the
-///                     planner also has to find the smallest version that still holds 16.
-///   byte-45k-v40    : the same text pinned to version 40. The scan is gone, what remains is
-///                     the fewest-symbols walk, the balancing search and the symbols.
-///   byte-4k-max10   : ASCII prose capped at version 10 (a label-sized symbol), 15 to 16 symbols. This is
-///                     the realistic request the version cap exists for.
-///   numeric-100k-any: digits, 15 symbols at version 40. All-Numeric content has no better
-///                     plan than one run, so the Optimal arm should cost what Single does.
-///   alnum-65k-any  : the full QR alphanumeric alphabet, exercising long alphanumeric prefixes
-///   mixed-40k-any   : order lines, letters and digit runs, 14 symbols. This is the content a mixed
-///                     plan is for, so the Optimal arm both plans and pays for it.
-///   uneven-40k-any  : 20k digits then 20k of the same order lines, 10 symbols. This is content whose density
-///                     changes along the text, where a split even in characters is far from even in cost.
-///   utf8-15k-any    : Japanese prose behind a UTF-8 ECI (asked for), 15 symbols. This is the multi-byte cost model.
-///   utf8-15k-mixed  : Japanese sentences carrying order numbers, behind a UTF-8 ECI (asked for). These are three-byte characters
-///                     with digit runs worth a Numeric segment, so the searches run the program under UTF-8.
-///   kanji-15k-any   : the utf8-15k-any text with AllowKanji: Single is its UTF-8 set, and
-///                     Optimal a Kanji set of 9 symbols, planned after the UTF-8 set it
-///                     is weighed against. The Kanji set's walks are scalar. Its Optimal Ratio is against
-///                     the Single set's 15 UTF-8 symbols, not its own 9. The Optimal row of utf8-15k-any is its twin.
-///   kanji-15k-mixed : the utf8-15k-mixed text the same way. Optimal is a Kanji set of 7 symbols at version 39.
-///   cells-15k-any   : Japanese prose whose every character has a Kanji cell, with AllowKanji: 9 symbols at version 39 as a Kanji
-///                     set under both segmentations
-///   cells-15k-utf8  : the same text with UTF-8 asked for, 16 symbols at version 40. This is cells-15k-any's twin.
-///   kanji-1k-max10  : the kanji-15k-any text capped at version 10: Single is its UTF-8 set of 11 symbols, and
-///                     Optimal a Kanji set of 7. The UTF-8 set's floor rules it out, so only the Kanji set is planned.
-///   cells-1k-max10  : the cells-15k-any text capped at version 10: a Kanji set of 7 symbols under both segmentations
-///   interleaved-1k-max10 : ASCII and kanji taking turns, capped at version 10, with AllowKanji. The runs change kind
-///                     four times in five characters, so the Kanji set's floor rules it out and Optimal plans only
-///                     the UTF-8 set of 7 symbols.
-///   interleaved-1k-utf8  : the same text and cap with UTF-8 asked for. This is interleaved-1k-max10's twin, so the gap
-///                     between their Optimal rows is what AllowKanji costs where the Kanji set cannot win.
-///   marked-40k-any  : the order lines as concatenated files leave them, a U+FEFF after every line feed. No symbol
-///                     may begin with one, so cuts are moved off it, and it should cost what mixed-40k-any does.
-///   *-boost         : the same prose and digits with BoostEccLevel, which re-costs every
-///                     chunk once per level it tries. The baseline encodes its symbols at
-///                     the level the boost reached, so the Ratio stays the planning overhead.
-///
-/// ECC L is requested throughout: the largest chunks a version holds, so every search runs over the longest prefixes.
-/// Symbol counts are the ones the planner picks. They move if the capacity tables or the split rule change, and the doc comment is not a pin.
+/// Measures Structured Append encoding against encoding its planned chunks individually.
 /// </summary>
+/// <remarks>
+/// The baseline uses the balanced split's chunks and shared version, so Ratio normally measures planning, charset selection and parity overhead.
+/// Allocations differ by the result array. Boost baselines use the level selected by the set.
+/// For Kanji-eligible mixed text, Optimal may choose fewer Kanji symbols than the Single UTF-8 baseline, so its ratio also includes that reduction.
+/// Cases cover version limits, uneven density, UTF-8, Kanji, frequent mode changes and U+FEFF boundaries.
+/// Fixture definitions are the authority for content sizes. Selected versions and symbol counts are results, not fixed benchmark contracts.
+/// </remarks>
 public class QRCodeStructuredAppendEncode
 {
     private static readonly string[] shapeKeys =

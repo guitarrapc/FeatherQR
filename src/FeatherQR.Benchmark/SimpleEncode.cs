@@ -2,21 +2,13 @@ using BenchmarkDotNet.Configs;
 using SkiaSharp;
 
 /// <summary>
-/// Cross-library Standard QR encoding: the shortest call each library offers for "text in, module matrix out", over five short payloads at ECC L.
-/// They all land in versions 1 to 4. <see cref="SimpleCorpusEncode"/> covers all four levels and the larger versions.
-///
-/// Comparability: every library selects the same QR version for every payload here (numeric 1, alphanumeric 2, url 3, unicode 4, wifi 3 at ECC L), so each row encodes the same amount of data into the same symbol size.
-/// Two notes on comparability:
-///
-///   Segmentation - FeatherQR, Net.Codecrete.QrCodeGenerator, QRCoder and CodeGlyphX
-///     plan mixed-mode segments by default, so the FeatherQR rows include the planning
-///     pass. For these payloads the plan is the one-mode stream, so each row encodes
-///     the same symbol as the one-mode setting would.
-///   Quiet zone - FeatherQR and QRCoder place a quiet zone in the returned matrix,
-///     while Net.Codecrete.QrCodeGenerator and CodeGlyphX return the bare symbol.
-///
-/// ZXing is configured to match this library's ECI behavior (Latin-1 for the ASCII payloads, UTF-8 for the unicode one) rather than left on its own default.
+/// Compares Standard QR encoders using their simplest matrix-generation APIs on short ECC L payloads.
 /// </summary>
+/// <remarks>
+/// All libraries select matching versions for these payloads. Default mixed-mode planning is included where supported.
+/// FeatherQR and QRCoder include a quiet zone. Net.Codecrete.QrCodeGenerator and CodeGlyphX return the bare symbol.
+/// ZXing uses matching Latin-1 or UTF-8 ECI settings. <see cref="SimpleCorpusEncode"/> covers larger symbols and other ECC levels.
+/// </remarks>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class SimpleEncode

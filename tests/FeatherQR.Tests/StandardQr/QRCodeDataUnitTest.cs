@@ -285,11 +285,9 @@ public class QRCodeDataUnitTest
         // see remarks.
         var pattern = 3;
 
-        // Arrange
         var original = new QRCodeData(5, quietZoneSize: quietZoneSize);  // Version 5: 37×37
         var size = original.Size;
 
-        // Set recognizable pattern
         for (int row = 0; row < size; row++)
         {
             for (int col = 0; col < size; col++)
@@ -298,11 +296,9 @@ public class QRCodeDataUnitTest
             }
         }
 
-        // Act
         var rawData = original.GetRawData();
         var restored = new QRCodeData(rawData, quietZoneSize);
 
-        // Assert
         await Assert.That(restored.Version).IsEqualTo(original.Version);
         await Assert.That(restored.Size).IsEqualTo(original.Size);
 
@@ -456,16 +452,13 @@ public class QRCodeDataUnitTest
     [Arguments(40, 4)]  // Version 40 (max), with quiet zone
     public async Task GetRawData_ArrayAndBufferWriter_ProduceSameResult(int version, int quietZoneSize)
     {
-        // Arrange
         var qrData = CreateTestQRCode(version, quietZoneSize);
 
-        // Act
         var arrayResult = qrData.GetRawData();
 
         var writer = new System.Buffers.ArrayBufferWriter<byte>();
         var bytesWritten = qrData.GetRawData(writer);
 
-        // Assert
         await Assert.That(bytesWritten).IsEqualTo(arrayResult.Length);
         await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(arrayResult, CollectionOrdering.Matching);
     }
@@ -473,14 +466,11 @@ public class QRCodeDataUnitTest
     [Test]
     public async Task GetRawData_BufferWriter_AdvancesCorrectly()
     {
-        // Arrange
         var qrData = CreateTestQRCode(1, 0);
         var writer = new System.Buffers.ArrayBufferWriter<byte>();
 
-        // Act
         var bytesWritten = qrData.GetRawData(writer);
 
-        // Assert
         await Assert.That(writer.WrittenCount).IsEqualTo(bytesWritten);
         await Assert.That(writer.WrittenCount > 0).IsTrue();
 
@@ -494,11 +484,9 @@ public class QRCodeDataUnitTest
     [Test]
     public async Task GetRawData_BufferWriter_CanBeCalledMultipleTimes()
     {
-        // Arrange
         var qrData = CreateTestQRCode(1, 0);
         var writer = new System.Buffers.ArrayBufferWriter<byte>();
 
-        // Act
         var bytesWritten1 = qrData.GetRawData(writer);
         var data1 = writer.WrittenSpan.ToArray();
 
@@ -507,7 +495,6 @@ public class QRCodeDataUnitTest
         var bytesWritten2 = qrData.GetRawData(writer);
         var data2 = writer.WrittenSpan.ToArray();
 
-        // Assert
         await Assert.That(bytesWritten2).IsEqualTo(bytesWritten1);
         await Assert.That(data2).IsEquivalentTo(data1, CollectionOrdering.Matching);
     }
@@ -515,14 +502,11 @@ public class QRCodeDataUnitTest
     [Test]
     public async Task GetRawDataSize_ReturnsCorrectSize()
     {
-        // Arrange
         var qrData = CreateTestQRCode(1, 0);
 
-        // Act
         var expectedSize = qrData.GetRawDataSize();
         var actualData = qrData.GetRawData();
 
-        // Assert
         await Assert.That(actualData.Length).IsEqualTo(expectedSize);
     }
 
@@ -534,18 +518,14 @@ public class QRCodeDataUnitTest
     [Arguments(40)]
     public async Task Roundtrip_WithBufferWriter_PreservesData(int version)
     {
-        // Arrange
         var original = CreateTestQRCode(version, quietZoneSize: 4);
 
-        // Act - Serialize
         var writer = new System.Buffers.ArrayBufferWriter<byte>();
         original.GetRawData(writer);
         var serialized = writer.WrittenSpan.ToArray();
 
-        // Act - Deserialize
         var restored = new QRCodeData(serialized, quietZoneSize: 4);
 
-        // Assert
         await Assert.That(restored.Version).IsEqualTo(original.Version);
         await Assert.That(restored.Size).IsEqualTo(original.Size);
         await AssertQRCodeDataEqual(original, restored);
@@ -554,14 +534,11 @@ public class QRCodeDataUnitTest
     [Test]
     public async Task GetRawData_BufferWriter_WorksWithCustomWriter()
     {
-        // Arrange
         var qrData = CreateTestQRCode(1, 0);
         var customWriter = new TestBufferWriter();
 
-        // Act
         var bytesWritten = qrData.GetRawData(customWriter);
 
-        // Assert
         await Assert.That(customWriter.WrittenCount).IsEqualTo(bytesWritten);
         await Assert.That(customWriter.AdvanceCalled).IsTrue().Because("Advance() must be called");
     }
@@ -619,22 +596,18 @@ public class QRCodeDataUnitTest
     [Test]
     public async Task GetRawData_BufferWriter_ReusesBufferEfficiently()
     {
-        // Arrange
         var qrData1 = CreateTestQRCode(1, 0);
         var qrData2 = CreateTestQRCode(2, 0);
         var writer = new System.Buffers.ArrayBufferWriter<byte>();
 
-        // Act - First write
         var bytes1 = qrData1.GetRawData(writer);
         var data1 = writer.WrittenSpan.ToArray();
 
         writer.Clear();
 
-        // Act - Second write (buffer reused)
         var bytes2 = qrData2.GetRawData(writer);
         var data2 = writer.WrittenSpan.ToArray();
 
-        // Assert
         await Assert.That(bytes2).IsNotEqualTo(bytes1); // Different sizes
         await Assert.That(data2).IsNotEqualTo(data1); // Different data
 

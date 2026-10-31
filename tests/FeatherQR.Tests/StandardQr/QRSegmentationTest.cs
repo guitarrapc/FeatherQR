@@ -16,7 +16,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class QRSegmentationTest
 {
-    // The one-mode stream, which the default no longer is.
+    // The default is Optimal, so the one-mode stream is asked for by name.
     private static readonly QRCodeGeneratorOptions QrSingle = new() { Segmentation = QRSegmentation.Single };
 
     /// <summary>
@@ -384,9 +384,9 @@ public class QRSegmentationTest
     }
 
     /// <summary>
-    /// Content no plan can help (its single mode Numeric or Kanji, or an empty text) leaves the Optimal route before any scan, so the
-    /// options that route reads on its own, the level boost, the version range, an FNC1 mode, a pinned mask and the quiet zone, must
-    /// reach the single-mode symbol as they do under Single. The content with a gain is the premise: it is the case that does scan.
+    /// Content no plan can help (its single mode Numeric or Kanji, or an empty text) leaves the Optimal route before any scan. The
+    /// options that route reads on its own must still reach the single-mode symbol as they do under Single: the level boost, the
+    /// version range, an FNC1 mode, a pinned mask and the quiet zone.
     /// </summary>
     [Test]
     [Arguments("1234567890")]

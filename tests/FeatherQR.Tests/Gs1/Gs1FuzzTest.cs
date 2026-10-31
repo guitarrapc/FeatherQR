@@ -9,12 +9,11 @@ namespace FeatherQR.Tests;
 /// the (AI) text and Digital Link conversions in both directions and <see cref="Gs1ElementString.TryRead"/>
 /// without an exception, an accepted string always enumerates at least one element, an accepted string formats
 /// and its text reads back, a URI that reads gives an element string that splits, and a built URI reads back.
-/// The generator entry points get the same texts: their size forms throw nothing, their <c>Create</c> forms
-/// throw the data layer's error in a <see cref="Gs1FormatException"/> or what <c>Create</c> throws for content
-/// that does not fit and nothing else, each succeeds exactly where its size form says yes, and they take exactly
-/// the data the data layer takes. No text here is longer than the entry points' stack buffers, no text that is
-/// taken has a URI bound past them, and none that is taken is too long for a symbol. So nothing is written into
-/// a pooled buffer here, and content that does not fit is not reached.
+/// The generator entry points get the same texts. Their size forms throw nothing, their <c>Create</c> forms
+/// throw only the data layer's error in a <see cref="Gs1FormatException"/> or the exception for content that
+/// does not fit, each succeeds exactly where its size form says yes, and they take exactly the data the data
+/// layer takes. No text here or URI of a taken text outgrows the entry points' stack buffers, and no taken text
+/// outgrows a symbol, so this test reaches neither a pooled buffer nor content that does not fit.
 /// </summary>
 public class Gs1FuzzTest
 {

@@ -7,11 +7,15 @@ namespace FeatherQR;
 public enum QRSegmentation
 {
     /// <summary>
-    /// The default: the mixed-mode split with the fewest total bits. Text JIS X 0208 holds apart from its ASCII characters can be written as Kanji runs beside runs of that ASCII, with no ECI header, when <see cref="QRCodeGeneratorOptions.AllowKanji"/> is set, the charset is left to the library and that is the smaller symbol.
-    /// Never selects a larger version than <see cref="Single"/>, emits the <see cref="Single"/> bit stream verbatim when a split would not shrink the symbol, and additionally encodes content that overflows every version in a single mode. A U+FEFF inside UTF-8 content never opens a Byte run, where a reader would drop it as a byte order mark: the run opens a character early and keeps it interior.
+    /// Selects the mixed-mode segmentation with the fewest total bits. This is the default.
     /// </summary>
     /// <remarks>
-    /// The search prices candidate versions; it allocates nothing for typical content and rents pooled buffers for long content. <see cref="Single"/> skips it.
+    /// Never selects a larger version than <see cref="Single"/>, and preserves the Single bit stream when splitting would not shrink the symbol.
+    /// With <see cref="QRCodeGeneratorOptions.AllowKanji"/>, eligible text can mix Kanji and ASCII runs when that produces a smaller symbol.
+    /// Kanji plans require the charset to be left to the library and carry no ECI header.
+    /// Can encode content that exceeds single-mode capacity. U+FEFF inside UTF-8 content is preserved.
+    /// <para/>
+    /// The search prices candidate versions. It allocates nothing for typical content and rents pooled buffers for long content. <see cref="Single"/> skips it.
     /// When <see cref="QRCodeGeneratorOptions.Utf8Bom"/> would actually write a byte order mark (a UTF-8 Byte-mode stream), the split is disabled and the <see cref="Single"/> stream is emitted: the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text.
     /// Content whose single mode is Numeric or Alphanumeric never carries a BOM and still splits.
     /// Size buffers with the same segmentation you encode with, the two can select different versions.
@@ -20,7 +24,7 @@ public enum QRSegmentation
 
     /// <summary>
     /// One segment in the single mode that can represent the whole content (Numeric, else Alphanumeric, else Byte, or Kanji for text JIS X 0208 holds entirely when <see cref="QRCodeGeneratorOptions.AllowKanji"/> is set and the charset is left to the library).
-    /// The cheapest to encode: one pass over the content and no version search, and the bit stream every release before 2.0.0 emitted.
+    /// Does not plan mixed-mode segments.
     /// </summary>
     Single = 1,
 }

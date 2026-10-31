@@ -87,10 +87,8 @@ public static partial class RmQRCodeGenerator
 
         var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
-        // One compare, on the field that holds the segmentation and the FNC1 mode together: the
-        // default (Optimal, no FNC1) and every FNC1 call take the planning route, and Single
-        // without FNC1 keeps its one-pass route with nothing else read on the way in. Validation
-        // of the values lives in the planning method.
+        // One compare on the field that packs the segmentation and the FNC1 mode, so Single
+        // without FNC1 reads no other option on its way in. The planning method validates the values.
         if (!options.TakesSingleRoute)
             return CreatePlanned(textSpan, eccLevel, in options);
 

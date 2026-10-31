@@ -553,7 +553,7 @@ public class Fnc1DecodeTest
     }
 
 #if !DEBUG
-    /// <summary>The FNC1 decode allocates nothing once warm: a separator, a literal %% and a trailing separator in Alphanumeric, and 0x1D in a Byte segment (Release only, as the other allocation tests are).</summary>
+    /// <summary>The stream holds a separator, a literal %% and a trailing separator in Alphanumeric, and 0x1D in a Byte segment, so each FNC1 read runs.</summary>
     [Test]
     [NotInParallel]
     public async Task Fnc1Decode_AllocatesNothing()

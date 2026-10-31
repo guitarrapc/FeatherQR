@@ -31,7 +31,7 @@ public static class SKCanvasExtensions
     /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
-    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="moduleSizePercent">Scale of each data module relative to its cell, 0.0 to 1.0. The default is 1.0.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>. Omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted. A shape draws the dark modules only and leaves the light rings undrawn, so the background shows through them at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
@@ -77,7 +77,7 @@ public static class SKCanvasExtensions
     /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
-    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="moduleSizePercent">Scale of each data module relative to its cell, 0.0 to 1.0. The default is 1.0.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>. Omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted. A shape draws the dark modules only and leaves the light rings undrawn, so the background shows through them at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
@@ -110,7 +110,7 @@ public static class SKCanvasExtensions
     /// </summary>
     /// <remarks>
     /// The Micro QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.
-    /// Micro QR does not offer the Standard QR icon overlay, since it has no error-correction headroom for overlays. Its one finder pattern takes a shape like any other symbology.
+    /// Icon overlays are not supported for Micro QR. Its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The Micro QR code to draw.</param>
@@ -120,7 +120,7 @@ public static class SKCanvasExtensions
     /// <param name="codeColor">The dark modules. Black when omitted. A <paramref name="gradientOptions"/> paints them instead, unless its direction is <see cref="GradientDirection.None"/>.</param>
     /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
-    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="moduleSizePercent">Scale of each data module relative to its cell, 0.0 to 1.0. The default is 1.0.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>. Omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
@@ -157,7 +157,7 @@ public static class SKCanvasExtensions
     /// </summary>
     /// <remarks>
     /// The Micro QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.
-    /// Micro QR does not offer the Standard QR icon overlay, since it has no error-correction headroom for overlays. Its one finder pattern takes a shape like any other symbology.
+    /// Icon overlays are not supported for Micro QR. Its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The Micro QR code to draw.</param>
@@ -166,7 +166,7 @@ public static class SKCanvasExtensions
     /// <param name="codeColor">The dark modules. Black when omitted. A <paramref name="gradientOptions"/> paints them instead, unless its direction is <see cref="GradientDirection.None"/>.</param>
     /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
-    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="moduleSizePercent">Scale of each data module relative to its cell, 0.0 to 1.0. The default is 1.0.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>. Omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
@@ -194,7 +194,7 @@ public static class SKCanvasExtensions
     /// Draws a rMQR code into an area of this size.
     /// </summary>
     /// <remarks>
-    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. rMQR has no error correction headroom to spare, so there is no icon option. Its one finder pattern takes a shape like any other symbology.
+    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. Icon overlays are not supported for rMQR. Its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The rMQR code to draw.</param>
@@ -204,7 +204,7 @@ public static class SKCanvasExtensions
     /// <param name="codeColor">The dark modules. Black when omitted. A <paramref name="gradientOptions"/> paints them instead, unless its direction is <see cref="GradientDirection.None"/>.</param>
     /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
-    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="moduleSizePercent">Scale of each data module relative to its cell, 0.0 to 1.0. The default is 1.0.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>. Omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
@@ -240,7 +240,7 @@ public static class SKCanvasExtensions
     /// Draws a rMQR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. rMQR has no error correction headroom to spare, so there is no icon option. Its one finder pattern takes a shape like any other symbology.
+    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. Icon overlays are not supported for rMQR. Its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The rMQR code to draw.</param>
@@ -249,7 +249,7 @@ public static class SKCanvasExtensions
     /// <param name="codeColor">The dark modules. Black when omitted. A <paramref name="gradientOptions"/> paints them instead, unless its direction is <see cref="GradientDirection.None"/>.</param>
     /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
-    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="moduleSizePercent">Scale of each data module relative to its cell, 0.0 to 1.0. The default is 1.0.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. It takes precedence over <paramref name="codeColor"/>, the way a shader takes precedence over the color of an <see cref="SKPaint"/>. Omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>

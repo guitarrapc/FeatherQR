@@ -1,17 +1,10 @@
 /// <summary>
-/// End-to-end Micro QR matrix decoding through the public API (MicroQRCodeDecoder).
-/// Payloads mirror MicroQREncodeEndToEnd so encode and decode costs are directly comparable.
-/// Matrices are quiet-zone-free (the decoder's in-place fast path).
-///
-/// Scenarios:
-///   Numeric_M2_L : M2-L (numeric capacity boundary)
-///   Alphanumeric_M3_L : M3-L (alphanumeric capacity boundary)
-///   Byte_M4_M : M4-M (byte capacity boundary)
-///   Kanji_M4_M : M4-M, Kanji mode (capacity boundary, 8 characters)
-///   *_Corrected : Numeric_M2_L (1 error) and Byte_M4_M (5 errors), each at its ISO correction capacity, with damage the decoder confirms as exactly that many corrected errors, so the correction path runs rather than syndrome generation alone (the clean cases exit early)
-///
-/// Byte_M4_M and Kanji_M4_M share version and level, so they differ in mode, not in symbol size.
+/// Measures Micro QR matrix decoding on the payloads of <see cref="MicroQREncodeEndToEnd"/>.
 /// </summary>
+/// <remarks>
+/// Matrices have no quiet zone. Corrected rows verify the intended error count at the symbol's correction capacity in setup.
+/// Byte_M4_M and Kanji_M4_M compare modes at the same version and ECC level.
+/// </remarks>
 public class MicroQRDecodeEndToEnd
 {
     private byte[] _numericModules = default!;

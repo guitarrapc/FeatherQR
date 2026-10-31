@@ -1,19 +1,11 @@
 /// <summary>
-/// End-to-end rMQR matrix encoding through the public API (RmQRCodeGenerator).
-/// Used to measure the user-visible impact of internal kernel changes such as the Reed-Solomon ECC encoder optimization.
-///
-/// Scenarios (level M, version fitted by the default MinimizeArea strategy):
-///   Numeric_R11x27 : smallest symbol, 12 digits (R7x43's capacity, which the area fit puts in R11x27: 297 modules against 301)
-///   Alphanumeric_R15x43 : 43 characters (R11x59's capacity, which the area fit puts in R15x43: 645 modules against 649)
-///   Byte_R17x139 : largest symbol, 150 bytes (capacity boundary, 4 RS blocks)
-///   Latin1Eci_R15x139 : explicit ECI 3 Byte segment
-///   Utf8Eci_R13x139 : explicit ECI 26 Byte segment
-///   Kanji_R17x139 : largest symbol, Kanji mode (capacity boundary, 92 characters)
-///
-/// The "(Pinned)" rows resolve the version before the pipeline, the path tools/CrossLanguageBenchmark takes on every encode.
-/// The "(Span)" rows' quiet-zone-free twins are in <see cref="RmQRQuietZone0Encode"/>.
-/// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>): it varies content shape rather than version, and every row needs a same-run Single pair, which does not belong in this table.
+/// Measures rMQR matrix encoding across modes and symbol sizes through <see cref="RmQRCodeGenerator"/>.
 /// </summary>
+/// <remarks>
+/// Automatic rows use ECC M and MinimizeArea fitting. The smallest area can have a different height from the capacity-table reference.
+/// Pinned rows include version resolution, as tools/CrossLanguageBenchmark does.
+/// <see cref="RmQRQuietZone0Encode"/> covers borderless spans and <see cref="RmQRSegmentationEncode"/> compares segmentation strategies.
+/// </remarks>
 public class RmQREncodeEndToEnd
 {
     private string _numeric = default!;

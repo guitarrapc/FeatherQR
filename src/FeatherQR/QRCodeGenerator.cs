@@ -12,7 +12,7 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// Writes Numeric, Alphanumeric and Byte mode, the last as ISO-8859-1 or UTF-8 with an ECI header, and Kanji mode.
-/// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header, where UTF-8 would take 16 or 24. It is written only when the caller sets <see cref="QRCodeGeneratorOptions.AllowKanji"/>, the charset is left at <see cref="EciMode.Default"/> and no byte order mark is asked for, and that option is off by default because an Android phone's own scanners read none of it.
+/// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header, where UTF-8 would take 16 or 24. It is written only when the caller sets <see cref="QRCodeGeneratorOptions.AllowKanji"/>, the charset is left at <see cref="EciMode.Default"/> and no byte order mark is asked for, and that option is off by default for reader compatibility.
 /// Under <see cref="QRSegmentation.Optimal"/> such text with ASCII in it can be written as Kanji runs beside Numeric, Alphanumeric and Byte runs of the ASCII, where that is the smaller symbol.
 /// A Structured Append set of such text is written in Kanji mode too, with the XOR of the text's Shift_JIS bytes as its parity: under both segmentations when every character is in the table, and under <see cref="QRSegmentation.Optimal"/> with ASCII in it where that set needs fewer symbols than the UTF-8 set, or as many at a lower version.
 /// </remarks>
@@ -235,10 +235,8 @@ public static partial class QRCodeGenerator
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
     {
-        // One compare, on the field that holds the segmentation and the FNC1 mode together: the
-        // default (Optimal, no FNC1) and every FNC1 call take the planning route, and Single
-        // without FNC1 keeps its one-pass route with nothing else read on the way in. Validation
-        // of the values lives in the planning method.
+        // One compare on the field that packs the segmentation and the FNC1 mode, so Single
+        // without FNC1 reads no other option on its way in. The planning method validates the values.
         if (!options.TakesSingleRoute)
             return CreateOptimal(textSpan, eccLevel, in options);
 
@@ -1433,7 +1431,7 @@ public static partial class QRCodeGenerator
         byte[]? rentedTable = null;
         var tableLength = PlanTableLength(textSpan, in analysis, fnc1);
 
-        // Content whose scan keeps no table and plans no Kanji selects the single-mode fit, so it is written from here: the planned route's two frames and the scan's call are what Optimal would cost it over Single.
+        // Content whose scan keeps no table and plans no Kanji ends at the single-mode fit anyway. Writing it here spares the planned route's two frames and the scan call.
         if (tableLength == 0 && !analysis.KanjiPlannable)
         {
             var single = SelectSingleVersion(eccLevel, in analysis, in options, fnc1);
@@ -1526,7 +1524,7 @@ public static partial class QRCodeGenerator
         byte[]? rentedTable = null;
         var tableLength = PlanTableLength(textSpan, in analysis, fnc1);
 
-        // Content whose scan keeps no table and plans no Kanji selects the single-mode fit, so it is written from here: the planned route's two frames and the scan's call are what Optimal would cost it over Single.
+        // Content whose scan keeps no table and plans no Kanji ends at the single-mode fit anyway. Writing it here spares the planned route's two frames and the scan call.
         if (tableLength == 0 && !analysis.KanjiPlannable)
         {
             var single = SelectSingleVersion(eccLevel, in analysis, in options, fnc1);

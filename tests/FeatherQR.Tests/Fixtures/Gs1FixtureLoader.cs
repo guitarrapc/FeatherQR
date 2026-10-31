@@ -35,7 +35,10 @@ public static class Gs1FixtureLoader
             ?? throw new InvalidDataException($"GS1 fixture file deserialized to null: {path}");
     }
 
-    public static IEnumerable<Gs1FixtureCase> EnumerateCases() => EnumerateFileIds().SelectMany(id => LoadFile(id).Cases);
+    // Hundreds of data-driven cases look up their fixture, so the files are parsed once a run
+    private static readonly Lazy<Gs1FixtureCase[]> cases = new(() => EnumerateFileIds().SelectMany(id => LoadFile(id).Cases).ToArray());
+
+    public static IEnumerable<Gs1FixtureCase> EnumerateCases() => cases.Value;
 
     /// <summary>The linter vector files under <c>syntax-dictionary/linters/</c>, by linter name.</summary>
     public static IEnumerable<string> EnumerateLinters()

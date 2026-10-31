@@ -317,7 +317,7 @@ internal static partial class CandidateScan
         if (!sweepOnly)
         {
             var onePass = search.Growing is not null;
-            // The rows a read before this one kept of this reading, merged by both scans where they come to one, so neither scans it
+            // Rows an earlier read kept for this reading are merged by both scans instead of scanned again
             search.Shared.TryTake(reading, image.Height, out var given);
             if (onePass)
                 FinderPatternFinder.FindCandidatesStridedAndFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, strided, out stridedCount, swept, out sweptCount, given);

@@ -4,12 +4,9 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Writing FNC1 into a Standard QR symbol (specs/standardqr-encoder.md, FNC1): the indicator in the standard's order
-/// (ECI, FNC1, the application indicator, data), the <c>%</c> rule applied in reverse in Alphanumeric segments (a
-/// separator written <c>%</c>, a literal <c>%</c> written <c>%%</c>), the separator pairs no segment can hold kept
-/// out of Alphanumeric mode, the two examples of ISO/IEC 18004 6.4.8 reproduced bit for bit under
-/// <see cref="QRSegmentation.Optimal"/>, every class read back by this library's decoder with the mode, and
-/// sizing that agrees with <c>Create</c>.
+/// Writing FNC1 into a Standard QR symbol (specs/standardqr-encoder.md, FNC1). In Alphanumeric segments a separator is
+/// written <c>%</c> and a literal <c>%</c> is written <c>%%</c>, so the separator pairs no segment can hold stay out of
+/// Alphanumeric mode.
 /// </summary>
 public class Fnc1EncodeTest
 {
@@ -80,7 +77,7 @@ public class Fnc1EncodeTest
         await Assert.That(shape.AlphanumericHasPercent).IsEqualTo(percentInAlphanumeric);
     }
 
-    /// <summary>The same texts without FNC1 keep today's modes and read back literally, so the option changes nothing it is not set on.</summary>
+    /// <summary>The same texts without FNC1 keep their modes and read back literally, so the option changes nothing it is not set on.</summary>
     [Test]
     [Arguments("10AB%CD", "Alphanumeric")]
     [Arguments("10AB" + Gs + "CD", "Byte")]
@@ -166,7 +163,6 @@ public class Fnc1EncodeTest
     /// <summary>
     /// A charset the caller names is written as named, under FNC1 as without. Japanese text that Kanji mode could carry stays UTF-8
     /// behind its ECI header when UTF-8 is named, and when a byte order mark is asked for, which only a Byte segment has a place for.
-    /// Sizing agrees with the symbol written.
     /// </summary>
     [Test]
     [Arguments(EciMode.Utf8, false, QRSegmentation.Single)]
@@ -205,7 +201,7 @@ public class Fnc1EncodeTest
         await Assert.That(Shape(data, info).Headers).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
-    /// <summary>The standard's header order: ECI, then FNC1, then the data. Non-ASCII text takes UTF-8 behind the ECI header, as it does without FNC1.</summary>
+    /// <summary>The standard's header order: ECI, then FNC1, then the data.</summary>
     [Test]
     [Arguments(Gtin + "10é" + Gs + "17231120", EciMode.Default, "ECI:3")]
     [Arguments(Gtin + "10€" + Gs + "17231120", EciMode.Default, "ECI:26")]
@@ -615,7 +611,7 @@ public class Fnc1EncodeTest
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(new string('7', 41), QREccLevel.L, out _, First with { Version = QRVersionRange.Exactly(1) })).IsFalse();
     }
 
-    // The committed FNC1 fixtures: every symbol another writer made reads back from this writer's symbol of the same data
+    // The committed FNC1 fixtures: the data each holds encodes here and reads back with its mode
 
     public static IEnumerable<Func<string>> StandardQrFixtureIds() => FixtureLoader.EnumerateFixtureIds("StandardQrFnc1").Select(id => (Func<string>)(() => id));
 

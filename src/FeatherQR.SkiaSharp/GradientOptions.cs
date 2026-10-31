@@ -6,22 +6,8 @@ namespace FeatherQR.SkiaSharp;
 /// Gradient configuration for symbol rendering.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Configures a linear gradient applied across the whole symbol, flowing in one of the directions of <see cref="GradientDirection"/>.
-/// </para>
-/// <para>
-/// For a simple two-colour gradient pass two colours. For more, add colours and optionally the stops they sit at.
-/// </para>
-/// <para>
-/// An instance is immutable through its API: the constructor copies the arrays it is given and no member hands one back, so a shared instance such as <see cref="Default"/> cannot be repainted by one caller for everyone else.
-/// </para>
-/// <para>
-/// A <c>with</c> expression varies the direction of an existing gradient, as in <c>GradientOptions.Default with { Direction = GradientDirection.BottomToTop }</c>, and the copy shares the colour array with the original, which is safe for the same reason: neither instance exposes it.
-/// </para>
-/// <para>
-/// <see cref="Direction"/> is the only <c>init</c> member, which is a rule rather than an omission: <see cref="Colors"/> and <see cref="ColorPositions"/> have to agree in length, and <c>with</c> sets one member at a time, so allowing <c>with { Colors = … }</c> would let a caller build a gradient whose stops no longer match its colours and only find out when it is drawn.
-/// The pair is therefore set together, through the constructor, where the mismatch is refused immediately.
-/// </para>
+/// A linear gradient across the symbol. Constructor inputs are copied and exposed as read-only spans.
+/// Only <see cref="Direction"/> supports <c>with</c>. Set colors and stops together through the constructor to validate their lengths.
 /// </remarks>
 public sealed record class GradientOptions
 {
@@ -35,7 +21,6 @@ public sealed record class GradientOptions
     public static readonly GradientOptions Default = new([SKColors.DarkOrange, SKColors.Firebrick], GradientDirection.TopLeftToBottomRight);
 
     /// <summary>
-    /// Initializes a new instance of <see cref="GradientOptions"/>.
     /// Both spans are copied, so the caller keeps ownership of whatever it passed.
     /// </summary>
     /// <remarks>

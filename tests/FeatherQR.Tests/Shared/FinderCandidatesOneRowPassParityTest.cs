@@ -264,8 +264,13 @@ public class FinderCandidatesOneRowPassParityTest
         return null;
     }
 
+    // Every case reads the scenes and none writes them, so they are drawn once
+    private static readonly Lazy<(string Name, byte[] Luminance, int Width, int Height)[]> DrawnScenes = new(() => DrawScenes().ToArray());
+
+    private static IEnumerable<(string Name, byte[] Luminance, int Width, int Height)> Scenes() => DrawnScenes.Value;
+
     /// <summary>Micro QR and rMQR symbols turned, keystoned, blurred and under noise, a sheet of several, and noise alone.</summary>
-    private static IEnumerable<(string Name, byte[] Luminance, int Width, int Height)> Scenes()
+    private static IEnumerable<(string Name, byte[] Luminance, int Width, int Height)> DrawScenes()
     {
         var random = new Random(20261028);
         var micro = MicroQRCodeGenerator.Create("ONE ROW PASS", MicroQREccLevel.L);

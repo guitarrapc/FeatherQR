@@ -24,9 +24,7 @@ using FeatherQR;
 // Append set. The run fails when the two forms or the sizing disagree within one tree. The summary and one digest of all
 // the lines go to stderr, so two runs can also be compared by that digest alone.
 //
-// A corpus of generated text finds what a fixed list does not: the defect this was written after (a literal % written twice
-// under Optimal without FNC1) differs on 1,930 of the default corpus's 72,928 lines, and no test of the suite failed on it
-// at the time.
+// A corpus of generated text finds what a fixed list does not.
 
 var textCount = args.Length > 0 ? int.Parse(args[0]) : 4000;
 var state = args.Length > 1 ? ulong.Parse(args[1]) : 0x9E3779B97F4A7C15UL;

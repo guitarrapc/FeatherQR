@@ -1,22 +1,13 @@
 using SkiaSharp;
 
 /// <summary>
-/// End-to-end PNG image generation and image decoding through the public rMQR API.
-/// RmQRCodeData is pre-generated in setup so the render scenarios cover the Skia render + PNG encode path only (letterboxed into a square canvas, as RmQRCodeImageBuilder does by default), and the decode scenarios cover the image detector (finder candidates → format → sub-finder anchored sampling → matrix decode) on clean 8 px/module renders.
-/// The span decode variants must stay allocation-free. The bitmap ones go through string overloads and carry the result.
-///
-/// Scenarios:
-///   R7x43_512px / R17x139_1024px : smallest / largest symbol rendered to PNG
-///   R7x43_ImageDecode_Span       : smallest symbol, luminance span → text
-///   R17x139_ImageDecode_Span     : largest symbol (2,363 modules), luminance span → text
-///   R7x43_BitmapDecode / R17x139_BitmapDecode : the SKBitmap entry point, so the
-///                                  grayscale conversion is inside the measurement
-///   R17x139_Keystone15_Span      : 4 px/module, the top edge 15 % shorter, turned 23 degrees:
-///                                  a sheared finder, read through its outline's frame and the traced perimeter
-///   R11x77_Keystone5_Span        : 4 px/module, the top edge 5 % shorter, turned 17 degrees:
-///                                  a mild keystone, read the same way
-///   NoSymbol_Noise / NoSymbol_Gradient : the failure path (both polarities, NotDetected)
+/// Measures rMQR image rendering and image decoding through the public APIs.
 /// </summary>
+/// <remarks>
+/// Render rows start with pre-generated matrices, so they measure Skia rendering and PNG encoding only, including square-canvas letterboxing.
+/// Decode rows cover clean images, perspective distortion and symbol-free images.
+/// Span decoding must remain allocation-free. Bitmap rows include grayscale conversion and allocate the decoded string.
+/// </remarks>
 public class RmQRImageEndToEnd
 {
     private RmQRCodeData _small = default!;

@@ -183,7 +183,7 @@ public class Gs1ElementStringValidateTest
         Gs1Validator.TryValidate("0109520123456788" + "10ABC\u001D" + "10DEF", Year, out var repeated);
         await Assert.That((repeated.Kind, repeated.Offset, repeated.Length)).IsEqualTo((Gs1ErrorKind.RepeatedAi, 22, 5));
 
-        // The same repeat before another element: whether an AI stands twice is kept over every element, not the last.
+        // The same repeat before another element, so a check of the last element alone misses it.
         Gs1Validator.TryValidate("0109520123456788" + "10ABC\u001D" + "10DEF\u001D" + "17251231", Year, out var repeatedBefore);
         await Assert.That((repeatedBefore.Kind, repeatedBefore.Offset, repeatedBefore.Length)).IsEqualTo((Gs1ErrorKind.RepeatedAi, 22, 5));
 
@@ -266,7 +266,7 @@ public class Gs1ElementStringValidateTest
     /// The checks take time in proportion to the number of elements, in each form that runs them: the element
     /// string, the (AI) text, and the element string on its way to a URI. A rule that scans the text for each element,
     /// for an AI it needs or for an earlier value to compare with, reads more than a billion elements in one of these
-    /// shapes at least, which takes several times the five seconds allowed. A scan for a requisite meets the key late
+    /// shapes at least, which takes longer than the five seconds allowed. A scan for a requisite meets the key late
     /// only when the key comes last, and a scan for a first value meets it late only for the second of two AIs, which
     /// is why that shape is twice as long. The test runs apart from the other tests of its process, since the bound
     /// is on the clock.

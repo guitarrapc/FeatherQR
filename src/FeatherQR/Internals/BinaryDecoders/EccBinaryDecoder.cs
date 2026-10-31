@@ -89,7 +89,6 @@ internal static partial class EccBinaryDecoder
             }
 
             // x^m·B(x) has degree at most n + 1 - L, so the update stops there rather than at the buffer's end.
-            // A Micro QR block has 2 to 14 ECC codewords, and its grid searches run the correction on many of the grids they sample.
             var coefficient = GaloisField.Divide(delta, lastDiscrepancy);
             var reach = n + 1 - errorCountEstimate;
             if (2 * errorCountEstimate <= n)

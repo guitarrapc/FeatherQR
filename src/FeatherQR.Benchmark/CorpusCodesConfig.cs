@@ -5,7 +5,7 @@ using BenchmarkDotNet.Running;
 
 /// <summary>
 /// Adds per-code columns to a corpus benchmark, where one operation encodes or decodes every code of a version range.
-/// Mean and Allocated are per operation, so without these a range of 673 codes reads as if one code took that long.
+/// Mean and Allocated are per operation, so without these a whole range reads as if one code took that long.
 /// </summary>
 public abstract class CorpusCodesConfig : ManualConfig
 {

@@ -433,9 +433,8 @@ public class RmQRSegmentPlannerUnitTest
     }
 
     /// <summary>
-    /// The premise of the second header the scan adds to the bound: a candidate ranked ahead of the single-mode fit does not hold the
-    /// single-mode stream, which is what a plan of one run is, so every plan that fits such a candidate has two runs or more. Held
-    /// over the corpus and the labels the scan sees, under every strategy and level.
+    /// The scan adds a second header to the bound on this premise. A candidate ranked ahead of the single-mode fit does not hold the
+    /// single-mode stream, which is what a plan of one run is, so every plan that fits such a candidate has two runs or more.
     /// </summary>
     [Test]
     public async Task AheadOfTheSingleModeFit_EveryPlanThatFits_HasTwoRunsOrMore()

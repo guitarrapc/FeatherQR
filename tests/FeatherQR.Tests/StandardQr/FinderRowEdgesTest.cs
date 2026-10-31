@@ -32,7 +32,6 @@ public class FinderRowEdgesTest
                 foreach (var kind in new[] { "noise", "runs", "dark", "light", "dark ends", "edges at the threshold", "alternating", "last end alone in a word" })
                 {
                     var row = BuildRow(length, threshold, kind, seed: length * 7 + threshold);
-                    // Each array is followed by slots the kernel may not write
                     var capacity = FinderPatternFinder.EdgeRunCapacity(length);
                     var starts = new short[capacity + Guard];
                     var ends = new short[capacity + Guard];
@@ -215,7 +214,7 @@ public class FinderRowEdgesTest
                 row.AsSpan().Fill(255);
                 break;
             case "alternating":
-                // Every pixel a run, the most a row holds: dark first, so a row of odd length has (length + 1) / 2
+                // Each pixel is its own run, dark first, so the row holds (length + 1) / 2 dark runs, the most a row can hold
                 for (var x = 0; x < length; x++)
                     row[x] = (x & 1) == 0 ? (byte)0 : (byte)255;
                 break;

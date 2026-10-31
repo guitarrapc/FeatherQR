@@ -22,17 +22,11 @@ internal ref struct BitWriter
     private ulong _accumulator;   // pending bits stored at the top (MSB-first)
     private int _accumulatorBits; // 0..31 between writes
 
-    /// <summary>
-    /// Current bit position in the buffer.
-    /// </summary>
     public readonly int BitPosition => _bytePosition * 8 + _accumulatorBits;
 
     /// <summary>
     /// Number of bytes written (rounded up to nearest byte)
     /// </summary>
-    /// <remarks>
-    /// If written 9 bits, this will be 2
-    /// </remarks>
     public readonly int ByteCount => _bytePosition + (_accumulatorBits + 7) / 8;
 
     public BitWriter(Span<byte> buffer)
@@ -183,7 +177,6 @@ internal ref struct BitWriter
     /// <summary>
     /// Gets the written data as a read-only span (flushes pending bits first).
     /// </summary>
-    /// <returns></returns>
     public ReadOnlySpan<byte> GetData()
     {
         Flush();

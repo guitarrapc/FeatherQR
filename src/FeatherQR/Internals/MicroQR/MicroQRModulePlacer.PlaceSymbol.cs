@@ -9,29 +9,20 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
-/// Fused fast-path placement pipeline for Micro QR (<see cref="PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/> and its contiguous overload): function patterns, data placement, mask selection/application and format information in one pass over bit-packed rows, unpacked to the byte matrix once at the end.
-///
-/// Produces matrices byte-identical to the per-module reference methods in MicroQRModulePlacer.cs (guarded by MicroQRModulePlacerParityTest).
-/// Four runtime tiers: BMI2+AVX2 (placement as a static per-row PEXT/PDEP permutation and a 32-module unpack, gated on fast-PEXT hardware, Intel or AMD Zen 3+), SSSE3 and ARM64 NEON (serial packed placement, 16-module unpack sharing one pipeline, only the bit-expand idiom differs), and portable scalar (SWAR spreads).
-/// It allocates nothing. Its design:
-/// <list type="bullet">
-/// <item>The transmission stream is at most 192 bits (M4), so it is packed once
-/// into three ulongs and consumed MSB-first from a register accumulator instead of per-bit indexed loads with a data/ecc branch.</item>
-/// <item>Column pairs are (even, odd) and never straddle the finder boundary:
-/// <c>right &gt;= 10</c> frees rows 1..size-1, <c>right &lt;= 8</c> frees rows 9..size-1, no per-module function-region predicate, and the stream fills the free modules exactly (ISO capacity tables, validated up front) so no remaining-bits guard is needed.
-/// Every segment's row count is even for all four sizes, so placement runs 2 rows (4 stream bits) per iteration.</item>
-/// <item>Mask scoring reads only the two symbol edges (ISO 7.8.3), taken
-/// straight from the packed rows. Every candidate's SUM1/SUM2 is one XOR + popcount against a static per-(size, mask) edge table.</item>
-/// <item>The mask apply (a 12-row-periodic template AND the data-region mask)
-/// is fused into the unpack pass instead of a separate XOR pass over the rows. Format bits are poked into the packed rows beforehand and live entirely outside the data-region mask, so the fused XOR cannot touch them.</item>
-/// <item>The unpack expands 16 modules per step with the SSSE3
-/// broadcast/shuffle/compare idiom when available, falling back to scalar SWAR spreads (8 modules per step) otherwise. A single code path serves all four sizes.</item>
-/// <item>All tables are small static arrays built by ordinary code from the
-/// reference implementations (NativeAOT/trimming-safe).</item>
-/// </list>
+/// Places a complete Micro QR symbol through a fused, allocation-free pipeline.
 /// </summary>
 internal static partial class MicroQRModulePlacer
 {
+    // Packed placement invariants:
+    // - The largest transmission stream is 192 bits (M4), held in three ulongs and consumed MSB-first.
+    // - Column pairs never cross the finder boundary: right >= 10 frees rows 1..size-1, otherwise rows 9..size-1.
+    //   Every segment has an even row count, allowing two rows (four stream bits) per iteration.
+    //   Validated capacities fill all free modules exactly, so no remaining-bit guard is needed.
+    // - ISO 7.8.3 scores only the two symbol edges. Per-size/mask edge tables reduce SUM1/SUM2 to XOR and popcount.
+    // - The 12-row mask template is restricted to data modules and applied while unpacking.
+    //   Format bits lie outside that region, so they survive the fused XOR unchanged.
+    // Tables are built from the per-module reference methods and checked by MicroQRModulePlacerParityTest.
+    // Hardware dispatch selects fast-PEXT BMI2 placement, SSSE3/NEON unpacking or portable SWAR.
     /// <summary>
     /// Runs the full placement pipeline into a core matrix: function patterns, data/ECC codeword placement, mask selection and application, and format information.
     /// Every module of the matrix is written, so it need not be cleared. Returns the selected mask pattern (0-3).

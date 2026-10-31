@@ -231,7 +231,7 @@ internal static partial class MicroQRImageDecoder
     {
         Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];
         var orientationCount = FinderAxisEstimator.FindOrientationCandidates(image.Luminance, image.Width, image.Height, image.Threshold, finder, orientations);
-        // The whole budget below goes on a finder of another symbology's symbol, which the gate of the read of every symbology tells from the axes found
+        // On another symbology's finder the search below spends its whole budget. The gate of the mixed read tells such a finder from the axes found
         if (orientationCount > 0 && !gate.Search(image, finder.X, finder.Y, orientations.Slice(0, orientationCount)))
             return best.Report(out charsWritten, out info);
         var attemptsRemaining = MaxArbitraryOrientationDecodeAttempts;

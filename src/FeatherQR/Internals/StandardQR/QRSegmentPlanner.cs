@@ -39,7 +39,7 @@ internal static class QRSegmentPlanner
     private const int MinCountBitsAny = 8;
 
     /// <summary>
-    /// The header a split's second run pays, which the scan without FNC1 or Kanji adds to the trivial bound: a plan of one run is the single-mode stream, which does not fit below the single-mode fit, so every plan that fits there has a second header.
+    /// The header a split's second run pays, which the scan without FNC1 or Kanji adds to the trivial bound. A plan of one run is the single-mode stream, which does not fit below the single-mode fit, so every plan that fits there has a second header.
     /// </summary>
     public const int SecondRunHeaderBits = ModeIndicatorBits + MinCountBitsAny;
 
@@ -90,26 +90,30 @@ internal static class QRSegmentPlanner
         => longestNumericRun < ShortestTyingNumericRun && longestAlnumRun < ShortestPayingAlnumRun;
 
     /// <summary>
-    /// Version fit for mixed-mode segmentation, restricted to <paramref name="minVersion"/> through <paramref name="maxVersion"/>.
-    /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit. When <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="QRSegmentation.Single"/>.
-    /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, Span{ModeSegment}, out int)"/> and written with no ECI header.
-    /// <c>false</c> means the content fits neither one mode nor a mixed plan in the window. The caller owns the error.
+    /// Selects a Standard QR version within the requested bounds and reports whether segmentation is needed.
     /// </summary>
     /// <remarks>
+    /// When <paramref name="useSegments"/> is false, emit the bit-identical Single stream.
+    /// When <paramref name="kanjiPlan"/> is true, build the Kanji plan with no ECI header.
+    /// Returns false if neither representation fits; the caller reports the error.
+    /// <para/>
     /// The scan needs no floor/ceiling machinery: count indicator widths are constant within the three version bands, so the optimal cost is computed at most once per band (three O(n) runs in the worst case), and capacity grows monotonically inside a band, so the first version that holds the band cost is the smallest. This form keeps no table, so the caller builds its plan with a run of its own.
     /// </remarks>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments, out bool kanjiPlan)
         => TrySelectVersion(text, in analysis, eccLevel, minVersion, maxVersion, default, default, out selected, out useSegments, out kanjiPlan, out _, out _);
 
     /// <summary>
-    /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, out int, out bool, out bool)"/>, keeping the run that priced the plan it chose.
-    /// When <paramref name="kanjiPlan"/> is true, <paramref name="table"/> holds that program's predecessors at the selected version's widths, which ended in <paramref name="tableFinalState"/> at <paramref name="tablePlannedBits"/>, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
-    /// Under FNC1 (<paramref name="fnc1"/> active) the indicator's bits join the stream's headers, the single-mode ceiling is the fit with those bits, the costs come from the FNC1 program, and no Kanji plan is priced. A split (<paramref name="useSegments"/>) leaves that program's predecessors in <paramref name="table"/> the same way, for <see cref="TryBuildPlanFnc1(ReadOnlySpan{char}, EciMode, int, QREccLevel, Fnc1Mode, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/>.
-    /// A split of a text with neither leaves the plain program's predecessors there, for <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, int, QREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/>. The one split whose run keeps no table is a Kanji-eligible text's UTF-8 plan (<paramref name="useSegments"/> without <paramref name="kanjiPlan"/> for a <see cref="TextAnalysisResult.KanjiPlannable"/> text).
-    /// An empty <paramref name="table"/> keeps nothing. Otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character, and <see cref="ModeSegmenter.Fnc1ParentBytesPerChar"/> under FNC1.
+    /// Selects a Standard QR version while optionally retaining the accepted plan for reconstruction.
     /// </summary>
+    /// <remarks>
+    /// An empty <paramref name="table"/> keeps nothing. Otherwise reserve ParentBytesPerChar bytes per character, or Fnc1ParentBytesPerChar under FNC1.
+    /// Reconstruct using <paramref name="tableFinalState"/> and <paramref name="tablePlannedBits"/> with the Kanji, FNC1 or ordinary builder matching the selected plan.
+    /// A Kanji-eligible text's UTF-8 split does not retain its table and needs a fresh cost run.
+    /// </remarks>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, Span<byte> table, Fnc1Mode fnc1, out int selected, out bool useSegments, out bool kanjiPlan, out int tableFinalState, out int tablePlannedBits)
     {
+        // FNC1 capacity checks include the indicator in both the single-mode ceiling and planned stream.
+        // FNC1 uses its own cost program and does not price a Kanji plan.
         kanjiPlan = false;
         tableFinalState = 0;
         tablePlannedBits = 0;
@@ -146,8 +150,8 @@ internal static class QRSegmentPlanner
             return hasSingle;
         }
 
-        // One O(n) pass pricing each character at the cheapest rate any mode could give it, plus the second run's header, since a plan of one run is the
-        // single-mode stream and fits no version below its fit: a lower bound on any plan at any version scanned, so it may only reject.
+        // One O(n) pass prices each character at the cheapest rate any mode could give it. The second run's header is added, since a plan of one run is the
+        // single-mode stream and fits no version below its fit. The sum is a lower bound on any plan at any version scanned, so it may only reject.
         // Not under FNC1, where a literal percent costs two Alphanumeric units and one byte, so one Byte run can undercut the Alphanumeric stream the fit priced.
         // It is what keeps Optimal roughly free on content no split can shrink. A candidate only pays for a cost run when it could hold at least this much.
         var trivialBits = fnc1.IsActive

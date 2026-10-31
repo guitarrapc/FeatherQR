@@ -5,19 +5,8 @@ namespace FeatherQR;
 /// <c>default</c> is the complete default configuration, so set only what you need: <c>new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, QuietZoneSize = 0 }</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Standard QR specific rather than shared: the three generators agree on almost nothing.
-/// <see cref="Version"/> is a different type in each, <see cref="QuietZoneSize"/> defaults to 4 here and to 2 in the other two, Micro QR has no ECI, and rMQR carries fit options that mean nothing here.
-/// </para>
-/// <para>
-/// A plain value: write it with an object initializer, assign a member afterwards (<c>options.QuietZoneSize = 0;</c>), or copy it with <c>with</c>, and the three give equal values.
-/// Each variable holds its own value: assigning it to another variable, or passing it to a method by value, copies it, so an assignment changes one variable and no copy of it.
-/// A method or a callback that takes the options by value and assigns to them therefore changes only its own copy, and has to return them or take them by <c>ref</c>.
-/// The generators take the options by <c>in</c>, a reference: they read it during the call and do not keep a reference to it afterwards, so do not assign to that variable from another thread while a call is running.
-/// </para>
-/// <para>
-/// The members have <c>set</c> accessors, not <c>init</c>: an object initializer over them compiles at C# 7.3, where <c>init</c> needs C# 9, so no constructor has to list the options and an option added later is one more property.
-/// </para>
+/// Mutable value type with C# 7.3-compatible setters. Changes to a copy do not affect the original.
+/// Generators read it by <c>in</c> during the call, so do not mutate the same variable concurrently.
 /// </remarks>
 public record struct QRCodeGeneratorOptions
 {
@@ -131,10 +120,9 @@ public record struct QRCodeGeneratorOptions
     }
 
     // One field holds the segmentation (the low 22 bits) and the FNC1 mode (the top 10 bits), so the generator
-    // tells "Single and no FNC1" from everything else with the one compare it already made on the segmentation
-    // alone: any other field sends the call to the planning route, which reads both out.
-    // An undefined segmentation value is kept as given when the 22 bits hold it and saturated to the mask when
-    // they do not, so the planning route refuses either (a masked value could read back as a defined one).
+    // tells "Single and no FNC1" from everything else with the one compare it made on the segmentation alone.
+    // A segmentation value the 22 bits cannot hold saturates to the mask rather than being masked, because a
+    // masked value could read back as a defined one and pass validation.
     private int _route;
     private const int SegmentationMask = (1 << Fnc1Shift) - 1;
     private const int Fnc1Shift = 22;
@@ -146,21 +134,13 @@ public record struct QRCodeGeneratorOptions
     internal readonly bool TakesSingleRoute => _route == (int)QRSegmentation.Single;
 
     /// <summary>
-    /// Write text in Kanji mode where it can be: 13 bits a character and no ECI header, where UTF-8 takes 24 bits a kana or kanji behind a 12-bit ECI header.
-    /// Off by default.
+    /// Allows Kanji mode for eligible text to reduce symbol size. Off by default.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Applies only where the charset is the library's choice (<see cref="EciMode.Default"/>) and no byte order mark is asked for (<see cref="Utf8Bom"/>). A charset the caller names is written as named.
-    /// Then text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) is one Kanji segment, and under <see cref="QRSegmentation.Optimal"/> text that is so apart from its ASCII can be Kanji runs beside runs of that ASCII, where that is the smaller symbol.
-    /// Seven JIS X 0208 characters that Windows code page 932 reads differently, among them the wave dash 〜, keep a text in UTF-8, as does any character outside the table.
-    /// A Structured Append set made with this option can be a Kanji set: no symbol carries an ECI header, and the parity is the XOR of the whole text's Shift_JIS bytes.
-    /// </para>
-    /// <para>
-    /// Off by default because not every reader reads Kanji mode. An Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it, where they read UTF-8 behind ECI 26.
-    /// The iPhone camera, Google Lens on iPhone and the dedicated readers tried read it.
-    /// Turn it on where the readers are known to read it, an industrial scanner for example, or where the symbol has to be smaller.
-    /// </para>
+    /// Applies only with <see cref="EciMode.Default"/> and without <see cref="Utf8Bom"/>.
+    /// Uses supported JIS X 0208 characters, excluding those that CP932 interprets differently.
+    /// Mixing Kanji with ASCII requires <see cref="QRSegmentation.Optimal"/>. Text with characters outside the supported set keeps its normal encoding.
+    /// Off by default for reader compatibility. Enable it when the intended readers support Kanji mode.
     /// </remarks>
     public bool AllowKanji { get; set; }
 }

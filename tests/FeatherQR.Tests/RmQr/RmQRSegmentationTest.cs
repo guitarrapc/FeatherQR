@@ -19,7 +19,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class RmQRSegmentationTest
 {
-    // The one-mode stream, which the default no longer is.
+    // The one-mode stream. The default is Optimal, so a test that compares against Single names it.
     private static readonly RmQRCodeGeneratorOptions RmSingle = new() { Segmentation = RmQRSegmentation.Single };
 
     private static int Area(RmQRCodeData data) => (data.Width - 4) * (data.Height - 4);

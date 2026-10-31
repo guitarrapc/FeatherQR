@@ -181,7 +181,6 @@ public class QRBinaryEncoderUnitTest
         var encoder = new QRBinaryEncoder(buffer);
         encoder.WriteData(input, analysisResult.EncodingMode, analysisResult.EciMode, false);
 
-        // Assert
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         await Assert.That(analysisResult.EncodingMode).IsEqualTo(EncodingMode.Byte);
         await Assert.That(actual).IsEqualTo(expected);

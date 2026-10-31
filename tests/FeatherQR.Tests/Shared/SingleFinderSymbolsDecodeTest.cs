@@ -105,7 +105,7 @@ public class SingleFinderSymbolsDecodeTest
         }
     }
 
-    /// <summary>Texts of several versions: Micro QR's are M2 to M4, rMQR's three widths of one height.</summary>
+    /// <summary>Texts of several versions: Micro QR's are M2 and M3, rMQR's three widths of one height.</summary>
     private static string Text(Symbology symbology, int index) => symbology == Symbology.MicroQR
         ? (index % 3) switch { 0 => $"FQR{index}", 1 => $"{index}0123456789", _ => $"FQR MICRO {index}" }
         : $"FQR RMQR {index}" + new string('A', index % 3 * 10);

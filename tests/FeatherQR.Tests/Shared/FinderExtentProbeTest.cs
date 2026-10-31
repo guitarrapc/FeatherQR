@@ -3,10 +3,11 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The probe that says whether the symbol a finder belongs to extends past a length along the finder's axes (<see cref="FinderExtentProbe"/>):
-/// no Micro QR symbol extends past 15 modules from its finder's separator, every rMQR symbol does along its width and every Standard QR code of version 3 and up along both axes, and where the walk cannot tell (a shadow the threshold calls dark, the image's edge) it says no.
-/// Versions 1 and 2 of Standard QR put the other finders' light separators within the length, 8.5 and 12.5 modules out, where the walk may end, so the probe promises nothing about them; nor about a symbol whose band holds a light column of its own data, which small Standard QR versions and the 7-module rMQR heights, whose band is two timing rows and five of data, can hold.
-/// A step counts as light from three quarters light, the choice that keeps a speckled or dimly lit quiet zone a gap: it loses those symbols' saving, not a read.
+/// The probe that says whether the symbol a finder belongs to extends past a length along the finder's axes (<see cref="FinderExtentProbe"/>).
+/// No Micro QR symbol extends past 15 modules from its finder's separator. Every rMQR symbol does along its width, and every Standard QR code of version 3 and up along both axes.
+/// Where the walk cannot tell, as with a shadow the threshold calls dark or the image's edge, it says no.
+/// Versions 1 and 2 of Standard QR put the other finders' light separators within the length, 8.5 and 12.5 modules out, where the walk may end, so the probe promises nothing about them.
+/// Nor does it promise anything about a symbol whose band holds a light column of its own data. Small Standard QR versions can hold one, and so can the 7-module rMQR heights, whose band is two timing rows and five of data.
 /// </summary>
 public class FinderExtentProbeTest
 {
@@ -111,8 +112,8 @@ public class FinderExtentProbeTest
     }
 
     /// <summary>
-    /// A shadow the global threshold calls dark over a Micro QR symbol's quiet zone and the paper beyond runs the walk on past the symbol: two steps of it are almost all dark, which a symbol's modules never are, so the probe gives no answer rather than a wrong one.
-    /// The sheets lit unevenly read so under the global threshold of the whole sheet, the symbol's light modules above it and the paper beside it below.
+    /// A shadow the global threshold calls dark over a Micro QR symbol's quiet zone and the paper beyond runs the walk on past the symbol.
+    /// Two steps of it are almost all dark, which a symbol's modules never are, so the probe gives no answer rather than a wrong one.
     /// </summary>
     [Test]
     public async Task ShadowOverTheQuietZone_GivesNoAnswer()
@@ -150,7 +151,7 @@ public class FinderExtentProbeTest
         var (full, width, height) = SupersampledRenderer.Render((r, c) => rmqr[r, c], columns, rows, 4f, 0f, 0f);
         var truth = SupersampledGeometry.GridToPixel(columns, rows, 4f, 0f, 0f);
         truth.Transform(3.5f, 3.5f, out var finderX, out var finderY);
-        // The image ends ten modules past the finder: the symbol's other seventeen are gone
+        // The image ends ten modules past the finder, so the symbol's last ten are gone
         truth.Transform(17f, 0f, out var edge, out _);
         var kept = (int)edge;
         var cut = new byte[kept * height];

@@ -6,11 +6,15 @@ namespace FeatherQR;
 public enum RmQRSegmentation
 {
     /// <summary>
-    /// The default: the mixed-mode split with the fewest total bits. Text JIS X 0208 holds apart from its ASCII characters can be written as Kanji runs beside runs of that ASCII, with no ECI header, when <see cref="RmQRCodeGeneratorOptions.AllowKanji"/> is set, the charset is left to the library and that is the smaller symbol.
-    /// Never selects a symbol with more core modules than <see cref="Single"/>, emits the <see cref="Single"/> bit stream verbatim when a split would not shrink it, and additionally encodes content that overflows every version in a single mode. A U+FEFF inside UTF-8 content never opens a Byte run, where a reader would drop it as a byte order mark: the run opens a character early and keeps it interior.
+    /// Selects the mixed-mode segmentation with the fewest total bits. This is the default.
     /// </summary>
     /// <remarks>
-    /// The search prices candidate versions; it allocates nothing, and content no split can help is ruled out before it starts. <see cref="Single"/> skips it.
+    /// Never selects a symbol with more core modules than <see cref="Single"/>, and preserves the Single bit stream when splitting would not shrink the symbol.
+    /// With <see cref="RmQRCodeGeneratorOptions.AllowKanji"/>, eligible text can mix Kanji and ASCII runs when that produces a smaller symbol.
+    /// Kanji plans require the charset to be left to the library and carry no ECI header.
+    /// Can encode content that exceeds single-mode capacity. U+FEFF inside UTF-8 content is preserved.
+    /// <para/>
+    /// The search prices candidate versions. It allocates nothing, and content no split can help is ruled out before it starts. <see cref="Single"/> skips it.
     /// Fewer core modules is not the same as a smaller image: <see cref="RmQRFitStrategy"/> ranks by core modules while the quiet zone adds to each dimension, so a flatter symbol can render onto a larger grid.
     /// Size buffers with the same segmentation you encode with.
     /// </remarks>
@@ -18,7 +22,7 @@ public enum RmQRSegmentation
 
     /// <summary>
     /// One segment in the single mode that can represent the whole content (Numeric, else Alphanumeric, else Byte, or Kanji for text JIS X 0208 holds entirely when <see cref="RmQRCodeGeneratorOptions.AllowKanji"/> is set and the charset is left to the library).
-    /// The cheapest to encode: one pass over the content and no version search, and the bit stream every release before 2.0.0 emitted.
+    /// Does not plan mixed-mode segments.
     /// </summary>
     Single = 1,
 }

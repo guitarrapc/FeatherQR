@@ -13,7 +13,7 @@ public class LocalBinarizerParityTest
 {
     private static readonly string[] Contents = ["noise", "blurred noise", "ramp", "symbol under a shadow", "two levels", "flat grey", "flat black", "flat white", "flat block edges", "levels 24 apart", "levels 25 apart", "flat at its neighbours' level", "one pixel apart"];
 
-    // Block columns on their own columns from 4 to 37, so the four-block and two-block steps end on every remainder, and each width's last step overlaps by another count
+    // Rows of 4 to 37 blocks on their own columns, so the four-block and two-block steps end on every remainder, and each width's last step overlaps by another count
     private static readonly (int Width, int Height)[] Sizes =
     [
         (33, 33), (40, 40), (41, 43), (47, 40), (48, 56), (63, 65), (64, 64), (72, 40), (79, 47), (80, 41), (95, 41), (96, 48), (97, 49), (100, 37),
@@ -43,7 +43,7 @@ public class LocalBinarizerParityTest
                 }
             }
         }
-        // Rows of more steps than a byte counter holds, in both vector widths. A counter only runs over where one column is the counted class in every step, so two of them are all light and all dark.
+        // Rows of more steps than a byte counter holds, in both vector widths. A counter runs over only where its lane is the counted class in every step, so some of these rows are all light and some all dark.
         yield return (8200, 40, "noise", 128, false);
         yield return (8200, 40, "symbol under a shadow", 128, true);
         yield return (8231, 41, "blurred noise", 128, false);
@@ -76,23 +76,15 @@ public class LocalBinarizerParityTest
             await Assert.That(differs).IsEqualTo(expected.Differs).Because($"{kernel}");
             await Assert.That(measured).IsTrue();
         }
-    }
 
-    [Test]
-    [MethodDataSource(nameof(Cases))]
-    public async Task TryBinarize_AndItsScalarEntry_MatchReference(int width, int height, string content, byte globalThreshold, bool negative)
-    {
-        var luminance = Render(content, width, height);
-        var seen = negative ? Negated(luminance) : luminance;
-        var expected = Reference(seen, seen, width, height, globalThreshold);
-
-        var scratch = new int[LocalBinarizer.ScratchLength(width, height)];
+        // The convenience entries must also recompute statistics when the caller reuses scratch.
+        var entryScratch = new int[LocalBinarizer.ScratchLength(width, height)];
         var vector = new byte[width * height];
         var scalar = new byte[width * height];
-        var vectorDiffers = LocalBinarizer.TryBinarize(luminance, width, height, negative, globalThreshold, vector, scratch, out var vectorDark);
+        var vectorDiffers = LocalBinarizer.TryBinarize(luminance, width, height, negative, globalThreshold, vector, entryScratch, out var vectorDark);
         // The statistics of one call are not the next call's: each entry without the flag reads them again
-        Array.Fill(scratch, -1);
-        var scalarDiffers = LocalBinarizer.TryBinarizeScalar(luminance, width, height, negative, globalThreshold, scalar, scratch, out var scalarDark);
+        Array.Fill(entryScratch, -1);
+        var scalarDiffers = LocalBinarizer.TryBinarizeScalar(luminance, width, height, negative, globalThreshold, scalar, entryScratch, out var scalarDark);
 
         await Assert.That(FirstDifference(scalar, expected.Binarized)).IsEqualTo(-1);
         await Assert.That(scalarDark).IsEqualTo(expected.Dark);

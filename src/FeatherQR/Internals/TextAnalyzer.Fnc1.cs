@@ -5,17 +5,17 @@ internal static partial class TextAnalyzer
     private const char FieldSeparator = '\u001D';
 
     /// <summary>
-    /// The single-mode analysis under FNC1 (ISO/IEC 18004 6.4.8.1): the separator U+001D is an Alphanumeric
-    /// character, written <c>%</c>, a literal <c>%</c> costs two (written <c>%%</c>), and a separator followed by
-    /// a separator or a literal <c>%</c> keeps the text out of Alphanumeric mode, since a reader takes <c>%%</c>
-    /// first within a segment (specs/standardqr-encoder.md, FNC1). Everything else is the analysis without FNC1:
-    /// the ECI follows the content or the request, and with <paramref name="allowKanji"/> a text JIS X 0208 holds
-    /// entirely takes Kanji mode. Scalar, kept apart from the SIMD analysis so the route without FNC1 keeps its
-    /// instructions. A vector form waits for a measured need.
+    /// Analyzes the single-mode encoding and charset under FNC1 (ISO/IEC 18004 6.4.8.1).
     /// </summary>
+    /// <remarks>
+    /// With <paramref name="allowKanji"/>, text entirely representable in JIS X 0208 can use Kanji mode.
+    /// </remarks>
     /// <remarks>The result plans no Kanji segments: <see cref="QRSegmentation.Optimal"/> under FNC1 mixes Numeric, Alphanumeric and Byte runs only.</remarks>
     public static TextAnalysisResult AnalyzeFnc1(ReadOnlySpan<char> text, EciMode requestedEciMode, bool allowKanji)
     {
+        // U+001D contributes one Alphanumeric character (%) and a literal % contributes two (%%).
+        // A separator followed by another separator or % rules out Alphanumeric: the reader consumes %% first.
+        // This scalar route is separate so ordinary text analysis retains its SIMD path.
         if (text.IsEmpty)
             return new TextAnalysisResult(EncodingMode.Byte, requestedEciMode, 0);
 

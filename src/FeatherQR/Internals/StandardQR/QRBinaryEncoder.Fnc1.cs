@@ -50,8 +50,8 @@ internal ref partial struct QRBinaryEncoder
 
     /// <summary>
     /// The Alphanumeric payload under FNC1 (6.4.8.1): a separator is written as <c>%</c> and a literal <c>%</c> as
-    /// <c>%%</c>, and the values pair into 11 bits as in any Alphanumeric run. The caller keeps a separator pair out
-    /// of the run (a reader would take the <c>%%</c> first). Scalar: the SIMD writers never see a separator.
+    /// <c>%%</c>, and the values pair into 11 bits as in any Alphanumeric run. The caller never puts a separator and a
+    /// following separator or literal <c>%</c> in one run, since a reader takes <c>%%</c> first. It is scalar because the SIMD writers have no separator case.
     /// </summary>
     public void WriteAlphanumericDataFnc1(ReadOnlySpan<char> chars)
     {

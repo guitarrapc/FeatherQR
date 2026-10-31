@@ -45,7 +45,9 @@ public class Gs1HriTest
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
-            if (c.Reader is null)
+            // zxing-cpp falls back to raw text when its table cannot split the AIs.
+            if (c.Reader is null || !c.Reader.Hri.StartsWith("(", StringComparison.Ordinal)
+                || c.Reader.Hri.Contains("<GS>", StringComparison.Ordinal) || c.Reader.Hri.Contains(Gs1TestText.Gs))
                 continue;
             var captured = (c.Id, c.Reader.Writer, c.Reader.ElementString, c.Reader.Hri);
             yield return () => captured;
@@ -62,6 +64,13 @@ public class Gs1HriTest
         {
             await Assert.That(elementString).IsEqualTo(c.ElementString).Because(c.Id);
             await Assert.That(error).IsEqualTo(default(Gs1Error));
+            await Assert.That(Gs1ElementString.TryToHri(elementString, out var hri, out _)).IsTrue();
+            await Assert.That(hri).IsEqualTo(c.Input).Because(c.Id);
+
+            var fixture = Gs1FixtureLoader.EnumerateCases().First(f => f.Id == c.Id);
+            // libzint treats AI 235 as predefined length (the fixture spec).
+            if (fixture.Reader is { Writer: "zint-libzint" } && !c.Input.Contains("(235)", StringComparison.Ordinal))
+                await Assert.That(elementString).IsEqualTo(fixture.Reader.ElementString).Because(c.Id);
         }
         else
         {
@@ -77,6 +86,9 @@ public class Gs1HriTest
         var expected = string.Concat(c.Hri.Select(line => EngineHriLine.Replace(line, "($1)")));
         await Assert.That(Gs1ElementString.TryToHri(c.ElementString, out var hri, out var error)).IsTrue().Because($"{c.Id}: {error}");
         await Assert.That(Unescape(hri)).IsEqualTo(expected).Because(c.Id);
+        await Assert.That(Gs1Hri.TryFromHri(hri, Year, out var back, out error)).IsTrue().Because($"{c.Id}: {error}");
+        // A trailing or redundant separator is dropped on the way.
+        await Assert.That(back).IsEqualTo(Canonical(c.ElementString)).Because(c.Id);
     }
 
     /// <summary>zxing-cpp's (AI) text of a symbol's element string, where its hand-maintained table could split it (it falls back to escaped text otherwise).</summary>
@@ -84,45 +96,9 @@ public class Gs1HriTest
     [MethodDataSource(nameof(ReaderCases))]
     public async Task TryToHri_MatchesZxingCppHri((string Id, string Writer, string ElementString, string Hri) c)
     {
-        // zxing-cpp falls back to the raw text, and keeps a raw separator in its (AI) text, where its own table could not split.
-        if (!c.Hri.StartsWith("(", StringComparison.Ordinal) || c.Hri.Contains("<GS>", StringComparison.Ordinal) || c.Hri.Contains(Gs1TestText.Gs))
-            return;
         var ours = Gs1ElementString.TryToHri(c.ElementString, out var hri, out var error);
         await Assert.That(ours).IsTrue().Because($"{c.Id}: {error}");
         await Assert.That(Unescape(hri)).IsEqualTo(c.Hri).Because($"{c.Id} ({c.Writer})");
-    }
-
-    /// <summary>libzint's separator placement equals this library's, except where libzint treats AI 235 as predefined length (the fixture spec).</summary>
-    [Test]
-    [MethodDataSource(nameof(BracketedCases))]
-    public async Task TryFromHri_PlacesSeparatorsAsLibzintDoes((string Id, string Input, bool Valid, string? ElementString) c)
-    {
-        var fixture = Gs1FixtureLoader.EnumerateCases().First(f => f.Id == c.Id);
-        if (!c.Valid || fixture.Reader is not { Writer: "zint-libzint" } || c.Input.Contains("(235)", StringComparison.Ordinal))
-            return;
-        await Assert.That(Gs1Hri.TryFromHri(c.Input, Year, out var elementString, out _)).IsTrue();
-        await Assert.That(elementString).IsEqualTo(fixture.Reader.ElementString).Because(c.Id);
-    }
-
-    [Test]
-    [MethodDataSource(nameof(AcceptedCases))]
-    public async Task RoundTrip_ElementStringThroughHri((string Id, string ElementString, string[] Hri) c)
-    {
-        await Assert.That(Gs1ElementString.TryToHri(c.ElementString, out var hri, out _)).IsTrue();
-        await Assert.That(Gs1Hri.TryFromHri(hri, Year, out var back, out var error)).IsTrue().Because($"{c.Id}: {error}");
-        // A trailing or redundant separator is dropped on the way, so compare the strings with those removed.
-        await Assert.That(back).IsEqualTo(Canonical(c.ElementString)).Because(c.Id);
-    }
-
-    [Test]
-    [MethodDataSource(nameof(BracketedCases))]
-    public async Task RoundTrip_HriThroughElementString((string Id, string Input, bool Valid, string? ElementString) c)
-    {
-        if (!c.Valid)
-            return;
-        await Assert.That(Gs1Hri.TryFromHri(c.Input, Year, out var elementString, out _)).IsTrue();
-        await Assert.That(Gs1ElementString.TryToHri(elementString, out var hri, out _)).IsTrue();
-        await Assert.That(hri).IsEqualTo(c.Input).Because(c.Id);
     }
 
     [Test]

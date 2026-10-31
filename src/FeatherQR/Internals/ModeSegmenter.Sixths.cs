@@ -21,10 +21,9 @@ internal static partial class ModeSegmenter
     /// Rounded up and topped with the cheapest possible header by the caller, it is a lower bound on any plan at any version, so it may only reject.
     /// </summary>
     /// <remarks>
-    /// A character's price is 48 sixths a byte less 28 for a digit and 15 for the rest of the alphanumeric alphabet, so a block of characters is a count of each,
-    /// which the vector tiers take from lane compares: 32 characters a step through a byte shuffle with AVX2, 8 a step by range compares on the portable 128-bit
-    /// vectors, each with the last block read overlapped and its priced lanes masked. Under UTF-8 a lane adds a byte above 0x7F and another above 0x7FF, and a
-    /// block holding a surrogate half, whose price depends on its neighbour, is priced one character at a time. The lanes are 16 bits wide, and so is the horizontal sum of a ushort vector, so each tier widens its lanes to sum them and adds the sum into an integer every 1,000 blocks with AVX2 and every 2,000 on the 128-bit tier, since a Structured Append set holds up to 113,424 characters and a longer input is priced whole before it is refused. Measurements: specs/standardqr-encoder.md, "Mixed-mode segmentation".
+    /// A character's price is 48 sixths a byte less 28 for a digit and 15 for the rest of the alphanumeric alphabet, so the vector tiers price a block by counting each class with lane compares.
+    /// Under UTF-8 a lane adds a byte above 0x7F and another above 0x7FF. A block holding a surrogate half is priced one character at a time, since that price depends on its neighbour.
+    /// The 16-bit lanes are summed into an integer before they can wrap, since a Structured Append set holds up to 113,424 characters and a longer input is priced whole before it is refused.
     /// </remarks>
     public static int CheapestSixths(ReadOnlySpan<char> text, EciMode charset)
     {

@@ -6,8 +6,7 @@ namespace FeatherQR.Tests;
 /// own UTF-8 code writes the same symbol.
 /// </summary>
 /// <remarks>
-/// The allocation checks are Release only, and run alone, as <see cref="DecodeAllocationTest"/>'s do. <see cref="NetStandardBuildParityTest"/>
-/// holds the netstandard builds to no allocation on such text.
+/// <see cref="NetStandardBuildParityTest"/> holds the netstandard builds to no allocation on such text.
 /// </remarks>
 [NotInParallel]
 public class ReplacedCharacterAllocationTest

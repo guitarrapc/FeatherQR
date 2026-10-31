@@ -1022,7 +1022,7 @@ internal static class SimdParity
     private static List<string> SixthsMismatches()
     {
         var mismatches = new List<string>();
-        // A vector tier reads its last block overlapped, so it takes only a text of at least one block, as the dispatch gives it.
+        // A vector tier falls back to the scalar loop below one block, so every tier takes every length.
         var tiers = new List<(string Name, int MinLength, Func<string, EciMode, int> Run)> { ("dispatch", 0, (text, charset) => ModeSegmenter.CheapestSixths(text, charset)) };
 #if NET8_0_OR_GREATER
         if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
@@ -1055,7 +1055,7 @@ internal static class SimdParity
     }
 
     /// <summary>
-    /// The cost run's lane tiers against the scalar loops, through the dispatch and called directly: cost, final state and (but on ARM64's costs-only tier) the parent table, on digits,
+    /// The cost run's lane tiers against the scalar loops, through the dispatch and called directly: cost, final state and the parent table, which ARM64's tier does not build, on digits,
     /// alphanumerics, bytes and their mixes under both one-byte charsets, at the three Standard QR bands, with and without Alphanumeric, at every length
     /// across the lanes' run paths and past the tier's limit.
     /// </summary>

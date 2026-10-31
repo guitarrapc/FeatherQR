@@ -2,15 +2,13 @@ using BenchmarkDotNet.Configs;
 using SkiaSharp;
 
 /// <summary>
-/// Cross-library Standard QR decoding over the corpus of <see cref="SimpleCorpusEncode"/>, by the same version ranges.
-/// <see cref="SimpleDecode"/> decodes five symbols in versions 1 to 4, and the gap between decoders moves with the version.
-///
-/// The matrix rows decode every pair of the range from quiet-zone-free module grids, as in <see cref="SimpleDecode"/>.
-/// The image rows decode 20 evenly spaced pairs of each range from 8-pixel-per-module RGBA renders, and the whole-corpus row decodes those four samples together.
-/// Rendering every pair would hold gigabytes of bitmaps.
-/// Every decoder is checked in setup to return the original text for every input, so no row can win by failing fast.
-/// A sampled image another decoder cannot read gives way to the next pair in corpus order, and setup prints how many did. A FeatherQR failure throws.
+/// Compares Standard QR decoders over the version-grouped corpus of <see cref="SimpleCorpusEncode"/>.
 /// </summary>
+/// <remarks>
+/// Matrix rows cover every pair in a range. Image rows sample evenly spaced pairs to bound bitmap memory.
+/// Setup verifies the decoded text. An image another decoder cannot read is replaced by the next corpus pair, with replacements reported.
+/// A FeatherQR failure aborts setup. Image rows include RGBA conversion, as in <see cref="SimpleDecode"/>.
+/// </remarks>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory, BenchmarkLogicalGroupRule.ByParams)]
 [Config(typeof(CodesConfig))]

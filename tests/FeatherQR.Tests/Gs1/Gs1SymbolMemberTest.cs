@@ -462,8 +462,7 @@ public class Gs1SymbolMemberTest
     /// capacity gets its answer without the pooled buffer the checks build its element string in, and (AI) text one
     /// character shorter takes that buffer, as the checks then run and refuse it. Both are longer than the stack
     /// buffer, so a rent is what tells the two paths apart. An element string is checked where it is and rents
-    /// nothing, so no test sees whether the length answers for it. The test runs apart from the other tests of its
-    /// process: the pool's events, once a listener asks for them, are raised on every thread.
+    /// nothing, so no test sees whether the length answers for it.
     /// </summary>
     [Test]
     [NotInParallel]

@@ -11,9 +11,9 @@ public enum MicroQRVersion
     /// <summary>13×13 modules. Numeric and Alphanumeric modes, ECC L/M.</summary>
     M2 = 2,
 
-    /// <summary>15×15 modules. Numeric, Alphanumeric and Byte modes, ECC L/M.</summary>
+    /// <summary>15×15 modules. Numeric, Alphanumeric, Byte and Kanji modes, ECC L/M.</summary>
     M3 = 3,
 
-    /// <summary>17×17 modules. Numeric, Alphanumeric and Byte modes, ECC L/M/Q.</summary>
+    /// <summary>17×17 modules. Numeric, Alphanumeric, Byte and Kanji modes, ECC L/M/Q.</summary>
     M4 = 4,
 }

@@ -6,10 +6,8 @@ using System.Runtime.Loader;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The netstandard builds' span API against this host's build: encode on a dirty destination for each symbology, both segmentations and
-/// quiet zones from 0 up, then sizing, encode, matrix decode and image decode on the paths a netstandard build has code of its own for,
-/// each allocating nothing once warm. No test host runs a netstandard build, so this loads the build beside the core project into a load
-/// context of its own and calls its public span API.
+/// The netstandard builds' span API against this host's build, on the paths a netstandard build has code of its own for. No test host
+/// runs a netstandard build, so this loads the build beside the core project into a load context of its own and calls its public span API.
 /// </summary>
 /// <remarks>
 /// The builds are found and checked for staleness as <see cref="CoreAssemblyDependencyTest"/> finds them: <c>dotnet build</c> of the
@@ -48,7 +46,7 @@ public class NetStandardBuildParityTest
         var expected = SymbolDecoder.DecodeImageSymbols(luminance, width, height);
         await Assert.That(expected.Length).IsEqualTo(6);
 
-        // Bridge only the public span entry; the result array belongs to the loaded build.
+        // Only the span entry needs a bridge. The result array belongs to the loaded build and is read through reflection.
         var target = build.GetType("FeatherQR.SymbolDecoder", throwOnError: true)!
             .GetMethod("DecodeImageSymbols", [typeof(ReadOnlySpan<byte>), typeof(int), typeof(int)])!;
         var method = new DynamicMethod("SymbolDecoder.DecodeImageSymbols", typeof(Array),
@@ -292,7 +290,7 @@ public class NetStandardBuildParityTest
         new("RmQR UTF-8", "RmQR", Utf8Text, "M"),
         // These runs hold more chars than a third of rMQR's 160-byte budget, and the netstandard builds transcode them through refs into a
         // buffer of three bytes a char. The indexer loop would write the same bytes, so these hold the refs' output on long runs at each
-        // site, and the buffer's size only its speed.
+        // site. The buffer's size changes only the speed.
         new("RmQR UTF-8 long", "RmQR", "12345678901234567890" + new string('k', 80) + "あ", "M"),
         new("RmQR UTF-8 long Single", "RmQR", new string('k', 100) + "あ", "M", ("Segmentation", "Single")),
         new("RmQR UTF-8 long FNC1", "RmQR", "0109521234543213\u001d10" + new string('k', 80) + "あ", "M", ("Fnc1", Fnc1First())),
@@ -536,9 +534,7 @@ public class NetStandardBuildParityTest
     /// <summary>
     /// Random Byte segments read through each netstandard build's own UTF-8 decoder give this host's build's text and decode info, which
     /// are <c>Utf8.ToUtf16</c>'s: under ECI 26 and behind a byte order mark with replacement, and with no ECI as UTF-8 only where the
-    /// bytes are well formed, else as Shift_JIS or ISO-8859-1. Half the segments are bytes drawn at each range's bounds, half valid UTF-8
-    /// cut to at most 45 bytes, which can end inside a sequence, each into a destination of room to spare, of its text's length and of
-    /// one char less.
+    /// bytes are well formed, else as Shift_JIS or ISO-8859-1.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(Frameworks))]
@@ -622,6 +618,9 @@ public class NetStandardBuildParityTest
         };
         foreach (var (symbology, eccLevel, maxLength, options) in shapes)
         {
+            // Reuse the span bridges so each random input exercises the API without generating and JIT-compiling new wrappers.
+            var hostEncoder = BindEncoder(host, symbology, host.Location);
+            var buildEncoder = BindEncoder(build, symbology, path);
             for (var round = 0; round < 500 && mismatch is null; round++)
             {
                 var text = new System.Text.StringBuilder();
@@ -629,8 +628,8 @@ public class NetStandardBuildParityTest
                     text.Append(TextPieces[random.Next(TextPieces.Length)]);
                 var c = new SpanCase($"{symbology} random {round}", symbology, text.ToString(0, Math.Min(text.Length, maxLength)), eccLevel, options);
 
-                var expected = Encode(host, host.Location, c);
-                var actual = Encode(build, path, c);
+                var expected = Encode(host, c, hostEncoder);
+                var actual = Encode(build, c, buildEncoder);
                 if (actual.Fits != expected.Fits || !actual.Matrix.AsSpan().SequenceEqual(expected.Matrix))
                     mismatch = $"{c.Name}, \"{c.Text}\": a symbol other than this host's build's";
             }
@@ -703,22 +702,30 @@ public class NetStandardBuildParityTest
 
     private sealed record EncodeOutcome(bool Fits, int BufferSize, int Width, int Height, byte[] Matrix, string? Text, string? Info);
 
+    private sealed record SpanEncoder(SpanSizing Size, SpanCreate Create, SpanDecode Decode);
+
+    private static SpanEncoder BindEncoder(Assembly assembly, string symbology, string path)
+        => new(BindSizing(assembly, symbology, path), BindSpanCreate(assembly, symbology, path), BindDecode(assembly, symbology, image: false, path));
+
     /// <summary>Sizes, writes and decodes <paramref name="c"/> through <paramref name="assembly"/>'s span API.</summary>
     private static EncodeOutcome Encode(Assembly assembly, string path, SpanCase c)
+        => Encode(assembly, c, BindEncoder(assembly, c.Symbology, path));
+
+    private static EncodeOutcome Encode(Assembly assembly, SpanCase c, SpanEncoder encoder)
     {
         var options = Options(assembly, c.Symbology, c.Options);
         var eccLevel = EccLevel(assembly, c.Symbology, c.EccLevel);
-        if (!BindSizing(assembly, c.Symbology, path)(c.Text, eccLevel, options, out var bufferSize, out var width, out var height))
+        if (!encoder.Size(c.Text, eccLevel, options, out var bufferSize, out var width, out var height))
             return new(false, 0, 0, 0, [], null, null);
 
         // A dirty destination, so that a module the encoder leaves unwritten shows.
         var matrix = new byte[bufferSize];
         matrix.AsSpan().Fill(0xA5);
-        var written = BindSpanCreate(assembly, c.Symbology, path)(c.Text, eccLevel, matrix, options);
+        var written = encoder.Create(c.Text, eccLevel, matrix, options);
         if (written != bufferSize)
             throw new InvalidOperationException($"{c.Name}: wrote {written} bytes where sizing gave {bufferSize}");
 
-        var (text, info) = Decode(BindDecode(assembly, c.Symbology, image: false, path), matrix, width, height);
+        var (text, info) = Decode(encoder.Decode, matrix, width, height);
         return new(true, bufferSize, width, height, matrix, text, info);
     }
 

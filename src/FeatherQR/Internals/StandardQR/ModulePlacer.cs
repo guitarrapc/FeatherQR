@@ -318,8 +318,8 @@ internal static partial class ModulePlacer
     /// <remarks>
     /// Places two identical copies for redundancy (ISO/IEC 18004 Section 7.9):
     /// <code>
-    /// - Copy 1: Around top-left and top-right finder patterns
-    /// - Copy 2: Around top-left and bottom-left finder patterns
+    /// - Copy 1: Around the top-left finder pattern
+    /// - Copy 2: Beside the top-right and bottom-left finder patterns
     /// </code>
     /// Bits are placed from LSB (bit 0) to MSB (bit 14).
     /// </remarks>
@@ -383,9 +383,6 @@ internal static partial class ModulePlacer
         }
     }
 
-    /// <summary>
-    /// Checks if two rectangles intersect.
-    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool Intersects(Rectangle r1, Rectangle r2)
     {
@@ -395,12 +392,8 @@ internal static partial class ModulePlacer
             && r1.Y < r2.Y + r2.Height;
     }
 
-    /// <summary>
-    /// Check if a module at given bit index is blocked using a bitmask.
-    /// </summary>
     /// <param name="mask">Bitmask buffer</param>
     /// <param name="bitIndex">Linear index of module</param>
-    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsModuleBlocked(ReadOnlySpan<byte> mask, int bitIndex)
     {
@@ -676,17 +669,17 @@ internal static partial class ModulePlacer
         /// Visual Pattern (12×12 sample, ■=dark, □=light):
         /// <code>
         /// ■■■■■■■■■■■■
+        /// ■□□□□□■□□□□□
+        /// ■□□■□□■□□■□□
         /// ■□■□■□■□■□■□
-        /// ■■□□□□■■□□□□
-        /// ■□□■□■□□□■□■
-        /// ■■□□□□■■□□□□
+        /// ■□□■□□■□□■□□
+        /// ■□□□□□■□□□□□
+        /// ■■■■■■■■■■■■
+        /// ■□□□□□■□□□□□
+        /// ■□□■□□■□□■□□
         /// ■□■□■□■□■□■□
-        /// ■■■■■■□□□□□□
-        /// ■□■□■□□■□■□■
-        /// ■■□□□□□□□□□□
-        /// ■□□■□■□■□■□■
-        /// ■■□□□□□□□□□□
-        /// ■□■□■□□■□■□■
+        /// ■□□■□□■□□■□□
+        /// ■□□□□□■□□□□□
         /// </code>
         ///
         /// Mathematical Properties:
@@ -744,17 +737,17 @@ internal static partial class ModulePlacer
         /// Visual Pattern (12×12 sample, ■=dark, □=light):
         /// <code>
         /// ■■■■■■■■■■■■
+        /// ■■■□□□■■■□□□
+        /// ■■□■■□■■□■■□
         /// ■□■□■□■□■□■□
-        /// ■■■■□□■■■■□□
-        /// ■□□■□■■□□■□■
-        /// ■■□□■■■■□□■■
-        /// ■□■□■□■□■□■□
+        /// ■□■■□■■□■■□■
+        /// ■□□□■■■□□□■■
         /// ■■■■■■■■■■■■
-        /// ■□■□■□□■□■□■
-        /// ■■■■□□□□■■□□
-        /// ■□□■□■□■□■□■
-        /// ■■□□■■□□■■■■
-        /// ■□■□■□□■□■□■
+        /// ■■■□□□■■■□□□
+        /// ■■□■■□■■□■■□
+        /// ■□■□■□■□■□■□
+        /// ■□■■□■■□■■□■
+        /// ■□□□■■■□□□■■
         /// </code>
         ///
         /// Mathematical Properties:
@@ -836,17 +829,17 @@ internal static partial class ModulePlacer
         /// Visual Pattern (12×12 sample, ■=dark, □=light):
         /// <code>
         /// ■□■□■□■□■□■□
-        /// □■■■□■□■■■□■
-        /// ■■□■■■■□■■■■
-        /// □■■□■□□■■□■□
-        /// ■□■■□■■□■■□■
-        /// □■■■■■□■■■■■
+        /// □□□■■■□□□■■■
+        /// ■□□□■■■□□□■■
+        /// □■□■□■□■□■□■
+        /// ■■■□□□■■■□□□
+        /// □■■■□□□■■■□□
         /// ■□■□■□■□■□■□
-        /// □■■■□■□□■■□□
-        /// ■■□■■■■□□■■■
-        /// □■■□■□□■■□□■
-        /// ■□■■□■■□■■□■
-        /// □■■■■■□■■■■□
+        /// □□□■■■□□□■■■
+        /// ■□□□■■■□□□■■
+        /// □■□■□■□■□■□■
+        /// ■■■□□□■■■□□□
+        /// □■■■□□□■■■□□
         /// </code>
         ///
         /// Hybrid Pattern:

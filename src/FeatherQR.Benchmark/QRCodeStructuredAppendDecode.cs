@@ -1,18 +1,13 @@
 using System.Text;
 
 /// <summary>
-/// What reading a Structured Append set costs over reading the same chunks as plain symbols.
-///
-/// The baseline arm decodes one plain symbol per chunk, each made by <c>Create</c> at the set's version and level with no header, so the Ratio column is the header's cost on the decode path: the 20 header bits and reporting them on <c>QRCodeDecodeInfo</c>.
-/// That reading holds only while no decode stage depends on the mask pattern: the two arms are separate encodes and pick their masks independently. Codeword extraction once evaluated the mask predicate per module, and this column read 1.26 for what was mask luck.
-/// Both arms decode <c>QRCodeData</c> with the default quiet zone and allocate one string per symbol.
-///
-///   byte-45k-any    : ASCII prose, 16 symbols at version 40
-///   numeric-100k-any: digits, 15 symbols at version 40
-///   mixed-40k-opt   : order lines under Optimal, 14 symbols. Every symbol carries several segments.
-///   utf8-15k-any    : Japanese prose behind a UTF-8 ECI, 15 symbols
-///   byte-4k-max10   : ASCII prose capped at version 10, the label-sized set
+/// Measures Structured Append decoding against decoding the same chunks as plain symbols.
 /// </summary>
+/// <remarks>
+/// Both arms decode QRCodeData with the default quiet zone and allocate one string per symbol.
+/// The ratio isolates header handling only while decoding cost is independent of the masks selected by the separate encodes.
+/// The historical mask-dependent result is recorded in .github/docs/specs/standardqr-decoder.md, Lessons Learned.
+/// </remarks>
 public class QRCodeStructuredAppendDecode
 {
     private static readonly string[] shapeKeys =

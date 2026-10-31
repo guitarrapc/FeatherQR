@@ -55,7 +55,7 @@ internal static partial class RmQRImageDecoder
                 if (certainBits == 0)
                     continue;
                 var index = Vector256.ConditionalSelect(certain, pyLow * stride + pxLow, Vector256<int>.Zero);
-                // Each half taken once: lane by lane from the whole vector, the upper half is extracted again for each of its four lanes
+                // Each half is taken once, since reading lane by lane from the whole vector extracts the upper half again for each of its lanes
                 var low = index.GetLower();
                 var high = index.GetUpper();
                 var dark = (uint)(luminance[low.GetElement(0)] - level) >> 31

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.StandardQR;
 
@@ -76,8 +77,14 @@ public class LensDistortionDecodeTest
         return null;
     }
 
+    // Several tests take the same shot and only read it, so each is drawn once
+    private static readonly ConcurrentDictionary<(int, float, float, float, float, float, bool), Lazy<(CameraRenderer.Photograph, QRCodeData, string)>> Shots = new();
+
     /// <summary>The symbol on a card tilted about an axis in its plane, photographed through a lens with a light blur and noise, with its data modules redrawn at random where asked.</summary>
     internal static (CameraRenderer.Photograph Photograph, QRCodeData Symbol, string Text) Render(int version, float pixelsPerModule, float tiltDegrees, float tiltAxisDegrees, float rollDegrees, float distortion, bool destroyData)
+        => Shots.GetOrAdd((version, pixelsPerModule, tiltDegrees, tiltAxisDegrees, rollDegrees, distortion, destroyData), key => new(() => Draw(key.Item1, key.Item2, key.Item3, key.Item4, key.Item5, key.Item6, key.Item7))).Value;
+
+    private static (CameraRenderer.Photograph Photograph, QRCodeData Symbol, string Text) Draw(int version, float pixelsPerModule, float tiltDegrees, float tiltAxisDegrees, float rollDegrees, float distortion, bool destroyData)
     {
         var text = $"FQR LENS v{version}";
         var qr = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 0 });
@@ -179,10 +186,8 @@ public class LensDistortionDecodeTest
     public async Task VersionAtFinders_OnACleanRender_NamesEveryVersion()
     {
         var wrong = new List<string>();
-        for (var version = 7; version <= 40; version++)
+        foreach (var (version, qr, photograph) in CleanRenders.Value)
         {
-            var qr = QRCodeGenerator.Create("FQR", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 0 });
-            var photograph = CameraRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, 4, new CameraRenderer.Shot(4f, TiltDegrees: 15f, TiltAxisDegrees: 30f, RollDegrees: 17f * version, BlurSigma: 0.5f));
             var (_, named) = Dimensions(photograph);
             if (named != qr.Size)
                 wrong.Add($"v{version}: {named}");
@@ -190,6 +195,16 @@ public class LensDistortionDecodeTest
 
         await Assert.That(wrong).IsEmpty();
     }
+
+    /// <summary>Every version that carries version information, on a card turned off the axes with no lens.</summary>
+    private static readonly Lazy<(int Version, QRCodeData Symbol, CameraRenderer.Photograph Photograph)[]> CleanRenders = new(() =>
+    [
+        .. Enumerable.Range(7, 34).Select(static version =>
+        {
+            var qr = QRCodeGenerator.Create("FQR", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 0 });
+            return (version, qr, CameraRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, 4, new CameraRenderer.Shot(4f, TiltDegrees: 15f, TiltAxisDegrees: 30f, RollDegrees: 17f * version, BlurSigma: 0.5f)));
+        }),
+    ]);
 
     /// <summary>The dimension the finders estimate, unsnapped, and the one the version information read at them names. Both are from the triple of the global threshold, as the decoder measures it.</summary>
     private static (float Estimate, int Named) Dimensions(CameraRenderer.Photograph photograph)
@@ -237,10 +252,8 @@ public class LensDistortionDecodeTest
     public async Task StatesDimension_OnACleanRender_IsTheDrawnDimensionAlone()
     {
         var wrong = new List<string>();
-        for (var version = 7; version <= 40; version++)
+        foreach (var (version, qr, photograph) in CleanRenders.Value)
         {
-            var qr = QRCodeGenerator.Create("FQR", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 0 });
-            var photograph = CameraRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, 4, new CameraRenderer.Shot(4f, TiltDegrees: 15f, TiltAxisDegrees: 30f, RollDegrees: 17f * version, BlurSigma: 0.5f));
             foreach (var versionsOff in new[] { -1, 0, 1 })
             {
                 if (version + versionsOff is < 7 or > 40)
@@ -273,7 +286,7 @@ public class LensDistortionDecodeTest
         await Assert.That(states).IsFalse();
     }
 
-    /// <summary>Both copies are asked. With either painted over the symbol no longer states its dimension, and the outlines are read as before.</summary>
+    /// <summary>Both copies are asked. With either painted over, the symbol no longer states its dimension, so the outlines are read.</summary>
     [Test]
     [Arguments(true)]
     [Arguments(false)]

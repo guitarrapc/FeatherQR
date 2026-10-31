@@ -1,20 +1,13 @@
 using BenchmarkDotNet.Configs;
 
 /// <summary>
-/// Cross-library rMQR encoding.
-/// CodeGlyphX is the only other library compared in this project that implements ISO/IEC 23941 at all, so these are the only rMQR rows with something to compare against.
-///
-/// Each row pins the same version on both libraries. rMQR versions are not ordered by size, and the two libraries pick differently when left to fit automatically, so pinning is what makes the rows measure the same symbol.
-/// The version numbering is the same on both sides (1 is R7x43, 32 is R17x139), which is why the cast works.
-///
-/// Comparability notes:
-///
-///   FeatherQR places a quiet zone in the returned matrix, while CodeGlyphX returns the
-///   bare symbol.
-///   FeatherQR plans mixed-mode segments by default, while CodeGlyphX picks one mode
-///   for the whole payload, so the FeatherQR rows include the planning pass. For these
-///   payloads the plan is the one-mode stream, so both sides encode the same symbol.
+/// Compares rMQR encoding with CodeGlyphX at matching pinned versions.
 /// </summary>
+/// <remarks>
+/// Automatic fitting differs between libraries, so both encode the same pinned symbol size.
+/// FeatherQR includes a quiet zone and mixed-mode planning. CodeGlyphX returns the bare symbol and selects one mode.
+/// These payloads produce a single-mode stream under both encoders.
+/// </remarks>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class SimpleRmQREncode

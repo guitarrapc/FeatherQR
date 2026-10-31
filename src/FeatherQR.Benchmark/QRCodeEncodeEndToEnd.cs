@@ -1,27 +1,14 @@
 using System.Text;
 
 /// <summary>
-/// End-to-end QR matrix encoding through the public API (QRCodeGenerator).
-/// Used to measure the user-visible impact of internal kernel changes such as the Reed-Solomon ECC encoder optimization.
-///
-/// Scenarios:
-///   Numeric_V1_L : version 1, numeric mode (digits only)
-///   Numeric_V40_L : version 40-L, numeric mode (7,089 digits, capacity boundary)
-///   Alphanumeric_V1_M : version 1, alphanumeric mode (uppercase / punctuation subset)
-///   Alphanumeric_V10_M : version 10-M, alphanumeric mode (300 characters)
-///   Alphanumeric_V40_L : version 40-L, alphanumeric mode (4,296 characters, capacity boundary)
-///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
-///   Byte_V20_M : version 19-M, byte mode (mid-size, exercises the transposed mask tier on two-word rows). The name says V20, and 620 bytes fit version 19
-///   Byte_V40_L : version 40-L, byte mode (largest data blocks)
-///   Byte_V40_H : version 39-H, byte mode (77 blocks x 30 ecc). The name says V40, and 1,200 bytes fit version 39
-///   Kanji_V6_M : version 6-M, Kanji mode (capacity boundary, 65 characters)
-///   Kanji_Long_V15_L : version 15-L, Kanji mode (capacity boundary, 320 characters)
-///
-/// Byte_Url_V6_M and Kanji_V6_M share version and level, so they differ in mode, not in symbol size.
-/// The "(Span)" rows keep the default quiet zone of 4, the matrix a caller gets with default options. Their quiet-zone-free twins are in <see cref="QRCodeQuietZone0Encode"/>.
-/// The three long alphanumeric and numeric shapes are long enough to time the Alphanumeric and Numeric writers.
-/// The "(Pinned)" and "(Boost)" rows resolve the version or level before the pipeline, the path tools/CrossLanguageBenchmark takes on every encode.
+/// Measures Standard QR matrix encoding through <see cref="QRCodeGenerator"/> across modes and symbol sizes.
 /// </summary>
+/// <remarks>
+/// Span rows retain the default quiet zone. <see cref="QRCodeQuietZone0Encode"/> measures their borderless counterparts.
+/// Pinned and Boost rows include version or level resolution. Long Numeric and Alphanumeric cases exercise their bulk writers.
+/// Byte_V20_M and Byte_V40_H retain historical names but currently fit versions 19 and 39.
+/// Byte_Url_V6_M and Kanji_V6_M share version and ECC level to compare modes at the same size.
+/// </remarks>
 public class QRCodeEncodeEndToEnd
 {
     private string _numeric = default!;

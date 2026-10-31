@@ -6,22 +6,11 @@ using FeatherQR.SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Styling a symbol must never cost it its scannability, on any symbology.
+/// Checks decoding of the selected module styles and sizes across all three symbologies.
 /// </summary>
 /// <remarks>
-/// <para>
-/// A module shape and a module size below 100% put gaps between modules. That is harmless for
-/// data modules, which every decoder reads by sampling the centre of the cell, and fatal for the
-/// finder pattern, which is located by scanning for the 1:1:3:1:1 run of dark and light along a
-/// line. Gaps split the three-module dark centre into three separate runs, the ratio no longer
-/// occurs anywhere in the image, and the symbol stops being found at all.
-/// </para>
-/// <para>
-/// So the renderer draws the finder as a whole pattern, never as styled modules. These cases are
-/// the guard: they fail with <c>NotDetected</c> if the module shape or size ever reaches the
-/// finder. The bound they pin is deliberately blunt, "it decodes", because the failure this
-/// prevents is not a loss of accuracy but a total loss of detection.
-/// </para>
+/// Finder patterns must be drawn separately from styled data modules: gaps can disrupt
+/// the dark/light runs used for detection. These cases guard that separation by decoding the render.
 /// </remarks>
 public class StyledSymbolDecodabilityTest
 {
@@ -39,8 +28,7 @@ public class StyledSymbolDecodabilityTest
         _ => RectangleModuleShape.Default,
     };
 
-    // 98% is here because a gap of one fiftieth of a module is invisible to a reader and still
-    // enough to break the run the detector looks for.
+    // 98% exercises a small gap as well as the wider gaps below.
     [Test]
     [Arguments(Style.Rectangle, 100)]
     [Arguments(Style.Rectangle, 98)]

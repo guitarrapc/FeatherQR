@@ -2,30 +2,14 @@ using BenchmarkDotNet.Configs;
 using SkiaSharp;
 
 /// <summary>
-/// Cross-library Standard QR decoding over the same five payloads as <see cref="SimpleEncode"/>, all in versions 1 to 4 at ECC L.
-/// <see cref="SimpleCorpusDecode"/> covers all four levels and the larger versions.
-/// Only three of the compared libraries decode at all: QRCoder and Net.Codecrete.QrCodeGenerator are encoders only.
-///
-/// Two entry points are measured, because the libraries differ in what they accept:
-///
-///   matrix - a module grid that is already extracted, no image processing. Both
-///     libraries take a quiet-zone-free symbol here. This is the path a caller uses
-///     when the modules come from somewhere other than a camera.
-///   image  - a rendered bitmap: binarize, locate finder patterns, sample, then decode.
-///     Every library gets the same 8-pixel-per-module RGBA image and does its own
-///     grayscale conversion.
-///
-/// Comparability notes:
-///
-///   The matrix rows use this library's string-returning overload, not the
-///   caller-buffer one, so every library allocates its result the same way. The
-///   allocation-free span overload is measured in <see cref="QRCodeDecodeEndToEnd"/>.
-///   CodeGlyphX is fed 32-bit RGBA rather than 8-bit luminance because its pixel entry
-///   point rejects any buffer narrower than 4 bytes per pixel, including the Gray8
-///   format its own PixelFormat enum offers (QrPixelDecoder guards on stride &lt; width * 4).
-///   Every decoder is verified in setup to actually succeed and return the original
-///   text, so no row can win by failing fast.
+/// Compares Standard QR matrix and image decoding on the payloads of <see cref="SimpleEncode"/>.
 /// </summary>
+/// <remarks>
+/// Matrix rows use quiet-zone-free grids and string-returning APIs so all libraries allocate the result.
+/// Image rows include each library's grayscale conversion from the same RGBA render.
+/// CodeGlyphX requires RGBA: its pixel decoder rejects Gray8's narrow stride.
+/// Setup checks every decoder returns the original text. Larger symbols are covered by <see cref="SimpleCorpusDecode"/>.
+/// </remarks>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class SimpleDecode

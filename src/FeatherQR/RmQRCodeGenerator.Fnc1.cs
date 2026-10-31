@@ -5,12 +5,8 @@ using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR;
 
-/// <summary>
-/// The planning route of the generator (specs/rmqr-encoder.md, FNC1): a segmentation other than
-/// <see cref="RmQRSegmentation.Single"/>, an FNC1 mode, or both. The single-mode route under FNC1 is the single-mode
-/// route's steps with the indicator's bits in the version fit and the indicator in the stream, written as its own
-/// methods so that route keeps its instructions. The mixed-mode route takes the mode as a parameter.
-/// </summary>
+// The planning route of the generator: a segmentation other than Single, an FNC1 mode, or both. The single-mode
+// route under FNC1 is its own methods rather than parameters on the route without FNC1, so that route keeps its instructions.
 public static partial class RmQRCodeGenerator
 {
     [MethodImpl(MethodImplOptions.NoInlining)]

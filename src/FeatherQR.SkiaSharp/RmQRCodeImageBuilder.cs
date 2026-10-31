@@ -9,8 +9,8 @@ namespace FeatherQR.SkiaSharp;
 /// </summary>
 /// <remarks>
 /// The same shape as <see cref="QRCodeImageBuilder"/>, with rMQR versions, levels and fit strategies and the 2-module quiet zone the specification asks for.
-/// Sizing has three modes: <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize"/> gives the matrix at an exact scale, <see cref="SymbolImageBuilderBase{TSelf}.WithSize"/> fits it into an exact canvas without stretching (every builder does that now, not just this one), and <see cref="WithWidth"/> takes a width and lets the height follow the code, which only a rectangular symbology has reason to offer.
-/// Icons are not offered here: rMQR has no error correction headroom to spare. Its one finder pattern can be styled with <see cref="SymbolImageBuilderBase{TSelf}.WithFinderPatternShape"/>.
+/// Sizing has three modes: <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize"/> gives the matrix at an exact scale, <see cref="SymbolImageBuilderBase{TSelf}.WithSize"/> fits it into an exact canvas without stretching, and <see cref="WithWidth"/> takes a width and lets the height follow the code aspect ratio.
+/// Icon overlays are not supported. Its one finder pattern can be styled with <see cref="SymbolImageBuilderBase{TSelf}.WithFinderPatternShape"/>.
 /// </remarks>
 /// <seealso cref="RmQRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
@@ -454,8 +454,8 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// Must agree with <see cref="WithVersion"/> when both are used.
     /// </summary>
     /// <param name="height">rMQR code height in modules.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the icon size, border or occupancy limit is out of range.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the rMQR code.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the height is not a valid rMQR height.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made rMQR code.</exception>
     public RmQRCodeImageBuilder WithHeight(RmQRHeight height)
     {
         if (_data is not null)
@@ -473,8 +473,8 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// Fewer modules is not the same as a smaller image: a flatter, wider rMQR code can render onto a larger grid.
     /// </summary>
     /// <param name="segmentation">Segmentation strategy.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the icon size, border or occupancy limit is out of range.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the rMQR code.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the segmentation strategy is invalid.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made rMQR code.</exception>
     public RmQRCodeImageBuilder WithSegmentation(RmQRSegmentation segmentation)
     {
         if (_data is not null)

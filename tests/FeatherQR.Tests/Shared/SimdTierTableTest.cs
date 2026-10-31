@@ -149,8 +149,8 @@ public class SimdTierTableTest
     }
 
     /// <summary>
-    /// ARM64 samples the mesh through the portable 128-bit tier. A tier of ARM64's own, the same steps written with its intrinsics, ran no faster
-    /// on either JIT of an Apple M2 and 2 % slower as NativeAOT code, so the kernel declares none (standardqr-decoder.md, Performance).
+    /// ARM64 samples the mesh through the portable 128-bit tier. A tier of ARM64's own ran no faster, so the kernel declares none
+    /// (standardqr-decoder.md, Performance).
     /// </summary>
     [Test]
     public async Task MeshSampler_OnArm64_TakesThePortable128BitTier()

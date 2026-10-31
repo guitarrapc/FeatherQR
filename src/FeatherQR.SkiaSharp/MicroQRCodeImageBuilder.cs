@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// </summary>
 /// <remarks>
 /// The same shape as <see cref="QRCodeImageBuilder"/>, with Micro QR versions and levels and the 2-module quiet zone the specification asks for.
-/// Icons are not offered here: Micro QR has no error correction headroom to spare. Its one finder pattern can be styled with <see cref="SymbolImageBuilderBase{TSelf}.WithFinderPatternShape"/>.
+/// Icon overlays are not supported. Its one finder pattern can be styled with <see cref="SymbolImageBuilderBase{TSelf}.WithFinderPatternShape"/>.
 /// </remarks>
 /// <seealso cref="MicroQRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>

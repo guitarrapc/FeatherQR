@@ -4,11 +4,8 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Writing FNC1 into an rMQR symbol (specs/rmqr-encoder.md, FNC1): the indicator in the standard's order (ECI, FNC1
-/// <c>101</c> or <c>110</c> with the application indicator, data), the <c>%</c> rule applied in reverse in Alphanumeric
-/// segments, the separator pairs no segment can hold kept out of Alphanumeric mode, the version fit with the
-/// indicator's 3 or 11 bits beside the 11-bit ECI header under every strategy and height, every class read back by
-/// this library's decoder with the mode, and sizing that agrees with <c>Create</c>.
+/// Writing FNC1 into an rMQR symbol (specs/rmqr-encoder.md, FNC1). Every symbol is read back by this library's decoder,
+/// which reports the mode.
 /// </summary>
 public class Fnc1RmQREncodeTest
 {
@@ -84,7 +81,7 @@ public class Fnc1RmQREncodeTest
         await Assert.That(shape.AlphanumericHasPercent).IsEqualTo(percentInAlphanumeric);
     }
 
-    /// <summary>The same texts without FNC1 keep today's modes and read back literally, so the option changes nothing it is not set on.</summary>
+    /// <summary>The same texts without FNC1 keep their usual modes and read back literally, so the option changes nothing it is not set on.</summary>
     [Test]
     [Arguments("10AB%CD", "Alphanumeric")]
     [Arguments("10AB" + Gs + "CD", "Byte")]
@@ -382,7 +379,7 @@ public class Fnc1RmQREncodeTest
         await Assert.That(RmQRCodeGenerator.Create(new string('7', 9), RmQREccLevel.M, fixedVersion with { Fnc1 = Fnc1Mode.SecondPosition(0) }).Version).IsEqualTo(RmQRVersion.R7x43).Because("11 + 7 + 30 = 48 bits, the capacity exactly");
         await Assert.That(() => RmQRCodeGenerator.Create(new string('7', 10), RmQREccLevel.M, fixedVersion with { Fnc1 = Fnc1Mode.SecondPosition(0) })).Throws<ArgumentException>().Because("11 + 7 + 34 = 52 bits");
 
-        // Alphanumeric: 3 mode + 3 count bits, 39 left under first position: seven characters exactly, and a literal % costs two.
+        // Alphanumeric takes 3 mode + 3 count bits, which leaves 39 under first position. That holds seven characters exactly, and a literal % costs two.
         await Assert.That(RmQRCodeGenerator.Create("ABCDEFG", RmQREccLevel.M, fixedVersion with { Fnc1 = Fnc1Mode.FirstPosition }).Version).IsEqualTo(RmQRVersion.R7x43);
         await Assert.That(() => RmQRCodeGenerator.Create("ABCDEF%", RmQREccLevel.M, fixedVersion with { Fnc1 = Fnc1Mode.FirstPosition })).Throws<ArgumentException>().Because("8 units, 44 bits");
         await Assert.That(RmQRCodeGenerator.Create("ABCDEF%", RmQREccLevel.M, fixedVersion).Version).IsEqualTo(RmQRVersion.R7x43).Because("without FNC1 the % costs one, 6 + 39 = 45 bits");
@@ -416,7 +413,6 @@ public class Fnc1RmQREncodeTest
             await Assert.That(decoded).IsEqualTo(text).Because(segmentation.ToString());
             await Assert.That(info.Fnc1).IsEqualTo(Fnc1Mode.FirstPosition);
 
-            // No other version that holds the stream ranks better under the strategy: every version the stream fits is checked by a fixed-version encode.
             foreach (var candidate in Enum.GetValues<RmQRVersion>())
             {
                 if (!RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out _, options with { Version = candidate }))
@@ -587,8 +583,8 @@ public class Fnc1RmQREncodeTest
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(new string('7', 361), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions())).IsTrue().Because("without FNC1 the digits fit");
     }
 
-    // The committed FNC1 fixtures: every rMQR symbol another writer made reads back from this writer's symbol of the same data, under Optimal at the same version (the writers split
-    // the modes, so a mixed-case serial fits a version its single-mode stream does not)
+    // The committed FNC1 fixtures. Optimal is held to each fixture's version, because the other writers split the modes
+    // and a mixed-case serial fits a version its single-mode stream does not.
 
     public static IEnumerable<Func<string>> RmQrFixtureIds() => FixtureLoader.EnumerateFixtureIds("RmQrFnc1").Select(id => (Func<string>)(() => id));
 
@@ -616,10 +612,6 @@ public class Fnc1RmQREncodeTest
     }
 
 #if !DEBUG
-    /// <summary>
-    /// The span form allocates nothing under FNC1, Single and Optimal alike (Release only, as the other allocation tests are). The long text
-    /// is past the FNC1 table's stack buffer, so its parent table comes from the pool. The plan itself is always on the stack.
-    /// </summary>
     [Test]
     [NotInParallel]
     public async Task SpanForm_AllocatesNothing()
@@ -629,7 +621,7 @@ public class Fnc1RmQREncodeTest
         var buffer = new byte[4_000];
         var single = new RmQRCodeGeneratorOptions { Fnc1 = Fnc1Mode.FirstPosition };
         var optimal = new RmQRCodeGeneratorOptions { Fnc1 = Fnc1Mode.SecondPosition(37), Segmentation = RmQRSegmentation.Optimal };
-        // Here a plan is built only for a version better ranked than the single-mode fit, and the FNC1 table leaves the stack only for a text longer than its stack buffer holds.
+        // A plan is built only for a version better ranked than the single-mode fit. The FNC1 table comes from the pool only for a text past its stack buffer.
         var longSingle = RmQRCodeGenerator.Create(longText, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Fnc1 = optimal.Fnc1, Segmentation = RmQRSegmentation.Single });
         await Assert.That(IsBetter(RmQRCodeGenerator.Create(longText, RmQREccLevel.M, optimal).Version, longSingle.Version, RmQRFitStrategy.MinimizeArea)).IsTrue();
         await Assert.That(longText.Length * ModeSegmenter.Fnc1ParentBytesPerChar).IsGreaterThan(ModeSegmenter.Fnc1MaxStackParents);

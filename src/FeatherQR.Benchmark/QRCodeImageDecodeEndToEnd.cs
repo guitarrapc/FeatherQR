@@ -1,23 +1,13 @@
 using SkiaSharp;
 
 /// <summary>
-/// Reading a Standard QR symbol from an image, large symbols first: the path a Structured Append set is read through, which the matrix-level benchmarks do not touch.
-///
-/// The shapes differ in what the pixels look like, because the stages do not cost the same on each.
-/// A render at a whole number of pixels a module, in an image whose width is a multiple of eight, is the flattering case: every eight-pixel group the threshold's histogram folds is one value.
-/// The same symbol at a fractional module size is still two-valued and costs the threshold several times as much, and a rotated one brings in the grey edge pixels a resampler makes.
-///
-///   v40-3px       : version 40, 3 px a module, 555 x 555
-///   v40-3.4px     : version 40 at a fractional module size, 629 x 629, still crisp
-///   v40-4px-rot17 : version 40, 4 px a module, rotated 17 degrees with a linear filter, 925 x 925
-///   v40-4px-soft  : version 40, 4 px a module, blurred, contrast reduced, a brightness ramp and noise: no pure black or white left
-///   v25-4px-keystone15 : version 25, 4 px a module, one edge 15 % shorter and turned 23 degrees with a linear filter: the alignment pattern where the finders' frame predicts it
-///   v6-4px        : a version 6 URL, the small-symbol reference
-///   none-noise    : 740 x 740 noise, no symbol: the failure path, both polarities
-///   none-gradient : 740 x 740 smooth ramp, no symbol: the histogram's worst case, both polarities
-///
-/// Luminance is the span overload and must stay allocation-free. Bitmap is the SKBitmap entry, so the RGBA conversion is inside the measurement.
+/// Measures Standard QR image decoding on large symbols, a small reference symbol and symbol-free images.
 /// </summary>
+/// <remarks>
+/// Whole and fractional module pitches, rotation, blur, low contrast, noise and perspective separate the detector's cost profiles.
+/// Whole-pixel renders alone favor the histogram's uniform-group shortcut and are not representative of image decoding.
+/// Luminance-span rows must remain allocation-free. Bitmap rows include RGBA conversion.
+/// </remarks>
 public class QRCodeImageDecodeEndToEnd
 {
     private static readonly string[] shapeKeys =

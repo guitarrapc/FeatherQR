@@ -9,10 +9,8 @@ namespace QRInteropFixtures;
 /// <summary>
 /// <c>sweep-fnc1</c>: generated content written under FNC1 by both generators and read back by the pinned readers.
 /// Where <c>spot-check-fnc1</c> reads a fixed list of cases, this reads many generated ones: element strings built
-/// from the GS1 Syntax Dictionary (each AI with a value of its components' types and lengths, the separator after a
-/// value another follows unless the AI is of predefined length), and sequences chosen to stress the <c>%</c> rule
-/// (a literal <c>%</c> and the separator U+001D in every order, doubled, at the ends, beside digits, capitals and
-/// lowercase), with Latin-1, UTF-8 and Kanji content beside them. Each text is written as a Standard QR and an
+/// from the GS1 Syntax Dictionary, and sequences chosen to stress the <c>%</c> rule, with Latin-1, UTF-8 and Kanji
+/// content beside them. Each text is written as a Standard QR and an
 /// rMQR symbol under <see cref="QRSegmentation.Single"/> and <see cref="QRSegmentation.Optimal"/> with the other
 /// options drawn at random. zxing-cpp must read each with the mode's identifier, GS1 content for first position, the
 /// ECI flag and the text. ZXing.Net must read each Standard QR symbol in first position (it has no rMQR reader).
@@ -358,8 +356,8 @@ public static class Fnc1Sweep
     /// <summary>
     /// One to five elements of AIs drawn from the dictionary. A value has its components' types and lengths, not
     /// their linters' rules: the symbol layer carries any element string, and the data layer's checks have their own
-    /// corpus. The separator follows a value another element follows unless the AI is of predefined length, and one
-    /// text in eight ends on a separator or carries a doubled one, which data from the field does.
+    /// corpus. The separator follows a value another element follows unless the AI is of predefined length. One text
+    /// in eight ends on a separator and one in eight carries a stray one, which data from the field does.
     /// </summary>
     private static string MakeElementString(Xorshift random, Gs1SyntaxDictionary dictionary)
     {

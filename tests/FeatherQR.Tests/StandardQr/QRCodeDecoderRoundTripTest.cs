@@ -96,7 +96,7 @@ public class QRCodeDecoderRoundTripTest
             observedMasks.Add(info.MaskPattern);
         }
 
-        // Not all 8 are guaranteed, but a healthy spread proves per-pattern unmasking
+        // Require several automatically selected masks; this is not exhaustive mask coverage.
         await Assert.That(observedMasks.Count >= 4).IsTrue().Because($"expected >= 4 distinct masks, observed: {string.Join(", ", observedMasks)}");
     }
 

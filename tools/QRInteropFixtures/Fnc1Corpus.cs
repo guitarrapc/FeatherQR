@@ -30,12 +30,12 @@ public static class Fnc1Corpus
     private const Fnc1Position Second = Fnc1Position.Second;
 
     /// <summary>
-    /// libzint takes bracketed or parenthesized AI syntax, refuses an unknown or malformed AI, a wrong length, an empty
-    /// field and a control character such as a raw separator, writes the symbol despite its linter's other findings (a
-    /// wrong check digit, character set, date or pairing), and writes the element string itself, with a separator after
+    /// libzint takes bracketed or parenthesized AI syntax and writes the element string itself, with a separator after
     /// each variable-length field that another follows, except after AI 235 and after some AIs typed with a leading zero.
-    /// An AI typed with a leading zero also gets past some of these checks (the fixture spec's oracle matrix records how).
-    /// It writes first position only, in Standard QR and rMQR, and puts FNC1 before an ECI header.
+    /// It refuses an unknown or malformed AI, a wrong length, an empty field and a control character such as a raw
+    /// separator. It writes the symbol despite its linter's other findings, such as a wrong check digit, character set,
+    /// date or pairing. An AI typed with a leading zero gets past some of these checks (the fixture spec's oracle matrix
+    /// records how). It writes first position only, in Standard QR and rMQR, and puts FNC1 before an ECI header.
     /// </summary>
     public static readonly Fnc1CaseDefinition[] ZintCases =
     [

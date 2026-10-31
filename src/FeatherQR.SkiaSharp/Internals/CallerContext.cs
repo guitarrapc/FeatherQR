@@ -6,8 +6,9 @@ namespace FeatherQR.SkiaSharp.Internals;
 /// Moves an async call off its caller's context before the call computes.
 /// </summary>
 /// <remarks>
-/// An async method runs on its caller's thread until an await that does not complete at once, and a render comes before any.
-/// Under a synchronization context or a task scheduler of the caller's own, as on a UI thread, the call moves to the thread pool, so the render leaves that thread.
+/// An async method runs on its caller's thread until an await that does not complete at once.
+/// A render comes before any, and so does a decode whose stream reads all complete at once.
+/// Under a synchronization context or a task scheduler of the caller's own, as on a UI thread, the call moves to the thread pool, so the work leaves that thread.
 /// With neither, as on a server, the await completes at once and the call stays on its thread.
 /// </remarks>
 internal static class CallerContext

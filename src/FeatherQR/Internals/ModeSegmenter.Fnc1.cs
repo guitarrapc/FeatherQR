@@ -4,36 +4,31 @@ using System.Runtime.CompilerServices;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// The scalar cost walk under FNC1 (specs/standardqr-encoder.md, FNC1). The character classes change: the
-/// separator U+001D is an Alphanumeric character (written <c>%</c>), a literal <c>%</c> costs two Alphanumeric
-/// characters (written <c>%%</c>), and the Alphanumeric states split into "the last character was a separator"
-/// and "it was not", because a separator followed by a separator or a literal <c>%</c> cannot share a run (a
-/// reader takes <c>%%</c> first): from the separator states those two characters can only open a new run or go
-/// to Byte, which is how the program prices a break against a Byte run. The parent table keeps one byte per
-/// character and state, the predecessor state with a flag for a run opened there, so it does not share the
-/// packed table of the program without FNC1, whose eight states fill its three bits. Kanji is not planned
-/// under FNC1.
+/// Computes segmentation costs under FNC1 without planning Kanji runs.
 /// </summary>
 /// <remarks>
-/// A charset of one byte a character takes loops that keep the nine states in locals, as the program without FNC1
+/// A charset of one byte a character takes loops that keep the eight states in locals, as the program without FNC1
 /// keeps its six (see <see cref="ModeSegmenter"/>): relaxing every state through arrays costs far more in memory
-/// traffic than the arithmetic. UTF-8 takes copies of those loops with a byte count a character: the array loop that
-/// shape had kept cost ten times the plain program a character (specs/standardqr-encoder.md, FNC1).
+/// traffic than the arithmetic. UTF-8 takes copies of those loops with a byte count a character.
 /// The loops open every mode from one cheapest state, as the plain program does, rather than from a minimum over the
 /// other modes: an opening from a run's own mode never lies on a cheapest plan, since merging the two runs saves a
 /// header and no mode's cost grows by the merge, and where the separator rule forbids the continuation (a separator
 /// state before a separator or a literal percent) the opening is the allowed move. The eight states are updated in
 /// place, which keeps the keys and minima a second set of states would hold off the stack, and a run of characters
-/// only Byte encodes is one add each, as in the plain loops. The table a cheapest-state opening writes can differ
-/// from the other-modes form in rows no walk reads; the walked rows are the same.
+/// only Byte encodes is one add each, as in the plain loops.
 /// With parents, the loop carries a state as a key, its cost shifted up four bits with the state's number below
 /// it, one bit more than the program without FNC1 needs for its eight. The minimum of keys is the minimum cost and,
-/// among equal costs, the lowest state, which is the rule the array loop's search has. A continued run beats an
+/// among equal costs, the lowest state. A continued run beats an
 /// opened one at equal cost, which no key order can say, so each target compares its two keys by cost before it
 /// keeps one.
 /// </remarks>
 internal static partial class ModeSegmenter
 {
+    // U+001D uses one Alphanumeric character (%), while a literal % uses two (%%).
+    // A reader consumes %% first, so a separator followed by a separator or % must open another run or use Byte mode.
+    // Alphanumeric states therefore distinguish whether the preceding character was a separator.
+    // The parent table uses one byte per character and state, including a run-opening flag.
+    // It cannot reuse the ordinary program's packed three-bit predecessor representation.
     private const int Fnc1StateNumeric0 = 0;
     private const int Fnc1StateNumeric1 = 1;
     private const int Fnc1StateNumeric2 = 2;

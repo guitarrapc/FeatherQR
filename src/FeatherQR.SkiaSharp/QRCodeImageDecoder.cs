@@ -71,9 +71,9 @@ public static class QRCodeImageDecoder
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The stream is read to its end through its asynchronous reads alone, so a stream that refuses synchronous reads, such as a server's request body, gives it.
-        /// A <see cref="MemoryStream"/> whose buffer is exposed is read in place instead, from its position to its end, with no call to its reads.
-        /// The image is then decoded as <see cref="SKBitmap.Decode(Stream)"/> decodes it, in its pixels as encoded with no EXIF orientation applied, and read as <see cref="TryDecode(SKBitmap, out string, out QRCodeDecodeInfo)"/> reads that bitmap.
+        /// The stream is read to its end through its asynchronous reads alone, so the call reads a stream that refuses synchronous reads, such as a server's request body.
+        /// A <see cref="MemoryStream"/> whose buffer is exposed is read in place instead, with no call to its reads.
+        /// The image is then decoded as <see cref="SKBitmap.Decode(Stream)"/> decodes it, with no EXIF orientation applied, and read as <see cref="TryDecode(SKBitmap, out string, out QRCodeDecodeInfo)"/> reads that bitmap.
         /// Called on a thread with a synchronization context, such as a UI thread, or under a task scheduler of the caller's own, the call decodes on the thread pool, so the caller can await it where it is.
         /// There it decodes a copy of an exposed <see cref="MemoryStream"/>'s buffer, so the buffer may be reused once the call returns.
         /// </para>
@@ -117,7 +117,7 @@ public static class QRCodeImageDecoder
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The synchronous twin of <see cref="DecodeAsync(Stream, CancellationToken)"/>: the stream is read to its end through its synchronous reads, or in place as there, and the image is decoded and read as there, under the same limits. Other limits are given with <see cref="Decode(Stream, ImageStreamReadLimits)"/>.
+        /// The synchronous twin of <see cref="DecodeAsync(Stream, CancellationToken)"/>, reading the stream through its synchronous reads under the same limits. Other limits are given with <see cref="Decode(Stream, ImageStreamReadLimits)"/>.
         /// </para>
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
@@ -168,7 +168,7 @@ public static class QRCodeImageDecoder
         /// </summary>
         /// <remarks>
         /// Reads the stream as <see cref="DecodeAsync(Stream, CancellationToken)"/> does, under the same limits, and the bitmap as <see cref="DecodeSymbols(SKBitmap)"/> does. Other limits are given with <see cref="DecodeSymbolsAsync(Stream, ImageStreamReadLimits, CancellationToken)"/>.
-        /// The token is also checked before each symbol the search tries, never inside one symbol's read, so a cancel stops the search at its next try.
+        /// The token is also checked before each symbol the search tries, never inside one symbol's read.
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
         /// <param name="cancellationToken">Stops the call before the decode, during the reads, and between the symbols the search tries.</param>

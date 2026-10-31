@@ -1,20 +1,10 @@
 /// <summary>
-/// The call for every symbol of any symbology, against Standard QR's call for every symbol and the three every-symbol calls in turn.
-///
-/// The shapes are 1,280 x 960 pages, the symbols drawn crisp at 4 px a module, as <see cref="SingleFinderDecodeImageSymbols"/> draws them.
-///
-///   qr-one     : one Standard QR symbol on a smooth texture
-///   mixed-12   : twelve symbols in a 4 x 3 grid on a light page, Standard QR, Micro QR and rMQR in turn
-///   qr-page-12 : twelve Standard QR symbols in a 4 x 3 grid
-///   no-symbol  : the texture with no symbol
-///
-///   EveryIntoRoom  : SymbolDecoder.DecodeImageSymbols into a span with room for every symbol
-///   EveryIntoArray : SymbolDecoder.DecodeImageSymbols into a new array
-///   ThreeCalls     : the three every-symbol calls in turn, each into a span with room for every symbol
-///   StandardQR     : QRCodeDecoder.DecodeImageSymbols into a span with room for every symbol, the baseline
-///
-/// The span forms allocate only the texts read.
+/// Compares mixed-symbology scanning with Standard QR scanning and three separate symbology scans.
 /// </summary>
+/// <remarks>
+/// The same pages cover a single symbol, mixed and Standard QR sheets, and no symbols.
+/// Span destinations have room for every symbol and allocate only the decoded texts. The array row also allocates the result container.
+/// </remarks>
 public class SymbolDecodeImageSymbols
 {
     private const int Width = SingleFinderDecodeImageSymbols.Width;

@@ -37,7 +37,6 @@ public sealed class RectangleModuleShape : ModuleShape
     /// </summary>
     public override bool RequiresAntialiasing => false;
 
-    // Enforce singleton pattern
     private RectangleModuleShape() { }
 
     /// <inheritdoc/>
@@ -62,7 +61,6 @@ public sealed class CircleModuleShape : ModuleShape
     /// </summary>
     public override bool RequiresAntialiasing => true;
 
-    // Enforce singleton pattern
     private CircleModuleShape() { }
 
     /// <inheritdoc/>

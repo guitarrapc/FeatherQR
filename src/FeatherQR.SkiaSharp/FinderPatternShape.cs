@@ -36,7 +36,6 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
     /// </summary>
     public static readonly RectangleFinderPatternShape Default = new();
 
-    // Enforce singleton pattern
     private RectangleFinderPatternShape() { }
 
     /// <summary>
@@ -95,7 +94,6 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
     /// </summary>
     public static readonly CircleFinderPatternShape Default = new();
 
-    // Enforce singleton pattern
     private CircleFinderPatternShape() { }
 
     /// <summary>

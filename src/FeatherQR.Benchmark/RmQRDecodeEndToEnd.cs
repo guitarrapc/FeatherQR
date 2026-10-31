@@ -1,17 +1,10 @@
 /// <summary>
-/// End-to-end rMQR matrix decoding through the public API (RmQRCodeDecoder): module matrix (no quiet zone) → text.
-/// Baseline for the reference-shaped decoder. Span-destination variants must stay allocation-free.
-///
-/// Scenarios (same payloads and symbols as RmQREncodeEndToEnd, level M):
-///   Numeric_R11x27      : smallest symbol, single RS block
-///   Alphanumeric_R15x43 : single RS block
-///   Byte_R17x139        : largest symbol, 4 RS blocks
-///   Kanji_R17x139       : largest symbol, Kanji mode (capacity boundary, 92 characters)
-///   *_Corrected         : Numeric_R11x27 and Byte_R17x139 with damage the decoder
-///                          confirms as exactly N corrected errors, so the
-///                          Berlekamp-Massey/Chien/Forney correction path runs rather
-///                          than syndrome generation alone (the clean cases exit early)
+/// Measures rMQR matrix decoding on the payloads of <see cref="RmQREncodeEndToEnd"/>.
 /// </summary>
+/// <remarks>
+/// Matrices have no quiet zone and span destinations must remain allocation-free.
+/// Corrected rows verify the intended error count in setup, ensuring correction runs instead of the clean-block shortcut.
+/// </remarks>
 public class RmQRDecodeEndToEnd
 {
     private byte[] _numericModules = default!;

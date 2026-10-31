@@ -51,7 +51,7 @@ public class ForcedIso8859_1Test
         await AssertRefused(() => QRCodeGenerator.Create(text, QREccLevel.M, options), "Create");
     }
 
-    // Text ISO-8859-1 holds, its top char included, is written as before
+    // Text ISO-8859-1 holds is written, its top char included
     [Test]
     public async Task TextLatin1Holds_IsWritten()
     {

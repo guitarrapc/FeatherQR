@@ -4,17 +4,17 @@ using System.Runtime.CompilerServices;
 namespace FeatherQR.Gs1.Internals;
 
 /// <summary>
-/// The (AI) text of an element string and back. The text is <c>(AI)value</c> pairs with nothing between them,
-/// the AI in parentheses and a literal parenthesis in a value written <c>\(</c>, which is the GS1 HRI form
-/// (General Specifications 4.14) minus the blank the specification allows after the closing parenthesis. A
-/// backslash in a value is written <c>\\</c>: no GS1 character set holds one, but a decoded symbol can, and
-/// without the escape a value ending in a backslash would run into the next pair when the text is read back.
-/// Formatting runs only what splitting needs. Building runs every check: each value is checked against its
-/// entry as it is copied, then the pairing rules run over the element string built. Errors point into the
-/// text the caller gave, escapes included.
+/// Converts between GS1 element strings and escaped <c>(AI)value</c> text.
 /// </summary>
+/// <remarks>
+/// Pairs have no intervening whitespace. Literal parentheses and backslashes are escaped as <c>\(</c> and <c>\\</c>.
+/// Formatting validates only what splitting requires. Parsing validates values and cross-element rules.
+/// Error positions refer to the caller's text, including escapes.
+/// </remarks>
 internal static class Gs1Hri
 {
+    // Escaping backslashes prevents a value's trailing backslash from swallowing the next pair's opening parenthesis.
+    // GS1 character sets exclude backslashes, but decoded input can still contain them.
     private const char Escape = '\\';
     private const char Open = '(';
     private const char Close = ')';

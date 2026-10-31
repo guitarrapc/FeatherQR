@@ -58,8 +58,8 @@ foreach (var (pattern, charset) in new[]
 }
 Console.WriteLine($"Structured Append FNV64: {digest:X16}");
 
-// The GS1 layer after native compilation: (AI) text into a GS1 QR Code and an rMQR code and back, the Digital Link
-// URI of the same data as plain text and back, and refused data as the exception that carries the data layer's error.
+// The GS1 layer after native compilation: both symbologies and the Digital Link URI round-trip, and refused data
+// throws the exception that carries the data layer's error.
 const string gs1Text = "(01)09506000134352(10)ABC123(17)201225";
 var gs1Symbol = QRCodeGenerator.CreateGs1(gs1Text, QREccLevel.M);
 if (!QRCodeDecoder.TryDecode(gs1Symbol, out var gs1Data, out var gs1Info) || gs1Info.Fnc1 != Fnc1Mode.FirstPosition

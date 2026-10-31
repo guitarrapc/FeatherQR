@@ -1,17 +1,13 @@
 using FeatherQR.Gs1;
 
 /// <summary>
-/// What the GS1 entry points add to an encode, on the three element strings of <see cref="Gs1DataLayer"/>: each
-/// entry point beside the <c>Create</c> call it ends in, all in the span form into one buffer, so the Allocated
-/// column is the layer's own. The difference between a row and its <c>Create</c> row is the data layer's work for
-/// the text: the checks, the separators of (AI) text, and for Digital Link the URI. <c>CreateGs1</c> has a row
-/// under <c>Optimal</c> in each symbology too, where the element string is split into runs when that lowers the
-/// version, so the cost of planning a GS1 label stands beside the default.
-///
-///   retail    : (01) GTIN, (17) expiry, (10) lot, the point-of-sale label
-///   logistics : (00) SSCC, (02) content GTIN, (11) production date, (37) count, (10) lot, a logistic label
-///   weighed   : (01) GTIN, (3103) net weight, (3922) price, (17) expiry, the Digital Link standard's variable-measure example
+/// Measures the GS1 data layer overhead over the underlying QR and rMQR encodes.
 /// </summary>
+/// <remarks>
+/// Each GS1 span call is paired with the plain Create call for its encoded data, using a shared destination buffer.
+/// The difference includes validation, HRI parsing and URI construction as applicable. Optimal rows also include segmentation.
+/// Payloads are shared with <see cref="Gs1DataLayer"/>.
+/// </remarks>
 public class Gs1SymbolEncode
 {
     private static readonly string[] shapeKeys = ["retail", "logistics", "weighed"];

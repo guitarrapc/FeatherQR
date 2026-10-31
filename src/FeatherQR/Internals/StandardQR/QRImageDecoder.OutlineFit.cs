@@ -8,13 +8,17 @@ internal static partial class QRImageDecoder
     private const int OutlineFitBelowDimension = 17 + 4 * 7;
 
     /// <summary>
-    /// The grid-to-pixel plane that best fits the corners of the three finders' inner outlines, the square five modules a side each dark ring encloses.
-    /// A grid through three centres and a fourth point takes each finder as a point and leans on the fourth. This one takes each finder as a shape, whose four corners carry the perspective where the finder stands, so nothing is extrapolated from a single point across the symbol.
-    /// Where the alignment search anchored, <paramref name="anchoredFit"/> is the plane fitted to those corners and the anchor as one more point. Each reads symbols the other does not.
-    /// False from version 7, and when an outline cannot be measured, as on a finder drawn round or an inferred one.
+    /// Fits a grid-to-pixel plane to the inner outlines of three finders, optionally including the alignment anchor.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="anchoredFit"/> includes the alignment point when available.
+    /// Returns false from version 7 onward or when an outline cannot be measured, including round or inferred finders.
+    /// </remarks>
     internal static bool TryFitToFinderOutlines(in ImageView image, in FinderFrame frame, int dimension, bool anchored, in PerspectiveTransform anchoredTransform, out PerspectiveTransform fitted, out PerspectiveTransform anchoredFit)
     {
+        // Each inner outline encloses a five-module square. Its four corners provide local perspective evidence.
+        // Fitting these shapes avoids extrapolating a fourth corner from three finder centers alone.
+        // Anchored and unanchored fits each read symbols the other misses.
         fitted = default;
         anchoredFit = default;
         if (dimension >= OutlineFitBelowDimension)
