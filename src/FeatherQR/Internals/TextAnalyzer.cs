@@ -128,12 +128,6 @@ internal static partial class TextAnalyzer
             : new TextAnalysisResult(EncodingMode.Kanji, EciMode.Default, text.Length);
     }
 
-    /// <summary>
-    /// Scalar fallback analysis (process 1 char at once)
-    /// </summary>
-    /// <param name="text">The text to inspect.</param>
-    /// <param name="requestedEciMode">The character encoding the caller asked for, or Default to choose one from the text.</param>
-    /// <returns>The narrowest encoding mode the text fits, its length in that mode's units, and the ECI mode to declare.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static TextAnalysisResult AnalyzeScalar(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {

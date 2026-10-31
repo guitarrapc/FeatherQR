@@ -10,13 +10,7 @@ namespace FeatherQR.SkiaSharp.Internals;
 /// </remarks>
 internal readonly record struct Vector2Slim
 {
-    /// <summary>
-    /// The X component of the vector.
-    /// </summary>
     public int X { get; }
-    /// <summary>
-    /// The Y component of the vector.
-    /// </summary>
     public int Y { get; }
 
     /// <summary>
@@ -90,22 +84,10 @@ internal readonly record struct Vector2Slim
         span[index + 1] = Y;
     }
 
-    /// <summary>
-    /// Returns the vector (0,0).
-    /// </summary>
     public static readonly Vector2Slim Zero = new(0, 0);
 
-    /// <summary>
-    /// Returns the vector (1,1).
-    /// </summary>
     public static readonly Vector2Slim One = new(1, 1);
 
-    /// <summary>
-    /// Returns the vector (1,0).
-    /// </summary>
     public static readonly Vector2Slim UnitX = new(1, 0);
-    /// <summary>
-    /// Returns the vector (0,1).
-    /// </summary>
     public static readonly Vector2Slim UnitY = new(0, 1);
 }

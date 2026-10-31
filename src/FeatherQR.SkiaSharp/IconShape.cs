@@ -86,7 +86,6 @@ public sealed class ImageIconShape : IconShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor)
     {
-        // Draw border background color padding if specified
         if (borderRect != rect)
         {
             using var borderPaint = new SKPaint()
@@ -97,7 +96,6 @@ public sealed class ImageIconShape : IconShape
             canvas.DrawRect(borderRect, borderPaint);
         }
 
-        // Draw an image
         // SKSamplingOptions.Default matches what the obsolete DrawBitmap(bitmap, rect) overload used.
         canvas.DrawBitmap(_image, rect, SKSamplingOptions.Default);
     }
@@ -160,7 +158,6 @@ public sealed class ImageTextIconShape : IconShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor)
     {
-        // Draw border background color padding if specified
         if (borderRect != rect)
         {
             using var borderPaint = new SKPaint()
@@ -171,21 +168,17 @@ public sealed class ImageTextIconShape : IconShape
             canvas.DrawRect(borderRect, borderPaint);
         }
 
-        // Draw an image
         // SKSamplingOptions.Default matches what the obsolete DrawBitmap(bitmap, rect) overload used.
         canvas.DrawBitmap(_image, rect, SKSamplingOptions.Default);
 
-        // Draw text below the image
         if (!string.IsNullOrEmpty(_text))
         {
-            // enable antialias for better text quality
             using var textPaint = new SKPaint
             {
                 Color = _textColor,
                 IsAntialias = true,
             };
 
-            // Calculate text X position based on horizontal alignment
             var textX = _horizontalAlign switch
             {
                 SKTextAlign.Left => borderRect.Left,
@@ -194,7 +187,6 @@ public sealed class ImageTextIconShape : IconShape
                 _ => borderRect.Left,
             };
 
-            // Calculate text Y position based on vertical alignment
             // CapHeight: Capital letter height, to better align text vertically
             var textY = _verticalAlign switch
             {

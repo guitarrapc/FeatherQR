@@ -56,7 +56,6 @@ public static class SymbolRenderer
 
         var shape = moduleShape ?? RectangleModuleShape.Default;
 
-        // Draw the background over the whole area at once
         using var lightPaint = new SKPaint() { Color = backgroundColor, Style = SKPaintStyle.Fill };
         canvas.DrawRect(area, lightPaint);
 
@@ -67,7 +66,6 @@ public static class SymbolRenderer
         if (IsEmpty(symbolArea))
             return;
 
-        // Create paint with gradient or solid color
         // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
 
@@ -157,7 +155,6 @@ public static class SymbolRenderer
 
         var shape = moduleShape ?? RectangleModuleShape.Default;
 
-        // Draw the background over the whole area at once
         using var lightPaint = new SKPaint() { Color = backgroundColor, Style = SKPaintStyle.Fill };
         canvas.DrawRect(area, lightPaint);
 
@@ -234,7 +231,6 @@ public static class SymbolRenderer
 
         var shape = moduleShape ?? RectangleModuleShape.Default;
 
-        // Draw the background over the whole area at once
         using var lightPaint = new SKPaint() { Color = backgroundColor, Style = SKPaintStyle.Fill };
         canvas.DrawRect(area, lightPaint);
 
@@ -640,7 +636,6 @@ public static class SymbolRenderer
         var cellHeight = area.Height / data.Height;
         var quietZone = (data.Width - coreWidth) / 2;
 
-        // Calculate module size with gaps
         var moduleWidth = cellWidth * moduleSizePercent;
         var moduleHeight = cellHeight * moduleSizePercent;
         var xOffset = (cellWidth - moduleWidth) / 2;

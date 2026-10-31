@@ -22,9 +22,6 @@ internal ref struct BitWriter
     private ulong _accumulator;   // pending bits stored at the top (MSB-first)
     private int _accumulatorBits; // 0..31 between writes
 
-    /// <summary>
-    /// Current bit position in the buffer.
-    /// </summary>
     public readonly int BitPosition => _bytePosition * 8 + _accumulatorBits;
 
     /// <summary>
