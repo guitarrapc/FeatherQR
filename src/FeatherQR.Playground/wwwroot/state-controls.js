@@ -97,9 +97,10 @@ export function createStateControls(document, hooks) {
     try {
       if (typeof state.content === 'string') contentEl.value = state.content;
       if (state.symbology === 'qr' || state.symbology === 'microqr' || state.symbology === 'rmqr') symbologySelect.value = state.symbology;
-      // Symbology decides the legal ECC / version option sets, rebuild before applying values
-      populateEccSelect();
+      // Micro QR ECC choices depend on the restored version.
       populateVersionSelect();
+      if (Number.isFinite(state.version)) versionSelect.value = String(state.version);
+      populateEccSelect();
       if ([...eccSelect.options].some(option => option.value === state.ecc)) eccSelect.value = state.ecc;
       if (typeof state.eccBoost === 'boolean') eccBoostCheck.checked = state.eccBoost;
       if (typeof state.allowKanji === 'boolean') allowKanjiCheck.checked = state.allowKanji;
@@ -110,7 +111,6 @@ export function createStateControls(document, hooks) {
       if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
       if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
       if (Number.isFinite(state.quietZone)) quietRange.value = String(clamp(state.quietZone, 0, 10));
-      if (Number.isFinite(state.version)) versionSelect.value = String(state.version);
       if (state.moduleShape) moduleShapeSelect.value = state.moduleShape;
       if (Number.isFinite(state.moduleSizePercent)) moduleSizeRange.value = String(Math.round(clamp(state.moduleSizePercent, 0.5, 1) * 100));
       if (Number.isFinite(state.moduleCornerRadius)) cornerRange.value = String(Math.round(clamp(state.moduleCornerRadius, 0, 1) * 100));
@@ -140,17 +140,22 @@ export function createStateControls(document, hooks) {
     }
   }
 
-  /** Repopulates the ECC select for the symbology, keeping the value when still valid. */
+  /** Repopulates ECC for the symbology and version, keeping the value when still valid. */
   function populateEccSelect() {
     const prev = eccSelect.value;
     eccSelect.replaceChildren();
     for (const [value, label] of ECC_OPTIONS[isRmqrSymbology() ? 'rmqr' : isMicroSymbology() ? 'microqr' : 'qr']) {
+      if (isMicroSymbology() && versionSelect.value !== '-1') {
+        const version = Number(versionSelect.value);
+        if (version === 1 ? value !== 'EDO' : value === 'EDO' || (value === 'Q' && version !== 4)) continue;
+      }
       const opt = document.createElement('option');
       opt.value = value;
       opt.textContent = label;
       eccSelect.appendChild(opt);
     }
-    eccSelect.value = [...eccSelect.options].some((o) => o.value === prev) ? prev : 'M';
+    const fallback = isMicroSymbology() && versionSelect.value === '1' ? 'EDO' : 'M';
+    eccSelect.value = [...eccSelect.options].some((o) => o.value === prev) ? prev : fallback;
   }
 
   /** Repopulates the version select for the symbology, keeping the value when still valid. */
@@ -188,9 +193,14 @@ export function createStateControls(document, hooks) {
   }
 
   function syncSymbologyControls() {
-    populateEccSelect();
     populateVersionSelect();
+    populateEccSelect();
     quietRange.value = isMicroSymbology() || isRmqrSymbology() ? '2' : '4';
+    syncDerivedControls();
+  }
+
+  function syncVersionControls() {
+    populateEccSelect();
     syncDerivedControls();
   }
 
@@ -235,10 +245,10 @@ export function createStateControls(document, hooks) {
     logoFileRow.hidden = logoModeSelect.value !== 'custom';
   }
 
-  populateEccSelect();
   populateVersionSelect();
+  populateEccSelect();
 
-  return { collectState, applyStateToControls, syncDerivedControls, syncSymbologyControls, get applyingState() { return applyingState; } };
+  return { collectState, applyStateToControls, syncDerivedControls, syncSymbologyControls, syncVersionControls, get applyingState() { return applyingState; } };
 }
 
 /** Flat preset entry → state shape used by applyStateToControls / share links. */

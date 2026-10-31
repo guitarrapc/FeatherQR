@@ -1374,7 +1374,7 @@ function markCustomPreset() {
 
 for (const el of [
   contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, formatSelect, appIndicatorInput, gs1StemInput,
-  versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
+  rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
   gradientToggle, gradientDirection,
@@ -1386,6 +1386,12 @@ for (const el of [
     scheduleGenerate();
   });
 }
+
+versionSelect.addEventListener('input', () => {
+  stateControls.syncVersionControls();
+  markCustomPreset();
+  scheduleGenerate();
+});
 
 // Symbology switch rebuilds the dependent selects and resets the quiet zone to
 // the symbology's specification default (QR: 4 modules, Micro QR: 2 modules).

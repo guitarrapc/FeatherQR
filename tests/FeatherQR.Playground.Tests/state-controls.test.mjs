@@ -216,3 +216,83 @@ test('fixed rMQR version suppresses height, returning to Auto restores it', asyn
   assert.equal(controls.collectState().height, 17);
   assert.equal(el('rmqr-height-select').disabled, false);
 });
+
+test('Micro QR M1 restores with detection-only ECC instead of M', () => {
+  const { controls, el } = fixture();
+  controls.applyStateToControls({ symbology: 'microqr', version: 1, ecc: 'M' });
+  assert.deepEqual(el('ecc-select').options.map(option => option.value), ['EDO']);
+  assert.equal(controls.collectState().ecc, 'EDO');
+});
+
+const microLevels = { '-1': ['EDO', 'L', 'M', 'Q'], 1: ['EDO'], 2: ['L', 'M'], 3: ['L', 'M'], 4: ['L', 'M', 'Q'] };
+for (const [from, levels] of Object.entries(microLevels)) {
+  for (const ecc of levels) {
+    for (const [to, available] of Object.entries(microLevels)) {
+      test(`Micro QR ${from}/${ecc} -> ${to} reconciles ECC and preserves quiet zone`, () => {
+        const { controls, el } = fixture();
+        controls.applyStateToControls({ symbology: 'microqr', version: Number(from), ecc, quietZone: 5 });
+        el('version-select').value = to;
+        controls.syncVersionControls();
+        assert.deepEqual(el('ecc-select').options.map(option => option.value), available);
+        assert.equal(controls.collectState().ecc, available.includes(ecc) ? ecc : to === '1' ? 'EDO' : 'M');
+        assert.equal(controls.collectState().version, Number(to));
+        assert.equal(controls.collectState().quietZone, 5);
+      });
+    }
+  }
+}
+for (const [version, available] of Object.entries(microLevels)) {
+  for (const [name, preset] of Object.entries(PRESETS)) {
+    test(`Micro QR ${version} + ${name} preset and share restoration`, async () => {
+      const { controls, el } = fixture();
+      controls.applyStateToControls({ symbology: 'microqr', version: Number(version) });
+      controls.applyStateToControls(presetToState(preset));
+      const state = controls.collectState();
+      assert.ok(available.includes(state.ecc));
+      assert.equal(state.version, Number(version));
+      const decoded = await decodeShareHash(await encodeShareState(state));
+      assert.equal(decoded.ok, true);
+      const restored = fixture();
+      restored.controls.applyStateToControls(decoded.state);
+      assert.deepEqual(restored.controls.collectState(), state);
+      assert.deepEqual(el('ecc-select').options.map(option => option.value), available);
+    });
+  }
+  for (const ecc of ['EDO', 'L', 'M', 'Q']) {
+    test(`legacy share Micro QR ${version}/${ecc} keeps version and normalizes incompatible ECC`, async () => {
+      const decoded = await decodeShareHash(await encodeShareState({ symbology: 'microqr', version: Number(version), ecc }));
+      assert.equal(decoded.ok, true);
+      const { controls } = fixture();
+      controls.applyStateToControls(decoded.state);
+      assert.equal(controls.collectState().version, Number(version));
+      assert.equal(controls.collectState().ecc, available.includes(ecc) ? ecc : version === '1' ? 'EDO' : 'M');
+    });
+  }
+}
+for (const symbology of ['qr', 'rmqr']) {
+  test(`${symbology} version changes retain all supported ECC options`, () => {
+    const { controls, el } = fixture();
+    controls.applyStateToControls({ symbology, ecc: 'H' });
+    for (const version of ['1', '4', '-1']) {
+      el('version-select').value = version;
+      controls.syncVersionControls();
+      assert.deepEqual(el('ecc-select').options.map(option => option.value), symbology === 'qr' ? ['L', 'M', 'Q', 'H'] : ['M', 'H']);
+      assert.equal(controls.collectState().ecc, 'H');
+    }
+  });
+}
+
+for (const version of [1, 2, 4]) {
+  test(`switching QR version ${version} to Micro QR filters ECC after version selection`, () => {
+    const { controls, el } = fixture();
+    controls.applyStateToControls({ symbology: 'qr', version, ecc: 'H' });
+    el('symbology-select').value = 'microqr';
+    controls.syncSymbologyControls();
+    assert.equal(controls.collectState().version, version);
+    assert.equal(controls.collectState().ecc, version === 1 ? 'EDO' : 'M');
+    assert.deepEqual(el('ecc-select').options.map(option => option.value), microLevels[version]);
+    el('symbology-select').value = 'qr';
+    controls.syncSymbologyControls();
+    assert.equal(controls.collectState().ecc, 'M');
+  });
+}

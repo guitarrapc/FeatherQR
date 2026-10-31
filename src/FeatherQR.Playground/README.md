@@ -12,6 +12,7 @@ It runs FeatherQR and SkiaSharp through WebAssembly. Text and images are process
 - **Browse the API:** the [API reference](https://guitarrapc.github.io/FeatherQR/api/index.html) lists public types and members with their documentation.
 
 If a preset requests an error-correction level unavailable for the selected symbology, the current supported level is retained.
+For Micro QR, a fixed version also limits ECC: M1 uses EDO, M2/M3 allow L or M, and M4 allows L, M or Q. Auto offers all four levels. Changing version keeps a compatible ECC; otherwise it selects EDO for M1 or M for the other versions. Shared links follow the same rule.
 
 Gradients, shapes and logos can reduce readability. Check the result with the scanners you intend to use, especially before printing.
 
