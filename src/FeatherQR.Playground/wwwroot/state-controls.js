@@ -1,3 +1,5 @@
+import { ECC_OPTIONS, RMQR_VERSIONS } from './symbol-options.js';
+
 /** Binds state collection and application once, without loading the WASM host. */
 export function createStateControls(document, hooks) {
   const contentEl = document.getElementById('content');
@@ -96,9 +98,9 @@ export function createStateControls(document, hooks) {
       if (typeof state.content === 'string') contentEl.value = state.content;
       if (state.symbology === 'qr' || state.symbology === 'microqr' || state.symbology === 'rmqr') symbologySelect.value = state.symbology;
       // Symbology decides the legal ECC / version option sets, rebuild before applying values
-      hooks.populateEccSelect();
-      hooks.populateVersionSelect();
-      if (state.ecc) eccSelect.value = state.ecc;
+      populateEccSelect();
+      populateVersionSelect();
+      if ([...eccSelect.options].some(option => option.value === state.ecc)) eccSelect.value = state.ecc;
       if (typeof state.eccBoost === 'boolean') eccBoostCheck.checked = state.eccBoost;
       if (typeof state.allowKanji === 'boolean') allowKanjiCheck.checked = state.allowKanji;
       if (DATA_FORMATS.includes(state.dataFormat)) formatSelect.value = state.dataFormat;
@@ -136,6 +138,60 @@ export function createStateControls(document, hooks) {
     } finally {
       applyingState = false;
     }
+  }
+
+  /** Repopulates the ECC select for the symbology, keeping the value when still valid. */
+  function populateEccSelect() {
+    const prev = eccSelect.value;
+    eccSelect.replaceChildren();
+    for (const [value, label] of ECC_OPTIONS[isRmqrSymbology() ? 'rmqr' : isMicroSymbology() ? 'microqr' : 'qr']) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label;
+      eccSelect.appendChild(opt);
+    }
+    eccSelect.value = [...eccSelect.options].some((o) => o.value === prev) ? prev : 'M';
+  }
+
+  /** Repopulates the version select for the symbology, keeping the value when still valid. */
+  function populateVersionSelect() {
+    const prev = versionSelect.value;
+    versionSelect.replaceChildren();
+    const auto = document.createElement('option');
+    auto.value = '-1';
+    auto.textContent = 'Auto';
+    versionSelect.appendChild(auto);
+    if (isRmqrSymbology()) {
+      RMQR_VERSIONS.forEach(([h, w], i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i + 1);
+        opt.textContent = `R${h}x${w} (${w}×${h})`;
+        versionSelect.appendChild(opt);
+      });
+    } else if (isMicroSymbology()) {
+      for (let v = 1; v <= 4; v++) {
+        const side = 9 + 2 * v;
+        const opt = document.createElement('option');
+        opt.value = String(v);
+        opt.textContent = `M${v} (${side}×${side})`;
+        versionSelect.appendChild(opt);
+      }
+    } else {
+      for (let v = 1; v <= 40; v++) {
+        const opt = document.createElement('option');
+        opt.value = String(v);
+        opt.textContent = `${v} (${17 + 4 * v}×${17 + 4 * v})`;
+        versionSelect.appendChild(opt);
+      }
+    }
+    versionSelect.value = [...versionSelect.options].some((o) => o.value === prev) ? prev : '-1';
+  }
+
+  function syncSymbologyControls() {
+    populateEccSelect();
+    populateVersionSelect();
+    quietRange.value = isMicroSymbology() || isRmqrSymbology() ? '2' : '4';
+    syncDerivedControls();
   }
 
   function clamp(value, min, max) {
@@ -179,7 +235,10 @@ export function createStateControls(document, hooks) {
     logoFileRow.hidden = logoModeSelect.value !== 'custom';
   }
 
-  return { collectState, applyStateToControls, syncDerivedControls, get applyingState() { return applyingState; } };
+  populateEccSelect();
+  populateVersionSelect();
+
+  return { collectState, applyStateToControls, syncDerivedControls, syncSymbologyControls, get applyingState() { return applyingState; } };
 }
 
 /** Flat preset entry → state shape used by applyStateToControls / share links. */

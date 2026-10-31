@@ -1,3 +1,5 @@
+import { RMQR_VERSIONS } from './symbol-options.js';
+import { PRESETS } from './presets.js';
 import { createStateControls, presetToState } from './state-controls.js';
 import { dotnet } from './_framework/dotnet.js';
 import {
@@ -213,35 +215,6 @@ const benchResult = document.getElementById('bench-result');
 
 /* ─── Symbology-dependent selects ─── */
 
-const ECC_OPTIONS = {
-  qr: [
-    ['L', 'L, 7%'],
-    ['M', 'M, 15%'],
-    ['Q', 'Q, 25%'],
-    ['H', 'H, 30%'],
-  ],
-  microqr: [
-    ['EDO', 'Error detection only (M1)'],
-    ['L', 'L, 7%'],
-    ['M', 'M, 15%'],
-    ['Q', 'Q, 25% (M4 only)'],
-  ],
-  rmqr: [
-    ['M', 'M, 15%'],
-    ['H', 'H, 30%'],
-  ],
-};
-
-/** The 32 rMQR versions in ISO/IEC 23941 index order (height-major); select value = index + 1 (= RmQRVersion). */
-const RMQR_VERSIONS = [
-  [7, 43], [7, 59], [7, 77], [7, 99], [7, 139],
-  [9, 43], [9, 59], [9, 77], [9, 99], [9, 139],
-  [11, 27], [11, 43], [11, 59], [11, 77], [11, 99], [11, 139],
-  [13, 27], [13, 43], [13, 59], [13, 77], [13, 99], [13, 139],
-  [15, 43], [15, 59], [15, 77], [15, 99], [15, 139],
-  [17, 43], [17, 59], [17, 77], [17, 99], [17, 139],
-];
-
 function isMicroSymbology() {
   return symbologySelect.value === 'microqr';
 }
@@ -361,143 +334,13 @@ function decodedModeMatches(result, request) {
   return result.fnc1 === 'second' && result.applicationIndicator === expected;
 }
 
-/** Repopulates the ECC select for the symbology, keeping the value when still valid. */
-function populateEccSelect() {
-  const prev = eccSelect.value;
-  eccSelect.replaceChildren();
-  for (const [value, label] of ECC_OPTIONS[isRmqrSymbology() ? 'rmqr' : isMicroSymbology() ? 'microqr' : 'qr']) {
-    const opt = document.createElement('option');
-    opt.value = value;
-    opt.textContent = label;
-    eccSelect.appendChild(opt);
-  }
-  eccSelect.value = [...eccSelect.options].some((o) => o.value === prev) ? prev : 'M';
-}
-
-/** Repopulates the version select for the symbology, keeping the value when still valid. */
-function populateVersionSelect() {
-  const prev = versionSelect.value;
-  versionSelect.replaceChildren();
-  const auto = document.createElement('option');
-  auto.value = '-1';
-  auto.textContent = 'Auto';
-  versionSelect.appendChild(auto);
-  if (isRmqrSymbology()) {
-    RMQR_VERSIONS.forEach(([h, w], i) => {
-      const opt = document.createElement('option');
-      opt.value = String(i + 1);
-      opt.textContent = `R${h}x${w} (${w}×${h})`;
-      versionSelect.appendChild(opt);
-    });
-  } else if (isMicroSymbology()) {
-    for (let v = 1; v <= 4; v++) {
-      const side = 9 + 2 * v;
-      const opt = document.createElement('option');
-      opt.value = String(v);
-      opt.textContent = `M${v} (${side}×${side})`;
-      versionSelect.appendChild(opt);
-    }
-  } else {
-    for (let v = 1; v <= 40; v++) {
-      const opt = document.createElement('option');
-      opt.value = String(v);
-      opt.textContent = `${v} (${17 + 4 * v}×${17 + 4 * v})`;
-      versionSelect.appendChild(opt);
-    }
-  }
-  versionSelect.value = [...versionSelect.options].some((o) => o.value === prev) ? prev : '-1';
-}
-
-populateEccSelect();
-populateVersionSelect();
-
-/* ─── Presets ─── */
-
-const PRESETS = {
-  instagram: {
-    ecc: 'H',
-    moduleShape: 'rounded',
-    moduleSizePercent: 0.92,
-    moduleCornerRadius: 0.45,
-    finderShape: 'roundedCircle',
-    foreground: '#111111',
-    background: '#ffffff',
-    gradientEnabled: true,
-    gradientColors: ['#F77737', '#E1306C', '#833AB4', '#5851DB'],
-    gradientDirection: 'BottomLeftToTopRight',
-    logoMode: 'default',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-  classic: {
-    ecc: 'M',
-    moduleShape: 'rectangle',
-    moduleSizePercent: 1.0,
-    moduleCornerRadius: 0.3,
-    finderShape: 'auto',
-    foreground: '#000000',
-    background: '#ffffff',
-    gradientEnabled: false,
-    gradientColors: ['#000000', '#444444'],
-    gradientDirection: 'TopLeftToBottomRight',
-    logoMode: 'none',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-  midnight: {
-    ecc: 'Q',
-    moduleShape: 'circle',
-    moduleSizePercent: 0.95,
-    moduleCornerRadius: 0.3,
-    finderShape: 'roundedCircle',
-    foreground: '#22d3ee',
-    background: '#0b1220',
-    gradientEnabled: true,
-    gradientColors: ['#22d3ee', '#818cf8', '#e879f9'],
-    gradientDirection: 'TopToBottom',
-    logoMode: 'none',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-  ocean: {
-    ecc: 'Q',
-    moduleShape: 'rounded',
-    moduleSizePercent: 0.95,
-    moduleCornerRadius: 0.6,
-    finderShape: 'rounded',
-    foreground: '#0c4a6e',
-    background: '#f0f9ff',
-    gradientEnabled: true,
-    gradientColors: ['#0ea5e9', '#0369a1', '#1e3a8a'],
-    gradientDirection: 'TopLeftToBottomRight',
-    logoMode: 'none',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-  sunset: {
-    ecc: 'Q',
-    moduleShape: 'rounded',
-    moduleSizePercent: 0.9,
-    moduleCornerRadius: 0.35,
-    finderShape: 'rounded',
-    foreground: '#7c2d12',
-    background: '#fffbeb',
-    gradientEnabled: true,
-    gradientColors: ['#b45309', '#dc2626', '#9d174d'],
-    gradientDirection: 'BottomToTop',
-    logoMode: 'none',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-};
-
 /* ─── State <-> DOM ─── */
 
 const EMPTY_BYTES = new Uint8Array(0);
 /** Uploaded logo image bytes (not part of share links). */
 let customLogoBytes = EMPTY_BYTES;
 const stateControls = createStateControls(document, {
-  populateEccSelect, populateVersionSelect, getGradientColors, renderGradientColors,
+  getGradientColors, renderGradientColors,
 });
 const { collectState, applyStateToControls, syncDerivedControls } = stateControls;
 
@@ -1547,10 +1390,7 @@ for (const el of [
 // Symbology switch rebuilds the dependent selects and resets the quiet zone to
 // the symbology's specification default (QR: 4 modules, Micro QR: 2 modules).
 symbologySelect.addEventListener('input', () => {
-  populateEccSelect();
-  populateVersionSelect();
-  quietRange.value = isMicroSymbology() || isRmqrSymbology() ? '2' : '4';
-  syncDerivedControls();
+  stateControls.syncSymbologyControls();
   markCustomPreset();
   scheduleGenerate();
 });

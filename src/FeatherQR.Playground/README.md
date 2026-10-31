@@ -11,6 +11,8 @@ It runs FeatherQR and SkiaSharp through WebAssembly. Text and images are process
 - **Measure throughput:** **Performance benchmark** runs either encoding alone or the full encode, render and PNG pipeline. Results measure the WebAssembly runtime in your browser, not native .NET performance.
 - **Browse the API:** the [API reference](https://guitarrapc.github.io/FeatherQR/api/index.html) lists public types and members with their documentation.
 
+If a preset requests an error-correction level unavailable for the selected symbology, the current supported level is retained.
+
 Gradients, shapes and logos can reduce readability. Check the result with the scanners you intend to use, especially before printing.
 
 ### Sharing a design
@@ -52,7 +54,8 @@ Run the JavaScript tests with Node.js 22 or later:
 node --experimental-default-type=module --test tests/FeatherQR.Playground.Tests/*.test.mjs
 ```
 
-Then verify generation, decode preview, the benchmark panel and a share-link round trip in the published app.
+The tests cover preset and symbology combinations, control edits and share-link restoration.
+Also verify generation, decode preview, the benchmark panel and a share-link round trip in the published app.
 The `build-playground` job in [build.yaml](../../.github/workflows/build.yaml) runs the JavaScript tests and publishes Release without AOT.
 
 ### Updating the API reference
