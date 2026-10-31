@@ -11,7 +11,7 @@ public enum DecodeStatus
     /// <summary>The input is not a valid module matrix (invalid size or no dark modules).</summary>
     InvalidMatrix,
 
-    /// <summary>Both format information copies are corrupted beyond BCH correction capacity.</summary>
+    /// <summary>The format information cannot be decoded or is inconsistent with the symbol.</summary>
     FormatInformationInvalid,
 
     /// <summary>One or more Reed-Solomon blocks contain more errors than the ECC level can correct.</summary>
@@ -33,12 +33,7 @@ public enum DecodeStatus
     NotDetected,
 
     /// <summary>
-    /// The symbol was read correctly, but one character has no mapping under the charset this decoder applies, so no text is produced.
+    /// A character has no mapping in the character set used by this decoder.
     /// </summary>
-    /// <remarks>
-    /// Today this means a Kanji mode cell outside JIS X 0208, in practice one of the 83 characters Microsoft CP932 adds in NEC row 13 (circled digits, roman numerals, unit ligatures).
-    /// It is deliberately distinct from <see cref="UnsupportedContent"/>: that says the symbol uses a feature this library does not implement, and no reader choice changes it, whereas this says the symbol is well formed and a CP932-capable reader would read it.
-    /// A caller that wants to fall back to such a reader should branch on exactly this status.
-    /// </remarks>
     UnmappedCharacter,
 }

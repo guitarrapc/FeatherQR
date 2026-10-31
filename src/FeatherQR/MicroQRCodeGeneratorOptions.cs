@@ -76,8 +76,7 @@ public record struct MicroQRCodeGeneratorOptions
     /// Micro QR has no ECI, so its UTF-8 bytes read as UTF-8 only in a reader that recognises them, where Kanji mode declares itself.
     /// </para>
     /// <para>
-    /// Off by default, as on the other two symbologies, because not every reader reads Kanji mode: in Standard QR an Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it.
-    /// Neither phone's own scanner reads Micro QR at all. The dedicated readers tried read it in Kanji mode and in UTF-8 alike.
+    /// Off by default for reader compatibility. Enable it when the intended readers support Kanji mode.
     /// </para>
     /// </remarks>
     public bool AllowKanji { get; set; }

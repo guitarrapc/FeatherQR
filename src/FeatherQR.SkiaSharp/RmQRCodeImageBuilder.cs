@@ -454,8 +454,8 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// Must agree with <see cref="WithVersion"/> when both are used.
     /// </summary>
     /// <param name="height">rMQR code height in modules.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the icon size, border or occupancy limit is out of range.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the rMQR code.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the height is not a valid rMQR height.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made rMQR code.</exception>
     public RmQRCodeImageBuilder WithHeight(RmQRHeight height)
     {
         if (_data is not null)
@@ -473,8 +473,8 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// Fewer modules is not the same as a smaller image: a flatter, wider rMQR code can render onto a larger grid.
     /// </summary>
     /// <param name="segmentation">Segmentation strategy.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the icon size, border or occupancy limit is out of range.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the rMQR code.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the segmentation strategy is invalid.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made rMQR code.</exception>
     public RmQRCodeImageBuilder WithSegmentation(RmQRSegmentation segmentation)
     {
         if (_data is not null)
