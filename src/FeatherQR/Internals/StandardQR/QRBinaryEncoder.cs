@@ -74,7 +74,7 @@ internal ref partial struct QRBinaryEncoder
     }
 
     /// <summary>
-    /// Writes terminator (up to 4 bits), byte alignment (0-7 bits) and pad bytes (0-16 bits) to reach target capacity
+    /// Writes terminator (up to 4 bits), byte alignment (0-7 bits) and alternating pad bytes to fill the remaining capacity
     /// </summary>
     /// <param name="targetBitCount">Target total bit count</param>
     /// <remarks>

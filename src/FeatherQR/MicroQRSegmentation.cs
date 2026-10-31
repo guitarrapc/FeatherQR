@@ -23,7 +23,7 @@ public enum MicroQRSegmentation
 
     /// <summary>
     /// One segment in the single mode that can represent the whole content (Numeric, else Alphanumeric, else Byte, or Kanji for text JIS X 0208 holds entirely when <see cref="MicroQRCodeGeneratorOptions.AllowKanji"/> is set).
-    /// The cheapest to encode: one pass over the content and no version search, and the bit stream every release before 2.0.0 emitted.
+    /// Does not plan mixed-mode segments.
     /// </summary>
     Single = 1,
 }

@@ -66,7 +66,6 @@ public static class SymbolRenderer
         if (IsEmpty(symbolArea))
             return;
 
-        // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
 
         // Apply gradient if specified. The shader wrapper must be disposed here.
@@ -165,7 +164,6 @@ public static class SymbolRenderer
         if (IsEmpty(symbolArea))
             return;
 
-        // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
 
         // Apply gradient if specified. The shader wrapper must be disposed here.
@@ -241,7 +239,6 @@ public static class SymbolRenderer
         if (IsEmpty(symbolArea))
             return;
 
-        // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
 
         using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
