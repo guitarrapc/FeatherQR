@@ -45,7 +45,10 @@ public class MicroQRSegmentationTest
     {
         await Assert.That(default(MicroQRCodeGeneratorOptions).Segmentation).IsEqualTo(MicroQRSegmentation.Optimal);
         await Assert.That(MicroQRCodeGeneratorOptions.Default.Segmentation).IsEqualTo(MicroQRSegmentation.Optimal);
+        // The zero enum value must remain Optimal so zero-initialized options keep this default.
+#pragma warning disable TUnitAssertions0005 // Intentionally pin the enum's zero-value contract.
         await Assert.That(default(MicroQRSegmentation)).IsEqualTo(MicroQRSegmentation.Optimal);
+#pragma warning restore TUnitAssertions0005
     }
 
     [Test]

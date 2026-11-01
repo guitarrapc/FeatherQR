@@ -52,7 +52,7 @@ internal static class DrawnCorners
         using var canvas = new SKCanvas(mirrored);
         canvas.Clear(SKColors.White);
         canvas.Scale(-1, 1, source.Width / 2f, 0);
-        canvas.DrawBitmap(source, 0, 0);
+        canvas.DrawBitmap(source, 0, 0, SKSamplingOptions.Default);
         return mirrored;
     }
 

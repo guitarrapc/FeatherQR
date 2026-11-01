@@ -24,33 +24,33 @@ public class FinderExtentProbeTest
         (4f, 0f, 0f), (4f, 15f, 0f), (4f, 45f, 0f), (4f, 90f, 0f), (4f, 30f, 0.06f), (2.5f, 0f, 0f), (2.5f, 20f, 0f), (6f, 75f, 0.04f),
     ];
 
-    public static IEnumerable<Case> MicroQRCases()
+    public static IEnumerable<Func<Case>> MicroQRCases()
     {
         (string Text, MicroQRVersion Version)[] symbols = [("12345", MicroQRVersion.M1), ("AB12", MicroQRVersion.M2), ("MICRO QR 3", MicroQRVersion.M3), ("MICRO QR CODE M4 TEST", MicroQRVersion.M4)];
         foreach (var (text, version) in symbols)
         {
             foreach (var (ppm, degrees, keystone) in Renders)
-                yield return new Case(version.ToString(), () => MicroCore(text, version), 2, ppm, degrees, keystone);
+                yield return () => new Case(version.ToString(), () => MicroCore(text, version), 2, ppm, degrees, keystone);
         }
     }
 
-    public static IEnumerable<Case> RmQRCases()
+    public static IEnumerable<Func<Case>> RmQRCases()
     {
         (string Text, RmQRVersion Version)[] symbols = [("RMQR 27", RmQRVersion.R13x27), ("RMQR 59", RmQRVersion.R9x59), ("RMQR AT ITS WIDEST, ONE HUNDRED AND THIRTY-NINE MODULES WIDE", RmQRVersion.R17x139)];
         foreach (var (text, version) in symbols)
         {
             foreach (var (ppm, degrees, keystone) in Renders)
-                yield return new Case(version.ToString(), () => RmQRCore(text, version), 2, ppm, degrees, keystone);
+                yield return () => new Case(version.ToString(), () => RmQRCore(text, version), 2, ppm, degrees, keystone);
         }
     }
 
-    public static IEnumerable<Case> StandardQRCases()
+    public static IEnumerable<Func<Case>> StandardQRCases()
     {
         (string Text, int Version)[] symbols = [("https://example.com/5", 5), ("STANDARD QR VERSION TEN HOLDS A LONGER TEXT THAN THE SMALL ONES, SO IT IS WRITTEN OUT HERE", 10)];
         foreach (var (text, version) in symbols)
         {
             foreach (var (ppm, degrees, keystone) in Renders)
-                yield return new Case($"v{version}", () => StandardQRCore(text, version), 4, ppm, degrees, keystone);
+                yield return () => new Case($"v{version}", () => StandardQRCore(text, version), 4, ppm, degrees, keystone);
         }
     }
 

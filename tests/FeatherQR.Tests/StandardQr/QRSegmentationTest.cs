@@ -59,7 +59,10 @@ public class QRSegmentationTest
     {
         await Assert.That(default(QRCodeGeneratorOptions).Segmentation).IsEqualTo(QRSegmentation.Optimal);
         await Assert.That(QRCodeGeneratorOptions.Default.Segmentation).IsEqualTo(QRSegmentation.Optimal);
+        // The zero enum value must remain Optimal so zero-initialized options keep this default.
+#pragma warning disable TUnitAssertions0005 // Intentionally pin the enum's zero-value contract.
         await Assert.That(default(QRSegmentation)).IsEqualTo(QRSegmentation.Optimal);
+#pragma warning restore TUnitAssertions0005
     }
 
     [Test]

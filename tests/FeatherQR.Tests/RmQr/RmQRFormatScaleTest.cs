@@ -87,7 +87,7 @@ public class RmQRFormatScaleTest
         canvas.Translate(rotated.Width / 2f, rotated.Height / 2f);
         canvas.RotateDegrees(degrees);
         canvas.Translate(-source.Width / 2f, -source.Height / 2f);
-        canvas.DrawBitmap(source, 0, 0);
+        canvas.DrawBitmap(source, 0, 0, SKSamplingOptions.Default);
         return rotated;
     }
 

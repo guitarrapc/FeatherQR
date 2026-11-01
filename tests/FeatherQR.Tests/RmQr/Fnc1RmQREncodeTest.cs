@@ -9,6 +9,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class Fnc1RmQREncodeTest
 {
+    /// <summary>A concrete case for <see cref="SizingCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct SizingCase(string Text, RmQRCodeGeneratorOptions Options);
+
     private const string Gs = "\u001D";
     private const string Gtin = "0109524000059109";
     private static readonly RmQRCodeGeneratorOptions First = new() { Fnc1 = Fnc1Mode.FirstPosition, QuietZoneSize = 0, Segmentation = RmQRSegmentation.Single };
@@ -503,7 +506,7 @@ public class Fnc1RmQREncodeTest
 
     // Sizing and the span form
 
-    public static IEnumerable<Func<(string Text, RmQRCodeGeneratorOptions Options)>> SizingCases()
+    public static IEnumerable<Func<SizingCase>> SizingCases()
     {
         var texts = new[] { Gtin + "17231120", Gtin + "10ABC123" + Gs + "17231120", Gtin + "101234567p" + Gs + "17231120", "10AB" + Gs + Gs + "CD", Gtin + "10é", "AA1234BBB112text text text text\r", "" };
         var modes = new[] { Fnc1Mode.FirstPosition, Fnc1Mode.SecondPosition(37), Fnc1Mode.SecondPosition('z') };
@@ -515,7 +518,7 @@ public class Fnc1RmQREncodeTest
                 {
                     foreach (var strategy in new[] { RmQRFitStrategy.MinimizeArea, RmQRFitStrategy.MinimizeHeight })
                     {
-                        var captured = (text, new RmQRCodeGeneratorOptions { Fnc1 = mode, Segmentation = segmentation, FitStrategy = strategy });
+                        var captured = new SizingCase(text, new RmQRCodeGeneratorOptions { Fnc1 = mode, Segmentation = segmentation, FitStrategy = strategy });
                         yield return () => captured;
                     }
                 }
@@ -525,7 +528,7 @@ public class Fnc1RmQREncodeTest
 
     [Test]
     [MethodDataSource(nameof(SizingCases))]
-    public async Task Sizing_AgreesWithCreate_AndTheSpanFormWritesTheSameSymbol((string Text, RmQRCodeGeneratorOptions Options) c)
+    public async Task Sizing_AgreesWithCreate_AndTheSpanFormWritesTheSameSymbol(SizingCase c)
     {
         var data = RmQRCodeGenerator.Create(c.Text, RmQREccLevel.M, c.Options);
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(c.Text, RmQREccLevel.M, out var size, c.Options)).IsTrue();

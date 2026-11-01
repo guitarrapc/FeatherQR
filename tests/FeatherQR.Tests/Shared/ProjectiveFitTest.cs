@@ -8,13 +8,13 @@ namespace FeatherQR.Tests;
 public class ProjectiveFitTest
 {
     /// <summary>Image quadrilaterals a 139 × 17 grid is mapped onto: square on, narrowed along either axis, toward a corner, and 40,000 px from the origin.</summary>
-    public static IEnumerable<float[]> Quadrilaterals()
+    public static IEnumerable<Func<float[]>> Quadrilaterals()
     {
-        yield return [100f, 100f, 800f, 100f, 800f, 186f, 100f, 186f];
-        yield return [180f, 120f, 720f, 120f, 900f, 260f, 20f, 260f];
-        yield return [40f, 300f, 900f, 40f, 900f, 520f, 40f, 380f];
-        yield return [310f, 80f, 1010f, 250f, 960f, 420f, 250f, 190f];
-        yield return [40100f, 20050f, 40900f, 20100f, 40880f, 20230f, 40090f, 20190f];
+        yield return () => [100f, 100f, 800f, 100f, 800f, 186f, 100f, 186f];
+        yield return () => [180f, 120f, 720f, 120f, 900f, 260f, 20f, 260f];
+        yield return () => [40f, 300f, 900f, 40f, 900f, 520f, 40f, 380f];
+        yield return () => [310f, 80f, 1010f, 250f, 960f, 420f, 250f, 190f];
+        yield return () => [40100f, 20050f, 40900f, 20100f, 40880f, 20230f, 40090f, 20190f];
     }
 
     [Test]

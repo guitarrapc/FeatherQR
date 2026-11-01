@@ -11,20 +11,26 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class Gs1ReadTest
 {
+    /// <summary>A concrete case for <see cref="QrScanCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct QrScanCase(string Id, string Data, bool Valid, string? ElementString, string[]? Hri);
+
+    /// <summary>A concrete case for <see cref="AcceptedCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct AcceptedCase(string Id, string Input, Gs1InputKind Kind, string ElementString);
+
     private static readonly Regex EngineHriLine = new(@"^\((\d{2,4})\) ", RegexOptions.Compiled);
 
-    public static IEnumerable<Func<(string Id, string Data, bool Valid, string? ElementString, string[]? Hri)>> QrScanCases()
+    public static IEnumerable<Func<QrScanCase>> QrScanCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
             if (c.InputKind != Gs1InputKind.ScanData || !(c.Input.StartsWith("]Q1", StringComparison.Ordinal) || c.Input.StartsWith("]Q3", StringComparison.Ordinal)))
                 continue;
-            var captured = (c.Id, c.Input, c.SyntaxEngine.Valid, c.SyntaxEngine.ElementString, c.SyntaxEngine.Hri);
+            var captured = new QrScanCase(c.Id, c.Input, c.SyntaxEngine.Valid, c.SyntaxEngine.ElementString, c.SyntaxEngine.Hri);
             yield return () => captured;
         }
     }
 
-    public static IEnumerable<Func<(string Id, string Input, Gs1InputKind Kind, string ElementString)>> AcceptedCases()
+    public static IEnumerable<Func<AcceptedCase>> AcceptedCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
@@ -34,7 +40,7 @@ public class Gs1ReadTest
                 continue;
             if (Gs1DigitalLinkTest.ReadDifferenceIds.Contains(c.Id))
                 continue;
-            var captured = (c.Id, c.Input, c.InputKind, c.SyntaxEngine.ElementString!);
+            var captured = new AcceptedCase(c.Id, c.Input, c.InputKind, c.SyntaxEngine.ElementString!);
             yield return () => captured;
         }
     }
@@ -42,7 +48,7 @@ public class Gs1ReadTest
     /// <summary>The engine's scan-data reading: the text after <c>]Q3</c> is an element string, the text after <c>]Q1</c> is a URI or plain data.</summary>
     [Test]
     [MethodDataSource(nameof(QrScanCases))]
-    public async Task TryRead_ReadsScanDataAsTheSyntaxEngine((string Id, string Data, bool Valid, string? ElementString, string[]? Hri) c)
+    public async Task TryRead_ReadsScanDataAsTheSyntaxEngine(QrScanCase c)
     {
         var fnc1 = c.Data.StartsWith("]Q3", StringComparison.Ordinal) ? Fnc1Mode.FirstPosition : default;
         var text = c.Data.Substring(3);
@@ -71,7 +77,7 @@ public class Gs1ReadTest
     /// <summary>Every element string and URI the engine read gives the (AI) text of the engine's element string, under the carrier's <see cref="Fnc1Mode"/>.</summary>
     [Test]
     [MethodDataSource(nameof(AcceptedCases))]
-    public async Task TryRead_GivesTheTextOfTheEnginesElementString((string Id, string Input, Gs1InputKind Kind, string ElementString) c)
+    public async Task TryRead_GivesTheTextOfTheEnginesElementString(AcceptedCase c)
     {
         var fnc1 = c.Kind == Gs1InputKind.ElementString ? Fnc1Mode.FirstPosition : default;
         await Assert.That(Gs1ElementString.TryRead(c.Input, fnc1, out var hri, out var error)).IsTrue().Because($"{c.Id}: {error}");

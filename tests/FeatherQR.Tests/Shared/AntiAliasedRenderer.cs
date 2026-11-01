@@ -20,7 +20,7 @@ internal static class AntiAliasedRenderer
             canvas.Scale(pixelsPerModule);
 
             // One path, so abutting modules leave no seam between them
-            using var path = new SKPath();
+            using var builder = new SKPathBuilder();
             for (var row = 0; row < rows; row++)
             {
                 for (var column = 0; column < columns; column++)
@@ -30,10 +30,11 @@ internal static class AntiAliasedRenderer
                     var start = column;
                     while (column + 1 < columns && isDark(row, column + 1))
                         column++;
-                    path.AddRect(new SKRect(start, row, column + 1, row + 1));
+                    builder.AddRect(new SKRect(start, row, column + 1, row + 1));
                 }
             }
             using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+            using var path = builder.Detach();
             canvas.DrawPath(path, paint);
         }
 

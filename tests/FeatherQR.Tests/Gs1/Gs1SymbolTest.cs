@@ -14,6 +14,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class Gs1SymbolTest
 {
+    /// <summary>A concrete case for <see cref="CorpusCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct CorpusCase(string Id, string Input, bool Valid, string? ElementString, bool Link);
+
     private const int Year = 2026;
     private const string Gs = "\u001D";
     private const string Gtin = "09506000134352";
@@ -534,14 +537,14 @@ public class Gs1SymbolTest
         "eq-text-element-string-given-as-bracketed",    // 010952012345678810ABC: (01) and (10), valid as an element string
     ];
 
-    public static IEnumerable<Func<(string Id, string Input, bool Valid, string? ElementString, bool Link)>> CorpusCases()
+    public static IEnumerable<Func<CorpusCase>> CorpusCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
             if (c.InputKind is not (Gs1InputKind.Bracketed or Gs1InputKind.ElementString))
                 continue;
             var asElementString = FormDifferences.Contains(c.Id);
-            var captured = (
+            var captured = new CorpusCase(
                 c.Id,
                 c.Input,
                 c.SyntaxEngine.Valid || asElementString,
@@ -559,7 +562,7 @@ public class Gs1SymbolTest
     /// </summary>
     [Test]
     [MethodDataSource(nameof(CorpusCases))]
-    public async Task Corpus_CreateGs1_TakesWhatTheSyntaxEngineTakes_AndWritesACompliantSymbol((string Id, string Input, bool Valid, string? ElementString, bool Link) c)
+    public async Task Corpus_CreateGs1_TakesWhatTheSyntaxEngineTakes_AndWritesACompliantSymbol(CorpusCase c)
     {
         var (resolved, elementString, error) = Resolve(c.Input, Year);
         await Assert.That(resolved).IsEqualTo(c.Valid).Because($"{c.Id}: {(resolved ? "taken" : error.ToString())}");
@@ -615,7 +618,7 @@ public class Gs1SymbolTest
     /// </summary>
     [Test]
     [MethodDataSource(nameof(CorpusCases))]
-    public async Task Corpus_CreateGs1DigitalLink_WritesTheDataLayersUri((string Id, string Input, bool Valid, string? ElementString, bool Link) c)
+    public async Task Corpus_CreateGs1DigitalLink_WritesTheDataLayersUri(CorpusCase c)
     {
         var (built, uri, error) = ResolveLink(c.Input, Year);
         await Assert.That(built).IsEqualTo(c.Valid && c.Link).Because($"{c.Id}: {(built ? uri : error.ToString())}");

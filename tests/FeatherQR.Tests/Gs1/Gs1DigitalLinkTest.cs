@@ -12,6 +12,15 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class Gs1DigitalLinkTest
 {
+    /// <summary>A concrete case for <see cref="UriCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct UriCase(string Id, string Uri, bool Valid, string? ElementString, string? Error);
+
+    /// <summary>A concrete case for <see cref="BuildCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct BuildCase(string Id, string ElementString, string? Uri, string? UriError, string? CodeGlyphXUri);
+
+    /// <summary>A concrete case for <see cref="RentCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct RentCase(string ElementString, int UriLength, int Rents);
+
     private const int Year = 2026;
     private const string Gtin = "0109520123456788";
 
@@ -58,18 +67,18 @@ public class Gs1DigitalLinkTest
         ("value is too long", [Gs1ErrorKind.ValueTooLong]),
     ];
 
-    public static IEnumerable<Func<(string Id, string Uri, bool Valid, string? ElementString, string? Error)>> UriCases()
+    public static IEnumerable<Func<UriCase>> UriCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
             if (c.InputKind != Gs1InputKind.DigitalLink)
                 continue;
-            var captured = (c.Id, c.Input, c.SyntaxEngine.Valid, c.SyntaxEngine.ElementString, c.SyntaxEngine.Error);
+            var captured = new UriCase(c.Id, c.Input, c.SyntaxEngine.Valid, c.SyntaxEngine.ElementString, c.SyntaxEngine.Error);
             yield return () => captured;
         }
     }
 
-    public static IEnumerable<Func<(string Id, string ElementString, string? Uri, string? UriError, string? CodeGlyphXUri)>> BuildCases()
+    public static IEnumerable<Func<BuildCase>> BuildCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
@@ -80,14 +89,14 @@ public class Gs1DigitalLinkTest
             if (c.SyntaxEngine.DigitalLink is null && c.SyntaxEngine.DigitalLinkError is null)
                 continue;
             var cgx = c.CodeGlyphX?.DigitalLink;
-            var captured = (c.Id, c.SyntaxEngine.ElementString!, c.SyntaxEngine.DigitalLink, c.SyntaxEngine.DigitalLinkError, cgx is not null && cgx.StartsWith("https://", StringComparison.Ordinal) ? cgx : null);
+            var captured = new BuildCase(c.Id, c.SyntaxEngine.ElementString!, c.SyntaxEngine.DigitalLink, c.SyntaxEngine.DigitalLinkError, cgx is not null && cgx.StartsWith("https://", StringComparison.Ordinal) ? cgx : null);
             yield return () => captured;
         }
     }
 
     [Test]
     [MethodDataSource(nameof(UriCases))]
-    public async Task TryFromDigitalLink_ReadsAsTheSyntaxEngine((string Id, string Uri, bool Valid, string? ElementString, string? Error) c)
+    public async Task TryFromDigitalLink_ReadsAsTheSyntaxEngine(UriCase c)
     {
         var read = Gs1ElementString.TryFromDigitalLink(c.Uri, out var elementString, out var error);
         if (ReadDifferences.TryGetValue(c.Id, out var differentKind))
@@ -208,7 +217,7 @@ public class Gs1DigitalLinkTest
 
     [Test]
     [MethodDataSource(nameof(BuildCases))]
-    public async Task TryToDigitalLink_BuildsTheSyntaxEngineUri((string Id, string ElementString, string? Uri, string? UriError, string? CodeGlyphXUri) c)
+    public async Task TryToDigitalLink_BuildsTheSyntaxEngineUri(BuildCase c)
     {
         var built = Gs1DigitalLink.TryToDigitalLink(c.ElementString, Year, null, out var uri, out var error);
         if (c.Uri is not null)
@@ -502,13 +511,13 @@ public class Gs1DigitalLinkTest
         await Assert.That((written, new string(exact))).IsEqualTo((uriLength, expected));
     }
 
-    public static IEnumerable<Func<(string ElementString, int UriLength, int Rents)>> RentCases()
+    public static IEnumerable<Func<RentCase>> RentCases()
     {
-        yield return () => (Gtin + "91" + new string('(', 90) + "\u001D" + "92" + new string('(', 66), 512, 0);
-        yield return () => (Gtin + "91" + new string('(', 90) + "\u001D" + "92" + new string('(', 66) + "A", 513, 1);
-        yield return () => (Gtin + string.Join("\u001D", Enumerable.Range(91, 9).Select(ai => ai + new string('A', 90))), 882, 1);
-        yield return () => (string.Concat(Enumerable.Repeat(Gtin, 32)), 36, 1);
-        yield return () => (string.Concat(Enumerable.Repeat(Gtin, 31)) + "10" + "ABCDEFGHIJKLM", 53, 0);
+        yield return () => new RentCase(Gtin + "91" + new string('(', 90) + "\u001D" + "92" + new string('(', 66), 512, 0);
+        yield return () => new RentCase(Gtin + "91" + new string('(', 90) + "\u001D" + "92" + new string('(', 66) + "A", 513, 1);
+        yield return () => new RentCase(Gtin + string.Join("\u001D", Enumerable.Range(91, 9).Select(ai => ai + new string('A', 90))), 882, 1);
+        yield return () => new RentCase(string.Concat(Enumerable.Repeat(Gtin, 32)), 36, 1);
+        yield return () => new RentCase(string.Concat(Enumerable.Repeat(Gtin, 31)) + "10" + "ABCDEFGHIJKLM", 53, 0);
     }
 
     /// <summary>
@@ -524,7 +533,7 @@ public class Gs1DigitalLinkTest
     [Test]
     [NotInParallel]
     [MethodDataSource(nameof(RentCases))]
-    public async Task StringForm_RentsOnlyForALongUriOrALongElementString((string ElementString, int UriLength, int Rents) c)
+    public async Task StringForm_RentsOnlyForALongUriOrALongElementString(RentCase c)
     {
         await Assert.That(Gs1ElementString.TryGetToDigitalLinkLength(c.ElementString, out var length, out _)).IsTrue();
         await Assert.That(length).IsEqualTo(c.UriLength);
