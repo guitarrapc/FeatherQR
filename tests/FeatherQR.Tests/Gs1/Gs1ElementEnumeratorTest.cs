@@ -9,7 +9,10 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class Gs1ElementEnumeratorTest
 {
-    public static IEnumerable<Func<(string Id, string ElementString, string Bracketed)>> AcceptedCases()
+    /// <summary>A concrete case for <see cref="AcceptedCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct AcceptedCase(string Id, string ElementString, string Bracketed);
+
+    public static IEnumerable<Func<AcceptedCase>> AcceptedCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
@@ -17,14 +20,14 @@ public class Gs1ElementEnumeratorTest
                 continue;
             if (c.InputKind is not (Gs1InputKind.ElementString or Gs1InputKind.Bracketed))
                 continue;
-            var captured = (c.Id, c.SyntaxEngine.ElementString, c.SyntaxEngine.Bracketed);
+            var captured = new AcceptedCase(c.Id, c.SyntaxEngine.ElementString, c.SyntaxEngine.Bracketed);
             yield return () => captured;
         }
     }
 
     [Test]
     [MethodDataSource(nameof(AcceptedCases))]
-    public async Task EnumerateElements_SplitsAsTheSyntaxEngineDoes((string Id, string ElementString, string Bracketed) c)
+    public async Task EnumerateElements_SplitsAsTheSyntaxEngineDoes(AcceptedCase c)
     {
         var expected = Gs1TestText.ParseBracketed(c.Bracketed);
         await Assert.That(expected).IsNotNull().Because(c.Id);

@@ -104,7 +104,7 @@ public class FinderCandidatesOneRowPassParityTest
         var strided = new FinderPattern[4096];
         var count = FinderPatternFinder.FindCandidates(luminance, width, height, threshold, strided, grey);
         await Assert.That(count).IsEqualTo(Finders);
-        await Assert.That(Finders).IsGreaterThan(FinderPatternFinder.RowHitCapacity);
+        await Assert.That(count).IsGreaterThan(FinderPatternFinder.RowHitCapacity);
         var centreY = Margin + 3.5f * Module;
         await Assert.That(strided.AsSpan(0, count).ToArray().All(c => Math.Abs(c.Y - centreY) < 1f)).IsTrue();
     }

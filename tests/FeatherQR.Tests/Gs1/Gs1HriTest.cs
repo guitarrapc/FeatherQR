@@ -13,22 +13,34 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class Gs1HriTest
 {
+    /// <summary>A concrete case for <see cref="BracketedCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct BracketedCase(string Id, string Input, bool Valid, string? ElementString);
+
+    /// <summary>A concrete case for <see cref="AcceptedCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct AcceptedCase(string Id, string ElementString, string[] Hri);
+
+    /// <summary>A concrete case for <see cref="ReaderCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct ReaderCase(string Id, string Writer, string ElementString, string Hri);
+
+    /// <summary>A concrete case for <see cref="RentCases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct RentCase(string ElementString, int TextLength, int Rents);
+
     private const int Year = 2026;
 
     private static readonly Regex EngineHriLine = new(@"^\((\d{2,4})\) ", RegexOptions.Compiled);
 
-    public static IEnumerable<Func<(string Id, string Input, bool Valid, string? ElementString)>> BracketedCases()
+    public static IEnumerable<Func<BracketedCase>> BracketedCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
             if (c.InputKind != Gs1InputKind.Bracketed)
                 continue;
-            var captured = (c.Id, c.Input, c.SyntaxEngine.Valid, c.SyntaxEngine.ElementString);
+            var captured = new BracketedCase(c.Id, c.Input, c.SyntaxEngine.Valid, c.SyntaxEngine.ElementString);
             yield return () => captured;
         }
     }
 
-    public static IEnumerable<Func<(string Id, string ElementString, string[] Hri)>> AcceptedCases()
+    public static IEnumerable<Func<AcceptedCase>> AcceptedCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
@@ -36,12 +48,12 @@ public class Gs1HriTest
                 continue;
             if (c.InputKind is not (Gs1InputKind.ElementString or Gs1InputKind.Bracketed))
                 continue;
-            var captured = (c.Id, c.SyntaxEngine.ElementString, c.SyntaxEngine.Hri);
+            var captured = new AcceptedCase(c.Id, c.SyntaxEngine.ElementString, c.SyntaxEngine.Hri);
             yield return () => captured;
         }
     }
 
-    public static IEnumerable<Func<(string Id, string Writer, string ElementString, string Hri)>> ReaderCases()
+    public static IEnumerable<Func<ReaderCase>> ReaderCases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
@@ -49,14 +61,14 @@ public class Gs1HriTest
             if (c.Reader is null || !c.Reader.Hri.StartsWith("(", StringComparison.Ordinal)
                 || c.Reader.Hri.Contains("<GS>", StringComparison.Ordinal) || c.Reader.Hri.Contains(Gs1TestText.Gs))
                 continue;
-            var captured = (c.Id, c.Reader.Writer, c.Reader.ElementString, c.Reader.Hri);
+            var captured = new ReaderCase(c.Id, c.Reader.Writer, c.Reader.ElementString, c.Reader.Hri);
             yield return () => captured;
         }
     }
 
     [Test]
     [MethodDataSource(nameof(BracketedCases))]
-    public async Task TryFromHri_BuildsTheSyntaxEngineElementString((string Id, string Input, bool Valid, string? ElementString) c)
+    public async Task TryFromHri_BuildsTheSyntaxEngineElementString(BracketedCase c)
     {
         var built = Gs1Hri.TryFromHri(c.Input, Year, out var elementString, out var error);
         await Assert.That(built).IsEqualTo(c.Valid).Because($"{c.Id}: {(built ? "built" : error.ToString())}");
@@ -81,7 +93,7 @@ public class Gs1HriTest
 
     [Test]
     [MethodDataSource(nameof(AcceptedCases))]
-    public async Task TryToHri_FormatsAsTheSyntaxEngineHri((string Id, string ElementString, string[] Hri) c)
+    public async Task TryToHri_FormatsAsTheSyntaxEngineHri(AcceptedCase c)
     {
         var expected = string.Concat(c.Hri.Select(line => EngineHriLine.Replace(line, "($1)")));
         await Assert.That(Gs1ElementString.TryToHri(c.ElementString, out var hri, out var error)).IsTrue().Because($"{c.Id}: {error}");
@@ -94,7 +106,7 @@ public class Gs1HriTest
     /// <summary>zxing-cpp's (AI) text of a symbol's element string, where its hand-maintained table could split it (it falls back to escaped text otherwise).</summary>
     [Test]
     [MethodDataSource(nameof(ReaderCases))]
-    public async Task TryToHri_MatchesZxingCppHri((string Id, string Writer, string ElementString, string Hri) c)
+    public async Task TryToHri_MatchesZxingCppHri(ReaderCase c)
     {
         var ours = Gs1ElementString.TryToHri(c.ElementString, out var hri, out var error);
         await Assert.That(ours).IsTrue().Because($"{c.Id}: {error}");
@@ -296,14 +308,14 @@ public class Gs1HriTest
         await Assert.That((written, new string(exact))).IsEqualTo((expected.Length, expected));
     }
 
-    public static IEnumerable<Func<(string ElementString, int TextLength, int Rents)>> RentCases()
+    public static IEnumerable<Func<RentCase>> RentCases()
     {
-        yield return () => ("91" + new string('(', 62), 128, 0);
-        yield return () => ("91" + new string('(', 63), 130, 0);
-        yield return () => ("0109520123456788" + "91" + new string('(', 245), 512, 0);
-        yield return () => ("0109520123456788" + "91" + new string('(', 245) + "A", 513, 1);
-        yield return () => ("91" + new string('A', 508), 512, 0);
-        yield return () => ("0109520123456788" + string.Join("\u001D", Enumerable.Range(91, 9).Select(ai => ai + new string('A', 90))), 864, 1);
+        yield return () => new RentCase("91" + new string('(', 62), 128, 0);
+        yield return () => new RentCase("91" + new string('(', 63), 130, 0);
+        yield return () => new RentCase("0109520123456788" + "91" + new string('(', 245), 512, 0);
+        yield return () => new RentCase("0109520123456788" + "91" + new string('(', 245) + "A", 513, 1);
+        yield return () => new RentCase("91" + new string('A', 508), 512, 0);
+        yield return () => new RentCase("0109520123456788" + string.Join("\u001D", Enumerable.Range(91, 9).Select(ai => ai + new string('A', 90))), 864, 1);
     }
 
     /// <summary>
@@ -317,7 +329,7 @@ public class Gs1HriTest
     [Test]
     [NotInParallel]
     [MethodDataSource(nameof(RentCases))]
-    public async Task StringForm_RentsOnlyForTextLongerThanItsStackBuffer((string ElementString, int TextLength, int Rents) c)
+    public async Task StringForm_RentsOnlyForTextLongerThanItsStackBuffer(RentCase c)
     {
         await Assert.That(Gs1ElementString.TryGetToHriLength(c.ElementString, out var length, out _)).IsTrue();
         await Assert.That(length).IsEqualTo(c.TextLength);

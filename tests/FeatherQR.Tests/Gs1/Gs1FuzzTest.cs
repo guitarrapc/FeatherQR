@@ -45,6 +45,7 @@ public class Gs1FuzzTest
     public async Task TryValidate_NeverThrows_OnRandomStrings()
     {
         var random = new Random(Seed + 1);
+        var checkedCount = 0;
         for (var i = 0; i < RandomStrings; i++)
         {
             var length = random.Next(0, 60);
@@ -52,8 +53,10 @@ public class Gs1FuzzTest
             for (var j = 0; j < length; j++)
                 chars[j] = random.Next(4) == 0 ? Alphabet[random.Next(Alphabet.Length)] : (char)('0' + random.Next(10));
             Exercise(new string(chars));
+            checkedCount++;
         }
-        await Assert.That(RandomStrings).IsGreaterThan(0);
+        await Assert.That(checkedCount).IsEqualTo(RandomStrings);
+        await Assert.That(checkedCount).IsGreaterThan(0);
     }
 
     private static void Exercise(string text)

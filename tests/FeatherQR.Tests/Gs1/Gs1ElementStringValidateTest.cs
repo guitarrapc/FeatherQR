@@ -13,6 +13,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class Gs1ElementStringValidateTest
 {
+    /// <summary>A concrete case for <see cref="Cases"/>, avoiding tuple reflection in the test runner.</summary>
+    public readonly record struct Case(string Id, string ElementString, bool Valid, string? EngineError, bool CompareKind);
+
     private const int Year = 2026;
 
     /// <summary>The engine's error message classes and the kind this library reports for them.</summary>
@@ -33,7 +36,7 @@ public class Gs1ElementStringValidateTest
     /// otherwise split into other elements and test nothing). The engine's error text describes the bracketed
     /// form, so the error class is compared for element string inputs only.
     /// </summary>
-    public static IEnumerable<Func<(string Id, string ElementString, bool Valid, string? EngineError, bool CompareKind)>> Cases()
+    public static IEnumerable<Func<Case>> Cases()
     {
         foreach (var c in Gs1FixtureLoader.EnumerateCases())
         {
@@ -59,7 +62,7 @@ public class Gs1ElementStringValidateTest
             }
             if (elementString is null)
                 continue;
-            var captured = (c.Id, elementString, c.SyntaxEngine.Valid, c.SyntaxEngine.Error, compareKind);
+            var captured = new Case(c.Id, elementString, c.SyntaxEngine.Valid, c.SyntaxEngine.Error, compareKind);
             yield return () => captured;
         }
     }
@@ -74,7 +77,7 @@ public class Gs1ElementStringValidateTest
 
     [Test]
     [MethodDataSource(nameof(Cases))]
-    public async Task TryValidate_GivesTheSyntaxEngineVerdict((string Id, string ElementString, bool Valid, string? EngineError, bool CompareKind) c)
+    public async Task TryValidate_GivesTheSyntaxEngineVerdict(Case c)
     {
         var valid = Gs1Validator.TryValidate(c.ElementString, Year, out var error);
         await Assert.That(valid).IsEqualTo(c.Valid).Because($"{c.Id}: engine {(c.Valid ? "accepts" : c.EngineError)}, this {(valid ? "accepts" : error.ToString())}");

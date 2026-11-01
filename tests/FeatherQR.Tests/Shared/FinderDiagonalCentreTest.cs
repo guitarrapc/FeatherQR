@@ -94,9 +94,10 @@ public class FinderDiagonalCentreTest
             canvas.Scale(pixelsPerModule);
             canvas.Translate(-3.5f, -3.5f);
             using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
-            using var ring = new SKPath { FillType = SKPathFillType.EvenOdd };
-            ring.AddRect(new SKRect(-spread, -spread, 7 + spread, 7 + spread));
-            ring.AddRect(new SKRect(1 + spread, 1 + spread, 6 - spread, 6 - spread));
+            using var builder = new SKPathBuilder { FillType = SKPathFillType.EvenOdd };
+            builder.AddRect(new SKRect(-spread, -spread, 7 + spread, 7 + spread));
+            builder.AddRect(new SKRect(1 + spread, 1 + spread, 6 - spread, 6 - spread));
+            using var ring = builder.Detach();
             canvas.DrawPath(ring, paint);
             canvas.DrawRect(new SKRect(2 - spread, 2 - spread, 5 + spread, 5 + spread), paint);
         }

@@ -346,7 +346,10 @@ public class RmQRSegmentationTest
     public async Task Optimal_IsTheDefault()
     {
         await Assert.That(default(RmQRCodeGeneratorOptions).Segmentation).IsEqualTo(RmQRSegmentation.Optimal);
+        // The zero enum value must remain Optimal so zero-initialized options keep this default.
+#pragma warning disable TUnitAssertions0005 // Intentionally pin the enum's zero-value contract.
         await Assert.That(default(RmQRSegmentation)).IsEqualTo(RmQRSegmentation.Optimal);
+#pragma warning restore TUnitAssertions0005
 
         // A URL with a long numeric tail: the split lands a smaller symbol than the single mode, so the default and the explicit Optimal agree and differ from Single.
         const string content = "https://example.com/p/1234567890123456";
