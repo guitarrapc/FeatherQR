@@ -1,3 +1,6 @@
+import { RMQR_VERSIONS } from './symbol-options.js';
+import { PRESETS } from './presets.js';
+import { createStateControls, presetToState } from './state-controls.js';
 import { dotnet } from './_framework/dotnet.js';
 import {
   decodeShareHash,
@@ -212,35 +215,6 @@ const benchResult = document.getElementById('bench-result');
 
 /* ─── Symbology-dependent selects ─── */
 
-const ECC_OPTIONS = {
-  qr: [
-    ['L', 'L, 7%'],
-    ['M', 'M, 15%'],
-    ['Q', 'Q, 25%'],
-    ['H', 'H, 30%'],
-  ],
-  microqr: [
-    ['EDO', 'Error detection only (M1)'],
-    ['L', 'L, 7%'],
-    ['M', 'M, 15%'],
-    ['Q', 'Q, 25% (M4 only)'],
-  ],
-  rmqr: [
-    ['M', 'M, 15%'],
-    ['H', 'H, 30%'],
-  ],
-};
-
-/** The 32 rMQR versions in ISO/IEC 23941 index order (height-major); select value = index + 1 (= RmQRVersion). */
-const RMQR_VERSIONS = [
-  [7, 43], [7, 59], [7, 77], [7, 99], [7, 139],
-  [9, 43], [9, 59], [9, 77], [9, 99], [9, 139],
-  [11, 27], [11, 43], [11, 59], [11, 77], [11, 99], [11, 139],
-  [13, 27], [13, 43], [13, 59], [13, 77], [13, 99], [13, 139],
-  [15, 43], [15, 59], [15, 77], [15, 99], [15, 139],
-  [17, 43], [17, 59], [17, 77], [17, 99], [17, 139],
-];
-
 function isMicroSymbology() {
   return symbologySelect.value === 'microqr';
 }
@@ -276,8 +250,6 @@ function fnc1Label(result) {
 function displayText(text) {
   return text.replace(/\u001d/g, '␝');
 }
-
-const DATA_FORMATS = ['text', 'gs1', 'link', 'aim'];
 
 /**
  * The WASM request for a playground state. The data format names the route: a GS1 format goes through
@@ -362,293 +334,15 @@ function decodedModeMatches(result, request) {
   return result.fnc1 === 'second' && result.applicationIndicator === expected;
 }
 
-/** Repopulates the ECC select for the symbology, keeping the value when still valid. */
-function populateEccSelect() {
-  const prev = eccSelect.value;
-  eccSelect.replaceChildren();
-  for (const [value, label] of ECC_OPTIONS[isRmqrSymbology() ? 'rmqr' : isMicroSymbology() ? 'microqr' : 'qr']) {
-    const opt = document.createElement('option');
-    opt.value = value;
-    opt.textContent = label;
-    eccSelect.appendChild(opt);
-  }
-  eccSelect.value = [...eccSelect.options].some((o) => o.value === prev) ? prev : 'M';
-}
-
-/** Repopulates the version select for the symbology, keeping the value when still valid. */
-function populateVersionSelect() {
-  const prev = versionSelect.value;
-  versionSelect.replaceChildren();
-  const auto = document.createElement('option');
-  auto.value = '-1';
-  auto.textContent = 'Auto';
-  versionSelect.appendChild(auto);
-  if (isRmqrSymbology()) {
-    RMQR_VERSIONS.forEach(([h, w], i) => {
-      const opt = document.createElement('option');
-      opt.value = String(i + 1);
-      opt.textContent = `R${h}x${w} (${w}×${h})`;
-      versionSelect.appendChild(opt);
-    });
-  } else if (isMicroSymbology()) {
-    for (let v = 1; v <= 4; v++) {
-      const side = 9 + 2 * v;
-      const opt = document.createElement('option');
-      opt.value = String(v);
-      opt.textContent = `M${v} (${side}×${side})`;
-      versionSelect.appendChild(opt);
-    }
-  } else {
-    for (let v = 1; v <= 40; v++) {
-      const opt = document.createElement('option');
-      opt.value = String(v);
-      opt.textContent = `${v} (${17 + 4 * v}×${17 + 4 * v})`;
-      versionSelect.appendChild(opt);
-    }
-  }
-  versionSelect.value = [...versionSelect.options].some((o) => o.value === prev) ? prev : '-1';
-}
-
-populateEccSelect();
-populateVersionSelect();
-
-/* ─── Presets ─── */
-
-const PRESETS = {
-  instagram: {
-    ecc: 'H',
-    moduleShape: 'rounded',
-    moduleSizePercent: 0.92,
-    moduleCornerRadius: 0.45,
-    finderShape: 'roundedCircle',
-    foreground: '#111111',
-    background: '#ffffff',
-    gradientEnabled: true,
-    gradientColors: ['#F77737', '#E1306C', '#833AB4', '#5851DB'],
-    gradientDirection: 'BottomLeftToTopRight',
-    logoMode: 'default',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-  classic: {
-    ecc: 'M',
-    moduleShape: 'rectangle',
-    moduleSizePercent: 1.0,
-    moduleCornerRadius: 0.3,
-    finderShape: 'auto',
-    foreground: '#000000',
-    background: '#ffffff',
-    gradientEnabled: false,
-    gradientColors: ['#000000', '#444444'],
-    gradientDirection: 'TopLeftToBottomRight',
-    logoMode: 'none',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-  midnight: {
-    ecc: 'Q',
-    moduleShape: 'circle',
-    moduleSizePercent: 0.95,
-    moduleCornerRadius: 0.3,
-    finderShape: 'roundedCircle',
-    foreground: '#22d3ee',
-    background: '#0b1220',
-    gradientEnabled: true,
-    gradientColors: ['#22d3ee', '#818cf8', '#e879f9'],
-    gradientDirection: 'TopToBottom',
-    logoMode: 'none',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-  ocean: {
-    ecc: 'Q',
-    moduleShape: 'rounded',
-    moduleSizePercent: 0.95,
-    moduleCornerRadius: 0.6,
-    finderShape: 'rounded',
-    foreground: '#0c4a6e',
-    background: '#f0f9ff',
-    gradientEnabled: true,
-    gradientColors: ['#0ea5e9', '#0369a1', '#1e3a8a'],
-    gradientDirection: 'TopLeftToBottomRight',
-    logoMode: 'none',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-  sunset: {
-    ecc: 'Q',
-    moduleShape: 'rounded',
-    moduleSizePercent: 0.9,
-    moduleCornerRadius: 0.35,
-    finderShape: 'rounded',
-    foreground: '#7c2d12',
-    background: '#fffbeb',
-    gradientEnabled: true,
-    gradientColors: ['#b45309', '#dc2626', '#9d174d'],
-    gradientDirection: 'BottomToTop',
-    logoMode: 'none',
-    logoSizePercent: 18,
-    logoBorderWidth: 6,
-  },
-};
-
 /* ─── State <-> DOM ─── */
 
 const EMPTY_BYTES = new Uint8Array(0);
 /** Uploaded logo image bytes (not part of share links). */
 let customLogoBytes = EMPTY_BYTES;
-/** True while applyStateToControls runs, so input events do not flip the preset to (custom). */
-let applyingState = false;
-
-/** @returns {object} playground state; doubles as the WASM QrRequest payload (camelCase) */
-function collectState() {
-  return {
-    content: contentEl.value,
-    symbology: symbologySelect.value,
-    ecc: eccSelect.value,
-    eccBoost: eccBoostCheck.checked,
-    allowKanji: allowKanjiCheck.checked,
-    dataFormat: formatSelect.value,
-    applicationIndicator: appIndicatorInput.value,
-    gs1Stem: gs1StemInput.value,
-    size: Number(sizeRange.value),
-    quietZone: Number(quietRange.value),
-    version: Number(versionSelect.value),
-    fitStrategy: rmqrFitSelect.value,
-    // A fixed version already pins the height; sending both would be rejected
-    // as contradictory when they disagree, so the height applies to Auto only.
-    height: versionSelect.value === '-1' ? Number(rmqrHeightSelect.value) : 0,
-    moduleShape: moduleShapeSelect.value,
-    moduleSizePercent: Number(moduleSizeRange.value) / 100,
-    moduleCornerRadius: Number(cornerRange.value) / 100,
-    finderShape: finderSelect.value,
-    foreground: fgColor.value,
-    background: bgTransparent.checked ? 'transparent' : bgColor.value,
-    gradient: {
-      enabled: gradientToggle.checked,
-      colors: getGradientColors(),
-      direction: gradientDirection.value,
-    },
-    logo: {
-      mode: logoModeSelect.value,
-      sizePercent: Number(logoSizeRange.value),
-      borderWidth: Number(logoBorderRange.value),
-    },
-  };
-}
-
-/** @param {object} state partial state (missing fields keep current control values) */
-function applyStateToControls(state) {
-  applyingState = true;
-  try {
-    if (typeof state.content === 'string') contentEl.value = state.content;
-    if (state.symbology === 'qr' || state.symbology === 'microqr' || state.symbology === 'rmqr') symbologySelect.value = state.symbology;
-    // Symbology decides the legal ECC / version option sets, rebuild before applying values
-    populateEccSelect();
-    populateVersionSelect();
-    if (state.ecc) eccSelect.value = state.ecc;
-    if (typeof state.eccBoost === 'boolean') eccBoostCheck.checked = state.eccBoost;
-    if (typeof state.allowKanji === 'boolean') allowKanjiCheck.checked = state.allowKanji;
-    if (DATA_FORMATS.includes(state.dataFormat)) formatSelect.value = state.dataFormat;
-    if (typeof state.applicationIndicator === 'string') appIndicatorInput.value = state.applicationIndicator.slice(0, 2);
-    if (typeof state.gs1Stem === 'string') gs1StemInput.value = state.gs1Stem;
-    if (state.fitStrategy === 'area' || state.fitStrategy === 'height' || state.fitStrategy === 'width') rmqrFitSelect.value = state.fitStrategy;
-    if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
-    if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
-    if (Number.isFinite(state.quietZone)) quietRange.value = String(clamp(state.quietZone, 0, 10));
-    if (Number.isFinite(state.version)) versionSelect.value = String(state.version);
-    if (state.moduleShape) moduleShapeSelect.value = state.moduleShape;
-    if (Number.isFinite(state.moduleSizePercent)) moduleSizeRange.value = String(Math.round(clamp(state.moduleSizePercent, 0.5, 1) * 100));
-    if (Number.isFinite(state.moduleCornerRadius)) cornerRange.value = String(Math.round(clamp(state.moduleCornerRadius, 0, 1) * 100));
-    if (state.finderShape) finderSelect.value = state.finderShape;
-    if (state.foreground) fgColor.value = state.foreground;
-    if (state.background === 'transparent') {
-      bgTransparent.checked = true;
-    } else if (state.background) {
-      bgTransparent.checked = false;
-      bgColor.value = state.background;
-    }
-    if (state.gradient) {
-      if (typeof state.gradient.enabled === 'boolean') gradientToggle.checked = state.gradient.enabled;
-      if (Array.isArray(state.gradient.colors) && state.gradient.colors.length >= 2) {
-        renderGradientColors(state.gradient.colors);
-      }
-      if (state.gradient.direction) gradientDirection.value = state.gradient.direction;
-    }
-    if (state.logo) {
-      if (state.logo.mode) logoModeSelect.value = state.logo.mode;
-      if (Number.isFinite(state.logo.sizePercent)) logoSizeRange.value = String(clamp(state.logo.sizePercent, 5, 35));
-      if (Number.isFinite(state.logo.borderWidth)) logoBorderRange.value = String(clamp(state.logo.borderWidth, 0, 24));
-    }
-    syncDerivedControls();
-  } finally {
-    applyingState = false;
-  }
-}
-
-/** Flat preset entry → state shape used by applyStateToControls / share links. */
-function presetToState(preset) {
-  return {
-    ecc: preset.ecc,
-    moduleShape: preset.moduleShape,
-    moduleSizePercent: preset.moduleSizePercent,
-    moduleCornerRadius: preset.moduleCornerRadius,
-    finderShape: preset.finderShape,
-    foreground: preset.foreground,
-    background: preset.background,
-    gradient: {
-      enabled: preset.gradientEnabled,
-      colors: preset.gradientColors,
-      direction: preset.gradientDirection,
-    },
-    logo: {
-      mode: preset.logoMode,
-      sizePercent: preset.logoSizePercent,
-      borderWidth: preset.logoBorderWidth,
-    },
-  };
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-/** Updates range outputs and conditional row visibility from current control values. */
-function syncDerivedControls() {
-  sizeOut.textContent = sizeRange.value;
-  quietOut.textContent = quietRange.value;
-  moduleSizeOut.textContent = moduleSizeRange.value;
-  cornerOut.textContent = cornerRange.value;
-  logoSizeOut.textContent = logoSizeRange.value;
-  logoBorderOut.textContent = logoBorderRange.value;
-  cornerRow.hidden = moduleShapeSelect.value !== 'rounded';
-  // Micro QR and rMQR have no ECC headroom for overlays, so the logo options do not apply, and
-  // ECC boost is Standard QR only for the same reasons the library scopes it there. The finder
-  // shape does apply to them now; wiring the control up for both is still to do.
-  eccBoostRow.hidden = isMicroSymbology() || isRmqrSymbology();
-  finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
-  logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();
-  // Micro QR has neither FNC1 nor a GS1 carrier. The stem belongs to a Digital Link and the indicator
-  // to an AIM format alone.
-  const format = isMicroSymbology() ? 'text' : formatSelect.value;
-  formatRow.hidden = isMicroSymbology();
-  gs1StemRow.hidden = format !== 'link';
-  appIndicatorRow.hidden = format !== 'aim';
-  gs1ExampleBtn.hidden = format !== 'gs1' && format !== 'link';
-  separatorRow.hidden = format === 'text';
-  // rMQR fit options apply only to automatic version selection.
-  rmqrFitRow.hidden = !isRmqrSymbology();
-  rmqrHeightRow.hidden = !isRmqrSymbology();
-  // A fixed version already pins both dimensions: fit strategy and fixed height
-  // only apply to automatic selection (the library rejects a disagreeing pair).
-  rmqrFitSelect.disabled = versionSelect.value !== '-1';
-  rmqrHeightSelect.disabled = versionSelect.value !== '-1';
-  gradientPanel.hidden = !gradientToggle.checked;
-  fgRow.classList.toggle('field--disabled', gradientToggle.checked);
-  fgColor.disabled = gradientToggle.checked;
-  bgColor.disabled = bgTransparent.checked;
-  logoFileRow.hidden = logoModeSelect.value !== 'custom';
-}
+const stateControls = createStateControls(document, {
+  getGradientColors, renderGradientColors,
+});
+const { collectState, applyStateToControls, syncDerivedControls } = stateControls;
 
 /* ─── Gradient color list ─── */
 
@@ -704,7 +398,7 @@ function syncGradientButtons() {
 
 /** <input type=color> requires #rrggbb; anything unparsable falls back to black. */
 function normalizeHexColor(value) {
-  return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : '#000000';
+  return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : '#000000';
 }
 
 gradientAddBtn.addEventListener('click', () => {
@@ -1675,12 +1369,12 @@ function formatBytes(n) {
 /* ─── Control events ─── */
 
 function markCustomPreset() {
-  if (!applyingState) presetSelect.value = 'custom';
+  if (!stateControls.applyingState) presetSelect.value = 'custom';
 }
 
 for (const el of [
   contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, formatSelect, appIndicatorInput, gs1StemInput,
-  versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
+  rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
   gradientToggle, gradientDirection,
@@ -1693,13 +1387,16 @@ for (const el of [
   });
 }
 
+versionSelect.addEventListener('input', () => {
+  stateControls.syncVersionControls();
+  markCustomPreset();
+  scheduleGenerate();
+});
+
 // Symbology switch rebuilds the dependent selects and resets the quiet zone to
 // the symbology's specification default (QR: 4 modules, Micro QR: 2 modules).
 symbologySelect.addEventListener('input', () => {
-  populateEccSelect();
-  populateVersionSelect();
-  quietRange.value = isMicroSymbology() || isRmqrSymbology() ? '2' : '4';
-  syncDerivedControls();
+  stateControls.syncSymbologyControls();
   markCustomPreset();
   scheduleGenerate();
 });
@@ -1989,14 +1686,21 @@ async function runBenchmark() {
 async function restoreFromLocationHash() {
   const raw = window.location.hash;
   if (!raw || raw.length <= 1) return false;
-  const decoded = await decodeShareHash(raw.slice(1));
-  if (!decoded.ok) {
-    showToast(`Could not restore from URL: ${decoded.error}. Showing defaults.`, 'info', 6000);
+  const previous = collectState();
+  try {
+    const decoded = await decodeShareHash(raw.slice(1));
+    if (!decoded.ok) {
+      showToast(`Could not restore from URL: ${decoded.error}. Showing defaults.`, 'info', 6000);
+      return false;
+    }
+    applyStateToControls(decoded.state);
+    presetSelect.value = 'custom';
+    return true;
+  } catch (error) {
+    applyStateToControls(previous);
+    showToast(`Could not restore from URL: ${error?.message ?? error}. Showing defaults.`, 'info', 6000);
     return false;
   }
-  applyStateToControls(decoded.state);
-  presetSelect.value = 'custom';
-  return true;
 }
 
 async function initializeRuntime() {

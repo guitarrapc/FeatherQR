@@ -33,6 +33,7 @@ The encoder exposes two output models.
 - The quiet zone is virtual: it changes the public coordinates but uses no payload storage.
 - The same text and options give the same matrix.
 - Renderers and serialization use this object model.
+- Restoring QRR data accepts only core sizes 21, 25, …, 177 (versions 1–40). Other sizes throw `InvalidDataException`, so the restored size and version cannot disagree.
 
 #### Caller-provided matrix buffer
 

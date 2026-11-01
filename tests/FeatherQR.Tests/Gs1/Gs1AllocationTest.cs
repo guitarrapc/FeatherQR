@@ -84,6 +84,20 @@ public class Gs1AllocationTest
         await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryGetReadLength(uri.AsSpan(), default, out _, out _))).IsEqualTo(0);
     }
 
+    [Test]
+    [Arguments("https://[::1]")]
+    [Arguments("https://[2001:db8:1:2:3:4:5:6]:8443/path")]
+    [Arguments("https://[::ffff:192.0.2.1]")]
+    public async Task DigitalLinkIpv6Stem_SpanAndLengthForms_AllocateNothing(string stem)
+    {
+        const string text = "0109520123456788";
+        var destination = new char[128];
+        await Assert.That(Gs1ElementString.TryToDigitalLink(text, destination, out _, out _, stem)).IsTrue();
+        await Assert.That(Gs1ElementString.TryGetToDigitalLinkLength(text, out _, out _, stem)).IsTrue();
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryToDigitalLink(text, destination, out _, out _, stem))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryGetToDigitalLinkLength(text, out _, out _, stem))).IsEqualTo(0);
+    }
+
     /// <summary>
     /// The destination and size forms of the entry points on data they take, from (AI) text and from an element
     /// string, under both segmentations, and the size forms on data they refuse, where a destination form throws.

@@ -372,9 +372,18 @@ var pngBytes = new QRCodeImageBuilder(content)
 
 // Span overloads also respect the segmentation option
 var option = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
-var calculated = TryGetRequiredBufferSize(content, QREccLevel.M, option);
+if (!QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.M, out var calculated, option))
+    return;
+
 var moduleBuffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
-QRCodeGenerator.Create(content, QREccLevel.M, moduleBuffer, option);
+try
+{
+    QRCodeGenerator.Create(content, QREccLevel.M, moduleBuffer, option);
+}
+finally
+{
+    ArrayPool<byte>.Shared.Return(moduleBuffer);
+}
 ```
 
 > [!TIP]
@@ -424,9 +433,11 @@ QRCodeGenerator.Create("日本語～", QREccLevel.M, kanji);           // UTF-8:
 QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M, kanji with { EciMode = EciMode.Utf8 }); // UTF-8, version 2
 QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M, kanji with { Utf8Bom = true });          // UTF-8 with a byte order mark, version 3
 
-// ASCII in the text: the default Single keeps it UTF-8, Optimal writes Kanji runs beside the ASCII
-QRCodeGenerator.Create("東京タワー333m", QREccLevel.M, kanji);                                                 // UTF-8, version 2
-QRCodeGenerator.Create("東京タワー333m", QREccLevel.M, kanji with { Segmentation = QRSegmentation.Optimal }); // Kanji + ASCII runs, version 1
+// Single keeps this mixed text in UTF-8
+QRCodeGenerator.Create("東京タワー333m", QREccLevel.M, kanji with { Segmentation = QRSegmentation.Single }); // UTF-8, version 2
+
+// The default Optimal segmentation writes Kanji runs beside the ASCII
+QRCodeGenerator.Create("東京タワー333m", QREccLevel.M, kanji); // Kanji + ASCII runs, version 1
 ```
 
 #### Structured Append (one message across several symbols)

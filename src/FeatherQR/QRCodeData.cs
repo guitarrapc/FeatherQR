@@ -260,7 +260,7 @@ public sealed class QRCodeData
             throw new InvalidDataException("Invalid QR code data: header mismatch.");
 
         var baseSizeFromFile = (int)rawDataSpan[3];
-        if (baseSizeFromFile < 21 || baseSizeFromFile > 177)
+        if (baseSizeFromFile < 21 || baseSizeFromFile > 177 || (baseSizeFromFile - 21) % 4 != 0)
             throw new InvalidDataException($"Invalid QR code size: {baseSizeFromFile}.");
 
         Version = VersionFromSize(baseSizeFromFile);

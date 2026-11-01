@@ -288,6 +288,40 @@ public class Gs1DigitalLinkTest
     [Arguments("https://:")]
     [Arguments("https://:8443")]
     [Arguments("https://[]")]
+    [Arguments("https://[1]")]
+    [Arguments("https://[:]")]
+    [Arguments("https://[:::]")]
+    [Arguments("https://[1:2:3:4:5:6:7]")]
+    [Arguments("https://[1:2:3:4:5:6:7:8:9]")]
+    [Arguments("https://[1:2:3:4:5:6:7:8::]")]
+    [Arguments("https://[::1:2:3:4:5:6:7:8]")]
+    [Arguments("https://[1::2::3]")]
+    [Arguments("https://[:1:2:3:4:5:6:7]")]
+    [Arguments("https://[1:2:3:4:5:6:7:]")]
+    [Arguments("https://[12345::]")]
+    [Arguments("https://[::12345]")]
+    [Arguments("https://[192.0.2.1]")]
+    [Arguments("https://[1:2:3:4:5:192.0.2.1]")]
+    [Arguments("https://[1:2:3:4:5:6:7:192.0.2.1]")]
+    [Arguments("https://[1:2:3:4:5:6::192.0.2.1]")]
+    [Arguments("https://[::ffff:256.0.2.1]")]
+    [Arguments("https://[::ffff:192.0.2.256]")]
+    [Arguments("https://[::ffff:192.0.2]")]
+    [Arguments("https://[::ffff:192.0.2.1.2]")]
+    [Arguments("https://[::ffff:192..2.1]")]
+    [Arguments("https://[::ffff:192.0.2.]")]
+    [Arguments("https://[::ffff:0192.0.2.1]")]
+    [Arguments("https://[::ffff:192.00.2.1]")]
+    [Arguments("https://[::ffff:c0.0.2.1]")]
+    [Arguments("https://[::ffff:192.0.2.1:1]")]
+    [Arguments("https://[::ffff:0xC0.0.2.1]")]
+    [Arguments("https://[::ffff:192.0.2.1::]")]
+    [Arguments("https://[fe80::1%25eth0]")]
+    [Arguments("https://[::1]/bad path")]
+    [Arguments("https://[::1]/path?query")]
+    [Arguments("https://[::1]/path#fragment")]
+    [Arguments("https://[::1]/\u0000")]
+    [Arguments("https://[::1]/é")]
     [Arguments("https://[::1")]
     [Arguments("https://[zz::1]")]
     [Arguments("https://a:")]
@@ -300,6 +334,73 @@ public class Gs1DigitalLinkTest
         await Assert.That(() => Gs1ElementString.TryToDigitalLink(Gtin, out _, out _, stem)).Throws<ArgumentException>();
         await Assert.That(() => Gs1ElementString.TryToDigitalLink(Gtin, new char[128], out _, out _, stem)).Throws<ArgumentException>();
         await Assert.That(() => Gs1ElementString.TryGetToDigitalLinkLength(Gtin, out _, out _, stem)).Throws<ArgumentException>();
+    }
+
+    [Test]
+    [MethodDataSource(nameof(ValidIpv6Stems))]
+    public async Task TryToDigitalLink_ValidIpv6Stem_AllFormsAgree(string stem)
+    {
+        var expected = stem.TrimEnd('/') + "/01/09520123456788";
+        await Assert.That(Gs1ElementString.TryToDigitalLink(Gtin, out var uri, out _, stem)).IsTrue();
+        await Assert.That(uri).IsEqualTo(expected);
+        await Assert.That(Uri.TryCreate(uri, UriKind.Absolute, out _)).IsTrue();
+        await Assert.That(Gs1ElementString.TryGetToDigitalLinkLength(Gtin, out var length, out _, stem)).IsTrue();
+        await Assert.That(length).IsEqualTo(expected.Length);
+        var destination = new char[length];
+        await Assert.That(Gs1ElementString.TryToDigitalLink(Gtin, destination, out var written, out _, stem)).IsTrue();
+        await Assert.That(new string(destination, 0, written)).IsEqualTo(expected);
+    }
+
+    public static IEnumerable<string> ValidIpv6Stems()
+    {
+        yield return "https://[2001:DB8:0000:1:2:3:4:FFFF]:8443/path/";
+        yield return "https://[1:2:3:4:5:6:192.0.2.1]";
+        yield return "https://[ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255]";
+        yield return "https://[::0.0.0.0]";
+        yield return "https://[::ffff:255.255.255.255]";
+        // Every possible position and width of the omitted zero groups.
+        for (var omitted = 1; omitted <= 8; omitted++)
+        {
+            for (var left = 0; left <= 8 - omitted; left++)
+            {
+                var prefix = string.Join(":", Enumerable.Repeat("a", left));
+                var suffix = string.Join(":", Enumerable.Repeat("b", 8 - omitted - left));
+                yield return $"https://[{prefix}::{suffix}]";
+            }
+        }
+        for (var left = 0; left <= 5; left++)
+            yield return $"https://[{string.Join(":", Enumerable.Repeat("1", left))}::192.0.2.1]";
+    }
+
+    [Test]
+    public async Task TryToDigitalLink_HexIpv6Mutations_MatchAddressParser()
+    {
+        var random = new Random(3986);
+        var bytes = new byte[16];
+        const string alphabet = "0123456789abcdef:g";
+        for (var sample = 0; sample < 2000; sample++)
+        {
+            random.NextBytes(bytes);
+            var address = new System.Net.IPAddress(bytes).ToString();
+            var position = random.Next(address.Length);
+            address = (sample % 3) switch
+            {
+                0 => address.Remove(position, 1),
+                1 => address.Insert(position, alphabet[random.Next(alphabet.Length)].ToString()),
+                _ => address,
+            };
+            var expected = System.Net.IPAddress.TryParse(address, out var parsed)
+                && parsed.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6;
+            var accepted = false;
+            try
+            {
+                accepted = Gs1ElementString.TryGetToDigitalLinkLength(Gtin, out _, out _, $"https://[{address}]");
+            }
+            catch (ArgumentException)
+            {
+            }
+            await Assert.That(accepted).IsEqualTo(expected).Because(address);
+        }
     }
 
     [Test]

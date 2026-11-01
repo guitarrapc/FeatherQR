@@ -84,6 +84,40 @@ public class QRCodeDataUnitTest
     // Constructors
 
     [Test]
+    [MethodDataSource(nameof(InvalidSerializedCoreSizes))]
+    public void Constructor_RawData_InvalidCoreSize_Throws(int size)
+    {
+        // A complete payload rules out truncation as the reason for rejection.
+        var raw = new byte[4 + (size * size + 7) / 8];
+        "QRR"u8.CopyTo(raw);
+        raw[3] = (byte)size;
+
+        Assert.Throws<InvalidDataException>(() => new QRCodeData(raw, 0));
+    }
+
+    public static IEnumerable<int> InvalidSerializedCoreSizes()
+    {
+        var validSizes = Enumerable.Range(1, 40).Select(version => 17 + 4 * version).ToHashSet();
+        return Enumerable.Range(0, 256).Where(size => !validSizes.Contains(size));
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(4)]
+    public async Task Constructor_RawData_AllVersions_PreserveSizeAndVersion(int quietZoneSize)
+    {
+        for (var version = 1; version <= 40; version++)
+        {
+            var original = new QRCodeData(version, 0);
+            var restored = new QRCodeData(original.GetRawData(), quietZoneSize);
+
+            await Assert.That(restored.Version).IsEqualTo(version);
+            await Assert.That(restored.Size).IsEqualTo(17 + 4 * version + 2 * quietZoneSize);
+            await Assert.That(restored.GetRawData()).IsEquivalentTo(original.GetRawData(), CollectionOrdering.Matching);
+        }
+    }
+
+    [Test]
     [Arguments(-1)]
     [Arguments(10_001)]
     [Arguments((1 << 30) - 1)]
