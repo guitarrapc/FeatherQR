@@ -259,7 +259,7 @@ public static class MicroQRCodeDecoder
     /// </remarks>
     /// <param name="data">The Micro QR code to decode.</param>
     /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecode(MicroQRCodeData, out string, out MicroQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(MicroQRCodeData, out string, out MicroQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the Micro QR code decoded.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     public static bool TryDecodeBytes(MicroQRCodeData data, out byte[] bytes, out MicroQRCodeDecodeInfo info)
@@ -297,7 +297,7 @@ public static class MicroQRCodeDecoder
     /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
     /// <param name="size">Side length in modules, quiet zone included.</param>
     /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecode(ReadOnlySpan{byte}, int, out string, out MicroQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, out string, out MicroQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the Micro QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, out byte[] bytes, out MicroQRCodeDecodeInfo info)
@@ -327,7 +327,7 @@ public static class MicroQRCodeDecoder
     /// <param name="size">Side length in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for the decoded bytes. <see cref="GetMaxDecodedLength"/> sizes it for bytes too.</param>
     /// <param name="bytesWritten">How many bytes were written. 0 when the matrix does not decode, and <paramref name="destination"/> is then left as it was.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecode(ReadOnlySpan{byte}, int, Span{char}, out int, out MicroQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, Span{char}, out int, out MicroQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the Micro QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, Span<byte> destination, out int bytesWritten, out MicroQRCodeDecodeInfo info)
@@ -354,14 +354,14 @@ public static class MicroQRCodeDecoder
     /// Finds a Micro QR code in a grayscale image and decodes its bytes, as <see cref="TryDecodeBytes(MicroQRCodeData, out byte[], out MicroQRCodeDecodeInfo)"/> reads them.
     /// </summary>
     /// <remarks>
-    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out MicroQRCodeDecodeInfo)"/> searches it, and a symbol whose content a call cannot give does not stop the search.
-    /// The bytes calls read some symbols the text calls cannot, such as a Kanji cell outside JIS X 0208. So in an image of several symbols the two calls can return different ones.
+    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out MicroQRCodeDecodeInfo)"/> searches it, but the two calls do not judge every symbol's content alike.
+    /// The bytes calls read symbols the text calls refuse, such as one holding a Kanji cell outside JIS X 0208, so in an image of several symbols the two calls can return different ones.
     /// </remarks>
     /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out MicroQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out MicroQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
@@ -393,7 +393,7 @@ public static class MicroQRCodeDecoder
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for the decoded bytes. <see cref="GetMaxDecodedLength"/> sizes it for bytes too.</param>
     /// <param name="bytesWritten">How many bytes were written. 0 when the image does not decode, and <paramref name="destination"/> is then left as it was.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, Span{char}, out int, out MicroQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, Span{char}, out int, out MicroQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>

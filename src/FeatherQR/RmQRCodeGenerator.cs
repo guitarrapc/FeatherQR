@@ -177,7 +177,7 @@ public static partial class RmQRCodeGenerator
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">Thrown when <see cref="RmQRCodeGeneratorOptions.Version"/> and <see cref="RmQRCodeGeneratorOptions.Height"/> disagree, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, or an undefined level, version, fit strategy or segmentation.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, or an undefined level, version, fit strategy, height or segmentation.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default)
     {
         size = default;

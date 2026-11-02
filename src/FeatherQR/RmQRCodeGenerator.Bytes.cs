@@ -36,7 +36,7 @@ public static partial class RmQRCodeGenerator
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
     /// <returns>The module matrix.</returns>
     /// <exception cref="ArgumentException">Thrown when the content does not fit, when the options contradict each other, or when they carry an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy or segmentation, or an assignment outside 0 to 999999.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy, height or segmentation, or an assignment outside 0 to 999999.</exception>
     public static RmQRCodeData Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(in options, eciAssignment);
@@ -81,7 +81,7 @@ public static partial class RmQRCodeGenerator
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header. Size <paramref name="destination"/> with the same assignment.</param>
     /// <returns>The number of bytes written.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, when the options contradict each other, or when they carry an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy or segmentation, or an assignment outside 0 to 999999.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy, height or segmentation, or an assignment outside 0 to 999999.</exception>
     public static int Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(in options, eciAssignment);
@@ -129,7 +129,7 @@ public static partial class RmQRCodeGenerator
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
     /// <returns><c>true</c> when the content fits.</returns>
     /// <exception cref="ArgumentException">Thrown when <see cref="RmQRCodeGeneratorOptions.Version"/> and <see cref="RmQRCodeGeneratorOptions.Height"/> disagree, or when the options carry an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy or segmentation, or an assignment outside 0 to 999999.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy, height or segmentation, or an assignment outside 0 to 999999.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         size = default;

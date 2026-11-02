@@ -273,7 +273,7 @@ public static class RmQRCodeDecoder
     /// </remarks>
     /// <param name="data">The rMQR code to decode.</param>
     /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecode(RmQRCodeData, out string, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(RmQRCodeData, out string, out RmQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     public static bool TryDecodeBytes(RmQRCodeData data, out byte[] bytes, out RmQRCodeDecodeInfo info)
@@ -313,7 +313,7 @@ public static class RmQRCodeDecoder
     /// <param name="width">Width in modules, quiet zone included.</param>
     /// <param name="height">Height in modules, quiet zone included.</param>
     /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecode(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int width, int height, out byte[] bytes, out RmQRCodeDecodeInfo info)
@@ -344,7 +344,7 @@ public static class RmQRCodeDecoder
     /// <param name="height">Height in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for the decoded bytes. <see cref="GetMaxDecodedLength"/> sizes it for bytes too.</param>
     /// <param name="bytesWritten">How many bytes were written. 0 when the matrix does not decode, and <paramref name="destination"/> is then left as it was.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecode(ReadOnlySpan{byte}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int width, int height, Span<byte> destination, out int bytesWritten, out RmQRCodeDecodeInfo info)
@@ -371,14 +371,14 @@ public static class RmQRCodeDecoder
     /// Finds an rMQR code in a grayscale image and decodes its bytes, as <see cref="TryDecodeBytes(RmQRCodeData, out byte[], out RmQRCodeDecodeInfo)"/> reads them.
     /// </summary>
     /// <remarks>
-    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> searches it, and a symbol whose content a call cannot give does not stop the search.
-    /// The bytes calls read some symbols the text calls cannot, such as one under an assignment with no charset here, and refuse one whose bytes fall under two assignments. So in an image of several symbols the two calls can return different ones.
+    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> searches it, but the two calls do not judge every symbol's content alike.
+    /// The bytes calls read symbols the text calls refuse, such as one under an assignment with no charset here, and refuse one whose bytes fall under two assignments, so in an image of several symbols the two calls can return different ones.
     /// </remarks>
     /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
@@ -410,7 +410,7 @@ public static class RmQRCodeDecoder
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for the decoded bytes. <see cref="GetMaxDecodedLength"/> sizes it for bytes too.</param>
     /// <param name="bytesWritten">How many bytes were written. 0 when the image does not decode, and <paramref name="destination"/> is then left as it was.</param>
-    /// <param name="info">What the attempt found, as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
