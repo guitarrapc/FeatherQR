@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
@@ -209,21 +210,20 @@ internal static class MicroQRConstants
         return (ushort)(((data << 10) | remainder) ^ 0x4445);
     }
 
-    // The 32 format words, index symbol number · 4 + mask. They live here, apart from the decoder's table of every word
-    // within three bits of one, so a check for an exact word does not build that 32 KB table.
-    private static readonly ushort[] formatWords = BuildFormatWords();
-
-    private static ushort[] BuildFormatWords()
-    {
-        var words = new ushort[32];
-        for (var symbolNumber = 0; symbolNumber < 8; symbolNumber++)
-        {
-            GetVersionAndEccFromSymbolNumber(symbolNumber, out var version, out var eccLevel);
-            for (var mask = 0; mask < 4; mask++)
-                words[symbolNumber * 4 + mask] = GetFormatBits(version, eccLevel, mask);
-        }
-        return words;
-    }
+    // The 32 format words GetFormatBits computes, symbol number · 4 + mask, two bytes each, little-endian.
+    // MicroQRConstants_MatchesExactlyTheThirtyTwoWords holds them to it over every 15-bit word.
+    // They live here, apart from the decoder's table of every word within three bits of one, so a check for an exact word does not build that 32 KB table.
+    private static ReadOnlySpan<byte> formatWords =>
+    [
+        0x45, 0x44, 0x72, 0x41, 0x2B, 0x4E, 0x1C, 0x4B, // M1:   4445 4172 4E2B 4B1C
+        0xAE, 0x55, 0x99, 0x50, 0xC0, 0x5F, 0xF7, 0x5A, // M2-L: 55AE 5099 5FC0 5AF7
+        0x93, 0x67, 0xA4, 0x62, 0xFD, 0x6D, 0xCA, 0x68, // M2-M: 6793 62A4 6DFD 68CA
+        0x78, 0x76, 0x4F, 0x73, 0x16, 0x7C, 0x21, 0x79, // M3-L: 7678 734F 7C16 7921
+        0xDE, 0x06, 0xE9, 0x03, 0xB0, 0x0C, 0x87, 0x09, // M3-M: 06DE 03E9 0CB0 0987
+        0x35, 0x17, 0x02, 0x12, 0x5B, 0x1D, 0x6C, 0x18, // M4-L: 1735 1202 1D5B 186C
+        0x08, 0x25, 0x3F, 0x20, 0x66, 0x2F, 0x51, 0x2A, // M4-M: 2508 203F 2F66 2A51
+        0xE3, 0x34, 0xD4, 0x31, 0x8D, 0x3E, 0xBA, 0x3B, // M4-Q: 34E3 31D4 3E8D 3BBA
+    ];
 
     /// <summary>
     /// Whether a 15-bit <paramref name="word"/> is exactly one of the 32 format words, and the version, level and mask it names.
@@ -237,6 +237,6 @@ internal static class MicroQRConstants
         var data = (word ^ 0x4445) >> 10;
         GetVersionAndEccFromSymbolNumber(data >> 2, out version, out eccLevel);
         maskPattern = data & 3;
-        return formatWords[data] == word;
+        return BinaryPrimitives.ReadUInt16LittleEndian(formatWords.Slice(data * 2)) == word;
     }
 }

@@ -209,7 +209,7 @@ Lessons:
 
 No generator file changed, so `Create` was not benchmarked.
 
-The readers were rewritten later the same day, after the maintainer called them inefficient. The first version computed the 32 Standard QR words one by one until one matched, went through the decoder's 32 KB table of every Micro QR word within three bits, and called `GetFormatModule` for each rMQR bit. The level and mask are the word's top five bits under the XOR mask, so the one word they name is the only candidate, and a single table load confirms it. The runs along a row are read in one window (`ModuleBitPacker.ReadRun`). The Micro QR words moved to `MicroQRConstants`, so reading a level no longer builds the 32 KB table. Measured in Release through the public API, before and after:
+The readers were rewritten later the same day, after the maintainer called them inefficient. The first version computed the 32 Standard QR words one by one until one matched, went through the decoder's 32 KB table of every Micro QR word within three bits, and called `GetFormatModule` for each rMQR bit. The level and mask are the word's top five bits under the XOR mask, so the one word they name is the only candidate, and a single table load confirms it. The runs along a row are read in one window (`ModuleBitPacker.ReadRun`). The Micro QR words moved to `MicroQRConstants`, so reading a level no longer builds the 32 KB table. They are a literal table there, as the tables beside them are, so nothing is built at run time, and the test over every 15-bit word holds them to `GetFormatBits` (a planted wrong byte failed it). Measured in Release through the public API, before and after:
 
 | Operation | Before | After |
 |---|---|---|
