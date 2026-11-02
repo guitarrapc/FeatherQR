@@ -137,6 +137,7 @@ namespace FeatherQR.SkiaSharp
         public static Task<MicroQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out MicroQRCodeDecodeInfo info);
     }
 
     public abstract class ModuleShape
@@ -195,6 +196,7 @@ namespace FeatherQR.SkiaSharp
         public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out QRCodeDecodeInfo info);
     }
 
     public sealed class RectangleFinderPatternShape : FinderPatternShape
@@ -259,6 +261,7 @@ namespace FeatherQR.SkiaSharp
         public static Task<RmQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out RmQRCodeDecodeInfo info);
     }
 
     public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShape

@@ -36,10 +36,15 @@ internal static class RmQRBinaryDecoder
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
     /// <param name="fnc1">The FNC1 mode when the stream carries one, with its application indicator in second position, and default otherwise.</param>
-    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, RmQRVersion version, Span<char> destination, out int charsWritten, out Fnc1Mode fnc1)
+    /// <param name="eciAssignment">The first ECI assignment the stream declares, also when the decode then fails, or <see cref="SegmentDecoders.NoEciAssignment"/>.</param>
+    /// <param name="bytes">Write the symbol's bytes, one a char, instead of its text, as <see cref="StandardQR.QRBinaryDecoder.DecodeBitStream"/> does.</param>
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, RmQRVersion version, Span<char> destination, out int charsWritten, out Fnc1Mode fnc1, out int eciAssignment, bool bytes = false)
     {
         charsWritten = 0;
         fnc1 = default;
+        eciAssignment = SegmentDecoders.NoEciAssignment;
+        var currentAssignment = SegmentDecoders.NoEciAssignment;
+        var dataAssignment = SegmentDecoders.NoDataAssignment;
         var reader = new BitReader(data);
         var totalBits = dataBitCount;
         var charset = ByteSegmentCharset.Unspecified;
@@ -91,6 +96,13 @@ internal static class RmQRBinaryDecoder
                                         : SegmentDecoders.DecodeAlphanumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
                                     break;
                                 default:
+                                    if (bytes)
+                                    {
+                                        if (!SegmentDecoders.KeepsOneAssignment(ref dataAssignment, currentAssignment))
+                                            return DecodeStatus.UnsupportedContent;
+                                        status = SegmentDecoders.CopyBytePayload(ref reader, totalBits, count, destination, ref charsWritten);
+                                        break;
+                                    }
                                     // Data codewords top out at 152 bytes (R17x139-M).
                                     rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
                                     status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, charset, fnc1.IsActive, rentedBytes, destination, ref charsWritten);
@@ -105,6 +117,11 @@ internal static class RmQRBinaryDecoder
                             var status = SegmentDecoders.ReadEciDesignator(ref reader, totalBits, out var eciValue);
                             if (status != DecodeStatus.Success)
                                 return status;
+                            if (eciAssignment == SegmentDecoders.NoEciAssignment)
+                                eciAssignment = eciValue;
+                            currentAssignment = eciValue;
+                            if (bytes)
+                                break; // the bytes take no charset, so every assignment reads
                             switch (eciValue)
                             {
                                 case EciIso8859_1a:
@@ -130,7 +147,17 @@ internal static class RmQRBinaryDecoder
                                 return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
                             dataSegmentSeen = true;
-                            var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                            DecodeStatus status;
+                            if (bytes)
+                            {
+                                if (!SegmentDecoders.KeepsOneAssignment(ref dataAssignment, currentAssignment))
+                                    return DecodeStatus.UnsupportedContent;
+                                status = SegmentDecoders.DecodeKanjiPayloadBytes(ref reader, totalBits, count, destination, ref charsWritten);
+                            }
+                            else
+                            {
+                                status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                            }
                             if (status != DecodeStatus.Success)
                                 return status;
                             break;

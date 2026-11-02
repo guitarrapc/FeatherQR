@@ -66,6 +66,44 @@ public static class QRCodeImageDecoder
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
             }
         }
+
+        /// <summary>
+        /// Finds a QR code in a bitmap and decodes its bytes, as they are in the symbol, with no charset applied.
+        /// </summary>
+        /// <remarks>
+        /// The bitmap is searched as <see cref="TryDecode(SKBitmap, out string, out QRCodeDecodeInfo)"/> searches it, and the bytes are read as <see cref="QRCodeDecoder.TryDecodeBytes(QRCodeData, out byte[], out QRCodeDecodeInfo)"/> reads them.
+        /// </remarks>
+        /// <param name="bitmap">The bitmap to scan.</param>
+        /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
+        /// <param name="info">What the attempt found, as <see cref="TryDecode(SKBitmap, out string, out QRCodeDecodeInfo)"/> reports it.</param>
+        /// <returns><c>true</c> when a QR code was found and decoded.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
+        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out QRCodeDecodeInfo info)
+        {
+            if (bitmap is null)
+                throw new ArgumentNullException(nameof(bitmap));
+
+            var width = bitmap.Width;
+            var height = bitmap.Height;
+            if (width < 21 || height < 21 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
+            {
+                bytes = [];
+                info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+                return false;
+            }
+
+            var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
+            try
+            {
+                var luminance = rented.AsSpan(0, pixelCount);
+                BitmapLuminanceConverter.Convert(bitmap, luminance);
+                return QRCodeDecoder.TryDecodeImageBytes(luminance, width, height, out bytes, out info);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+            }
+        }
         /// <summary>
         /// Reads an image from a stream asynchronously, and finds and decodes a QR code in it.
         /// </summary>

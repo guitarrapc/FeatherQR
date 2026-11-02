@@ -129,7 +129,7 @@ The grids scaled from the finder fail first, and no timing frame is fitted.
 |---|---|
 | Versions | M1 to M4. The matrix size gives the version, and the format information must agree with it |
 | ECC levels | L, M and Q, as each version defines them. M1 only detects errors |
-| Data modes | Numeric, Alphanumeric, Byte (UTF-8, Shift_JIS or ISO-8859-1, chosen by the [shared heuristic](standardqr-decoder.md#decisions) because Micro QR has no ECI), Kanji (M3 and M4, JIS X 0208). The generator writes Kanji on request (`AllowKanji`) for text JIS X 0208 can represent |
+| Data modes | Numeric, Alphanumeric, Byte (UTF-8, Shift_JIS or ISO-8859-1, chosen by the [shared heuristic](standardqr-decoder.md#decisions) because Micro QR has no ECI), Kanji (M3 and M4, JIS X 0208). The generator writes Kanji on request (`AllowKanji`) for text JIS X 0208 can represent. The bytes calls (`TryDecodeBytes`, `TryDecodeImageBytes`) give a Byte segment as written instead, and Kanji as its Shift_JIS pairs, as [Standard QR](standardqr-decoder.md#supported) (Bytes) does |
 | Quiet zone | Matrix: any uniform light border, with the core located from the finder's corner |
 | Error correction | Reed-Solomon, capped at the capacity t of ISO Table 9. Corrections are reported |
 | Format information | One 15-bit copy, with up to 3 bit errors corrected |

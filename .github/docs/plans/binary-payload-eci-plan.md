@@ -117,11 +117,11 @@ What the bytes are:
 - Under FNC1 the separator is 0x1D, by the rule the text follows. The application indicator is on the info, not in the bytes.
 - ECI and Structured Append headers are not bytes. They are on the info.
 
-The parts of a Structured Append set, joined in index order, give the bytes the set was made from. Phase 2 checks whether `GetMaxDecodedLength` already bounds the byte count (Numeric is the densest mode in both readings). The documentation then says so, or a byte bound is added.
+The parts of a Structured Append set, joined in index order, give the bytes the set was made from. `GetMaxDecodedLength` bounds the byte count too, since Numeric is the densest mode in both readings, and the span forms' documentation says so.
 
 ### The assignment on the decode info
 
-`QRCodeDecodeInfo` and `RmQRCodeDecodeInfo` gain `int? EciAssignment`, the first assignment the stream declares, or `null` when it declares none. The text calls report it too, on success and on `UnsupportedContent`, so a caller that gets `UnsupportedContent` with an assignment knows it can read the bytes and decode them with its own `Encoding`. Results of the several-symbol calls carry it through their `Info`. `MicroQRCodeDecodeInfo` gets nothing.
+`QRCodeDecodeInfo` and `RmQRCodeDecodeInfo` gain `int? EciAssignment`, the first assignment the stream declares, or `null` when it declares none. The text calls report it too, on success and on the two reads whose content is no text, `UnsupportedContent` and `UnmappedCharacter`, so a caller that gets either with an assignment knows it can read the bytes and decode them with its own `Encoding`. Results of the several-symbol calls carry it through their `Info`. `MicroQRCodeDecodeInfo` gets nothing.
 
 A stream whose Byte and Kanji segments fall under two different assignments, no ECI counting as one, has no single interpretation for its bytes. The bytes calls refuse it (B7). The text calls read it as today when every assignment has a charset here.
 
@@ -159,7 +159,7 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 |---|---|---|---|
 | 0 | Premises and rulings | Done 2026-11-02. The subclauses are not public, so each statement of the ECI policy was checked against the reference implementations, and the section numbers wait until the text is at hand. B1 to B11 were ruled the same day. No change to `src` | Each statement of the ECI policy is marked as one the reference implementations agree on or one they split on |
 | 1 | Builders and the encoder's choices | Done 2026-11-02 (Progress log). B11 and B10, then `EccLevel` and `MaskPattern` on the three data types | The properties equal what decoding reports over every version, level and mask, with and without boost, and after a raw-data round trip. `Create` allocation and time unchanged |
-| 2 | Bytes out | One internal bytes entry over the three bitstream decoders, the assignment on the info, the unknown assignment reported, the `TryDecodeBytes` and `TryDecodeImageBytes` calls and the SkiaSharp overloads | Bytes are right for every mode, under FNC1, behind a byte order mark and across Structured Append parts. The interop oracle's raw bytes agree on the fixture corpus. Text results unchanged on the whole corpus |
+| 2 | Bytes out | Done 2026-11-02 (Progress log). One internal bytes entry over the three bitstream decoders, the assignment on the info, the unknown assignment reported, the `TryDecodeBytes` and `TryDecodeImageBytes` calls and the SkiaSharp overloads | Bytes are right for every mode, under FNC1, behind a byte order mark and across Structured Append parts. The interop oracle's raw bytes agree on the fixture corpus. Text results unchanged on the whole corpus |
 | 3 | ECI writer and bytes in, Standard QR and rMQR | A designator of one to three codewords, the bytes `Create` and sizing calls with their `eciAssignment` parameter, and Structured Append from bytes. Then the Android and iPhone cameras scan undeclared binary and ECI 899 symbols from this phase, and what each shows is recorded for the Phase 5 docs. The check waits for this phase because nothing here could write either symbol before it | All 256 byte values and random payloads round-trip through Phase 2 and through the oracle. Under single-segment encoding the largest payload at each version and level equals the standard's Byte-mode capacity. The designator grows at 127/128 and 16383/16384, and 1,000,000 is refused. Text output byte-identical. The phone results are recorded |
 | 4 | Bytes in, Micro QR | The same without ECI | As Phase 3, without the ECI rows |
 | 5 | Docs, Playground, fold | The encoder and decoder specs (the not-implemented and unsupported rows, the ECI policy and both deviations in Decisions), D7 amended in `qrcode-symbologies.md`, README, migration notes for Phase 1, the API page, and in the Playground a hex view of decoded bytes with the assignment and a hex or file input. Fold this plan into the specs and delete it | The specs describe what was built, and this file is gone |
@@ -224,3 +224,24 @@ The readers were rewritten later the same day, after the maintainer called them 
 Allocation is unchanged. New tests hold the exact match to a search over all 2^15 words for Standard QR and Micro QR and `ReadRun` to a read per module, and refuse a change to each format module one at a time. A planted skip of one module failed them. Debug suite 61,290, none failed.
 
 Lesson: an exact match is not a search. The data bits of a format word sit under its XOR mask, so the candidate is computed, not found. The first version had carried over the shape of a decoder that corrects errors, which has to try every word.
+
+### Phase 2, bytes out (2026-11-02)
+
+Done:
+
+- `TryDecodeBytes` (code, matrix and matrix into a span) and `TryDecodeImageBytes` (array and span) on the three decoders, `TryDecodeBytes(SKBitmap)` on the three SkiaSharp image decoders, and `EciAssignment` (`int?`) on `QRCodeDecodeInfo` and `RmQRCodeDecodeInfo`. The approved listings gained exactly these, and the API page was regenerated.
+- The three bitstream decoders take a `bytes` flag. Under it a Byte segment is copied as written, Kanji gives its Shift_JIS pairs, every assignment reads, and Byte and Kanji segments under two assignments are `UnsupportedContent`. Numeric and Alphanumeric need no change, since their characters are their bytes.
+- The bytes travel through the char destination the text calls already use, one byte a char, and are narrowed at the end. A thread-static flag (`PayloadOutput`) the bytes calls set around the text call tells the matrix decoders, which read it once after Reed-Solomon. The image search passes its destination through dozens of stage signatures, and only that last step differs between the outputs.
+- The assignment is reported on `UnmappedCharacter` too, not only on `UnsupportedContent`: both are reads whose content is no text, and the bytes calls read both.
+- `GetMaxDecodedLength` bounds the bytes, as the design expected. Numeric gives a byte a digit and is the densest in both readings. A test fills versions 1 and 40 at level L with digits and with kanji and reads them into a destination of that length.
+- Tests: `BitStreamBytesTest` (every mode in all three decoders, assignments of every designator length, both Kanji lead-byte ranges, streams under two assignments, destination and truncation order) and a bytes test per symbology (matrix, image and bitmap paths, `EciAssignment` on both outputs, the Structured Append parts joined). `TypeShapeTest` now pins `EciAssignment` on the two info types that have ECI. Twenty-four existing calls took the new `out` argument.
+- Planted faults: a one-assignment check that always passes failed four tests. A Kanji pair computed from 0x81 for every lead failed none at first, because every Kanji test used a lead below 0xA0. The test over both ranges was added, and it fails two cases.
+- Interop: all 343 committed matrix fixtures (Standard QR, FNC1, Structured Append, Micro QR, rMQR) read as bytes equal to the interop oracle's raw bytes. 337 are identical. The 6 in FNC1 second position match once the oracle's leading application indicator is set aside, which this library reports on `Fnc1` instead.
+- Text decode speed: the 22 span-form decodes (21 of matrices, one of an image), run twice each against the commit before, alternated, with 10 iterations: mean ratios 0.87 to 1.06, and the rows above 1.0 overlap the baseline from run to run. No allocation on either side.
+- Suites: Debug 61,414 on net8.0 and net10.0, 804 skipped. Release 61,780, 802 skipped. None failed.
+
+Lessons:
+
+- A test of a two-range mapping needs a case in each range. The first Kanji tests used 0x82 and 0x87 leads, so the arithmetic for 0xE0 to 0xEB went unseen until a fault was planted there.
+- An output that differs only in the last step of a deep search is cheaper to select there than to pass down: a flag the outer call sets reached the one branch that needed it, where a parameter would have touched every stage.
+- A benchmark comparison must not switch the checkout under a script. A stopped script went on to stash the source mid-run. The baseline now comes from the commit extracted into a separate folder.

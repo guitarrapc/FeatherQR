@@ -66,6 +66,45 @@ public static class MicroQRCodeImageDecoder
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
             }
         }
+
+        /// <summary>
+        /// Finds a Micro QR code in a bitmap and decodes its bytes, as they are in the symbol, with no charset applied.
+        /// </summary>
+        /// <remarks>
+        /// The bitmap is searched as <see cref="TryDecode(SKBitmap, out string, out MicroQRCodeDecodeInfo)"/> searches it, and the bytes are read as <see cref="MicroQRCodeDecoder.TryDecodeBytes(MicroQRCodeData, out byte[], out MicroQRCodeDecodeInfo)"/> reads them.
+        /// </remarks>
+        /// <param name="bitmap">The bitmap to scan.</param>
+        /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
+        /// <param name="info">What the attempt found, as <see cref="TryDecode(SKBitmap, out string, out MicroQRCodeDecodeInfo)"/> reports it.</param>
+        /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
+        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out MicroQRCodeDecodeInfo info)
+        {
+            if (bitmap is null)
+                throw new ArgumentNullException(nameof(bitmap));
+
+            var width = bitmap.Width;
+            var height = bitmap.Height;
+            // M1 is 11 modules per side
+            if (width < 11 || height < 11 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
+            {
+                bytes = [];
+                info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+                return false;
+            }
+
+            var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
+            try
+            {
+                var luminance = rented.AsSpan(0, pixelCount);
+                BitmapLuminanceConverter.Convert(bitmap, luminance);
+                return MicroQRCodeDecoder.TryDecodeImageBytes(luminance, width, height, out bytes, out info);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+            }
+        }
         /// <summary>
         /// Reads an image from a stream asynchronously, and finds and decodes a Micro QR code in it.
         /// </summary>

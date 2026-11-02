@@ -1,4 +1,5 @@
 using System.Buffers;
+using FeatherQR.Internals.BinaryDecoders;
 using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR;
@@ -9,6 +10,7 @@ namespace FeatherQR;
 /// <remarks>
 /// Reads Numeric, Alphanumeric, Byte and Kanji mode across all 32 versions and both error correction levels.
 /// A Byte segment is read as its ECI header declares, for ISO-8859-1, UTF-8 and Shift_JIS.
+/// Another assignment fails the text with <see cref="DecodeStatus.UnsupportedContent"/> and is named on <see cref="RmQRCodeDecodeInfo.EciAssignment"/>, and the bytes calls, <see cref="TryDecodeBytes(RmQRCodeData, out byte[], out RmQRCodeDecodeInfo)"/> and its overloads, read the symbol's bytes under any assignment for the caller to convert.
 /// With no ECI header it is read as UTF-8 when the bytes are valid UTF-8, as Shift_JIS when they are well formed Shift_JIS that ISO-8859-1 text would not hold and hold no C0 control character but tab, CR, LF and, under FNC1, the separator 0x1D, and as ISO-8859-1 otherwise.
 /// Kanji is mapped through JIS X 0208, so a cell outside that repertoire fails the whole rMQR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
 /// Reed-Solomon runs at full block strength, correcting up to ⌊ecc/2⌋ codewords per block, and reports the count in <see cref="RmQRCodeDecodeInfo.ErrorsCorrected"/>.
@@ -253,6 +255,167 @@ public static class RmQRCodeDecoder
             throw new ArgumentOutOfRangeException(nameof(version), $"Invalid rMQR version: {version}");
 
         return RmQRMatrixDecoder.GetMaxCharCount(version);
+    }
+
+    /// <summary>
+    /// Decodes the bytes an rMQR code carries, as they are in the symbol, with no charset applied.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Byte segment gives its bytes as written, a byte order mark included. Numeric and Alphanumeric segments give the ASCII bytes of their characters, and a Kanji segment the two Shift_JIS bytes of each character, whether or not JIS X 0208 assigns it.
+    /// Under FNC1 the separator is the byte 0x1D, as it is U+001D in the text. ECI headers are not bytes. The info reports them.
+    /// </para>
+    /// <para>
+    /// Every ECI assignment reads, and <see cref="RmQRCodeDecodeInfo.EciAssignment"/> names the one the bytes are in, <c>null</c> when the symbol declares none.
+    /// A symbol whose Byte and Kanji segments fall under two different assignments, no ECI counting as one, fails with <see cref="DecodeStatus.UnsupportedContent"/>, because its bytes have no single reading. The text calls read such a symbol when they have a charset for each assignment.
+    /// </para>
+    /// </remarks>
+    /// <param name="data">The rMQR code to decode.</param>
+    /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
+    /// <param name="info">What the attempt found, as <see cref="TryDecode(RmQRCodeData, out string, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <returns><c>true</c> when the rMQR code decoded.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    public static bool TryDecodeBytes(RmQRCodeData data, out byte[] bytes, out RmQRCodeDecodeInfo info)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+
+        var width = data.GetCoreWidth();
+        var height = data.GetCoreHeight();
+        var rented = ArrayPool<byte>.Shared.Rent(width * height);
+        try
+        {
+            var modules = rented.AsSpan(0, width * height);
+            data.GetCoreData(modules);
+            return TryDecodeBytes(modules, width, height, out bytes, out info);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Decodes the bytes a module matrix carries, as <see cref="TryDecodeBytes(RmQRCodeData, out byte[], out RmQRCodeDecodeInfo)"/> reads them.
+    /// </summary>
+    /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
+    /// <param name="width">Width in modules, quiet zone included.</param>
+    /// <param name="height">Height in modules, quiet zone included.</param>
+    /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
+    /// <param name="info">What the attempt found, as <see cref="TryDecode(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <returns><c>true</c> when the rMQR code decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int width, int height, out byte[] bytes, out RmQRCodeDecodeInfo info)
+    {
+        var maxBytes = RmQRMatrixDecoder.GetMaxCharCount(RmQRVersion.R17x139);
+        var rentedChars = ArrayPool<char>.Shared.Rent(maxBytes);
+        try
+        {
+            var chars = rentedChars.AsSpan(0, maxBytes);
+            bool success;
+            int written;
+            using (PayloadOutput.Bytes())
+                success = TryDecode(modules, width, height, chars, out written, out info);
+            bytes = success ? PayloadOutput.ToArray(chars.Slice(0, written)) : [];
+            return success;
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Decodes the bytes a module matrix carries into the buffer you provide, as <see cref="TryDecodeBytes(RmQRCodeData, out byte[], out RmQRCodeDecodeInfo)"/> reads them.
+    /// </summary>
+    /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
+    /// <param name="width">Width in modules, quiet zone included.</param>
+    /// <param name="height">Height in modules, quiet zone included.</param>
+    /// <param name="destination">Destination buffer for the decoded bytes. <see cref="GetMaxDecodedLength"/> sizes it for bytes too.</param>
+    /// <param name="bytesWritten">How many bytes were written. 0 when the matrix does not decode, and <paramref name="destination"/> is then left as it was.</param>
+    /// <param name="info">What the attempt found, as <see cref="TryDecode(ReadOnlySpan{byte}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <returns><c>true</c> when the rMQR code decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int width, int height, Span<byte> destination, out int bytesWritten, out RmQRCodeDecodeInfo info)
+    {
+        var rentedChars = ArrayPool<char>.Shared.Rent(destination.Length);
+        try
+        {
+            var chars = rentedChars.AsSpan(0, destination.Length);
+            bool success;
+            using (PayloadOutput.Bytes())
+                success = TryDecode(modules, width, height, chars, out bytesWritten, out info);
+            PayloadOutput.Narrow(chars.Slice(0, bytesWritten), destination);
+            return success;
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Finds an rMQR code in a grayscale image and decodes its bytes, as <see cref="TryDecodeBytes(RmQRCodeData, out byte[], out RmQRCodeDecodeInfo)"/> reads them.
+    /// </summary>
+    /// <remarks>
+    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> searches it, so the same symbol is found. Only what is read from it differs.
+    /// </remarks>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
+    /// <param name="info">What the attempt found, as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
+    public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, out byte[] bytes, out RmQRCodeDecodeInfo info)
+    {
+        var maxBytes = RmQRMatrixDecoder.GetMaxCharCount(RmQRVersion.R17x139);
+        var rentedChars = ArrayPool<char>.Shared.Rent(maxBytes);
+        try
+        {
+            var chars = rentedChars.AsSpan(0, maxBytes);
+            bool success;
+            int written;
+            using (PayloadOutput.Bytes())
+                success = TryDecodeImage(luminance, width, height, chars, out written, out info);
+            bytes = success ? PayloadOutput.ToArray(chars.Slice(0, written)) : [];
+            return success;
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Finds an rMQR code in a grayscale image and decodes its bytes into the buffer you provide, as <see cref="TryDecodeImageBytes(ReadOnlySpan{byte}, int, int, out byte[], out RmQRCodeDecodeInfo)"/> does.
+    /// </summary>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="destination">Destination buffer for the decoded bytes. <see cref="GetMaxDecodedLength"/> sizes it for bytes too.</param>
+    /// <param name="bytesWritten">How many bytes were written. 0 when the image does not decode, and <paramref name="destination"/> is then left as it was.</param>
+    /// <param name="info">What the attempt found, as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/> reports it.</param>
+    /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
+    public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, Span<byte> destination, out int bytesWritten, out RmQRCodeDecodeInfo info)
+    {
+        var rentedChars = ArrayPool<char>.Shared.Rent(destination.Length);
+        try
+        {
+            var chars = rentedChars.AsSpan(0, destination.Length);
+            bool success;
+            using (PayloadOutput.Bytes())
+                success = TryDecodeImage(luminance, width, height, chars, out bytesWritten, out info);
+            PayloadOutput.Narrow(chars.Slice(0, bytesWritten), destination);
+            return success;
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
+        }
     }
 
     private static void ValidateMatrix(ReadOnlySpan<byte> modules, int width, int height)

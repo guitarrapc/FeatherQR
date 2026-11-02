@@ -25,7 +25,7 @@ public class Fnc1RmQRDecodeTest
                 data[i >> 3] |= (byte)(0x80 >> (i & 7));
         }
         var destination = new char[destinationLength];
-        var status = RmQRBinaryDecoder.DecodeBitStream(data, clean.Length, RmQRVersion.R7x43, destination, out var written, out var fnc1);
+        var status = RmQRBinaryDecoder.DecodeBitStream(data, clean.Length, RmQRVersion.R7x43, destination, out var written, out var fnc1, out _);
         return (status, new string(destination, 0, written), fnc1);
     }
 
@@ -331,11 +331,11 @@ public class Fnc1RmQRDecodeTest
         }
         var destination = new char[16];
         for (var i = 0; i < 3; i++)
-            RmQRBinaryDecoder.DecodeBitStream(data, bits.Length, RmQRVersion.R7x43, destination, out _, out _);
+            RmQRBinaryDecoder.DecodeBitStream(data, bits.Length, RmQRVersion.R7x43, destination, out _, out _, out _);
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 16; i++)
-            RmQRBinaryDecoder.DecodeBitStream(data, bits.Length, RmQRVersion.R7x43, destination, out _, out _);
+            RmQRBinaryDecoder.DecodeBitStream(data, bits.Length, RmQRVersion.R7x43, destination, out _, out _, out _);
         await Assert.That(GC.GetAllocatedBytesForCurrentThread() - before).IsEqualTo(0);
     }
 #endif

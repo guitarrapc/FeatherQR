@@ -561,11 +561,11 @@ public class Fnc1DecodeTest
         var data = Build(Fnc1Second(37), Alphanumeric("A%B%%C%"), Bytes(0x41, 0x1D, 0x42), Terminator());
         var destination = new char[64];
         for (var i = 0; i < 3; i++)
-            QRBinaryDecoder.DecodeBitStream(data, Version, destination, out _, out _, out _);
+            QRBinaryDecoder.DecodeBitStream(data, Version, destination, out _, out _, out _, out _);
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 16; i++)
-            QRBinaryDecoder.DecodeBitStream(data, Version, destination, out _, out _, out _);
+            QRBinaryDecoder.DecodeBitStream(data, Version, destination, out _, out _, out _, out _);
         await Assert.That(GC.GetAllocatedBytesForCurrentThread() - before).IsEqualTo(0);
     }
 #endif
@@ -591,7 +591,7 @@ public class Fnc1DecodeTest
     private static DecodeStatus Decode(byte[] data, out string text, out QRStructuredAppend header, out Fnc1Mode fnc1, int destinationLength = 128)
     {
         var destination = new char[destinationLength];
-        var status = QRBinaryDecoder.DecodeBitStream(data, Version, destination, out var charsWritten, out header, out fnc1);
+        var status = QRBinaryDecoder.DecodeBitStream(data, Version, destination, out var charsWritten, out header, out fnc1, out _);
         text = new string(destination, 0, charsWritten);
         return status;
     }

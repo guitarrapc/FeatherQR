@@ -6,16 +6,16 @@ namespace FeatherQR;
 public readonly record struct QRCodeDecodeInfo
 {
     internal QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected)
-        : this(status, version, eccLevel, maskPattern, errorsCorrected, default, default, default)
+        : this(status, version, eccLevel, maskPattern, errorsCorrected, default, default, default, null)
     {
     }
 
-    internal QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected, QRStructuredAppend structuredAppend, Fnc1Mode fnc1)
-        : this(status, version, eccLevel, maskPattern, errorsCorrected, default, structuredAppend, fnc1)
+    internal QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected, QRStructuredAppend structuredAppend, Fnc1Mode fnc1, int? eciAssignment)
+        : this(status, version, eccLevel, maskPattern, errorsCorrected, default, structuredAppend, fnc1, eciAssignment)
     {
     }
 
-    private QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected, SymbolCorners corners, QRStructuredAppend structuredAppend, Fnc1Mode fnc1)
+    private QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected, SymbolCorners corners, QRStructuredAppend structuredAppend, Fnc1Mode fnc1, int? eciAssignment)
     {
         Status = status;
         Version = version;
@@ -25,10 +25,11 @@ public readonly record struct QRCodeDecodeInfo
         Corners = corners;
         StructuredAppend = structuredAppend;
         Fnc1 = fnc1;
+        EciAssignment = eciAssignment;
     }
 
     /// <summary>The same result with the symbol's image position attached. The image decoders call this on success.</summary>
-    internal QRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, MaskPattern, ErrorsCorrected, corners, StructuredAppend, Fnc1);
+    internal QRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, MaskPattern, ErrorsCorrected, corners, StructuredAppend, Fnc1, EciAssignment);
 
     /// <summary>Decode result status. <see cref="DecodeStatus.Success"/> when decoding succeeded.</summary>
     public DecodeStatus Status { get; }
@@ -53,4 +54,14 @@ public readonly record struct QRCodeDecodeInfo
 
     /// <summary>The FNC1 mode, when the symbol carries one (GS1 data, or an industry format with its application indicator). See <see cref="Fnc1Mode"/>. <c>default</c>, neither position, for a symbol that carries none or a failed decode.</summary>
     public Fnc1Mode Fnc1 { get; }
+
+    /// <summary>
+    /// The first ECI assignment the symbol declares, or <c>null</c> when it declares none. A conforming symbol's assignments run from 0 to 999999.
+    /// </summary>
+    /// <remarks>
+    /// Reported on a read and on a read whose content cannot be given as text (<see cref="DecodeStatus.UnsupportedContent"/>, <see cref="DecodeStatus.UnmappedCharacter"/>).
+    /// An assignment the text calls have no charset for fails them with <see cref="DecodeStatus.UnsupportedContent"/>, and the bytes calls (<see cref="QRCodeDecoder.TryDecodeBytes(QRCodeData, out byte[], out QRCodeDecodeInfo)"/>) read it, so the bytes can be converted with the charset the assignment names.
+    /// <c>null</c> after any other failure.
+    /// </remarks>
+    public int? EciAssignment { get; }
 }

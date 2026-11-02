@@ -117,7 +117,7 @@ internal static class MicroQRMatrixDecoder
             return DecodeStatus.DataUncorrectable;
         }
 
-        var status = MicroQRBinaryDecoder.DecodeBitStream(block.Slice(0, dataCodewords), dataBitCount, version, destination, out charsWritten);
+        var status = MicroQRBinaryDecoder.DecodeBitStream(block.Slice(0, dataCodewords), dataBitCount, version, destination, out charsWritten, PayloadOutput.IsBytes);
         if (status != DecodeStatus.Success)
             charsWritten = 0; // only a read counts its characters, not the segments written before a failure
         info = new MicroQRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected);
@@ -125,10 +125,11 @@ internal static class MicroQRMatrixDecoder
     }
 
     /// <summary>
-    /// Upper bound of decoded characters for a version, across all ECC levels and modes.
+    /// Upper bound of decoded characters for a version, across all ECC levels and modes, and of decoded bytes.
     /// </summary>
     /// <remarks>
     /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters, and 3× codewords is a safe bound.
+    /// As bytes Numeric is the densest too, a byte a digit, ahead of Kanji's two bytes in 13 bits.
     /// The L (or detection-only) level has the most data codewords per version.
     /// </remarks>
     public static int GetMaxCharCount(MicroQRVersion version)
