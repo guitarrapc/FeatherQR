@@ -127,7 +127,7 @@ A stream whose Byte and Kanji segments fall under two different assignments, no 
 
 ### ECC level and mask on the encode result
 
-`QRCodeData` and `MicroQRCodeData` gain `EccLevel` and `MaskPattern`, and `RmQRCodeData` gains `EccLevel`. They are read from the symbol's own format information when asked. Nothing is added to `Create`, so it allocates and runs as before. The values survive `GetRawData`, and a code restored from the bytes the span `Create` wrote reports them too, because the format information is part of the matrix.
+`QRCodeData` and `MicroQRCodeData` gain `EccLevel` and `MaskPattern`, and `RmQRCodeData` gains `EccLevel`. They are read from the symbol's own format information when asked. Nothing is added to `Create`, so it allocates and runs as before. The values survive `GetRawData` and a restore, because the format information is part of the matrix. The span `Create` writes a module matrix, not a `QRCodeData`, so it gains nothing here: decoding that matrix reports the level and mask, as it did before.
 
 Every public instance must then hold readable format information (B10). Two kinds do not today. The blank constructors (`QRCodeData(int, int)`, `MicroQRCodeData(MicroQRVersion, int)`, `RmQRCodeData(RmQRVersion, int)`) make an all-light matrix that nothing public can draw into, since no indexer has a public setter. Inside `src` only the generators call them. The raw-data constructors accept any modules behind a valid header. An all-light format area reads as no format in Standard QR and rMQR, five bits from the nearest valid pattern. In Micro QR it is three bits from M4-L with mask 1, inside the correction distance, so a property read from a blank Micro QR matrix would report a level and a mask the matrix never had. With the blank constructors internal and the raw-data constructors checking, the generators and a checked restore are the only public ways to an instance. All three types are sealed classes, so `default` is `null` rather than an empty matrix, and nothing public changes a module after construction, so the format information an instance starts with stays readable.
 
@@ -158,7 +158,7 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | # | Phase | Contents | Exit |
 |---|---|---|---|
 | 0 | Premises and rulings | Done 2026-11-02. The subclauses are not public, so each statement of the ECI policy was checked against the reference implementations, and the section numbers wait until the text is at hand. B1 to B11 were ruled the same day. No change to `src` | Each statement of the ECI policy is marked as one the reference implementations agree on or one they split on |
-| 1 | Builders and the encoder's choices | B11 and B10, then `EccLevel` and `MaskPattern` on the three data types | The properties equal what decoding reports over every version, level and mask, with and without boost, and after a raw-data round trip. `Create` allocation and time unchanged |
+| 1 | Builders and the encoder's choices | Done 2026-11-02 (Progress log). B11 and B10, then `EccLevel` and `MaskPattern` on the three data types | The properties equal what decoding reports over every version, level and mask, with and without boost, and after a raw-data round trip. `Create` allocation and time unchanged |
 | 2 | Bytes out | One internal bytes entry over the three bitstream decoders, the assignment on the info, the unknown assignment reported, the `TryDecodeBytes` and `TryDecodeImageBytes` calls and the SkiaSharp overloads | Bytes are right for every mode, under FNC1, behind a byte order mark and across Structured Append parts. The interop oracle's raw bytes agree on the fixture corpus. Text results unchanged on the whole corpus |
 | 3 | ECI writer and bytes in, Standard QR and rMQR | A designator of one to three codewords, the bytes `Create` and sizing calls with their `eciAssignment` parameter, and Structured Append from bytes. Then the Android and iPhone cameras scan undeclared binary and ECI 899 symbols from this phase, and what each shows is recorded for the Phase 5 docs. The check waits for this phase because nothing here could write either symbol before it | All 256 byte values and random payloads round-trip through Phase 2 and through the oracle. Under single-segment encoding the largest payload at each version and level equals the standard's Byte-mode capacity. The designator grows at 127/128 and 16383/16384, and 1,000,000 is refused. Text output byte-identical. The phone results are recorded |
 | 4 | Bytes in, Micro QR | The same without ECI | As Phase 3, without the ECI rows |
@@ -189,3 +189,38 @@ Lessons:
 - The edition a spec cites can be withdrawn without anything in the repository noticing. It was found only by opening the standard's catalogue page.
 
 No change to `src`, so no benchmark delta.
+
+### Phase 1, builders and the encoder's choices (2026-11-02)
+
+Done:
+
+- `QRCodeData` and `MicroQRCodeData` have `EccLevel` and `MaskPattern`, and `RmQRCodeData` has `EccLevel`, read from the format information when asked. Standard QR reads both copies where the placer writes them and matches them exactly against the 32 words. Micro QR reads through the matrix decoder's own format reader, over a view of the packed core, and accepts only distance 0 for its own version. rMQR reads both copies where `RmQRConstants.GetFormatModule` places them and matches the two words its version has.
+- The three empty-matrix constructors are internal. The three restore constructors throw `InvalidDataException` unless the format information is exact.
+- `QRCodeImageBuilder.WithErrorCorrection` and `WithEciMode` throw `InvalidOperationException` on a builder made from a `QRCodeData`. The three builders' docs name the data's `EccLevel` (and `MaskPattern`) as where the level and mask are.
+- Tests: `SymbolDataFormatInformationTest`, 24 cases. They cover the properties against what decoding reads over every level and mask at versions 1, 7 and 40, every Micro QR symbol and mask, rMQR at three versions and both levels, boost and serialization, and the refusals: an empty matrix, one format module off where the decoder corrects it, copies that disagree, and another version's word. Two builder cases. The pattern round trips in the three data test classes stamp a format word before they serialize.
+- The approved listing lost three constructors and gained five properties. The SkiaSharp listing is unchanged. The Playground's API page was regenerated, which also brought in doc changes earlier commits had left out of it.
+- The design's claim that the span `Create`'s bytes restore into a `QRCodeData` was wrong. They are a module matrix. Corrected above.
+- Suites: Debug 61,270 on net8.0 and net10.0, 804 skipped. Release 61,636, 802 skipped. None failed.
+
+Lessons:
+
+- An all-light Micro QR format area is three bits from M4-L with mask 1, inside the decoder's correction distance. A reader with the decoder's tolerance gives a matrix nobody wrote a level and a mask. Computing the distances before ruling B10 is what found it.
+- A claim about an output's shape needs the output looked at. The span `Create`'s buffer was assumed to be the serialized form while the design was written.
+
+No generator file changed, so `Create` was not benchmarked.
+
+The readers were rewritten later the same day, after the maintainer called them inefficient. The first version computed the 32 Standard QR words one by one until one matched, went through the decoder's 32 KB table of every Micro QR word within three bits, and called `GetFormatModule` for each rMQR bit. The level and mask are the word's top five bits under the XOR mask, so the one word they name is the only candidate, and a single table load confirms it. The runs along a row are read in one window (`ModuleBitPacker.ReadRun`). The Micro QR words moved to `MicroQRConstants`, so reading a level no longer builds the 32 KB table. They are a literal table there, as the tables beside them are, so nothing is built at run time, and the test over every 15-bit word holds them to `GetFormatBits` (a planted wrong byte failed it). Measured in Release through the public API, before and after:
+
+| Operation | Before | After |
+|---|---|---|
+| Version 40, `EccLevel` then `MaskPattern` (level H, mask 7) | 328 ns | 27 ns |
+| Version 40 restore | 436 ns | 268 ns (the rest is the array) |
+| Version 1 restore | 184 ns | 40 ns |
+| Micro QR M4, both properties | 28 ns | 17 ns |
+| Micro QR M4 restore | 42 ns | 31 ns |
+| rMQR R17x139, `EccLevel` | 56 ns | 27 ns |
+| rMQR R17x139 restore | 105 ns | 75 ns |
+
+Allocation is unchanged. New tests hold the exact match to a search over all 2^15 words for Standard QR and Micro QR and `ReadRun` to a read per module, and refuse a change to each format module one at a time. A planted skip of one module failed them. Debug suite 61,290, none failed.
+
+Lesson: an exact match is not a search. The data bits of a format word sit under its XOR mask, so the candidate is computed, not found. The first version had carried over the shape of a decoder that corrects errors, which has to try every word.

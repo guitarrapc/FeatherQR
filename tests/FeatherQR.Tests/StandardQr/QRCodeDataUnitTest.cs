@@ -109,6 +109,7 @@ public class QRCodeDataUnitTest
         for (var version = 1; version <= 40; version++)
         {
             var original = new QRCodeData(version, 0);
+            StampFormat(original);
             var restored = new QRCodeData(original.GetRawData(), quietZoneSize);
 
             await Assert.That(restored.Version).IsEqualTo(version);
@@ -261,6 +262,7 @@ public class QRCodeDataUnitTest
 
         // Set core data
         original.SetCoreData(coreBuffer);
+        StampFormat(original);
 
         // Serialize and Deserialize
         var rawData = original.GetRawData();
@@ -268,16 +270,19 @@ public class QRCodeDataUnitTest
 
         await Assert.That(restored.Size).IsEqualTo(matrixSize);
 
-        // Verify pattern
+        // Verify pattern, the 30 format modules aside
+        var differences = 0;
         for (int row = 0; row < matrixSize; row++)
         {
             for (int col = 0; col < matrixSize; col++)
             {
                 var index = row * matrixSize + col;
-                var expected = index % pattern == 0;
-                await Assert.That(restored[row, col]).IsEquivalentTo(expected);
+                if (restored[row, col] != (index % pattern == 0))
+                    differences++;
+                await Assert.That(restored[row, col]).IsEqualTo(original[row, col]);
             }
         }
+        await Assert.That(differences).IsLessThanOrEqualTo(30);
     }
 
     /// <summary>
@@ -330,6 +335,7 @@ public class QRCodeDataUnitTest
             }
         }
 
+        StampFormat(original);
         var rawData = original.GetRawData();
         var restored = new QRCodeData(rawData, quietZoneSize);
 
@@ -392,6 +398,7 @@ public class QRCodeDataUnitTest
         }
 
         // Serialize and deserialize with same QuietZone size
+        StampFormat(original);
         var rawData = original.GetRawData();
         var restored = new QRCodeData(rawData, quietZoneSize: quietZoneSize);
 
@@ -452,6 +459,7 @@ public class QRCodeDataUnitTest
         }
 
         // Serialize and deserialize with different QuietZone size
+        StampFormat(original);
         var rawData = original.GetRawData();
         var restored = new QRCodeData(rawData, quietZoneSize: deserializeQuietZone);
 
@@ -601,6 +609,7 @@ public class QRCodeDataUnitTest
         }
 
         // Serialize with BufferWriter and deserialize
+        StampFormat(original);
         var writer = new System.Buffers.ArrayBufferWriter<byte>();
         original.GetRawData(writer);
         var rawData = writer.WrittenSpan.ToArray();
@@ -676,7 +685,20 @@ public class QRCodeDataUnitTest
             }
         }
 
+        StampFormat(qrData);
         return qrData;
+    }
+
+    /// <summary>
+    /// Writes a format word a generator writes over a test pattern, since the restore takes no matrix without one.
+    /// </summary>
+    private static void StampFormat(QRCodeData data)
+    {
+        var size = data.GetCoreSize();
+        var core = new byte[size * size];
+        data.GetCoreData(core);
+        FeatherQR.Internals.StandardQR.ModulePlacer.PlaceFormat(core, size, FeatherQR.Internals.StandardQR.QRCodeConstants.GetFormatBits(QREccLevel.M, 0));
+        data.SetCoreData(core);
     }
 
     private static async Task AssertQRCodeDataEqual(QRCodeData expected, QRCodeData actual)

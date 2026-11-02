@@ -95,10 +95,10 @@ The non-throwing cores are `RmQRVersionSelector.TrySelect` (single mode) and `Rm
 Data model (`public sealed class RmQRCodeData`):
 
 ```csharp
-RmQRCodeData(RmQRVersion version, int quietZoneSize);
-RmQRCodeData(byte[] rawData, int quietZoneSize);
+RmQRCodeData(byte[] rawData, int quietZoneSize);                             // throws unless both format words are exact for the version
 RmQRCodeData(ReadOnlySpan<byte> rawData, int quietZoneSize);
 int Width { get; }   int Height { get; }   RmQRVersion Version { get; }     // quiet zone included
+RmQREccLevel EccLevel { get; }                                                // read from the format information when asked
 bool this[int row, int col] { get; }                                          // quiet zone reads false
 int GetRawDataSize();  byte[] GetRawData();  int GetRawData(IBufferWriter<byte> writer);   // "QRX" + type 2 + width + height + packed core bits
 ```

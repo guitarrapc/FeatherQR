@@ -51,11 +51,12 @@ namespace FeatherQR
 
     public sealed class MicroQRCodeData
     {
-        public MicroQRCodeData(MicroQRVersion version, int quietZoneSize);
         public MicroQRCodeData(ReadOnlySpan<byte> rawData, int quietZoneSize);
         public MicroQRCodeData(byte[] rawData, int quietZoneSize);
+        public MicroQREccLevel EccLevel { get; }
         public MicroQRVersion Version { get; }
         public bool this[int row, int col] { get; }
+        public int MaskPattern { get; }
         public int Size { get; }
         public ModuleRect[] GetModuleRectangles();
         public bool TryGetModuleRectangles(Span<ModuleRect> destination, out int written);
@@ -174,8 +175,9 @@ namespace FeatherQR
     {
         public QRCodeData(ReadOnlySpan<byte> rawDataSpan, int quietZoneSize);
         public QRCodeData(byte[] rawData, int quietZoneSize);
-        public QRCodeData(int version, int quietZoneSize);
+        public QREccLevel EccLevel { get; }
         public bool this[int row, int col] { get; }
+        public int MaskPattern { get; }
         public int Size { get; }
         public int Version { get; }
         public ModuleRect[] GetModuleRectangles();
@@ -295,8 +297,8 @@ namespace FeatherQR
     public sealed class RmQRCodeData
     {
         public RmQRCodeData(ReadOnlySpan<byte> rawData, int quietZoneSize);
-        public RmQRCodeData(RmQRVersion version, int quietZoneSize);
         public RmQRCodeData(byte[] rawData, int quietZoneSize);
+        public RmQREccLevel EccLevel { get; }
         public RmQRVersion Version { get; }
         public bool this[int row, int col] { get; }
         public int Height { get; }

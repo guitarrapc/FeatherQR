@@ -19,6 +19,22 @@ namespace FeatherQR.Internals;
 /// </remarks>
 internal static class ModuleBitPacker
 {
+    /// <summary>
+    /// <paramref name="count"/> (1 to 9) consecutive modules of packed <paramref name="bits"/> from module <paramref name="index"/>, the first in the highest bit.
+    /// </summary>
+    /// <remarks>
+    /// It loads the three bytes a run can touch, so two bytes past the run's first one must lie inside <paramref name="bits"/>.
+    /// The data models read the format information's runs along a row through it, one window instead of a read per module.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int ReadRun(byte[] bits, int index, int count)
+    {
+        System.Diagnostics.Debug.Assert(count is >= 1 and <= 9 && (index >> 3) + 2 < bits.Length, "a run reads three bytes from its first");
+        var first = index >> 3;
+        var window = bits[first] << 16 | bits[first + 1] << 8 | bits[first + 2];
+        return window >> (24 - (index & 7) - count) & ((1 << count) - 1);
+    }
+
     /// <summary>Whether <see cref="Pack"/> takes a vector step on this machine.</summary>
     private static bool HasVectorPack =>
 #if NET8_0_OR_GREATER

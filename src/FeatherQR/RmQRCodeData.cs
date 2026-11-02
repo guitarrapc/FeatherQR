@@ -130,6 +130,24 @@ public sealed class RmQRCodeData
     public RmQRVersion Version { get; }
 
     /// <summary>
+    /// The error correction level the rMQR code was written at, read from its format information.
+    /// </summary>
+    /// <remarks>
+    /// rMQR has one data mask, so there is no mask pattern to report.
+    /// It is read when asked, so the generator does no extra work for it.
+    /// </remarks>
+    public RmQREccLevel EccLevel
+    {
+        get
+        {
+            // Every public instance passed this check when it was made. Only an internal blank matrix fails it.
+            if (!TryReadFormat(out var eccLevel))
+                throw new InvalidOperationException("The rMQR code holds no format information.");
+            return eccLevel;
+        }
+    }
+
+    /// <summary>
     /// The module at the given position.
     /// </summary>
     /// <param name="row">Row, counted from the outer edge of the quiet zone.</param>
@@ -162,7 +180,10 @@ public sealed class RmQRCodeData
     /// <param name="version">The rMQR code version.</param>
     /// <param name="quietZoneSize">Width of the light border in modules. The specification asks for 2, narrower than the 4 Standard QR uses.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not an rMQR version or the quiet zone size is out of range.</exception>
-    public RmQRCodeData(RmQRVersion version, int quietZoneSize)
+    /// <remarks>
+    /// The generator fills it. It is not public because nothing public can draw into it, and a public instance always carries format information.
+    /// </remarks>
+    internal RmQRCodeData(RmQRVersion version, int quietZoneSize)
     {
         if (!RmQRConstants.IsValidVersion(version))
             throw new ArgumentOutOfRangeException(nameof(version), $"Invalid rMQR version: {version}");
@@ -186,7 +207,7 @@ public sealed class RmQRCodeData
     /// </remarks>
     /// <param name="rawData">The serialized rMQR code.</param>
     /// <param name="quietZoneSize">Width of the light border in modules. 2 is the standard width.</param>
-    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized rMQR code.</exception>
+    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized rMQR code, or when its two copies of the format information are not the words a generator writes for its version.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public RmQRCodeData(byte[] rawData, int quietZoneSize) : this(rawData.AsSpan(), quietZoneSize)
@@ -229,6 +250,10 @@ public sealed class RmQRCodeData
         {
             _bits[_bits.Length - 1] &= (byte)(0xFF << (8 - remainder));
         }
+
+        // EccLevel reads the format information, so an instance without one is not made
+        if (!TryReadFormat(out _))
+            throw new InvalidDataException("Invalid rMQR code data: the format information is not a word a generator writes for this version.");
     }
 
     private static void ValidateQuietZone(int quietZoneSize)
@@ -330,6 +355,50 @@ public sealed class RmQRCodeData
     {
         var bitIndex = coreRow * _coreWidth + coreCol;
         return (_bits[bitIndex >> 3] & (1 << (7 - (bitIndex & 7)))) != 0;
+    }
+
+    /// <summary>
+    /// Whether both copies of the format information are exactly the words a generator writes for this version, and which level they name.
+    /// </summary>
+    /// <remarks>
+    /// Exact, not within the decoder's three bits: a generated code always carries the exact words, and a matrix that needs correcting is not one this type restores.
+    /// </remarks>
+    private bool TryReadFormat(out RmQREccLevel eccLevel)
+    {
+        // Each copy's block is five rows of three consecutive modules, bit 5c + r in row r and column c, so a row is a run read in one window.
+        // The sub-finder side's last three bits run along one row too. The finder side's last three run down a column, one read each.
+        RmQRConstants.GetFormatBlock(subFinderSide: false, _coreHeight, _coreWidth, out var finderRow, out var finderCol);
+        RmQRConstants.GetFormatBlock(subFinderSide: true, _coreHeight, _coreWidth, out var subFinderRow, out var subFinderCol);
+        var finderSide = 0;
+        var subFinderSide = 0;
+        for (var r = 0; r < 5; r++)
+        {
+            // Column c of the block is bit 2 - c of the run
+            var f = ModuleBitPacker.ReadRun(_bits, (finderRow + r) * _coreWidth + finderCol, 3);
+            finderSide |= (f >> 2 & 1) << r | (f >> 1 & 1) << (5 + r) | (f & 1) << (10 + r);
+            var s = ModuleBitPacker.ReadRun(_bits, (subFinderRow + r) * _coreWidth + subFinderCol, 3);
+            subFinderSide |= (s >> 2 & 1) << r | (s >> 1 & 1) << (5 + r) | (s & 1) << (10 + r);
+        }
+        for (var k = 0; k < 3; k++)
+        {
+            RmQRConstants.GetFormatTail(k, subFinderSide: false, _coreHeight, _coreWidth, out var row, out var col);
+            if (GetCoreModule(row, col))
+                finderSide |= 1 << (15 + k);
+        }
+        RmQRConstants.GetFormatTail(0, subFinderSide: true, _coreHeight, _coreWidth, out var tailRow, out var tailCol);
+        var tail = ModuleBitPacker.ReadRun(_bits, tailRow * _coreWidth + tailCol, 3);
+        subFinderSide |= (tail >> 2 & 1) << 15 | (tail >> 1 & 1) << 16 | (tail & 1) << 17;
+
+        // The level is the finder side's top bit under its XOR mask, so only its words can match
+        eccLevel = (RmQREccLevel)((finderSide ^ RmQRConstants.FormatXorFinderSide) >> 17 & 1);
+        if (finderSide == RmQRFormatInformationDecoder.Word(Version, eccLevel, subFinderSide: false)
+            && subFinderSide == RmQRFormatInformationDecoder.Word(Version, eccLevel, subFinderSide: true))
+        {
+            return true;
+        }
+
+        eccLevel = default;
+        return false;
     }
 
     /// <summary>

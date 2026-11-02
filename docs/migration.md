@@ -535,8 +535,20 @@ Use `EciMode.Utf8`, or `EciMode.Default` to let the library choose. Text ISO-885
 - **An undefined `QREccLevel` throws `ArgumentOutOfRangeException` naming `eccLevel`.** It used to fail inside the version search as an `ArgumentException` with no parameter name ("ECC info not found for version 1, level 99"). Code that catches `ArgumentException` still catches it.
 - **An `EciMode` other than `Default`, `Iso8859_1` and `Utf8` throws `ArgumentOutOfRangeException` naming `eciMode`.** On Numeric or Alphanumeric text an undefined value used to be written into the ECI header as given, and this library read such a symbol back as `UnsupportedContent`. On other text it threw the same exception from further in. ECI 1, which happened to read back as Latin-1, is refused too: use `EciMode.Iso8859_1`.
 - **A quiet zone above 10,000 modules throws `ArgumentOutOfRangeException` naming `quietZoneSize`**, the bound Micro QR and rMQR have. `Create` and `CreateStructuredAppend` used to accept any non-negative size and return a `QRCodeData` whose `Size` had overflowed (−2,147,483,629 for 2^30 − 1, 19 for `int.MaxValue`). `TryGetRequiredBufferSize` and the span `Create` refused only sizes whose buffer did not fit an `int`, about 23,000 and up.
-- **The `QRCodeData` constructors apply the same bound**, and now refuse a negative quiet zone as well. `new QRCodeData(version, quietZoneSize)` also refuses a version outside 1 to 40, naming `version`, where it used to size the matrix from it (`-5` gave a `Size` of −3).
+- **The `QRCodeData` restore constructors apply the same bound**, and now refuse a negative quiet zone as well. The constructor that made an empty matrix from a version is [no longer public](#the-data-types-report-their-level-and-mask-and-restore-only-what-a-generator-writes).
 - **When an argument is wrong and the content does not fit either, the argument is reported.** All three symbologies report in the same order: quiet zone, segmentation, ECI (Standard QR and rMQR), ECC level, then the fit.
+
+### The data types report their level and mask, and restore only what a generator writes
+
+**Source break for the empty-matrix constructors, run-time break for a restore of a matrix no generator wrote.**
+
+- **`QRCodeData` and `MicroQRCodeData` have `EccLevel` and `MaskPattern`, and `RmQRCodeData` has `EccLevel`** (rMQR has one mask). They are read from the symbol's format information, so they report the level `BoostEccLevel` raised to and the mask the generator chose, they survive `GetRawData`, and `Create` does no extra work for them. They used to be learned only by decoding the symbol.
+- **`new QRCodeData(int, int)`, `new MicroQRCodeData(MicroQRVersion, int)` and `new RmQRCodeData(RmQRVersion, int)` are no longer public.** They made an all-light matrix that nothing public could draw into. If you used one for its `Size`, a Standard QR symbol is `17 + 4 × version` modules a side plus twice the quiet zone, and `TryGetRequiredBufferSize` reports the size of a given content.
+- **The restore constructors throw `InvalidDataException` unless the format information is exactly a word a generator writes**: both copies the same word in Standard QR and rMQR, and a word that names the matrix's own version in Micro QR and rMQR. Bytes `GetRawData` wrote for a generated symbol always restore. Bytes of an empty matrix, or of one whose format modules were changed, no longer do.
+
+### `QRCodeImageBuilder` refuses `WithErrorCorrection` and `WithEciMode` on a ready-made code
+
+**Run-time break.** On a builder made from a `QRCodeData`, both now throw `InvalidOperationException`, as its other encoding setters and the Micro QR and rMQR builders already did. They used to be accepted and ignored, so a call that asked for level H drew whatever level the data held. Drop the call, or generate the data at the level you want. The level the data holds is `QRCodeData.EccLevel`.
 
 ### A luminance read names a size below one
 

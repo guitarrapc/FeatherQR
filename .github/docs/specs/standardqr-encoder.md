@@ -34,6 +34,7 @@ The encoder exposes two output models.
 - The same text and options give the same matrix.
 - Renderers and serialization use this object model.
 - Restoring QRR data accepts only core sizes 21, 25, …, 177 (versions 1–40). Other sizes throw `InvalidDataException`, so the restored size and version cannot disagree.
+- `EccLevel` and `MaskPattern` are read from the format information when asked, so the generator does no extra work for them and they survive serialization. Restoring QRR data therefore requires both copies of the format information to be the same word a generator writes, exactly, not within the decoder's correction distance, and throws `InvalidDataException` otherwise. No public constructor makes an empty matrix, since nothing public could draw into one, so every public instance has a level and a mask to report.
 
 #### Caller-provided matrix buffer
 
@@ -344,7 +345,7 @@ Every entry point (`Create`, `CreateStructuredAppend`, `TryGetRequiredBufferSize
 - an undefined ECC level.
 - an `EciMode` other than `Default`, `Iso8859_1` and `Utf8`.
 - `Iso8859_1` asked for over text with a char above U+00FF, the one check that reads the content. rMQR refuses it the same way.
-- quiet-zone sizes outside `0..10,000`, the bound Micro QR and rMQR use. The `QRCodeData` constructors apply it too, after refusing a version outside `1..40`.
+- quiet-zone sizes outside `0..10,000`, the bound Micro QR and rMQR use. The `QRCodeData` restore constructors apply it too.
 
 Errors come in the order the other two symbologies report them: quiet zone, segmentation, ECI (rMQR's place for it; Micro QR has none), ECC level, then whether the content fits. At 10,000 the largest side squared still fits `int`, so the size arithmetic needs no overflow check. The span overload also rejects buffers smaller than the matrix.
 
