@@ -160,7 +160,7 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | 0 | Premises and rulings | Done 2026-11-02. The subclauses are not public, so each statement of the ECI policy was checked against the reference implementations, and the section numbers wait until the text is at hand. B1 to B11 were ruled the same day. No change to `src` | Each statement of the ECI policy is marked as one the reference implementations agree on or one they split on |
 | 1 | Builders and the encoder's choices | Done 2026-11-02 (Progress log). B11 and B10, then `EccLevel` and `MaskPattern` on the three data types | The properties equal what decoding reports over every version, level and mask, with and without boost, and after a raw-data round trip. `Create` allocation and time unchanged |
 | 2 | Bytes out | Done 2026-11-02 (Progress log). One internal bytes entry over the three bitstream decoders, the assignment on the info, the unknown assignment reported, the `TryDecodeBytes` and `TryDecodeImageBytes` calls and the SkiaSharp overloads | Bytes are right for every mode, under FNC1, behind a byte order mark and across Structured Append parts. The interop oracle's raw bytes agree on the fixture corpus. Text results unchanged on the whole corpus |
-| 3 | ECI writer and bytes in, Standard QR and rMQR | A designator of one to three codewords, the bytes `Create` and sizing calls with their `eciAssignment` parameter, and Structured Append from bytes. Then the Android and iPhone cameras scan undeclared binary and ECI 899 symbols from this phase, and what each shows is recorded for the Phase 5 docs. The check waits for this phase because nothing here could write either symbol before it | All 256 byte values and random payloads round-trip through Phase 2 and through the oracle. Under single-segment encoding the largest payload at each version and level equals the standard's Byte-mode capacity. The designator grows at 127/128 and 16383/16384, and 1,000,000 is refused. Text output byte-identical. The phone results are recorded |
+| 3 | ECI writer and bytes in, Standard QR and rMQR | Done 2026-11-02, the phone check closed on the iPhone 2026-11-03 (Progress log). A designator of one to three codewords, the bytes `Create` and sizing calls with their `eciAssignment` parameter, and Structured Append from bytes. Then the Android and iPhone cameras scan undeclared binary and ECI 899 symbols from this phase, and what each shows is recorded for the Phase 5 docs. The check waits for this phase because nothing here could write either symbol before it | All 256 byte values and random payloads round-trip through Phase 2 and through the oracle. Under single-segment encoding the largest payload at each version and level equals the standard's Byte-mode capacity. The designator grows at 127/128 and 16383/16384, and 1,000,000 is refused. Text output byte-identical. The phone results are recorded |
 | 4 | Bytes in, Micro QR | The same without ECI | As Phase 3, without the ECI rows |
 | 5 | Docs, Playground, fold | The encoder and decoder specs (the not-implemented and unsupported rows, the ECI policy and both deviations in Decisions), D7 amended in `qrcode-symbologies.md`, README, migration notes for Phase 1, the API page, and in the Playground a hex view of decoded bytes with the assignment and a hex or file input. Fold this plan into the specs and delete it | The specs describe what was built, and this file is gone |
 
@@ -189,3 +189,85 @@ Lessons:
 - The edition a spec cites can be withdrawn without anything in the repository noticing. It was found only by opening the standard's catalogue page.
 
 No change to `src`, so no benchmark delta.
+
+### Phase 1, builders and the encoder's choices (2026-11-02)
+
+Done:
+
+- `QRCodeData` and `MicroQRCodeData` have `EccLevel` and `MaskPattern`, and `RmQRCodeData` has `EccLevel`, read from the format information when asked. Standard QR reads both copies where the placer writes them and matches them exactly against the 32 words. Micro QR reads through the matrix decoder's own format reader, over a view of the packed core, and accepts only distance 0 for its own version. rMQR reads both copies where `RmQRConstants.GetFormatModule` places them and matches the two words its version has.
+- The three empty-matrix constructors are internal. The three restore constructors throw `InvalidDataException` unless the format information is exact.
+- `QRCodeImageBuilder.WithErrorCorrection` and `WithEciMode` throw `InvalidOperationException` on a builder made from a `QRCodeData`. The three builders' docs name the data's `EccLevel` (and `MaskPattern`) as where the level and mask are.
+- Tests: `SymbolDataFormatInformationTest`, 24 cases. They cover the properties against what decoding reads over every level and mask at versions 1, 7 and 40, every Micro QR symbol and mask, rMQR at three versions and both levels, boost and serialization, and the refusals: an empty matrix, one format module off where the decoder corrects it, copies that disagree, and another version's word. Two builder cases. The pattern round trips in the three data test classes stamp a format word before they serialize.
+- The approved listing lost three constructors and gained five properties. The SkiaSharp listing is unchanged. The Playground's API page was regenerated, which also brought in doc changes earlier commits had left out of it.
+- The design's claim that the span `Create`'s bytes restore into a `QRCodeData` was wrong. They are a module matrix. Corrected above.
+- Suites: Debug 61,270 on net8.0 and net10.0, 804 skipped. Release 61,636, 802 skipped. None failed.
+
+Lessons:
+
+- An all-light Micro QR format area is three bits from M4-L with mask 1, inside the decoder's correction distance. A reader with the decoder's tolerance gives a matrix nobody wrote a level and a mask. Computing the distances before ruling B10 is what found it.
+- A claim about an output's shape needs the output looked at. The span `Create`'s buffer was assumed to be the serialized form while the design was written.
+
+No generator file changed, so `Create` was not benchmarked.
+
+The readers were rewritten later the same day, after the maintainer called them inefficient. The first version computed the 32 Standard QR words one by one until one matched, went through the decoder's 32 KB table of every Micro QR word within three bits, and called `GetFormatModule` for each rMQR bit. The level and mask are the word's top five bits under the XOR mask, so the one word they name is the only candidate, and a single table load confirms it. The runs along a row are read in one window (`ModuleBitPacker.ReadRun`). The Micro QR words moved to `MicroQRConstants`, so reading a level no longer builds the 32 KB table. They are a literal table there, as the tables beside them are, so nothing is built at run time, and the test over every 15-bit word holds them to `GetFormatBits` (a planted wrong byte failed it). Measured in Release through the public API, before and after:
+
+| Operation | Before | After |
+|---|---|---|
+| Version 40, `EccLevel` then `MaskPattern` (level H, mask 7) | 328 ns | 27 ns |
+| Version 40 restore | 436 ns | 268 ns (the rest is the array) |
+| Version 1 restore | 184 ns | 40 ns |
+| Micro QR M4, both properties | 28 ns | 17 ns |
+| Micro QR M4 restore | 42 ns | 31 ns |
+| rMQR R17x139, `EccLevel` | 56 ns | 27 ns |
+| rMQR R17x139 restore | 105 ns | 75 ns |
+
+Allocation is unchanged. New tests hold the exact match to a search over all 2^15 words for Standard QR and Micro QR and `ReadRun` to a read per module, and refuse a change to each format module one at a time. A planted skip of one module failed them. Debug suite 61,290, none failed.
+
+Lesson: an exact match is not a search. The data bits of a format word sit under its XOR mask, so the candidate is computed, not found. The first version had carried over the shape of a decoder that corrects errors, which has to try every word.
+
+### Phase 2, bytes out (2026-11-02)
+
+Done:
+
+- `TryDecodeBytes` (code, matrix and matrix into a span) and `TryDecodeImageBytes` (array and span) on the three decoders, `TryDecodeBytes(SKBitmap)` on the three SkiaSharp image decoders, and `EciAssignment` (`int?`) on `QRCodeDecodeInfo` and `RmQRCodeDecodeInfo`. The approved listings gained exactly these, and the API page was regenerated.
+- The three bitstream decoders take a `bytes` flag. Under it a Byte segment is copied as written, Kanji gives its Shift_JIS pairs, every assignment reads, and Byte and Kanji segments under two assignments are `UnsupportedContent`. Numeric and Alphanumeric need no change, since their characters are their bytes.
+- The bytes travel through the char destination the text calls already use, one byte a char, and are narrowed at the end. A thread-static flag (`PayloadOutput`) the bytes calls set around the text call tells the matrix decoders, which read it once after Reed-Solomon. The image search passes its destination through dozens of stage signatures, and only that last step differs between the outputs.
+- The assignment is reported on `UnmappedCharacter` too, not only on `UnsupportedContent`: both are reads whose content is no text, and the bytes calls read both.
+- `GetMaxDecodedLength` bounds the bytes, as the design expected. Numeric gives a byte a digit and is the densest in both readings. A test fills versions 1 and 40 at level L with digits and with kanji and reads them into a destination of that length.
+- Tests: `BitStreamBytesTest` (every mode in all three decoders, assignments of every designator length, both Kanji lead-byte ranges, streams under two assignments, destination and truncation order) and a bytes test per symbology (matrix, image and bitmap paths, `EciAssignment` on both outputs, the Structured Append parts joined). `TypeShapeTest` now pins `EciAssignment` on the two info types that have ECI. Twenty-four existing calls took the new `out` argument.
+- Planted faults: a one-assignment check that always passes failed four tests. A Kanji pair computed from 0x81 for every lead failed none at first, because every Kanji test used a lead below 0xA0. The test over both ranges was added, and it fails two cases.
+- Interop: all 343 committed matrix fixtures (Standard QR, FNC1, Structured Append, Micro QR, rMQR) read as bytes equal to the interop oracle's raw bytes. 337 are identical. The 6 in FNC1 second position match once the oracle's leading application indicator is set aside, which this library reports on `Fnc1` instead.
+- Text decode speed: the 22 span-form decodes (21 of matrices, one of an image), run twice each against the commit before, alternated, with 10 iterations: mean ratios 0.87 to 1.06, and the rows above 1.0 overlap the baseline from run to run. No allocation on either side.
+- Suites: Debug 61,414 on net8.0 and net10.0, 804 skipped. Release 61,780, 802 skipped. None failed.
+
+Lessons:
+
+- A test of a two-range mapping needs a case in each range. The first Kanji tests used 0x82 and 0x87 leads, so the arithmetic for 0xE0 to 0xEB went unseen until a fault was planted there.
+- An output that differs only in the last step of a deep search is cheaper to select there than to pass down: a flag the outer call sets reached the one branch that needed it, where a parameter would have touched every stage.
+- A benchmark comparison must not switch the checkout under a script. A stopped script went on to stash the source mid-run. The baseline now comes from the commit extracted into a separate folder.
+
+### Phase 3, ECI writer and bytes in (2026-11-02)
+
+Done:
+
+- `Create`, the span `Create` and `TryGetRequiredBufferSize` over `ReadOnlySpan<byte>`, with `int? eciAssignment = null` after the options, on `QRCodeGenerator` and `RmQRCodeGenerator`, and `CreateStructuredAppend` over bytes on `QRCodeGenerator`. The approved listing gained exactly these seven, the SkiaSharp listing is unchanged, and the API page was regenerated.
+- The designator takes one, two or three codewords (`EciModeExtensions.Designator` and `DesignatorBits`) in both stream writers and in every price of the header: the single-mode fit, both planners, the set planner and rMQR's selector. rMQR's automatic fit reads tables built for an 11-bit prefix, so bytes under an assignment from 128 walk the strategy's order and price each version, as FNC1 does.
+- Bytes take the text pipeline widened one to a char, on the stack up to 256 bytes and rented above (rMQR always on the stack), and are analyzed for their mode as text is, under a charset of their own: `Default` for none, or an `EciMode` value no caller can pass that carries the assignment below a flag bit. The writers' Byte path became "UTF-8 transcodes, anything else narrows". The Optimal and Structured Append routes were split after their analysis, so the bytes calls enter with theirs. A payload longer than any symbol holds (7,089 digits, 361 in rMQR) is refused before it is widened.
+- B5's refusals with `ArgumentException`, and an assignment outside 0 to 999999 with `ArgumentOutOfRangeException`, in the text calls' validation order.
+- `SizingSurfaceTest` held every `Create` to end with the options and allowed one sizing overload. It now allows one sizing overload per kind of content, and the assignment after the options of a bytes overload, which B2 put there.
+- `Create(default, ecc)` and `Create([], ecc)` no longer compile (CS0121, both overloads fit), which a probe compiled against the build confirmed. Every other call shape resolves as before. The migration notes say so.
+- Tests: `QRCodeGeneratorBytesTest` (227 cases a framework) and `RmQRCodeGeneratorBytesTest` (111). They cover every byte value under both segmentations, undeclared and under 899, and seeded payloads of digit, letter and byte runs under assignments of every designator length, with the span form and the sizing held to `Create`. They read the stream bit for bit with no header and with each designator form at 0, 127, 128, 899, 16383, 16384 and 999999, and the one header ahead of an Optimal plan. They pin the Byte capacity of every version and level (rMQR's also under a two-codeword designator) against its published values and the designator's cost at 40-L (2,953, 2,952, 2,951 and 2,950 bytes), 7,089 digits at 40-L, the refusals from every call, ASCII bytes writing the text call's symbol, a read assignment passed back writing the symbol again, the boost and a pinned mask, Structured Append parts joined with the parity and the assignment on each, and empty payloads.
+- Planted faults: a header priced at 12 bits whatever its designator failed 7 Standard QR tests. rMQR's table fit for every assignment failed 5 rMQR tests, and assignment 127, which the table prices right, passed.
+- Interop: 541 symbols from the bytes calls (every byte value in both symbologies and segmentations, 300 seeded payloads each, a 1,500-byte set under 899). In all 538 the oracle read, its raw bytes are the payload and its ECI-protocol output names the declared assignment, or none. The 3 it did not read are empty payloads: it reads no empty symbol, the text call's included, so those rest on this library's decoder.
+- Text output: 1,587 text symbols and 190 refusals hash the same built from the commit before and from this change, the refusals' types and messages included. They are 23 texts (empty, each mode, Latin-1, Japanese, emoji, a mid-text U+FEFF, FNC1 content) under 11 Standard QR option sets at every level, through both `Create` forms and as a set, and under 7 rMQR option sets at both levels.
+- Text encode speed: 87 benchmarks (the two end-to-end classes, and the Optimal rows of the segmentation and set benchmarks) against the commit before, alternated twice with 10 iterations of 200 ms: mean ratios 0.84 to 1.17. Each of the three rows at 1.10 or more had one high run of this change, so the two rMQR classes and the largest Standard QR row ran again, the commit before first, with 20 iterations: 0.95 to 1.07, and those three at 0.95, 0.98 and 1.03. Allocation is the same in every row but for one-byte readings.
+- Suites: Debug 61,286 on net8.0 and net10.0, 804 skipped. Release 61,654, 802 skipped. None failed.
+- Phone check, iPhone (2026-11-03, the maintainer): the camera recognizes the Standard QR symbols as QR codes and shows no content, and a QR reader app on it reports that it cannot read them. The four symbols are one 19-byte payload (the PNG signature, 0x00, and bytes that are no valid UTF-8), undeclared and under 899, in Standard QR and rMQR. The maintainer closed the check on this result without Android, and kept bytes as they are: the library adds no text form such as Base45.
+
+Lessons:
+
+- A value recalled for a test needs its source. 26-L's Byte capacity is 1,367, and the 1,370 first written into the test is that version's data codeword count.
+- A set's version is the smallest that holds its count of symbols, so a boost case needs a pinned version to have room for a higher level.
+- The oracle's ECI-protocol bytes open with the symbology identifier, `]Q1` without an ECI and `]Q2` with one, before the first designator's backslash.
+- A phone's camera and a general reader app treat a QR code's content as text, so a payload that is no text shows as nothing, declared or not. Bytes are for readers an application controls, and that does not change B3. Phase 5's docs say so, and point a payload meant for general readers to text, such as Base45 in Alphanumeric mode, which costs about 3 % over the bytes where Base64 in Byte mode costs 33 %.
+- A benchmark filter over classes with parameters multiplies by their shapes. The five encode classes are 304 benchmarks, about six hours for four runs. The end-to-end classes and the Optimal rows, at 200 ms iterations, cover the routes that changed in about 40 minutes.

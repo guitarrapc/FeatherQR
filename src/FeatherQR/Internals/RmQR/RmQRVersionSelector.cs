@@ -35,7 +35,7 @@ internal static class RmQRVersionSelector
     /// <inheritdoc cref="GetRequiredBits(RmQRVersion, EncodingMode, int)"/>
     /// <summary>
     /// Total bit count including the optional rMQR ECI prefix.
-    /// The supported ISO-8859-1 and UTF-8 assignments both use the one-byte designator form.
+    /// The ISO-8859-1 and UTF-8 assignments take the one-codeword designator, and an assignment over bytes the form its number needs.
     /// </summary>
     public static long GetRequiredBits(RmQRVersion version, EncodingMode mode, int dataLength, EciMode eciMode)
     {
@@ -322,6 +322,10 @@ internal static class RmQRVersionSelector
     /// </summary>
     public static bool TrySelectAutoFit(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion version)
     {
+        // The tables price no header and the one-codeword designator. Bytes under a longer one walk the order instead.
+        if (eciMode.IsDeclaredBytes() && eciMode.GetRmQrHeaderBits() > EciHeaderBits)
+            return TrySelectInOrder(mode, dataLength, eciMode, eccLevel, fitStrategy, height, fnc1HeaderBits: 0, out version);
+
         var eciIndex = eciMode == EciMode.Default ? 0 : 1;
         var capacities = FitCapacities[((RmQRConstants.GetModeIndex(mode) * 2 + (int)eccLevel) * 2 + eciIndex) * 3 + (int)fitStrategy];
         var order = FitOrders[(int)fitStrategy];
@@ -385,6 +389,12 @@ internal static class RmQRVersionSelector
             return true;
         }
 
+        return TrySelectInOrder(mode, dataLength, eciMode, eccLevel, fitStrategy, height, fnc1HeaderBits, out version);
+    }
+
+    /// <summary>The automatic fit by walking the strategy's order and pricing each version, for the headers the capacity tables have no axis for.</summary>
+    private static bool TrySelectInOrder(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, int fnc1HeaderBits, out RmQRVersion version)
+    {
         var order = GetFitOrder(fitStrategy);
         var heightMask = GetFitHeightMask(fitStrategy, height);
         for (var j = 0; j < order.Length; j++)
@@ -457,6 +467,7 @@ internal static class RmQRVersionSelector
     {
         EciMode.Default => 0,
         EciMode.Iso8859_1 or EciMode.Utf8 => EciHeaderBits,
+        _ when eciMode.IsDeclaredBytes() => eciMode.GetRmQrHeaderBits(),
         _ => throw new ArgumentOutOfRangeException(nameof(eciMode), $"Unsupported ECI mode for rMQR: {eciMode}"),
     };
 }

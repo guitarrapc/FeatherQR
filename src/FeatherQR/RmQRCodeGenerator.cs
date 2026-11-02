@@ -7,13 +7,14 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR;
 
 /// <summary>
-/// Encodes text into a rectangular rMQR code (ISO/IEC 23941), versions R7x43 to R17x139.
+/// Encodes text or bytes into a rectangular rMQR code (ISO/IEC 23941), versions R7x43 to R17x139.
 /// </summary>
 /// <remarks>
 /// Pick a version outright, or let <see cref="RmQRFitStrategy"/> choose among those that hold the content, optionally within one height.
 /// The default <see cref="RmQRFitStrategy.MinimizeArea"/> takes the fewest modules, which can mean a taller and narrower code: 12 digits at level M give R11x27 (297 modules) rather than R7x43 (301).
 /// Use <see cref="RmQRFitStrategy.MinimizeHeight"/> or a fixed <see cref="RmQRHeight"/> when you want the flattest code instead.
 /// Writes Numeric, Alphanumeric and Byte mode, the last with ECI assignment 3 for ISO-8859-1 or 26 for UTF-8, and Kanji mode.
+/// Bytes are written as they are, under the ECI assignment the caller names or under none.
 /// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header. It is written only when the caller sets <see cref="RmQRCodeGeneratorOptions.AllowKanji"/> and the charset is left at <see cref="EciMode.Default"/>.
 /// Under <see cref="RmQRSegmentation.Optimal"/> such text with ASCII in it can be written as Kanji runs beside Numeric, Alphanumeric and Byte runs of the ASCII, where that is the smaller symbol.
 /// The quiet zone defaults to the 2 modules ISO/IEC 23941 asks for.
@@ -122,7 +123,7 @@ public static partial class RmQRCodeGenerator
     /// </remarks>
     /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
-    /// <param name="destination">Where to write the matrix. Needs <see cref="RmQRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
+    /// <param name="destination">Where to write the matrix. Needs <see cref="RmQRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize(ReadOnlySpan{char}, RmQREccLevel, out RmQRCodeCalculatedSize, in RmQRCodeGeneratorOptions)"/>.</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <returns>The number of bytes written.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
@@ -214,6 +215,12 @@ public static partial class RmQRCodeGenerator
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
 
         var analysis = AnalyzeForPlan(textSpan, eciMode, allowKanji, fnc1);
+        return TryPlanOptimalVersion(textSpan, eccLevel, in analysis, requestedVersion, fitStrategy, height, fnc1, out version);
+    }
+
+    /// <summary>The rest of <see cref="TryPlanOptimalVersion(ReadOnlySpan{char}, RmQREccLevel, EciMode, bool, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, RmQRSegmentation, Fnc1Mode, out RmQRVersion)"/> from the analysis, which bytes input makes its own way.</summary>
+    private static bool TryPlanOptimalVersion(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in TextAnalysisResult analysis, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, out RmQRVersion version)
+    {
         byte[]? rentedTable = null;
         var tableLength = fnc1.IsActive ? RmQRSegmentPlanner.Fnc1TableLength(textSpan, in analysis) : RmQRSegmentPlanner.TableLength(textSpan, in analysis);
         Span<byte> table = tableLength == 0
@@ -267,13 +274,18 @@ public static partial class RmQRCodeGenerator
     /// </summary>
     private static void ValidateOptimalEntry(ReadOnlySpan<char> textSpan, EciMode eciMode, RmQRSegmentation segmentation)
     {
+        ValidateOptimalSegmentation(segmentation);
+        ValidateEci(textSpan, eciMode);
+    }
+
+    private static void ValidateOptimalSegmentation(RmQRSegmentation segmentation)
+    {
         if (segmentation != RmQRSegmentation.Optimal)
         {
             throw new ArgumentOutOfRangeException(nameof(segmentation), (int)segmentation > RmQRCodeGeneratorOptions.LargestKeptSegmentation
                 ? $"Invalid rMQR segmentation: a value below 0 or above {RmQRCodeGeneratorOptions.LargestKeptSegmentation}"
                 : $"Invalid rMQR segmentation: {segmentation}");
         }
-        ValidateEci(textSpan, eciMode);
     }
 
     private static void ValidateEci(ReadOnlySpan<char> textSpan, EciMode eciMode)
@@ -294,6 +306,13 @@ public static partial class RmQRCodeGenerator
         // assignment 26 for other Unicode. DataLength is the encoded byte count, or
         // the character count in Kanji mode.
         var analysis = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: allowKanji);
+        return PrepareConfiguration(in analysis, eccLevel, requestedVersion, fitStrategy, height);
+    }
+
+    /// <summary>Selects / validates the version for an analysis already made.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static RmQRConfiguration PrepareConfiguration(in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
+    {
         var version = analysis.EciMode == EciMode.Default
             ? RmQRVersionSelector.Select(analysis.EncodingMode, analysis.DataLength, eccLevel, requestedVersion, fitStrategy, height)
             : RmQRVersionSelector.Select(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height);
@@ -350,8 +369,15 @@ public static partial class RmQRCodeGenerator
     private static RmQRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, bool allowKanji, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int quietZoneSize, RmQRSegmentation segmentation, Fnc1Mode fnc1)
     {
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
+        var analysis = AnalyzeForPlan(textSpan, eciMode, allowKanji, fnc1);
+        return CreateOptimal(textSpan, eccLevel, in analysis, requestedVersion, fitStrategy, height, quietZoneSize, fnc1);
+    }
+
+    /// <summary>The rest of <see cref="CreateOptimal(ReadOnlySpan{char}, RmQREccLevel, EciMode, bool, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, int, RmQRSegmentation, Fnc1Mode)"/> from the analysis, which bytes input makes its own way.</summary>
+    private static RmQRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in TextAnalysisResult analysis, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int quietZoneSize, Fnc1Mode fnc1)
+    {
         Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
-        var config = PrepareConfigurationOptimal(textSpan, eccLevel, eciMode, allowKanji, requestedVersion, fitStrategy, height, fnc1, plan, out var segmentCount, out var planCharset);
+        var config = PrepareConfigurationOptimal(textSpan, eccLevel, in analysis, requestedVersion, fitStrategy, height, fnc1, plan, out var segmentCount, out var planCharset);
         var segments = plan.Slice(0, segmentCount);
 
         var result = new RmQRCodeData(config.Version, quietZoneSize);
@@ -375,8 +401,15 @@ public static partial class RmQRCodeGenerator
     private static int CreateOptimalTo(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, bool allowKanji, Span<byte> destination, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int quietZoneSize, RmQRSegmentation segmentation, Fnc1Mode fnc1)
     {
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
+        var analysis = AnalyzeForPlan(textSpan, eciMode, allowKanji, fnc1);
+        return CreateOptimalTo(textSpan, eccLevel, in analysis, destination, requestedVersion, fitStrategy, height, quietZoneSize, fnc1);
+    }
+
+    /// <summary>The rest of <see cref="CreateOptimalTo(ReadOnlySpan{char}, RmQREccLevel, EciMode, bool, Span{byte}, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, int, RmQRSegmentation, Fnc1Mode)"/> from the analysis, which bytes input makes its own way.</summary>
+    private static int CreateOptimalTo(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in TextAnalysisResult analysis, Span<byte> destination, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int quietZoneSize, Fnc1Mode fnc1)
+    {
         Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
-        var config = PrepareConfigurationOptimal(textSpan, eccLevel, eciMode, allowKanji, requestedVersion, fitStrategy, height, fnc1, plan, out var segmentCount, out var planCharset);
+        var config = PrepareConfigurationOptimal(textSpan, eccLevel, in analysis, requestedVersion, fitStrategy, height, fnc1, plan, out var segmentCount, out var planCharset);
         var segments = plan.Slice(0, segmentCount);
 
         var coreWidth = RmQRConstants.GetWidth(config.Version);
@@ -404,9 +437,8 @@ public static partial class RmQRCodeGenerator
     /// A zero <paramref name="segmentCount"/> means the single-mode stream is what gets emitted, which is the case whenever mixing would not shrink the rMQR code.
     /// <paramref name="planCharset"/> is the charset the plan is written under: none for a Kanji-eligible text's Kanji plan, whose Byte runs hold only ASCII.
     /// </summary>
-    private static RmQRConfiguration PrepareConfigurationOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, bool allowKanji, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, Span<ModeSegment> plan, out int segmentCount, out EciMode planCharset)
+    private static RmQRConfiguration PrepareConfigurationOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in TextAnalysisResult analysis, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, Span<ModeSegment> plan, out int segmentCount, out EciMode planCharset)
     {
-        var analysis = AnalyzeForPlan(textSpan, eciMode, allowKanji, fnc1);
         byte[]? rentedTable = null;
         var tableLength = fnc1.IsActive ? RmQRSegmentPlanner.Fnc1TableLength(textSpan, in analysis) : RmQRSegmentPlanner.TableLength(textSpan, in analysis);
         Span<byte> table = tableLength == 0

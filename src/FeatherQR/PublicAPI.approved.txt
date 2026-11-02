@@ -235,9 +235,13 @@ namespace FeatherQR
 
     public static class QRCodeGenerator
     {
+        public static QRCodeData Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null);
+        public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<byte> data, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null);
+        public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null);
+        public static int Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static int Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null);
     }
 
@@ -360,8 +364,11 @@ namespace FeatherQR
 
     public static class RmQRCodeGenerator
     {
+        public static RmQRCodeData Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = null);
+        public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = null);
+        public static int Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static int Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = null);
     }
 

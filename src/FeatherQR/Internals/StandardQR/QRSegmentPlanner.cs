@@ -32,7 +32,7 @@ internal static class QRSegmentPlanner
     /// <summary>Standard QR mode indicator width (ISO/IEC 18004 7.4.1).</summary>
     private const int ModeIndicatorBits = 4;
 
-    /// <summary>Standard QR ECI prefix: 4-bit mode indicator 0111 plus a one-byte assignment designator.</summary>
+    /// <summary>The UTF-8 ECI prefix a Kanji-eligible text's UTF-8 plan pays: 4-bit mode indicator 0111 plus assignment 26's one-codeword designator.</summary>
     private const int EciHeaderBits = ModeIndicatorBits + 8;
 
     /// <summary>Narrowest count indicator of any mode at any version (Byte and Kanji at versions 1-9). Pinned by QRSegmentPlannerUnitTest.</summary>
@@ -140,7 +140,7 @@ internal static class QRSegmentPlanner
             return hasSingle;
         }
 
-        var eciBits = (charset == EciMode.Default ? 0 : EciHeaderBits) + fnc1.StandardQrHeaderBits;
+        var eciBits = charset.GetStandardQrHeaderBits() + fnc1.StandardQrHeaderBits;
 
         // Strictly below the single-mode fit: at that version the single-mode stream already fits, and emitting it unchanged is the blast-radius bound the feature is designed around.
         var top = hasSingle ? Math.Min(single - 1, maxVersion) : maxVersion;
@@ -555,7 +555,7 @@ internal static class QRSegmentPlanner
         Debug.Assert(planBits < 0 || planBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
         var capacityBits = QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8;
-        if (planBits != plannedBits || planBits + (charset == EciMode.Default ? 0 : EciHeaderBits) + fnc1.StandardQrHeaderBits > capacityBits)
+        if (planBits != plannedBits || planBits + charset.GetStandardQrHeaderBits() + fnc1.StandardQrHeaderBits > capacityBits)
         {
             // A plan the decoder would misread, a model that disagreed, or a version that simply cannot hold the plan (a legitimate answer for a caller that asked about a specific version).
             segmentCount = 0;

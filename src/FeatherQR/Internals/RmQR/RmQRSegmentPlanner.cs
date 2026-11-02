@@ -111,7 +111,7 @@ internal static partial class RmQRSegmentPlanner
         if (mode is EncodingMode.Numeric or EncodingMode.Kanji)
             return RmQRVersionSelector.TrySelect(mode, dataLength, charset, eccLevel, requestedVersion, fitStrategy, height, out selected);
 
-        var eciBits = charset == EciMode.Default ? 0 : EciHeaderBits;
+        var eciBits = charset.GetRmQrHeaderBits();
 
         if (requestedVersion is { } requested)
         {
@@ -425,7 +425,7 @@ internal static partial class RmQRSegmentPlanner
         Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
         var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
-        if (measuredBits != plannedBits || measuredBits + (charset == EciMode.Default ? 0 : EciHeaderBits) > capacityBits)
+        if (measuredBits != plannedBits || measuredBits + charset.GetRmQrHeaderBits() > capacityBits)
         {
             // Either the model disagreed, or this version simply cannot hold the plan (a legitimate answer for a caller that asked about a specific version).
             segmentCount = 0;

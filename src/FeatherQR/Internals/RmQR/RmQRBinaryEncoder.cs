@@ -36,8 +36,9 @@ namespace FeatherQR.Internals.RmQR;
 internal static partial class RmQRBinaryEncoder
 {
     private const int ModeEci = 0b111;
-    private const int EciDesignatorBits = 8;
-    private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + EciDesignatorBits;
+
+    /// <summary>The ECI header of the two text charsets, whose assignments 3 and 26 take the one-codeword designator.</summary>
+    private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + 8;
 
     // rMQR byte-mode capacity tops out at 150 bytes (R17x139-M), so any content that passed version selection transcodes into this budget (the branch is on the analyzer's exact UTF-8 byte count, not a per-char worst case). The pool path only exists for callers that bypass selection.
     private const int StackByteBudget = 160;
@@ -68,7 +69,7 @@ internal static partial class RmQRBinaryEncoder
             throw new ArgumentException($"Destination too small: {codewordCount} data codewords required, got {destination.Length} bytes.", nameof(destination));
         Debug.Assert(RmQRVersionSelector.GetRequiredBits(version, mode, analysis.DataLength, analysis.EciMode) <= capacityBits, "content must fit (version selection guarantees this)");
 
-        if (analysis.EciMode is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8))
+        if (analysis.EciMode is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8) && !analysis.EciMode.IsDeclaredBytes())
             throw new ArgumentOutOfRangeException(nameof(analysis), $"Unsupported charset {analysis.EciMode} for rMQR.");
 
         // Writer state: 64-bit MSB-first accumulator, pending bit count (0..32 between appends), byte position. Every store below lands inside [0, codewordCount) because all stored bits are real data bits within the capacity asserted above.
@@ -102,14 +103,13 @@ internal static partial class RmQRBinaryEncoder
                     var countBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
                     var headerValue = (0b011 << countBits) | analysis.DataLength;
                     var headerBits = RmQRConstants.ModeIndicatorLength + countBits;
-                    if (analysis.EciMode is EciMode.Default or EciMode.Iso8859_1)
+                    if (analysis.EciMode != EciMode.Utf8)
                     {
+                        // ISO-8859-1 text and bytes, which arrive one a char, are written a char a byte.
                         Append(ref dest, ref acc, ref accBits, ref bytePos, headerValue, headerBits);
                         WriteLatin1(ref dest, ref acc, ref accBits, ref bytePos, text, vectorized: true);
                         break;
                     }
-                    if (analysis.EciMode != EciMode.Utf8)
-                        throw new ArgumentOutOfRangeException(nameof(analysis), $"Unsupported charset {analysis.EciMode} for rMQR Byte mode.");
                     return EncodeUtf8Codewords(text, codewordCount, capacityBits, headerValue, headerBits, analysis.DataLength, destination);
                 }
             default:
@@ -439,9 +439,14 @@ internal static partial class RmQRBinaryEncoder
         }
     }
 
+    /// <summary>The ECI indicator and the designator of the charset's assignment, in one append of 11 to 27 bits.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteEciHeader(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, EciMode eciMode)
-        => Append(ref dest, ref acc, ref accBits, ref bytePos, (ModeEci << EciDesignatorBits) | (int)eciMode, EciHeaderBits);
+    {
+        var assignment = eciMode.Assignment();
+        var designatorBits = EciModeExtensions.DesignatorBits(assignment);
+        Append(ref dest, ref acc, ref accBits, ref bytePos, (ModeEci << designatorBits) | EciModeExtensions.Designator(assignment), RmQRConstants.ModeIndicatorLength + designatorBits);
+    }
 
     // ---------------------------------------------------------------
     // Group / value helpers

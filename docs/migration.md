@@ -190,6 +190,16 @@ The one spelling that needs an edit is a named argument: `plainText:` becomes `t
 
 **Except on .NET Framework and other netstandard2.0 consumers.** See [Older language versions](#older-language-versions) below; that conversion is not available there before C# 14.
 
+### Bytes overloads beside the text ones
+
+`QRCodeGenerator` and `RmQRCodeGenerator` gained `Create`, span `Create` and `TryGetRequiredBufferSize` overloads over `ReadOnlySpan<byte>`, and `QRCodeGenerator` a `CreateStructuredAppend` one, which write bytes as they are. A `string`, a `char` span, a `byte[]` and a `"..."u8` literal each pick their overload as before. Empty content written as `default` or `[]` fits both, so the compiler reports the call as ambiguous (CS0121). Name the kind:
+
+```csharp
+QRCodeGenerator.Create(default, QREccLevel.M);                    // CS0121 now
+QRCodeGenerator.Create("", QREccLevel.M);                         // the empty text, as before
+QRCodeGenerator.Create(ReadOnlySpan<byte>.Empty, QREccLevel.M);   // empty bytes
+```
+
 ### Older language versions
 
 Some 2.0.0 spellings need C# features your project may not have enabled. They affect the `netstandard2.0` asset, which is what .NET Framework 4.6.2+ binds, and the `init` ones affect `netstandard2.1` as well. Neither is about the runtime — the compiled library works fine on both; it is about what your compiler will let you write.

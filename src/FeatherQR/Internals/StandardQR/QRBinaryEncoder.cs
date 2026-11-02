@@ -47,20 +47,24 @@ internal ref partial struct QRBinaryEncoder
     }
 
     /// <summary>
-    /// Writes mode indicator (4 bits) and optional ECI header (12 bits).
+    /// Writes the optional ECI header (12 to 28 bits) and the mode indicator (4 bits).
     /// </summary>
     /// <param name="encoding">Encoding mode.</param>
     /// <param name="eci">ECI mode for character encoding.</param>
     public void WriteMode(EncodingMode encoding, EciMode eci)
     {
         if (eci != EciMode.Default)
-        {
-            _writer.Write((int)EncodingMode.ECI, 4);
-            // The one-codeword form of the ECI designator, which holds assignment numbers 0-127.
-            _writer.Write((int)eci, 8);
-        }
+            WriteEci(eci);
 
         _writer.Write((int)encoding, 4);
+    }
+
+    /// <summary>The ECI indicator and the designator of the charset's assignment, in one write.</summary>
+    private void WriteEci(EciMode eci)
+    {
+        var assignment = eci.Assignment();
+        var designatorBits = EciModeExtensions.DesignatorBits(assignment);
+        _writer.Write(((int)EncodingMode.ECI << designatorBits) | EciModeExtensions.Designator(assignment), 4 + designatorBits);
     }
 
     /// <summary>
@@ -157,19 +161,16 @@ internal ref partial struct QRBinaryEncoder
     /// <param name="text">Content the plan indexes into.</param>
     /// <param name="segments">Planned runs, in order, covering the whole content.</param>
     /// <param name="version">Target version (decides the count indicator widths).</param>
-    /// <param name="eci">Effective charset: Default / ISO-8859-1 narrow, UTF-8 transcode.</param>
+    /// <param name="eci">Effective charset: Default, ISO-8859-1 and bytes narrow, UTF-8 transcodes.</param>
     public void WriteSegments(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments, int version, EciMode eci)
     {
         if (segments.Length == 0)
             throw new ArgumentException("A segmented QR stream needs at least one segment.", nameof(segments));
-        if (eci is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8))
+        if (eci is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8) && !eci.IsDeclaredBytes())
             throw new ArgumentOutOfRangeException(nameof(eci), $"Unsupported charset {eci} for segmented encoding.");
 
         if (eci != EciMode.Default)
-        {
-            _writer.Write((int)EncodingMode.ECI, 4);
-            _writer.Write((int)eci, 8);
-        }
+            WriteEci(eci);
 
         // The count widths once for the version, not a mode lookup per run: a Kanji plan of
         // interleaved text has a run every few characters.
@@ -262,15 +263,12 @@ internal ref partial struct QRBinaryEncoder
 
     private void EncodeByte(ReadOnlySpan<char> textSpan, EciMode eci, bool utf8Bom)
     {
-        if (eci is EciMode.Default or EciMode.Iso8859_1)
+        if (eci != EciMode.Utf8)
         {
-            // Default is declared only over ASCII, whose Latin-1 bytes are the same.
+            // Text under Default is ASCII, whose Latin-1 bytes are the same. Bytes arrive one a char and leave as they came.
             WriteLatin1Data(textSpan);
             return;
         }
-
-        if (eci != EciMode.Utf8)
-            throw new ArgumentOutOfRangeException(nameof(eci), "Unsupported ECI mode for Byte encoding");
 
         // UTF-8: encode into a temporary buffer, then bulk-write (+3 reserves room for the UTF-8 BOM)
         var maxByteCount = textSpan.Length * 4 + (utf8Bom ? 3 : 0);

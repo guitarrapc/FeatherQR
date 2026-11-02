@@ -27,33 +27,40 @@ public class SizingSurfaceTest
     }
 
     /// <summary>
-    /// Exactly one non-throwing sizing overload per symbology, and it takes the options
-    /// struct, not a parameter list.
+    /// One non-throwing sizing overload per kind of content, text and bytes, and it takes
+    /// the options struct, not a parameter list.
     /// </summary>
     [Test]
     [Arguments(typeof(QRCodeGenerator), typeof(QRCodeGeneratorOptions))]
     [Arguments(typeof(MicroQRCodeGenerator), typeof(MicroQRCodeGeneratorOptions))]
     [Arguments(typeof(RmQRCodeGenerator), typeof(RmQRCodeGeneratorOptions))]
-    public async Task NonThrowingSizing_IsExactlyOneOverload_TakingOptions(Type generator, Type optionsType)
+    public async Task NonThrowingSizing_IsOneOverloadPerContent_TakingOptions(Type generator, Type optionsType)
     {
         var tries = PublicStatic(generator, "TryGetRequiredBufferSize");
-        await Assert.That(tries.Length).IsEqualTo(1);
+        var contents = tries.Select(m => m.GetParameters()[0].ParameterType).ToArray();
+        await Assert.That(contents.Distinct().Count()).IsEqualTo(tries.Length).Because("one overload a kind of content");
+        await Assert.That(contents.All(t => t == typeof(ReadOnlySpan<char>) || t == typeof(ReadOnlySpan<byte>))).IsTrue();
+        await Assert.That(contents.Contains(typeof(ReadOnlySpan<char>))).IsTrue();
 
-        var last = tries[0].GetParameters()[^1];
-        await Assert.That(last.ParameterType).IsEqualTo(optionsType.MakeByRefType());
+        foreach (var sizing in tries)
+        {
+            var options = OptionsParameter(sizing);
+            await Assert.That(options.ParameterType).IsEqualTo(optionsType.MakeByRefType());
 
-        // Sizing is the one place the options argument is optional on every symbology, so
-        // TryGetRequiredBufferSize(text, ecc, out size) is the shortest correct call.
-        await Assert.That(last.IsOptional).IsTrue();
+            // Sizing is the one place the options argument is optional on every symbology, so
+            // TryGetRequiredBufferSize(text, ecc, out size) is the shortest correct call.
+            await Assert.That(options.IsOptional).IsTrue();
 
-        // It is the only sizing call, so it must not be deprecated.
-        await Assert.That(tries[0].GetCustomAttribute<ObsoleteAttribute>()).IsNull();
+            // It is the only sizing call for its content, so it must not be deprecated.
+            await Assert.That(sizing.GetCustomAttribute<ObsoleteAttribute>()).IsNull();
+        }
     }
 
     /// <summary>
     /// Every <c>Create</c> overload takes the options struct as its last, optional
     /// parameter, so the three generators have the same shape and none takes its
-    /// configuration as a parameter list.
+    /// configuration as a parameter list. A bytes overload under ECI follows it with the
+    /// optional assignment, which describes the bytes rather than how to encode them.
     /// </summary>
     [Test]
     [Arguments(typeof(QRCodeGenerator), typeof(QRCodeGeneratorOptions))]
@@ -69,11 +76,21 @@ public class SizingSurfaceTest
 
         foreach (var create in creates)
         {
-            var last = create.GetParameters()[^1];
-            await Assert.That(last.ParameterType).IsEqualTo(optionsType.MakeByRefType())
+            var options = OptionsParameter(create);
+            await Assert.That(options.ParameterType).IsEqualTo(optionsType.MakeByRefType())
                 .Because($"{generator.Name}.{create.Name} must take its configuration as {optionsType.Name}");
-            await Assert.That(last.IsOptional).IsTrue()
+            await Assert.That(options.IsOptional).IsTrue()
                 .Because($"{generator.Name}.{create.Name} must be callable without options");
         }
+    }
+
+    /// <summary>The options parameter: the last, or the one before an optional <c>int? eciAssignment</c> after a bytes payload.</summary>
+    private static ParameterInfo OptionsParameter(MethodInfo method)
+    {
+        var parameters = method.GetParameters();
+        var last = parameters[^1];
+        var isAssignment = last.Name == "eciAssignment" && last.ParameterType == typeof(int?) && last.IsOptional
+            && parameters[0].ParameterType == typeof(ReadOnlySpan<byte>);
+        return isAssignment ? parameters[^2] : last;
     }
 }
