@@ -2,7 +2,7 @@
 
 ## Purpose
 
-FeatherQR writes and reads text only. A payload that is not text cannot be written as it is, and a symbol whose bytes are not in one of three charsets is read as converted text or not at all. This plan adds bytes in and bytes out to all three symbologies, sets one ECI policy against ISO/IEC 18004:2015 and ISO/IEC 23941, reports the error correction level and mask the encoder chose, and makes the builders refuse encoding settings they cannot apply.
+FeatherQR writes and reads text only. A payload that is not text cannot be written as it is, and a symbol whose bytes are not in one of three charsets is read as converted text or not at all. This plan adds bytes in and bytes out to all three symbologies, sets one ECI policy against ISO/IEC 18004 and ISO/IEC 23941, reports the error correction level and mask the encoder chose, and makes the builders refuse encoding settings they cannot apply.
 
 It records where things stand, the problems, the design, the decisions the maintainer rules on, and the phases. When it completes, its durable content moves into the specs and this file is deleted.
 
@@ -53,7 +53,7 @@ P1 to P6 are what [standardqr-encoder.md](../specs/standardqr-encoder.md) lists 
 
 ## ECI policy
 
-The standard models every mode as producing bytes. Numeric and Alphanumeric give ASCII, Byte gives its bytes, and Kanji gives the Shift_JIS byte pairs it compacts. An ECI says how the bytes after it are interpreted, and with none the interpretation is ISO-8859-1. The reader passes the assignment on with the bytes (the ECI protocol) rather than having to know every charset. Phase 0 pins the section for each of these statements.
+The standard models every mode as producing bytes. Numeric and Alphanumeric give ASCII, Byte gives its bytes, and Kanji gives the Shift_JIS byte pairs it compacts. An ECI says how the bytes after it are interpreted, and with none the interpretation is ISO-8859-1. The reader passes the assignment on with the bytes (the ECI protocol) rather than having to know every charset. The subclauses that state these are not public, so Phase 0 checked each statement against the reference implementations instead (Progress log).
 
 This plan adopts three rules.
 
@@ -61,7 +61,7 @@ This plan adopts three rules.
 2. Reading bytes is literal. Every mode yields the bytes the standard defines, no charset is applied, and the assignment is reported. An assignment this library has no charset for is not an error.
 3. Reading text follows the standard except where the literal reading cannot give the text the writer meant, and each such deviation is named in the decoder's Decisions. There are two. A Byte segment with no ECI is read by its bytes, which is already recorded. A Kanji segment under an ECI is read as JIS X 0208 (B8). An assignment with no charset here stays `UnsupportedContent` for text, and is now reported.
 
-| Topic | ISO/IEC 18004:2015 and ISO/IEC 23941 | Today | After this plan |
+| Topic | ISO/IEC 18004 and ISO/IEC 23941 | Today | After this plan |
 |---|---|---|---|
 | Assignment range | 000000 to 999999, in a designator of one to three codewords | Read: all. Written: 0 to 127 | Written: all |
 | No ECI | ISO-8859-1 | Text: by the bytes (recorded deviation) | Text: unchanged. Bytes: no interpretation, no assignment reported |
@@ -157,7 +157,7 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 
 | # | Phase | Contents | Exit |
 |---|---|---|---|
-| 0 | Premises and rulings | Pin in `standardqr-spec-map.md` and `rmqr-spec-map.md` the sections for the designator, the default interpretation, what an ECI governs, the ECI protocol and assignment 899. B1 to B11 were ruled on 2026-11-02. No change to `src` | Every statement in the ECI policy has a section number |
+| 0 | Premises and rulings | Done 2026-11-02. The subclauses are not public, so each statement of the ECI policy was checked against the reference implementations, and the section numbers wait until the text is at hand. B1 to B11 were ruled the same day. No change to `src` | Each statement of the ECI policy is marked as one the reference implementations agree on or one they split on |
 | 1 | Builders and the encoder's choices | B11 and B10, then `EccLevel` and `MaskPattern` on the three data types | The properties equal what decoding reports over every version, level and mask, with and without boost, and after a raw-data round trip. `Create` allocation and time unchanged |
 | 2 | Bytes out | One internal bytes entry over the three bitstream decoders, the assignment on the info, the unknown assignment reported, the `TryDecodeBytes` and `TryDecodeImageBytes` calls and the SkiaSharp overloads | Bytes are right for every mode, under FNC1, behind a byte order mark and across Structured Append parts. The interop oracle's raw bytes agree on the fixture corpus. Text results unchanged on the whole corpus |
 | 3 | ECI writer and bytes in, Standard QR and rMQR | A designator of one to three codewords, the bytes `Create` and sizing calls with their `eciAssignment` parameter, and Structured Append from bytes. Then the Android and iPhone cameras scan undeclared binary and ECI 899 symbols from this phase, and what each shows is recorded for the Phase 5 docs. The check waits for this phase because nothing here could write either symbol before it | All 256 byte values and random payloads round-trip through Phase 2 and through the oracle. Under single-segment encoding the largest payload at each version and level equals the standard's Byte-mode capacity. The designator grows at 127/128 and 16383/16384, and 1,000,000 is refused. Text output byte-identical. The phone results are recorded |
@@ -168,4 +168,24 @@ Phase 1 is independent of the rest. Phase 2 comes before Phase 3 so that bytes i
 
 ## Progress log
 
-Nothing yet.
+### Phase 0, premises (2026-11-02)
+
+Done:
+
+- B1 to B11 were ruled, all as recommended. B2 and B5 were refined in discussion first (the assignment as a parameter of the bytes calls, Kanji mode for bytes left for a request).
+- ISO/IEC 18004:2015 is withdrawn. The fourth edition, ISO/IEC 18004:2024, replaced it in August 2024. Its Foreword lists two main changes: fixed pattern damage is graded continuously under ISO/IEC 15415, and the reference decoding algorithm is clarified. Neither touches data encodation. The specs still cite the 2015 subclause numbers.
+- The public parts of both standards pin clauses, not subclauses. In ISO/IEC 18004:2024 they are clause 7 (Requirements), clause 14 (Transmitted data), Annex F (Symbology identifier), Annex H (JIS8 and Shift JIS character sets) and ISO/IEC 15424 as a normative reference. Definition 3.15 defines a segment as data under one ECI or one encoding mode. The public sample of ISO/IEC 23941 is its DIS text: clause 7 (Requirements), clause 13 (Transmitted data), Annex E (Symbology identifier), Annex G (ISO/IEC 8859-1 character sets), Annex H (JIS8 and Shift JIS character sets), ISO/IEC 8859-1 as a normative reference, and the same definition of a segment as 4.11.
+- The subclauses for the designator lengths, the default interpretation, what an ECI governs and the ECI protocol are not public, and neither is AIM's ECI register (ECI Part 3), which lists 899. They were not pinned.
+- Instead each statement was checked against the reference implementations kept for interop work, four readers and three writers:
+  - Designator: all agree. One to three codewords marked by the leading bits 0, 10 and 110 carry 0 to 127, 128 to 16383 and 16384 to 999999, and a larger number is refused. This library's reader agrees, and Phase 3's writer follows it.
+  - No ECI: they split. One reads ISO-8859-1. Two guess from the bytes. One guesses only when the symbol declares no ECI anywhere, and otherwise reads the data before the first ECI as ISO-8859-1. This library guesses, a recorded deviation. The last rule is closer to the standard and is a lead outside this plan.
+  - What an ECI governs: they split. One applies it to the bytes of every mode, Kanji included. Three read Kanji as JIS X 0208 whatever the ECI, as this library does (B8).
+  - An unknown assignment: they split. Two fail the symbol, one ignores the ECI and keeps its charset, and one reads assignments up to 899 as binary and flags those above. The implementations that name 899 call it binary data, as secondary sources do. One writer declares it over bytes input by default, and the others write no header (B3).
+  - Transmission: two of the readers report a symbology identifier and agree on its modifier, 1 without an ECI and 2 with one (3 to 6 with FNC1). One of them also offers the ECI protocol, each assignment as a backslash and six digits and a literal backslash doubled, as a separate output. This library reports neither (D10).
+
+Lessons:
+
+- A subclause behind a purchase cannot be an exit criterion. Behaviour shared by independent implementations is the evidence at hand, and where they split it shows which choice is a deviation and which side the field takes.
+- The edition a spec cites can be withdrawn without anything in the repository noticing. It was found only by opening the standard's catalogue page.
+
+No change to `src`, so no benchmark delta.
