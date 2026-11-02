@@ -174,7 +174,7 @@ internal static class MicroQRMatrixDecoder
     /// Reads the 15 format information bits.
     /// Positions mirror <see cref="MicroQRModulePlacer.PlaceFormat"/> exactly: bits 14…7 along row 8 columns 1-8, bits 6…0 down column 8 rows 7-1.
     /// </summary>
-    private static ushort ReadFormatBits<TModules>(ReadOnlySpan<byte> pixels, in TModules modules)
+    internal static ushort ReadFormatBits<TModules>(ReadOnlySpan<byte> pixels, in TModules modules)
         where TModules : struct, IMicroQRModules
     {
         var raw = 0;

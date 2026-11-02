@@ -34,6 +34,9 @@ public class RmQRCodeDataUnitTest
             state = state * 1664525u + 1013904223u;
             modules[i] = (byte)(state >> 31);
         }
+
+        // The restore takes no matrix without the format words a generator writes
+        RmQRModulePlacer.PlaceFormat(modules, version, RmQREccLevel.M, h, w);
         return modules;
     }
 

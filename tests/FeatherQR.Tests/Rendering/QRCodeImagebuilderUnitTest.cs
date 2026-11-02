@@ -422,6 +422,22 @@ public class QRCodeImageBuilderTest
     }
 
     [Test]
+    public async Task WithErrorCorrection_QRCodeDataBuilder_ThrowsInvalidOperationException()
+    {
+        var builder = new QRCodeImageBuilder(QRCodeGenerator.Create(TestContent, QREccLevel.L));
+
+        await Assert.That(() => builder.WithErrorCorrection(QREccLevel.H)).Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task WithEciMode_QRCodeDataBuilder_ThrowsInvalidOperationException()
+    {
+        var builder = new QRCodeImageBuilder(QRCodeGenerator.Create(TestContent, QREccLevel.L));
+
+        await Assert.That(() => builder.WithEciMode(EciMode.Utf8)).Throws<InvalidOperationException>();
+    }
+
+    [Test]
     public async Task WithVersion_FixedVersion_MatchesQRCodeDataRendering()
     {
         const int fixedVersion = 10;

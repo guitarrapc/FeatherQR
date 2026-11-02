@@ -39,6 +39,7 @@ public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCode
     /// <summary>
     /// Starts a builder that draws a Micro QR code you have already generated.
     /// The Micro QR code is drawn exactly as given, so only the appearance options apply and the encoding options throw <see cref="InvalidOperationException"/>.
+    /// The level and mask it was written with are <see cref="MicroQRCodeData.EccLevel"/> and <see cref="MicroQRCodeData.MaskPattern"/>.
     /// </summary>
     /// <param name="microQrCodeData">The Micro QR code to draw.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="microQrCodeData"/> is null.</exception>

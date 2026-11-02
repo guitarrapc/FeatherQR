@@ -41,8 +41,8 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
 
     /// <summary>
     /// Starts a builder that draws a QR code you have already generated.
-    /// The QR code is used exactly as given, so only the appearance options apply.
-    /// Most encoding options throw <see cref="InvalidOperationException"/> on a builder created this way. <see cref="WithErrorCorrection"/> and <see cref="WithEciMode"/> are accepted and then ignored.
+    /// The QR code is used exactly as given, so only the appearance options apply and the encoding options throw <see cref="InvalidOperationException"/>.
+    /// The level and mask it was written with are <see cref="QRCodeData.EccLevel"/> and <see cref="QRCodeData.MaskPattern"/>.
     /// </summary>
     /// <param name="qrCodeData">The QR code to draw.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="qrCodeData"/> is null.</exception>
@@ -392,8 +392,12 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// Sets how much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.
     /// </summary>
     /// <param name="eccLevel">The level to encode at. Reach for H when an icon or a custom module shape covers part of the QR code.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made QR code.</exception>
     public QRCodeImageBuilder WithErrorCorrection(QREccLevel eccLevel)
     {
+        if (_qrCodeData is not null)
+            throw new InvalidOperationException("WithErrorCorrection cannot be used when QRCodeData is provided directly.");
+
         _eccLevel = eccLevel;
         return this;
     }
@@ -417,8 +421,12 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// Sets the character encoding to declare in the QR code.
     /// </summary>
     /// <param name="eciMode">The encoding to declare. The default picks it from the content.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made QR code.</exception>
     public QRCodeImageBuilder WithEciMode(EciMode eciMode)
     {
+        if (_qrCodeData is not null)
+            throw new InvalidOperationException("WithEciMode cannot be used when QRCodeData is provided directly.");
+
         _eciMode = eciMode;
         return this;
     }

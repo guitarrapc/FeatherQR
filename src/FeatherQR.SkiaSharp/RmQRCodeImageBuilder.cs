@@ -45,6 +45,7 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// <summary>
     /// Starts a builder that draws an rMQR code you have already generated.
     /// The rMQR code is drawn exactly as given, so only the appearance options apply and the encoding options throw <see cref="InvalidOperationException"/>.
+    /// The level it was written at is <see cref="RmQRCodeData.EccLevel"/>.
     /// </summary>
     /// <param name="rmQrCodeData">The rMQR code to draw.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="rmQrCodeData"/> is null.</exception>

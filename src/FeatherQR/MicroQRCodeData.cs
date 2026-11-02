@@ -118,6 +118,36 @@ public sealed class MicroQRCodeData
     public MicroQRVersion Version { get; }
 
     /// <summary>
+    /// The error correction level the Micro QR code was written at, read from its format information.
+    /// </summary>
+    /// <remarks>
+    /// It is read when asked, so the generator does no extra work for it.
+    /// </remarks>
+    public MicroQREccLevel EccLevel
+    {
+        get
+        {
+            ReadFormat(out var eccLevel, out _);
+            return eccLevel;
+        }
+    }
+
+    /// <summary>
+    /// The data mask pattern, 0 to 3, the Micro QR code was written with, read from its format information.
+    /// </summary>
+    /// <remarks>
+    /// Without <see cref="MicroQRCodeGeneratorOptions.MaskPattern"/> this is the pattern the generator chose.
+    /// </remarks>
+    public int MaskPattern
+    {
+        get
+        {
+            ReadFormat(out _, out var maskPattern);
+            return maskPattern;
+        }
+    }
+
+    /// <summary>
     /// The module at the given position.
     /// </summary>
     /// <param name="row">Row, counted from the outer edge of the quiet zone.</param>
@@ -150,7 +180,10 @@ public sealed class MicroQRCodeData
     /// <param name="version">The Micro QR code version.</param>
     /// <param name="quietZoneSize">Width of the light border in modules. The specification asks for 2, narrower than the 4 Standard QR uses.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not M1-M4 or the quiet zone size is out of range.</exception>
-    public MicroQRCodeData(MicroQRVersion version, int quietZoneSize)
+    /// <remarks>
+    /// The generator fills it. It is not public because nothing public can draw into it, and a public instance always carries format information.
+    /// </remarks>
+    internal MicroQRCodeData(MicroQRVersion version, int quietZoneSize)
     {
         if ((uint)((int)version - 1) > 3)
             throw new ArgumentOutOfRangeException(nameof(version), $"Invalid Micro QR version: {version}");
@@ -172,7 +205,7 @@ public sealed class MicroQRCodeData
     /// </remarks>
     /// <param name="rawData">The serialized Micro QR code.</param>
     /// <param name="quietZoneSize">Width of the light border in modules. 2 is the standard width.</param>
-    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized Micro QR code.</exception>
+    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized Micro QR code, or when its format information is not a word a generator writes for its version.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public MicroQRCodeData(byte[] rawData, int quietZoneSize) : this(rawData.AsSpan(), quietZoneSize)
@@ -214,6 +247,10 @@ public sealed class MicroQRCodeData
         {
             _bits[_bits.Length - 1] &= (byte)(0xFF << (8 - remainder));
         }
+
+        // EccLevel and MaskPattern read the format information, so an instance without one is not made
+        if (!TryReadFormat(out _, out _))
+            throw new InvalidDataException("Invalid Micro QR code data: the format information is not a word a generator writes for this version.");
     }
 
     private static void ValidateQuietZone(int quietZoneSize)
@@ -312,6 +349,40 @@ public sealed class MicroQRCodeData
     {
         var bitIndex = coreRow * _baseSize + coreCol;
         return (_bits[bitIndex >> 3] & (1 << (7 - (bitIndex & 7)))) != 0;
+    }
+
+    private void ReadFormat(out MicroQREccLevel eccLevel, out int maskPattern)
+    {
+        // Every public instance passed this check when it was made. Only an internal blank matrix fails it.
+        if (!TryReadFormat(out eccLevel, out maskPattern))
+            throw new InvalidOperationException("The Micro QR code holds no format information.");
+    }
+
+    /// <summary>
+    /// Whether the format information is exactly a word a generator writes for this version, and which level and mask it names.
+    /// </summary>
+    /// <remarks>
+    /// Exact, not within the decoder's three bits: an all-light format area is three bits from M4-L with mask 1, so a blank matrix would otherwise report a level and a mask it never had.
+    /// </remarks>
+    private bool TryReadFormat(out MicroQREccLevel eccLevel, out int maskPattern)
+    {
+        var raw = MicroQRMatrixDecoder.ReadFormatBits(default, new CoreModules(this));
+        if (MicroQRFormatInformationDecoder.TryDecode(raw, out var version, out eccLevel, out maskPattern, out var distance)
+            && distance == 0
+            && version == Version)
+        {
+            return true;
+        }
+
+        eccLevel = default;
+        maskPattern = 0;
+        return false;
+    }
+
+    /// <summary>The packed core read through the decoder's module interface, so the format bits are read where the decoder reads them.</summary>
+    private readonly struct CoreModules(MicroQRCodeData data) : IMicroQRModules
+    {
+        public bool IsDark(ReadOnlySpan<byte> grid, int row, int col) => data.GetCoreModule(row, col);
     }
 
     /// <summary>

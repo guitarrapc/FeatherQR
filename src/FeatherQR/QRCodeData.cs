@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using FeatherQR.Internals;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR;
 
@@ -157,6 +158,37 @@ public sealed class QRCodeData
     public int Version { get; private set; }
 
     /// <summary>
+    /// The error correction level the QR code was written at, read from its format information.
+    /// </summary>
+    /// <remarks>
+    /// Under <see cref="QRCodeGeneratorOptions.BoostEccLevel"/> this is the raised level, not the one asked for.
+    /// It is read when asked, so the generator does no extra work for it.
+    /// </remarks>
+    public QREccLevel EccLevel
+    {
+        get
+        {
+            ReadFormat(out var eccLevel, out _);
+            return eccLevel;
+        }
+    }
+
+    /// <summary>
+    /// The data mask pattern, 0 to 7, the QR code was written with, read from its format information.
+    /// </summary>
+    /// <remarks>
+    /// Without <see cref="QRCodeGeneratorOptions.MaskPattern"/> this is the pattern the generator chose.
+    /// </remarks>
+    public int MaskPattern
+    {
+        get
+        {
+            ReadFormat(out _, out var maskPattern);
+            return maskPattern;
+        }
+    }
+
+    /// <summary>
     /// The module at the given position.
     /// </summary>
     /// <param name="row">Row, counted from the outer edge of the quiet zone.</param>
@@ -207,7 +239,10 @@ public sealed class QRCodeData
     /// <param name="version">The QR code version, 1 to 40.</param>
     /// <param name="quietZoneSize">Width of the light border in modules, 0 to 10,000. The standard asks for 4, and 0 leaves the QR code hard to scan.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not 1 to 40 or the quiet zone size is out of range.</exception>
-    public QRCodeData(int version, int quietZoneSize)
+    /// <remarks>
+    /// The generators fill it. It is not public because nothing public can draw into it, and a public instance always carries format information.
+    /// </remarks>
+    internal QRCodeData(int version, int quietZoneSize)
     {
         if ((uint)(version - 1) > 39)
             throw new ArgumentOutOfRangeException(nameof(version), $"Invalid QR version: {version}");
@@ -229,7 +264,7 @@ public sealed class QRCodeData
     /// </remarks>
     /// <param name="rawData">The serialized QR code.</param>
     /// <param name="quietZoneSize">Width of the light border in modules, 0 to 10,000. 4 is the standard width.</param>
-    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized QR code.</exception>
+    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized QR code, or when its two copies of the format information are not the same word a generator writes.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public QRCodeData(byte[] rawData, int quietZoneSize) : this(rawData.AsSpan(), quietZoneSize)
@@ -245,7 +280,7 @@ public sealed class QRCodeData
     /// </remarks>
     /// <param name="rawDataSpan">The serialized QR code.</param>
     /// <param name="quietZoneSize">Width of the light border in modules, 0 to 10,000. 4 is the standard width.</param>
-    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized QR code.</exception>
+    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized QR code, or when its two copies of the format information are not the same word a generator writes.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public QRCodeData(ReadOnlySpan<byte> rawDataSpan, int quietZoneSize)
@@ -285,6 +320,10 @@ public sealed class QRCodeData
         {
             _bits[^1] &= (byte)(0xFF << (8 - remainder));
         }
+
+        // EccLevel and MaskPattern read the format information, so an instance without one is not made
+        if (!TryReadFormat(out _, out _))
+            throw new InvalidDataException("Invalid QR code data: the format information is not a word a generator writes.");
     }
 
     /// <summary>
@@ -449,6 +488,65 @@ public sealed class QRCodeData
     {
         var bitIndex = coreRow * _baseSize + coreCol;
         return (_bits[bitIndex >> 3] & (1 << (7 - (bitIndex & 7)))) != 0;
+    }
+
+    private void ReadFormat(out QREccLevel eccLevel, out int maskPattern)
+    {
+        // Every public instance passed this check when it was made. Only an internal blank matrix fails it.
+        if (!TryReadFormat(out eccLevel, out maskPattern))
+            throw new InvalidOperationException("The QR code holds no format information.");
+    }
+
+    /// <summary>
+    /// Whether both copies of the format information are the same word a generator writes, and which level and mask it names.
+    /// </summary>
+    /// <remarks>
+    /// An exact match, not the decoder's nearest word within three bits: a generated code always carries the exact word, and a matrix that needs correcting is not one this type restores.
+    /// </remarks>
+    private bool TryReadFormat(out QREccLevel eccLevel, out int maskPattern)
+    {
+        // Bit i at the positions ModulePlacer.PlaceFormat writes: copy 1 around the top-left finder, copy 2 split between the other two
+        var size = _baseSize;
+        var copy1 = 0;
+        var copy2 = 0;
+        for (var i = 0; i < 15; i++)
+        {
+            int row1, col1, row2, col2;
+            if (i < 8)
+            {
+                (row1, col1) = (i < 6 ? i : i + 1, 8);
+                (row2, col2) = (8, size - 1 - i);
+            }
+            else
+            {
+                (row1, col1) = (8, i == 8 ? 7 : 14 - i);
+                (row2, col2) = (size - 15 + i, 8);
+            }
+            if (GetCoreModule(row1, col1))
+                copy1 |= 1 << i;
+            if (GetCoreModule(row2, col2))
+                copy2 |= 1 << i;
+        }
+
+        if (copy1 == copy2)
+        {
+            for (var level = QREccLevel.L; level <= QREccLevel.H; level++)
+            {
+                for (var mask = 0; mask < 8; mask++)
+                {
+                    if (QRCodeConstants.GetFormatBits(level, mask) == copy1)
+                    {
+                        eccLevel = level;
+                        maskPattern = mask;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        eccLevel = default;
+        maskPattern = 0;
+        return false;
     }
 
     /// <summary>
