@@ -207,4 +207,20 @@ Lessons:
 - An all-light Micro QR format area is three bits from M4-L with mask 1, inside the decoder's correction distance. A reader with the decoder's tolerance gives a matrix nobody wrote a level and a mask. Computing the distances before ruling B10 is what found it.
 - A claim about an output's shape needs the output looked at. The span `Create`'s buffer was assumed to be the serialized form while the design was written.
 
-No generator file changed, so `Create` was not benchmarked. The restore now reads 30 modules (Standard QR), 15 (Micro QR) or 36 (rMQR) and compares them with at most 32 words. That cost was not measured.
+No generator file changed, so `Create` was not benchmarked.
+
+The readers were rewritten later the same day, after the maintainer called them inefficient. The first version computed the 32 Standard QR words one by one until one matched, went through the decoder's 32 KB table of every Micro QR word within three bits, and called `GetFormatModule` for each rMQR bit. The level and mask are the word's top five bits under the XOR mask, so the one word they name is the only candidate, and a single table load confirms it. The runs along a row are read in one window (`ModuleBitPacker.ReadRun`). The Micro QR words moved to `MicroQRConstants`, so reading a level no longer builds the 32 KB table. Measured in Release through the public API, before and after:
+
+| Operation | Before | After |
+|---|---|---|
+| Version 40, `EccLevel` then `MaskPattern` (level H, mask 7) | 328 ns | 27 ns |
+| Version 40 restore | 436 ns | 268 ns (the rest is the array) |
+| Version 1 restore | 184 ns | 40 ns |
+| Micro QR M4, both properties | 28 ns | 17 ns |
+| Micro QR M4 restore | 42 ns | 31 ns |
+| rMQR R17x139, `EccLevel` | 56 ns | 27 ns |
+| rMQR R17x139 restore | 105 ns | 75 ns |
+
+Allocation is unchanged. New tests hold the exact match to a search over all 2^15 words for Standard QR and Micro QR and `ReadRun` to a read per module, and refuse a change to each format module one at a time. A planted skip of one module failed them. Debug suite 61,290, none failed.
+
+Lesson: an exact match is not a search. The data bits of a format word sit under its XOR mask, so the candidate is computed, not found. The first version had carried over the shape of a decoder that corrects errors, which has to try every word.

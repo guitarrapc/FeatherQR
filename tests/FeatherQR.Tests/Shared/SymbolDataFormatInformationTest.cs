@@ -85,6 +85,63 @@ public class SymbolDataFormatInformationTest
     }
 
     [Test]
+    [Arguments(1)]
+    [Arguments(40)]
+    public async Task QRCodeData_RefusesAChangeToAnyOneFormatModule(int version)
+    {
+        var data = QRCodeGenerator.Create("FORMAT", QREccLevel.Q, new QRCodeGeneratorOptions { Version = version, MaskPattern = 6, QuietZoneSize = 0 });
+        var size = data.Size;
+        var raw = data.GetRawData();
+        await Assert.That(new QRCodeData(raw, 0).MaskPattern).IsEqualTo(6);
+
+        // Bit i of copy 1 around the top-left finder and of copy 2 split between the other two
+        var accepted = new List<string>();
+        for (var i = 0; i < 15; i++)
+        {
+            var copy1 = i < 8 ? (i < 6 ? i : i + 1, 8) : (8, i == 8 ? 7 : 14 - i);
+            var copy2 = i < 8 ? (8, size - 1 - i) : (size - 15 + i, 8);
+            foreach (var (row, col) in new[] { copy1, copy2 })
+            {
+                var changed = (byte[])raw.Clone();
+                FlipModule(changed, StandardHeader, size, row, col);
+                try
+                {
+                    _ = new QRCodeData(changed, 0);
+                    accepted.Add($"({row},{col})");
+                }
+                catch (InvalidDataException)
+                {
+                }
+            }
+        }
+        await Assert.That(accepted).IsEmpty();
+    }
+
+    [Test]
+    public async Task FormatInformationDecoder_MatchesExactlyTheThirtyTwoWords()
+    {
+        var mismatches = 0;
+        for (var word = 0; word < 1 << 15; word++)
+        {
+            var expected = false;
+            var (expectedLevel, expectedMask) = (default(QREccLevel), 0);
+            foreach (var level in StandardLevels)
+            {
+                for (var mask = 0; mask < 8; mask++)
+                {
+                    if (QRCodeConstants.GetFormatBits(level, mask) == word)
+                        (expected, expectedLevel, expectedMask) = (true, level, mask);
+                }
+            }
+
+            var ok = FormatInformationDecoder.TryMatchExact(word, out var eccLevel, out var maskPattern);
+            if (ok != expected || (ok && (eccLevel != expectedLevel || maskPattern != expectedMask)))
+                mismatches++;
+        }
+        await Assert.That(mismatches).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task QRCodeData_RefusesCopiesThatDisagree()
     {
         var data = QRCodeGenerator.Create("FORMAT", QREccLevel.M, new QRCodeGeneratorOptions { MaskPattern = 2, QuietZoneSize = 0 });
@@ -176,6 +233,60 @@ public class SymbolDataFormatInformationTest
     }
 
     [Test]
+    [Arguments(MicroQRVersion.M2)]
+    [Arguments(MicroQRVersion.M4)]
+    public async Task MicroQRCodeData_RefusesAChangeToAnyOneFormatModule(MicroQRVersion version)
+    {
+        var data = MicroQRCodeGenerator.Create("1", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = version, MaskPattern = 2, QuietZoneSize = 0 });
+        var size = data.Size;
+        var raw = data.GetRawData();
+        await Assert.That(new MicroQRCodeData(raw, 0).MaskPattern).IsEqualTo(2);
+
+        // Row 8, columns 1-8, and column 8, rows 1-7
+        var positions = Enumerable.Range(1, 8).Select(col => (8, col)).Concat(Enumerable.Range(1, 7).Select(row => (row, 8)));
+        var accepted = new List<string>();
+        foreach (var (row, col) in positions)
+        {
+            var changed = (byte[])raw.Clone();
+            FlipModule(changed, ExtendedHeader, size, row, col);
+            try
+            {
+                _ = new MicroQRCodeData(changed, 0);
+                accepted.Add($"({row},{col})");
+            }
+            catch (InvalidDataException)
+            {
+            }
+        }
+        await Assert.That(accepted).IsEmpty();
+    }
+
+    [Test]
+    public async Task MicroQRConstants_MatchesExactlyTheThirtyTwoWords()
+    {
+        var mismatches = 0;
+        for (var word = 0; word < 1 << 15; word++)
+        {
+            var expected = false;
+            var (expectedVersion, expectedLevel, expectedMask) = (default(MicroQRVersion), default(MicroQREccLevel), 0);
+            for (var symbolNumber = 0; symbolNumber < 8; symbolNumber++)
+            {
+                MicroQRConstants.GetVersionAndEccFromSymbolNumber(symbolNumber, out var v, out var l);
+                for (var mask = 0; mask < 4; mask++)
+                {
+                    if (MicroQRConstants.GetFormatBits(v, l, mask) == word)
+                        (expected, expectedVersion, expectedLevel, expectedMask) = (true, v, l, mask);
+                }
+            }
+
+            var ok = MicroQRConstants.TryMatchFormatWord(word, out var version, out var eccLevel, out var maskPattern);
+            if (ok != expected || (ok && (version != expectedVersion || eccLevel != expectedLevel || maskPattern != expectedMask)))
+                mismatches++;
+        }
+        await Assert.That(mismatches).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task MicroQRCodeData_RefusesTheFormatOfAnotherVersion()
     {
         var data = MicroQRCodeGenerator.Create("1", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M2, MaskPattern = 0, QuietZoneSize = 0 });
@@ -242,6 +353,38 @@ public class SymbolDataFormatInformationTest
         await Assert.That(RmQRCodeDecoder.TryDecode(Unpack(raw, ExtendedHeader, width, height), width, height, out var text, out _)).IsTrue();
         await Assert.That(text).IsEqualTo("1");
         await Assert.That(() => new RmQRCodeData(raw, 0)).Throws<InvalidDataException>();
+    }
+
+    [Test]
+    [Arguments(RmQRVersion.R7x43)]
+    [Arguments(RmQRVersion.R11x27)]
+    [Arguments(RmQRVersion.R17x139)]
+    public async Task RmQRCodeData_RefusesAChangeToAnyOneFormatModule(RmQRVersion version)
+    {
+        var data = RmQRCodeGenerator.Create("1", RmQREccLevel.H, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var (width, height) = (data.Width, data.Height);
+        var raw = data.GetRawData();
+        await Assert.That(new RmQRCodeData(raw, 0).EccLevel).IsEqualTo(RmQREccLevel.H);
+
+        var accepted = new List<string>();
+        foreach (var subFinderSide in new[] { false, true })
+        {
+            for (var bit = 0; bit < 18; bit++)
+            {
+                RmQRConstants.GetFormatModule(bit, subFinderSide, height, width, out var row, out var col);
+                var changed = (byte[])raw.Clone();
+                FlipModule(changed, ExtendedHeader, width, row, col);
+                try
+                {
+                    _ = new RmQRCodeData(changed, 0);
+                    accepted.Add($"({row},{col})");
+                }
+                catch (InvalidDataException)
+                {
+                }
+            }
+        }
+        await Assert.That(accepted).IsEmpty();
     }
 
     [Test]

@@ -365,26 +365,36 @@ public sealed class RmQRCodeData
     /// </remarks>
     private bool TryReadFormat(out RmQREccLevel eccLevel)
     {
+        // Each copy's block is five rows of three consecutive modules, bit 5c + r in row r and column c, so a row is a run read in one window.
+        // The sub-finder side's last three bits run along one row too. The finder side's last three run down a column, one read each.
+        RmQRConstants.GetFormatBlock(subFinderSide: false, _coreHeight, _coreWidth, out var finderRow, out var finderCol);
+        RmQRConstants.GetFormatBlock(subFinderSide: true, _coreHeight, _coreWidth, out var subFinderRow, out var subFinderCol);
         var finderSide = 0;
         var subFinderSide = 0;
-        for (var bit = 0; bit < 18; bit++)
+        for (var r = 0; r < 5; r++)
         {
-            RmQRConstants.GetFormatModule(bit, subFinderSide: false, _coreHeight, _coreWidth, out var row, out var col);
-            if (GetCoreModule(row, col))
-                finderSide |= 1 << bit;
-            RmQRConstants.GetFormatModule(bit, subFinderSide: true, _coreHeight, _coreWidth, out row, out col);
-            if (GetCoreModule(row, col))
-                subFinderSide |= 1 << bit;
+            // Column c of the block is bit 2 - c of the run
+            var f = ModuleBitPacker.ReadRun(_bits, (finderRow + r) * _coreWidth + finderCol, 3);
+            finderSide |= (f >> 2 & 1) << r | (f >> 1 & 1) << (5 + r) | (f & 1) << (10 + r);
+            var s = ModuleBitPacker.ReadRun(_bits, (subFinderRow + r) * _coreWidth + subFinderCol, 3);
+            subFinderSide |= (s >> 2 & 1) << r | (s >> 1 & 1) << (5 + r) | (s & 1) << (10 + r);
         }
-
-        for (var level = RmQREccLevel.M; level <= RmQREccLevel.H; level++)
+        for (var k = 0; k < 3; k++)
         {
-            if (finderSide == RmQRConstants.GetFormatBits(Version, level, subFinderSide: false)
-                && subFinderSide == RmQRConstants.GetFormatBits(Version, level, subFinderSide: true))
-            {
-                eccLevel = level;
-                return true;
-            }
+            RmQRConstants.GetFormatTail(k, subFinderSide: false, _coreHeight, _coreWidth, out var row, out var col);
+            if (GetCoreModule(row, col))
+                finderSide |= 1 << (15 + k);
+        }
+        RmQRConstants.GetFormatTail(0, subFinderSide: true, _coreHeight, _coreWidth, out var tailRow, out var tailCol);
+        var tail = ModuleBitPacker.ReadRun(_bits, tailRow * _coreWidth + tailCol, 3);
+        subFinderSide |= (tail >> 2 & 1) << 15 | (tail >> 1 & 1) << 16 | (tail & 1) << 17;
+
+        // The level is the finder side's top bit under its XOR mask, so only its words can match
+        eccLevel = (RmQREccLevel)((finderSide ^ RmQRConstants.FormatXorFinderSide) >> 17 & 1);
+        if (finderSide == RmQRFormatInformationDecoder.Word(Version, eccLevel, subFinderSide: false)
+            && subFinderSide == RmQRFormatInformationDecoder.Word(Version, eccLevel, subFinderSide: true))
+        {
+            return true;
         }
 
         eccLevel = default;

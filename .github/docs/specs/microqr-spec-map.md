@@ -173,7 +173,7 @@ Reference tests: [SingleFinderSymbolsDecodeTest](../../../tests/FeatherQR.Tests/
 |---|---|---|
 | - | Bit-packed core matrix with a virtual quiet zone (the spec's quiet zone is 2 modules) | [MicroQRCodeData](../../../src/FeatherQR/MicroQRCodeData.cs) |
 | - | "QRX" serialization container (magic + symbol type + width + height + packed bits). The restore refuses a matrix whose format word is not exactly one a generator writes for its version: an all-light format area is three bits from M4-L with mask 1, inside the decoder's correction distance, so the decoder's tolerance would let an empty matrix report a level and a mask | [MicroQRCodeData.GetRawData](../../../src/FeatherQR/MicroQRCodeData.cs) |
-| - | `EccLevel` and `MaskPattern` read from the format information when asked, through the matrix decoder's own format reader | [MicroQRCodeData](../../../src/FeatherQR/MicroQRCodeData.cs), [MicroQRMatrixDecoder.ReadFormatBits](../../../src/FeatherQR/Internals/MicroQR/MicroQRMatrixDecoder.cs) |
+| - | `EccLevel` and `MaskPattern` read from the format information when asked: the word's top five bits under the XOR mask name the one word it can be, and a load from the 32 words confirms it. The words sit in `MicroQRConstants`, apart from the decoder's 32 KB table of every word within three bits, so reading a level does not build that table | [MicroQRCodeData](../../../src/FeatherQR/MicroQRCodeData.cs), [MicroQRConstants.TryMatchFormatWord](../../../src/FeatherQR/Internals/MicroQR/MicroQRConstants.cs) |
 
 Reference tests: [MicroQRCodeDataUnitTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRCodeDataUnitTest.cs).
 

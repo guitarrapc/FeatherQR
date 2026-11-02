@@ -208,4 +208,35 @@ internal static class MicroQRConstants
 
         return (ushort)(((data << 10) | remainder) ^ 0x4445);
     }
+
+    // The 32 format words, index symbol number · 4 + mask. They live here, apart from the decoder's table of every word
+    // within three bits of one, so a check for an exact word does not build that 32 KB table.
+    private static readonly ushort[] formatWords = BuildFormatWords();
+
+    private static ushort[] BuildFormatWords()
+    {
+        var words = new ushort[32];
+        for (var symbolNumber = 0; symbolNumber < 8; symbolNumber++)
+        {
+            GetVersionAndEccFromSymbolNumber(symbolNumber, out var version, out var eccLevel);
+            for (var mask = 0; mask < 4; mask++)
+                words[symbolNumber * 4 + mask] = GetFormatBits(version, eccLevel, mask);
+        }
+        return words;
+    }
+
+    /// <summary>
+    /// Whether a 15-bit <paramref name="word"/> is exactly one of the 32 format words, and the version, level and mask it names.
+    /// </summary>
+    /// <remarks>
+    /// The symbol number and the mask are the word's top five bits under the XOR mask, so the one word they name is the only one it can be, and a single load confirms it.
+    /// </remarks>
+    public static bool TryMatchFormatWord(int word, out MicroQRVersion version, out MicroQREccLevel eccLevel, out int maskPattern)
+    {
+        Debug.Assert((uint)word < 1 << 15, "a format word is 15 bits");
+        var data = (word ^ 0x4445) >> 10;
+        GetVersionAndEccFromSymbolNumber(data >> 2, out version, out eccLevel);
+        maskPattern = data & 3;
+        return formatWords[data] == word;
+    }
 }

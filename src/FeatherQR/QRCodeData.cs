@@ -505,44 +505,28 @@ public sealed class QRCodeData
     /// </remarks>
     private bool TryReadFormat(out QREccLevel eccLevel, out int maskPattern)
     {
-        // Bit i at the positions ModulePlacer.PlaceFormat writes: copy 1 around the top-left finder, copy 2 split between the other two
+        // At the positions ModulePlacer.PlaceFormat writes. Row 8 holds copy 1's bits 14-9, 8 and 7 in columns 0-5, 7 and 8,
+        // and copy 2's bits 7-0 in its last eight columns, each a run read in one window. The rest lie down column 8.
         var size = _baseSize;
-        var copy1 = 0;
-        var copy2 = 0;
-        for (var i = 0; i < 15; i++)
+        var row8 = 8 * size;
+        var left = ModuleBitPacker.ReadRun(_bits, row8, 9); // column c is bit 8 - c, and column 6 is the timing pattern
+        var copy1 = (left >> 3) << 9 | (left >> 1 & 1) << 8 | (left & 1) << 7;
+        var copy2 = ModuleBitPacker.ReadRun(_bits, row8 + size - 8, 8);
+        for (var row = 0; row < 6; row++)
         {
-            int row1, col1, row2, col2;
-            if (i < 8)
-            {
-                (row1, col1) = (i < 6 ? i : i + 1, 8);
-                (row2, col2) = (8, size - 1 - i);
-            }
-            else
-            {
-                (row1, col1) = (8, i == 8 ? 7 : 14 - i);
-                (row2, col2) = (size - 15 + i, 8);
-            }
-            if (GetCoreModule(row1, col1))
-                copy1 |= 1 << i;
-            if (GetCoreModule(row2, col2))
+            if (GetCoreModule(row, 8))
+                copy1 |= 1 << row;
+        }
+        if (GetCoreModule(7, 8))
+            copy1 |= 1 << 6;
+        for (var i = 8; i < 15; i++)
+        {
+            if (GetCoreModule(size - 15 + i, 8))
                 copy2 |= 1 << i;
         }
 
-        if (copy1 == copy2)
-        {
-            for (var level = QREccLevel.L; level <= QREccLevel.H; level++)
-            {
-                for (var mask = 0; mask < 8; mask++)
-                {
-                    if (QRCodeConstants.GetFormatBits(level, mask) == copy1)
-                    {
-                        eccLevel = level;
-                        maskPattern = mask;
-                        return true;
-                    }
-                }
-            }
-        }
+        if (copy1 == copy2 && FormatInformationDecoder.TryMatchExact(copy1, out eccLevel, out maskPattern))
+            return true;
 
         eccLevel = default;
         maskPattern = 0;

@@ -366,23 +366,22 @@ public sealed class MicroQRCodeData
     /// </remarks>
     private bool TryReadFormat(out MicroQREccLevel eccLevel, out int maskPattern)
     {
-        var raw = MicroQRMatrixDecoder.ReadFormatBits(default, new CoreModules(this));
-        if (MicroQRFormatInformationDecoder.TryDecode(raw, out var version, out eccLevel, out maskPattern, out var distance)
-            && distance == 0
-            && version == Version)
+        // At the positions MicroQRModulePlacer.PlaceFormat writes: bits 14-7 along row 8, columns 1-8, a run read in one window,
+        // then bits 6-0 up column 8, rows 7-1
+        var raw = ModuleBitPacker.ReadRun(_bits, 8 * _baseSize + 1, 8) << 7;
+        var bit = 6;
+        for (var row = 7; row >= 1; row--, bit--)
         {
-            return true;
+            if (GetCoreModule(row, 8))
+                raw |= 1 << bit;
         }
+
+        if (MicroQRConstants.TryMatchFormatWord(raw, out var version, out eccLevel, out maskPattern) && version == Version)
+            return true;
 
         eccLevel = default;
         maskPattern = 0;
         return false;
-    }
-
-    /// <summary>The packed core read through the decoder's module interface, so the format bits are read where the decoder reads them.</summary>
-    private readonly struct CoreModules(MicroQRCodeData data) : IMicroQRModules
-    {
-        public bool IsDark(ReadOnlySpan<byte> grid, int row, int col) => data.GetCoreModule(row, col);
     }
 
     /// <summary>

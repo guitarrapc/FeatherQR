@@ -170,4 +170,28 @@ public class ModuleBitPackerParityTest
         await Assert.That(() => ModuleBitPacker.PackZeroOrOneScalar(new byte[9], new byte[1])).Throws<ArgumentException>();
         await Assert.That(() => ModuleBitPacker.Unpack(new byte[1], new byte[9])).Throws<ArgumentException>();
     }
+
+    [Test]
+    public async Task ReadRun_MatchesNaive_EveryOffsetAndLength()
+    {
+        var bits = new byte[8];
+        new Random(17).NextBytes(bits);
+        var mismatches = 0;
+        // Every start whose three bytes lie inside the array, every length
+        for (var index = 0; index < (bits.Length - 2) * 8; index++)
+        {
+            for (var count = 1; count <= 9; count++)
+            {
+                var expected = 0;
+                for (var k = 0; k < count; k++)
+                {
+                    var module = index + k;
+                    expected = expected << 1 | (bits[module >> 3] >> (7 - (module & 7)) & 1);
+                }
+                if (ModuleBitPacker.ReadRun(bits, index, count) != expected)
+                    mismatches++;
+            }
+        }
+        await Assert.That(mismatches).IsEqualTo(0);
+    }
 }

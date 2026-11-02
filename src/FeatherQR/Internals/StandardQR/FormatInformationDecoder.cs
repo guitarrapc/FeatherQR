@@ -30,6 +30,23 @@ internal static class FormatInformationDecoder
     }
 
     /// <summary>
+    /// Whether a 15-bit <paramref name="word"/> is exactly one of the 32 words, and the level and mask it names.
+    /// </summary>
+    /// <remarks>
+    /// The level and mask are the word's top five bits under the XOR mask, so the one word they name is the only one it can be, and a single load confirms it.
+    /// The level indicators L 01, M 00, Q 11 and H 10 are the order of <see cref="QREccLevel"/> with the low bit flipped.
+    /// </remarks>
+    public static bool TryMatchExact(int word, out QREccLevel eccLevel, out int maskPattern)
+    {
+        System.Diagnostics.Debug.Assert((uint)word < 1 << 15, "a format word is 15 bits");
+        // ISO/IEC 18004's format XOR mask, as QRCodeConstants.GetFormatBits applies it
+        var data = (word ^ 0b101010000010010) >> 10;
+        eccLevel = (QREccLevel)((data >> 3) ^ 1);
+        maskPattern = data & 7;
+        return candidates[(int)eccLevel * 8 + maskPattern] == word;
+    }
+
+    /// <summary>
     /// Decodes format information from the two redundant 15-bit copies.
     /// </summary>
     /// <param name="rawCopy1">Raw 15 bits read around the top-left finder pattern (bit i = format bit i).</param>
