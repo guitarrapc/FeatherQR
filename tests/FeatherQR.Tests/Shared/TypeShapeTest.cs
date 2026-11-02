@@ -274,12 +274,13 @@ public class TypeShapeTest
     /// defines a single data mask, so there is no mask pattern to report. Structured Append
     /// is the other: only Standard QR defines it, so only its result carries the header. FNC1
     /// is the third: Standard QR and rMQR define both of its modes and Micro QR neither.
+    /// ECI is the fourth, split the same way: Micro QR has no ECI header to report.
     /// </summary>
     [Test]
-    [Arguments(typeof(QRCodeDecodeInfo), true, true, true)]
-    [Arguments(typeof(MicroQRCodeDecodeInfo), true, false, false)]
-    [Arguments(typeof(RmQRCodeDecodeInfo), false, false, true)]
-    public async Task DecodeInfo_ReportsTheSameMembers(Type type, bool hasMaskPattern, bool hasStructuredAppend, bool hasFnc1)
+    [Arguments(typeof(QRCodeDecodeInfo), true, true, true, true)]
+    [Arguments(typeof(MicroQRCodeDecodeInfo), true, false, false, false)]
+    [Arguments(typeof(RmQRCodeDecodeInfo), false, false, true, true)]
+    public async Task DecodeInfo_ReportsTheSameMembers(Type type, bool hasMaskPattern, bool hasStructuredAppend, bool hasFnc1, bool hasEciAssignment)
     {
         var names = type.GetProperties(Instance).Select(p => p.Name).ToArray();
 
@@ -291,7 +292,8 @@ public class TypeShapeTest
         await Assert.That(names.Contains("MaskPattern")).IsEqualTo(hasMaskPattern);
         await Assert.That(names.Contains("StructuredAppend")).IsEqualTo(hasStructuredAppend);
         await Assert.That(names.Contains("Fnc1")).IsEqualTo(hasFnc1);
-        await Assert.That(names.Length).IsEqualTo(5 + (hasMaskPattern ? 1 : 0) + (hasStructuredAppend ? 1 : 0) + (hasFnc1 ? 1 : 0));
+        await Assert.That(names.Contains("EciAssignment")).IsEqualTo(hasEciAssignment);
+        await Assert.That(names.Length).IsEqualTo(5 + (hasMaskPattern ? 1 : 0) + (hasStructuredAppend ? 1 : 0) + (hasFnc1 ? 1 : 0) + (hasEciAssignment ? 1 : 0));
 
         // Status and Corners are the shared types on all three. Version and ECC level are per-symbology.
         await Assert.That(type.GetProperty("Status")!.PropertyType).IsEqualTo(typeof(DecodeStatus));
@@ -303,6 +305,10 @@ public class TypeShapeTest
         if (hasFnc1)
         {
             await Assert.That(type.GetProperty("Fnc1")!.PropertyType).IsEqualTo(typeof(Fnc1Mode));
+        }
+        if (hasEciAssignment)
+        {
+            await Assert.That(type.GetProperty("EciAssignment")!.PropertyType).IsEqualTo(typeof(int?));
         }
     }
 

@@ -13,7 +13,7 @@ public class RmQRBinaryDecoderUnitTest
     private static (DecodeStatus Status, string Text) Decode(byte[] data, RmQRVersion version)
     {
         var destination = new char[RmQRMatrixDecoder.GetMaxCharCount(version)];
-        var status = RmQRBinaryDecoder.DecodeBitStream(data, data.Length * 8, version, destination, out var written, out _);
+        var status = RmQRBinaryDecoder.DecodeBitStream(data, data.Length * 8, version, destination, out var written, out _, out _);
         return (status, new string(destination, 0, written));
     }
 
@@ -228,7 +228,7 @@ public class RmQRBinaryDecoderUnitTest
                 // outside the contract, and the matrix decoder never produces one.
                 var dataBitCount = random.Next(0, data.Length * 8 + 1);
 
-                RmQRBinaryDecoder.DecodeBitStream(data, dataBitCount, version, destination, out _, out _);
+                RmQRBinaryDecoder.DecodeBitStream(data, dataBitCount, version, destination, out _, out _, out _);
             }
         }
     }

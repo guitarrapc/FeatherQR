@@ -906,7 +906,7 @@ On x64, a default publish runs slower than the JIT, and [x64 SIMD on NativeAOT](
 
 ### Are ISO-8859-2 and other encodings supported?
 
-FeatherQR writes/reads ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208). Other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
+FeatherQR writes/reads ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208). Text in other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) is not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice. Bytes already in such an encoding are written as they are by the bytes overloads of `QRCodeGenerator.Create` and `RmQRCodeGenerator.Create`, declared with `eciAssignment` (4 for ISO-8859-2, 20 for Shift JIS).
 
 | Supported | Encoding Mode | Encoding |
 | --- | --- | --- |

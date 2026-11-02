@@ -70,7 +70,14 @@ RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRC
 int Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default);   // byte per module, row-major, quiet zone included, returns bytes written
 bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default);
 public readonly record struct RmQRCodeCalculatedSize { int BufferSize; int Width; int Height; RmQRVersion Version; }   // Width/Height include the quiet zone
+
+// Bytes, written as they are, under the ECI assignment the caller names or none
+RmQRCodeData Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null);
+int Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null);
+bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null);
 ```
+
+The bytes overloads follow Standard QR's ([Bytes input](standardqr-encoder.md#bytes-input)): the bytes given are the bytes in the symbol, digits and the alphanumeric alphabet may take their modes, the assignment is written as a designator of one to three codewords, and an `EciMode` other than `Default`, `AllowKanji` and an FNC1 mode are refused. The version, fit, height, quiet zone and segmentation apply as they do to text.
 
 `Version` and `Height` may be given together only when they agree. Otherwise the call throws `ArgumentException`. `FitStrategy` is ignored when `Version` is given.
 
@@ -148,6 +155,7 @@ The square symbologies follow the same rule, their builders since 2026-09-10 and
 | Versions | All 32 (R7x43 … R17x139) |
 | ECC levels | M, H |
 | Data modes | Numeric, Alphanumeric, Byte (ECI 3 for ISO-8859-1, ECI 26 for UTF-8, no ECI for ASCII), and Kanji on request (`AllowKanji`, no ECI header) |
+| Bytes input | Written as they are, with no ECI header or under the assignment the caller names, 0 to 999999 |
 | Segmentation | The minimal-bit mixed-mode split by default (`RmQRSegmentation.Optimal`, since 2.0.0), or one segment in a single mode (`RmQRSegmentation.Single`) |
 | FNC1 | Both modes through `RmQRCodeGeneratorOptions.Fnc1`: first position (`101`) for GS1 data and second position (`110` and an application indicator) for an industry format registered with AIM, under both segmentations, with the indicator's bits in the version fit ([FNC1](#fnc1)) |
 | Version selection | Exact version, or automatic fit by strategy, optionally within a fixed height |
@@ -274,7 +282,7 @@ The shared `TextAnalyzer` analyzes the text (Numeric / Alphanumeric / Byte, sing
 
 With `AllowKanji`, when the library chooses the charset, a text whose every character has an encoder cell becomes one Kanji segment with no ECI header, and under `Optimal` a Kanji-eligible text that contains ASCII is also priced as a Kanji plan ([Mixed-mode segmentation](#mixed-mode-segmentation)).
 
-The analyzer chooses the charset for every path and the mode for the default single-segment path. `RmQRSegmentation.Optimal` chooses each run's mode instead but keeps the analyzer's charset, because the charset is a property of the content, not of the split.
+The analyzer chooses the charset for every path and the mode for the default single-segment path. `RmQRSegmentation.Optimal` chooses each run's mode instead but keeps the analyzer's charset, because the charset is a property of the content, not of the split. Bytes are analyzed the same way for their mode, widened one to a char, and their charset is the assignment the caller names, or none.
 
 ### Mixed-mode segmentation
 
@@ -323,7 +331,7 @@ The optimum is exact because the dynamic program keeps the group remainder in it
 
 Content longer than the largest character count any rMQR symbol holds in any mode (361, Numeric at R17x139-M) is rejected before any cost run, so pathological input never pays for planning. Since a mixed plan can encode content no single mode holds, this limit is a rejection rule, not only a cap on work. Its margin is three bits, with the derivation beside the constant in `RmQRSegmentPlanner`. A plan is also capped at a run count above what the largest capacity could hold. The reconstructed plan is re-costed from the byte counts the encoder will emit and rejected on disagreement, because the bit-stream writers store without a bounds check on each flush.
 
-A plan has one ECI prefix, ahead of the first run, because an rMQR decoder applies the declared charset to all following runs. Its 11 bits count in the cost the version scan compares.
+A plan has one ECI prefix, ahead of the first run, because an rMQR decoder applies the declared charset to all following runs. Its bits, 11 for text and up to 27 for bytes under an assignment, count in the cost the version scan compares.
 
 The shared byte-segment decoder consumes a leading EF BB BF of every segment, even behind an explicit UTF-8 declaration, so the shared segmentation program never opens a Byte run at a mid-content U+FEFF. The run opens one character earlier and keeps the mark inside (rationale: specs/standardqr-encoder.md, "Plans the byte-segment decoder would misread are never built").
 
@@ -348,9 +356,9 @@ Paired with the library as it was with the floor and the upper bound (one proces
 
 ### 3. Fit the version
 
-Required bits = optional 11-bit ECI prefix (`111` + 8-bit assignment) + 3 (data mode) + count indicator (per version, table above) + payload bits. The terminator may shrink to the remaining capacity, down to zero bits.
+Required bits = optional ECI prefix (`111` + a designator of 8, 16 or 24 bits, so 11 bits for text's assignments 3 and 26) + 3 (data mode) + count indicator (per version, table above) + payload bits. The terminator may shrink to the remaining capacity, down to zero bits.
 
-Automatic fit scans a table listing the versions in best-first order per strategy, with their capacity per mode × ECC × ECI presence and the height as a bitmask. A test checks that it selects the same version as the definitional "best fitting version" scan for every input.
+Automatic fit scans a table listing the versions in best-first order per strategy, with their capacity per mode × ECC × ECI presence and the height as a bitmask. A test checks that it selects the same version as the definitional "best fitting version" scan for every input. The table prices an 11-bit prefix, so bytes under an assignment from 128, whose prefix is 19 or 27 bits, walk the same order and price each version instead, as FNC1 does.
 
 Under `RmQRSegmentation.Optimal`, the required bits are the planned mixed-mode cost for the candidate version. The candidate set, strategy ordering, height constraint and error text are unchanged. The one behaviour difference is that input the single mode overflows at every version can succeed instead of throwing (see [Mixed-mode segmentation](#mixed-mode-segmentation)).
 
@@ -365,7 +373,7 @@ Under `RmQRSegmentation.Optimal`, the required bits are the planned mixed-mode c
 
 The data codewords are written in this order:
 
-- An optional ECI mode `111` plus an 8-bit assignment.
+- An optional ECI mode `111` plus the assignment's designator, one codeword up to 127, two up to 16383, three up to 999999.
 - For each run, a 3-bit data-mode indicator, the count indicator and the payload bits. There is one run by default. Under `Optimal` the planned runs follow in order.
 - The terminator `000`, shortened at capacity.
 - Zero bits up to a byte boundary.

@@ -39,7 +39,8 @@ internal static class MicroQRBinaryDecoder
     /// <param name="version">Micro QR version (M1-M4), determines mode/count indicator widths.</param>
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, MicroQRVersion version, Span<char> destination, out int charsWritten)
+    /// <param name="bytes">Write the symbol's bytes, one a char, instead of its text: Byte segments as written and Kanji as its Shift_JIS pairs.</param>
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, MicroQRVersion version, Span<char> destination, out int charsWritten, bool bytes = false)
     {
         charsWritten = 0;
         var reader = new BitReader(data);
@@ -97,7 +98,9 @@ internal static class MicroQRBinaryDecoder
                 // As a fourth switch arm it slows the Numeric and Byte decodes.
                 if (modeValue == ModeKanji)
                 {
-                    var kanjiStatus = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                    var kanjiStatus = bytes
+                        ? SegmentDecoders.DecodeKanjiPayloadBytes(ref reader, totalBits, count, destination, ref charsWritten)
+                        : SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
                     if (kanjiStatus != DecodeStatus.Success)
                         return kanjiStatus;
                     continue;
@@ -121,6 +124,14 @@ internal static class MicroQRBinaryDecoder
                         }
                     default:
                         {
+                            if (bytes)
+                            {
+                                rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
+                                var copyStatus = SegmentDecoders.CopyBytePayload(ref reader, totalBits, count, rentedBytes, destination, ref charsWritten);
+                                if (copyStatus != DecodeStatus.Success)
+                                    return copyStatus;
+                                break;
+                            }
                             // Micro QR data codewords top out at 16 bytes (M4-L).
                             rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
                             var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Unspecified, fnc1: false, rentedBytes, destination, ref charsWritten);

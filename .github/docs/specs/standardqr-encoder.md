@@ -6,10 +6,10 @@ This record covers what the Standard QR encoder (`QRCodeGenerator`) does, why it
 
 ## What
 
-`QRCodeGenerator` converts text into a Standard QR module matrix through the full ISO/IEC 18004 encoding pipeline:
+`QRCodeGenerator` converts text or bytes into a Standard QR module matrix through the full ISO/IEC 18004 encoding pipeline:
 
 ```
-Text
+Text or bytes
   -> mode / ECI analysis
   -> version selection
   -> data bit stream and padding
@@ -51,6 +51,16 @@ It is the only sizing method. The throwing `GetRequiredBufferSize` released in 1
 
 The encoder overwrites every byte of the region it writes: the core is written whole from per-version tables (step 7), and only a non-zero quiet zone is cleared. It accepts a dirty pooled destination and leaves any tail past the returned byte count untouched. After JIT and pool warm-up, the span path allocates nothing in Release builds.
 
+#### Bytes input
+
+`Create`, the span `Create`, `TryGetRequiredBufferSize` and `CreateStructuredAppend` each have an overload over `ReadOnlySpan<byte>`, with an optional `int? eciAssignment` after the options.
+
+- The bytes given are the bytes in the symbol. Digits may be written in Numeric mode and the alphanumeric alphabet in Alphanumeric mode, under both segmentations, since those modes carry the same ASCII bytes. ASCII bytes therefore write the text call's symbol.
+- The assignment is written as a designator of one, two or three codewords (0 to 127, 128 to 16383, 16384 to 999999), and a number outside 0 to 999999 is refused. With none, no header is written.
+- The options only text uses are refused with `ArgumentException`: an `EciMode` other than `Default`, `Utf8Bom`, `AllowKanji` and an FNC1 mode. The version range, quiet zone, mask, boost and segmentation apply as they do to text.
+- A Structured Append set splits between any two bytes, declares the assignment in every symbol and carries the XOR of all the bytes, so its parts joined in index order are the bytes.
+- The assignment a bytes decode reports passes straight back: `Create(bytes, info.EccLevel, options, info.EciAssignment)` writes the bytes again under the declaration they were read under. Kanji mode, FNC1 and a Structured Append header are not part of the bytes and are not written again.
+
 ### Supported
 
 | Area | Coverage |
@@ -58,8 +68,9 @@ The encoder overwrites every byte of the region it writes: the core is written w
 | Symbology | Standard QR |
 | Versions | 1–40 |
 | ECC levels | L, M, Q, H |
+| Input | Text, and bytes written as they are ([Bytes input](#bytes-input)) |
 | Data modes | Numeric, Alphanumeric, Byte, and Kanji |
-| ECI | Default/no header, ISO-8859-1 (assignment 3), UTF-8 (assignment 26) |
+| ECI | Text: no header, ISO-8859-1 (assignment 3) or UTF-8 (assignment 26). Bytes: no header, or the assignment the caller names, 0 to 999999 |
 | UTF-8 BOM | Optional in UTF-8 Byte mode |
 | Version selection | Automatic minimum-fit, caller-requested version, or a version range |
 | ECC boost | Optional: the requested level is a minimum, raised as far as the chosen version's capacity allows without changing the version |
@@ -71,8 +82,8 @@ The encoder overwrites every byte of the region it writes: the core is written w
 
 ### Not implemented
 
-- Arbitrary ECI assignment numbers
-- Arbitrary binary payload input
+- Charsets for text beyond ISO-8859-1 and UTF-8. Bytes in another charset are written with its assignment.
+- Kanji mode for bytes. Shift_JIS bytes are written in Byte mode.
 - Micro QR and rMQR
 
 By default the encoder analyzes the input once and emits one data segment. `QRSegmentation.Optimal` selects the globally minimal mixed-mode split instead (see [Mixed-mode segmentation](#mixed-mode-segmentation)).
@@ -95,7 +106,7 @@ A text held in one chunk goes straight to `Create`, so the common case costs one
 
 Three searches balance the split: the fewest symbols at the largest version, the smallest version in the range that holds that count, and the smallest per-symbol budget at that version that holds it. Splitting at that budget gives every symbol one version and none fuller than necessary. A greedy fill would leave three full symbols and one nearly empty, which looks like a defect on one label. Splits fall on `char` boundaries, never inside a surrogate pair. More than sixteen symbols at the largest version, or a single character that fits no symbol there, throws `ArgumentException` on the options.
 
-A symbol's budget is its version's data capacity minus the 20-bit header and, when the set declares a charset, the 12-bit ECI header every symbol repeats. A chunk costs its single-mode stream or, under `QRSegmentation.Optimal`, the cheaper of that and the minimal mixed plan. Cost never falls as a chunk grows, so the longest chunk within a budget is well defined, and a greedy walk at a budget gives the count it needs.
+A symbol's budget is its version's data capacity minus the 20-bit header and, when the set declares a charset, the ECI header every symbol repeats: 12 bits for text, and 12 to 28 for bytes under an assignment. A chunk costs its single-mode stream or, under `QRSegmentation.Optimal`, the cheaper of that and the minimal mixed plan. Cost never falls as a chunk grows, so the longest chunk within a budget is well defined, and a greedy walk at a budget gives the count it needs.
 
 The walk finds the chunk end without pricing whole prefixes: a prefix's mode changes at most twice along the text (Numeric, then Alphanumeric, then Byte), and within one mode the single-mode cost is a closed form of the length. So the end takes a few arithmetic steps, plus one pass over the run's bytes for a UTF-8 Byte run.
 
@@ -345,6 +356,7 @@ Every entry point (`Create`, `CreateStructuredAppend`, `TryGetRequiredBufferSize
 - an undefined ECC level.
 - an `EciMode` other than `Default`, `Iso8859_1` and `Utf8`.
 - `Iso8859_1` asked for over text with a char above U+00FF, the one check that reads the content. rMQR refuses it the same way.
+- for bytes, an `EciMode` other than `Default`, `Utf8Bom`, `AllowKanji` or an FNC1 mode, and an assignment outside 0 to 999999, in the ECI's place in the order below.
 - quiet-zone sizes outside `0..10,000`, the bound Micro QR and rMQR use. The `QRCodeData` restore constructors apply it too.
 
 Errors come in the order the other two symbologies report them: quiet zone, segmentation, ECI (rMQR's place for it; Micro QR has none), ECC level, then whether the content fits. At 10,000 the largest side squared still fits `int`, so the size arithmetic needs no overflow check. The span overload also rejects buffers smaller than the matrix.
@@ -370,6 +382,8 @@ With `EciMode.Default`, Byte mode picks its character encoding as follows:
 Numeric and Alphanumeric payloads need no charset conversion, but an explicitly requested non-default ECI is still emitted before their data-mode indicator.
 
 An explicit ECI is a caller constraint: `Iso8859_1` is accepted only for text in U+0000..U+00FF and refused otherwise, and `Default` upgrades text outside that range to UTF-8 to avoid an incompatible choice.
+
+Bytes are widened one to a char, U+0000 to U+00FF, and analyzed the same way for their mode. Their charset is not chosen from their values: it is the assignment the caller names, or none.
 
 On supported x86/x64 runtimes, analysis uses AVX2 or SSE2 for character-class checks, and on ARM64 a NEON tier (16 chars per step, with 8-wide vector remainder blocks). A scalar path covers short inputs and other targets.
 
@@ -498,7 +512,7 @@ A mixed-mode plan is only as good as the decode it produces. Cost optimality had
 
 The U+FEFF constraint was first a rejection of the minimal plan, with a fallback to the single-mode stream. Its known gap was that it never searched a slightly costlier safe split, so 3,000 digits + U+FEFF + 10 letters reported "does not fit". Moving the rule into the program waited until the input class mattered, which it did for Structured Append: a set sizes sixteen chunks by plans, and a refused plan there is a symbol written as a stream its chunk was never sized for.
 
-A plan has one ECI prefix, ahead of the first run, because a decoder carries the declared charset across the following runs. Its 12 bits are part of the cost the version scan compares.
+A plan has one ECI prefix, ahead of the first run, because a decoder carries the declared charset across the following runs. Its 12 bits for text, and 12 to 28 for bytes under an assignment, are part of the cost the version scan compares.
 
 A text whose every character has a Kanji cell is one Kanji run under both segmentations, and the planner returns before any cost run: no character fits another mode more cheaply, and Byte would need an ECI header ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written)).
 
@@ -528,7 +542,7 @@ The gap was accepted with the user on 2026-10-01, because Kanji mode is written 
 
 `QRBinaryEncoder` writes MSB-first through `BitWriter`:
 
-1. Optional ECI indicator `0111` and 8-bit assignment number.
+1. Optional ECI indicator `0111` and the assignment's designator: `0` and 7 bits up to 127, `10` and 14 bits up to 16383, `110` and 21 bits up to 999999. Text's assignments 3 and 26 take the first form.
 2. Data mode indicator.
 3. Character-count indicator.
 4. Mode-specific payload.
@@ -652,7 +666,7 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 
 ## Why
 
-- One canonical binary pipeline serves string and span inputs, object and span outputs, and all rendering APIs, which share the same mode, ECC, interleaving, placement and masking logic.
+- One canonical binary pipeline serves text and bytes inputs, object and span outputs, and all rendering APIs, which share the same mode, ECC, interleaving, placement and masking logic.
 - Central Standard QR tables, not duplicated conditionals, supply capacity, block grouping, alignment centers and remainder counts, which keeps the structure correct.
 - Encoder and decoder agree by construction: they share, or test in both directions, function-module layout, format generation and block conventions.
 - Validation is independent: ZXing decodes generated symbols across modes, ECI choices, ECC levels, boundary capacities and large versions, and the in-process decoder adds all-version round trips and error injection.
@@ -675,6 +689,10 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 - A set of one is never written: its header costs 20 bits and tells a reader nothing. The decoder still accepts one.
 - Stack buffers stay zero-initialized: the encoder uses no `[SkipLocalsInit]`. Skipping the zeroing measured 1 to 12 % of a version 1 to 10 encode (2026-10-02) and nothing on larger symbols. Under the memory safety rules C# 15 starts in preview, a `stackalloc` without an initializer in such a member is an unsafe operation, and in an encoder a read before a write would not fail but put stale stack bytes into a symbol that leaves the process. The zeroing's cost is cut instead by allocating less (see Lessons Learned, Performance). The library's only `unsafe` method is `ModulePlacer.ExpandBitsAdvSimd`, for an alignment hint, and the encoder's performance work added none.
 - FNC1 is an option on the same `Create`, not an entry point of its own, and the content is the text a reader returns (U+001D as the separator, no identifier or indicator), so a decoded symbol re-encodes from its decode info. The header order is the standard's, ECI, FNC1, the application indicator, then the data, although libzint and CodeGlyphX write FNC1 before ECI and the decoder reads both. FNC1 beside ECI is allowed, as the standard allows, and an ECI header is written exactly where it is without FNC1 (non-ASCII text, or an `EciMode` the caller names). The GS1 General Specifications do not support ECI, Structured Append or Kanji mode in a GS1 QR Code, and that rule belongs to the GS1 layer ([GS1 data](qrcode-gs1-data.md)), because second position has no such limit. A Structured Append set refuses any FNC1 mode until a reader is measured to read FNC1 across a set. The decoder reads FNC1 beside a Structured Append header. Under `Optimal` no Kanji run is planned under FNC1, and the lane kernels and the default class table stay as they are: a lane variant waits for a measured need. The rest of the rules are under [FNC1](#fnc1).
+- Bytes take the text pipeline, widened one to a char under a charset of their own that carries the assignment or none. Every writer already writes such a char as its byte, so ASCII bytes write the text call's symbol by construction, and no second stream writer, planner or set planner has to be kept in step with the first. A declared assignment rides as an `EciMode` value no caller can pass, a flag bit above every assignment with the number below it: the header and the byte form are decided by comparing a charset only with `Default`, for the header, and with `Utf8`, to transcode, so such a value is written with its header and its bytes as they are. The code that names the text charsets never sees such a value or admits it explicitly: bytes are analyzed under `Default` and take the value afterwards, the stream writers' charset checks and rMQR's header price admit it, and the FNC1 writers are never reached because bytes refuse FNC1.
+- The assignment is a parameter of the bytes calls, not an option. It describes the bytes rather than how to encode them, the options keep `EciMode` as their only ECI member, and the text calls have no assignment parameter, so neither can be given to the wrong kind of call. `null` means no header, so ECI 0 needs no sentinel.
+- Bytes carry no ECI header by default. A binary payload is expected to carry none, and a reader that does not know an assignment such as 899 refuses the symbol, as this library's text decoder does. `eciAssignment: 899` writes the exact declaration. On an iPhone the camera recognized the Standard QR symbols of a 19-byte payload that is not valid UTF-8, undeclared and under 899, and showed no content, and a reader app reported it could not read them (2026-11-03). Android was not checked.
+- The options only text uses are refused rather than ignored, so a caller cannot believe a setting applied that was not. Kanji mode for Shift_JIS bytes is valid under the standard and waits for a request: Byte mode already writes those bytes exactly, and on bytes `AllowKanji` would have to mean "these bytes are Shift_JIS", which the encoder cannot check.
 - The parity follows the bytes, so Kanji encoding changes Japanese text's parity: in Kanji mode (with `AllowKanji`) it is the XOR of Shift_JIS bytes, not UTF-8 ones. A set stays consistent, so no reader breaks, but a pinned value of this encoder's parity for Japanese input depends on the option: 「こんにちは世界、QRコードの分割テストです。」×3 carries 176 as a Kanji set and 6 as the UTF-8 set. `StructuredAppendKanjiTest` checks the Kanji sets' parity, and older tests check ASCII, Latin-1 and UTF-8. The decode corpus holds Japanese sets both ways, since the decoder reports what is on the wire.
 
 ---

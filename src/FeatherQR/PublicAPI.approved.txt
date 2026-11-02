@@ -90,8 +90,13 @@ namespace FeatherQR
         public static bool TryDecode(MicroQRCodeData data, out string text, out MicroQRCodeDecodeInfo info);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out MicroQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(MicroQRCodeData data, out byte[] bytes, out MicroQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, Span<byte> destination, out int bytesWritten, out MicroQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, out byte[] bytes, out MicroQRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out MicroQRCodeDecodeInfo info);
+        public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, Span<byte> destination, out int bytesWritten, out MicroQRCodeDecodeInfo info);
+        public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, out byte[] bytes, out MicroQRCodeDecodeInfo info);
         public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<MicroQRCodeDecodeResult> destination);
         public static int GetMaxDecodedLength(MicroQRVersion version);
     }
@@ -200,6 +205,7 @@ namespace FeatherQR
         public int ErrorsCorrected { get; }
         public int MaskPattern { get; }
         public int Version { get; }
+        public int? EciAssignment { get; }
     }
 
     public readonly struct QRCodeDecodeResult : IEquatable<QRCodeDecodeResult>
@@ -216,17 +222,26 @@ namespace FeatherQR
         public static bool TryDecode(QRCodeData data, out string text, out QRCodeDecodeInfo info);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info);
         public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out QRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(QRCodeData data, out byte[] bytes, out QRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, Span<byte> destination, out int bytesWritten, out QRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, out byte[] bytes, out QRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out QRCodeDecodeInfo info);
+        public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, Span<byte> destination, out int bytesWritten, out QRCodeDecodeInfo info);
+        public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, out byte[] bytes, out QRCodeDecodeInfo info);
         public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<QRCodeDecodeResult> destination);
         public static int GetMaxDecodedLength(int version);
     }
 
     public static class QRCodeGenerator
     {
+        public static QRCodeData Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null);
+        public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<byte> data, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null);
+        public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null);
+        public static int Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static int Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null);
     }
 
@@ -319,6 +334,7 @@ namespace FeatherQR
         public RmQRVersion Version { get; }
         public SymbolCorners Corners { get; }
         public int ErrorsCorrected { get; }
+        public int? EciAssignment { get; }
     }
 
     public readonly struct RmQRCodeDecodeResult : IEquatable<RmQRCodeDecodeResult>
@@ -335,16 +351,24 @@ namespace FeatherQR
         public static bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info);
         public static bool TryDecode(RmQRCodeData data, out string text);
         public static bool TryDecode(RmQRCodeData data, out string text, out RmQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int width, int height, Span<byte> destination, out int bytesWritten, out RmQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int width, int height, out byte[] bytes, out RmQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(RmQRCodeData data, out byte[] bytes, out RmQRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
         public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info);
+        public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, Span<byte> destination, out int bytesWritten, out RmQRCodeDecodeInfo info);
+        public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, out byte[] bytes, out RmQRCodeDecodeInfo info);
         public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<RmQRCodeDecodeResult> destination);
         public static int GetMaxDecodedLength(RmQRVersion version);
     }
 
     public static class RmQRCodeGenerator
     {
+        public static RmQRCodeData Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = null);
+        public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = null);
+        public static int Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = null, int? eciAssignment = null);
         public static int Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = null);
     }
 

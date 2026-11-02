@@ -21,6 +21,8 @@ public class NetStandardBuildParityTest
     private delegate int SpanCreate(string text, int eccLevel, byte[] destination, object options);
     private delegate bool SpanSizing(string text, int eccLevel, object options, out int bufferSize, out int width, out int height);
     private delegate bool SpanDecode(byte[] input, int width, int height, char[] destination, out int charsWritten, object?[]? info);
+    private delegate int BytesCreate(byte[] data, int eccLevel, byte[] destination, object options, int? eciAssignment);
+    private delegate bool BytesDecode(byte[] modules, int size, byte[] destination, out int bytesWritten);
 
     // Lazy, so that cases starting together load a build once: a load context is not unloaded.
     private static readonly ConcurrentDictionary<string, Lazy<Assembly>> Builds = new();
@@ -777,6 +779,90 @@ public class NetStandardBuildParityTest
     private static Func<Type, object> Fnc1First() => fnc1 => fnc1.GetProperty("FirstPosition")!.GetValue(null)!;
 
     private static Func<Type, object> Fnc1Second(int applicationIndicator) => fnc1 => fnc1.GetMethod("SecondPosition", [typeof(int)])!.Invoke(null, [applicationIndicator])!;
+
+    /// <summary>
+    /// Bytes in and out through Standard QR's span calls, where a netstandard build widens bytes to chars and narrows them back with loops of its own.
+    /// Every byte value, once in a payload widened on the stack and once in one long enough to be widened into a rented buffer.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Frameworks))]
+    public async Task Bytes_WriteAndReadAsThisHostsBuild(string targetFramework)
+    {
+        var (build, path) = await LoadBuild(targetFramework);
+        var create = BindBytesCreate(build, path);
+        var decode = BindBytesDecode(build, path);
+        var options = Activator.CreateInstance(build.GetType("FeatherQR.QRCodeGeneratorOptions", throwOnError: true)!)!;
+
+        foreach (var length in new[] { 256, 300 })
+        {
+            foreach (var eci in new int?[] { null, 899 })
+            {
+                var label = $"{length} bytes, ECI {eci?.ToString() ?? "none"}";
+                var payload = new byte[length];
+                for (var i = 0; i < length; i++)
+                    payload[i] = (byte)i;
+                await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(payload, QREccLevel.M, out var size, default, eci)).IsTrue();
+                var expected = new byte[size.BufferSize];
+                QRCodeGenerator.Create(payload, QREccLevel.M, expected, default, eci);
+
+                var matrix = new byte[size.BufferSize];
+                await Assert.That(create(payload, (int)QREccLevel.M, matrix, options, eci)).IsEqualTo(size.BufferSize).Because(label);
+                await Assert.That(matrix).IsEquivalentTo(expected, TUnit.Assertions.Enums.CollectionOrdering.Matching).Because(label);
+
+                var read = new byte[length];
+                await Assert.That(decode(matrix, size.Size, read, out var written)).IsTrue().Because(label);
+                await Assert.That(written).IsEqualTo(length).Because(label);
+                await Assert.That(read).IsEquivalentTo(payload, TUnit.Assertions.Enums.CollectionOrdering.Matching).Because(label);
+            }
+        }
+    }
+
+    /// <summary>The loaded build's <c>QRCodeGenerator.Create(ReadOnlySpan&lt;byte&gt;, ecc, Span&lt;byte&gt;, in options, int?)</c>, taking arrays.</summary>
+    private static BytesCreate BindBytesCreate(Assembly build, string path)
+    {
+        var generator = build.GetType("FeatherQR.QRCodeGenerator", throwOnError: true)!;
+        var eccLevel = build.GetType("FeatherQR.QREccLevel", throwOnError: true)!;
+        var options = build.GetType("FeatherQR.QRCodeGeneratorOptions", throwOnError: true)!;
+        var target = generator.GetMethod("Create", [typeof(ReadOnlySpan<byte>), eccLevel, typeof(Span<byte>), options.MakeByRefType(), typeof(int?)])
+            ?? throw new InvalidOperationException($"{generator.FullName}.Create(ReadOnlySpan<byte>, {eccLevel.Name}, Span<byte>, in {options.Name}, int?) not found in {path}");
+
+        var method = new DynamicMethod("QR.CreateBytes", typeof(int), [typeof(byte[]), typeof(int), typeof(byte[]), typeof(object), typeof(int?)], typeof(NetStandardBuildParityTest).Module, skipVisibility: true);
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(ReadOnlySpan<byte>).GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Newobj, typeof(Span<byte>).GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Unbox, options);
+        il.Emit(OpCodes.Ldarg_S, (byte)4);
+        il.Emit(OpCodes.Call, target);
+        il.Emit(OpCodes.Ret);
+        return method.CreateDelegate<BytesCreate>();
+    }
+
+    /// <summary>The loaded build's <c>QRCodeDecoder.TryDecodeBytes(ReadOnlySpan&lt;byte&gt;, size, Span&lt;byte&gt;, out written, out info)</c>, taking arrays and dropping the info.</summary>
+    private static BytesDecode BindBytesDecode(Assembly build, string path)
+    {
+        var decoder = build.GetType("FeatherQR.QRCodeDecoder", throwOnError: true)!;
+        var info = build.GetType("FeatherQR.QRCodeDecodeInfo", throwOnError: true)!;
+        var target = decoder.GetMethod("TryDecodeBytes", [typeof(ReadOnlySpan<byte>), typeof(int), typeof(Span<byte>), typeof(int).MakeByRefType(), info.MakeByRefType()])
+            ?? throw new InvalidOperationException($"{decoder.FullName}.TryDecodeBytes(ReadOnlySpan<byte>, int, Span<byte>, out int, out {info.Name}) not found in {path}");
+
+        var method = new DynamicMethod("QR.TryDecodeBytes", typeof(bool), [typeof(byte[]), typeof(int), typeof(byte[]), typeof(int).MakeByRefType()], typeof(NetStandardBuildParityTest).Module, skipVisibility: true);
+        var il = method.GetILGenerator();
+        var decoded = il.DeclareLocal(info);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(ReadOnlySpan<byte>).GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Newobj, typeof(Span<byte>).GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldloca, decoded);
+        il.Emit(OpCodes.Call, target);
+        il.Emit(OpCodes.Ret);
+        return method.CreateDelegate<BytesDecode>();
+    }
 
     /// <summary>The core's build for <paramref name="targetFramework"/>, loaded once into a load context of its own. A stale build skips the case.</summary>
     private static async Task<(Assembly Build, string Path)> LoadBuild(string targetFramework)

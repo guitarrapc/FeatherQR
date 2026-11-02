@@ -52,11 +52,16 @@ internal static class QRBinaryDecoder
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
     /// <param name="structuredAppend">The Structured Append header when the stream carries one, accepted at any position. Default otherwise.</param>
     /// <param name="fnc1">The FNC1 mode when the stream carries one, with its application indicator in second position. Default otherwise.</param>
-    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten, out QRStructuredAppend structuredAppend, out Fnc1Mode fnc1)
+    /// <param name="eciAssignment">The first ECI assignment the stream declares, also when the decode then fails, or <see cref="SegmentDecoders.NoEciAssignment"/>. A bytes read that succeeds reports instead the assignment its Byte and Kanji segments are under, when it has any.</param>
+    /// <param name="bytes">Write the symbol's bytes, one a char, instead of its text: every mode as the bytes the standard defines, any assignment, and Byte and Kanji segments under one assignment only.</param>
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten, out QRStructuredAppend structuredAppend, out Fnc1Mode fnc1, out int eciAssignment, bool bytes = false)
     {
         charsWritten = 0;
         structuredAppend = default;
         fnc1 = default;
+        eciAssignment = SegmentDecoders.NoEciAssignment;
+        var currentAssignment = SegmentDecoders.NoEciAssignment;
+        var dataAssignment = SegmentDecoders.NoDataAssignment;
         var reader = new BitReader(data);
         var totalBits = data.Length * 8;
         var charset = ByteSegmentCharset.Unspecified;
@@ -113,10 +118,22 @@ internal static class QRBinaryDecoder
                             var count = reader.Reads(countBits);
                             dataSegmentSeen = true;
 
-                            // Segment payload bytes are staged in a rented buffer (reused
-                            // across segments) so the charset conversion sees them whole.
-                            rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
-                            var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, charset, fnc1.IsActive, rentedBytes, destination, ref charsWritten);
+                            DecodeStatus status;
+                            if (bytes)
+                            {
+                                // An empty segment adds no bytes, so the assignment it falls under conflicts with none.
+                                if (count > 0 && !SegmentDecoders.KeepsOneAssignment(ref dataAssignment, currentAssignment))
+                                    return DecodeStatus.UnsupportedContent;
+                                rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
+                                status = SegmentDecoders.CopyBytePayload(ref reader, totalBits, count, rentedBytes, destination, ref charsWritten);
+                            }
+                            else
+                            {
+                                // Segment payload bytes are staged in a rented buffer (reused
+                                // across segments) so the charset conversion sees them whole.
+                                rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
+                                status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, charset, fnc1.IsActive, rentedBytes, destination, ref charsWritten);
+                            }
                             if (status != DecodeStatus.Success)
                                 return status;
                             break;
@@ -126,6 +143,16 @@ internal static class QRBinaryDecoder
                             var status = SegmentDecoders.ReadEciDesignator(ref reader, totalBits, out var eciValue);
                             if (status != DecodeStatus.Success)
                                 return status;
+                            if (eciAssignment == SegmentDecoders.NoEciAssignment)
+                                eciAssignment = eciValue;
+                            currentAssignment = eciValue;
+                            if (bytes)
+                            {
+                                // The bytes take no charset, so every assignment reads. A designator also holds numbers past the last assignment, which no symbol may declare.
+                                if (eciValue > EciModeExtensions.MaxAssignment)
+                                    return DecodeStatus.UnsupportedContent;
+                                break;
+                            }
                             switch (eciValue)
                             {
                                 case EciIso8859_1a:
@@ -151,7 +178,17 @@ internal static class QRBinaryDecoder
                                 return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
                             dataSegmentSeen = true;
-                            var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                            DecodeStatus status;
+                            if (bytes)
+                            {
+                                if (count > 0 && !SegmentDecoders.KeepsOneAssignment(ref dataAssignment, currentAssignment))
+                                    return DecodeStatus.UnsupportedContent;
+                                status = SegmentDecoders.DecodeKanjiPayloadBytes(ref reader, totalBits, count, destination, ref charsWritten);
+                            }
+                            else
+                            {
+                                status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                            }
                             if (status != DecodeStatus.Success)
                                 return status;
                             break;
@@ -196,6 +233,9 @@ internal static class QRBinaryDecoder
                 }
             }
 
+            // The first assignment may cover only digits and letters. The bytes are read under the one their Byte and Kanji segments share.
+            if (bytes && dataAssignment != SegmentDecoders.NoDataAssignment)
+                eciAssignment = dataAssignment;
             return DecodeStatus.Success;
         }
         finally

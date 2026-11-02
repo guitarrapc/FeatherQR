@@ -53,17 +53,21 @@ internal static partial class RmQRMatrixDecoder
         }
         var data = stream.Slice(0, eccInfo.TotalDataCodewords);
 
-        var status = RmQRBinaryDecoder.DecodeBitStream(data, eccInfo.TotalDataCodewords * 8, version, destination, out charsWritten, out var fnc1);
+        var status = RmQRBinaryDecoder.DecodeBitStream(data, eccInfo.TotalDataCodewords * 8, version, destination, out charsWritten, out var fnc1, out var eciAssignment, PayloadOutput.IsBytes);
         if (status != DecodeStatus.Success)
             charsWritten = 0; // only a read counts its characters, not the segments written before a failure
+        // The mode is reported on a read only. The assignment also on a read whose content is no text, so the caller knows what to read the bytes as.
         info = status == DecodeStatus.Success
-            ? new RmQRCodeDecodeInfo(status, version, eccLevel, errorsCorrected, fnc1)
-            : new RmQRCodeDecodeInfo(status, version, eccLevel, errorsCorrected); // the mode is reported on a read only
+            ? new RmQRCodeDecodeInfo(status, version, eccLevel, errorsCorrected, fnc1, SegmentDecoders.Reported(eciAssignment))
+            : status is DecodeStatus.UnsupportedContent or DecodeStatus.UnmappedCharacter
+                ? new RmQRCodeDecodeInfo(status, version, eccLevel, errorsCorrected, default, SegmentDecoders.Reported(eciAssignment))
+                : new RmQRCodeDecodeInfo(status, version, eccLevel, errorsCorrected);
         return status;
     }
 
     /// <summary>
     /// Upper bound on decoded characters for a version across ECC levels and modes: numeric packs 3 digits into 10 bits, so one data codeword (8 bits) yields at most 2.4 characters, and 3× the M-level data codewords is a safe bound.
+    /// It bounds decoded bytes too: as bytes Numeric is the densest as well, a byte a digit, ahead of Kanji's two bytes in 13 bits.
     /// </summary>
     public static int GetMaxCharCount(RmQRVersion version)
         => RmQRConstants.GetDataCodewordCount(version, RmQREccLevel.M) * 3;

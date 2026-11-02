@@ -190,6 +190,20 @@ The one spelling that needs an edit is a named argument: `plainText:` becomes `t
 
 **Except on .NET Framework and other netstandard2.0 consumers.** See [Older language versions](#older-language-versions) below; that conversion is not available there before C# 14.
 
+### Bytes overloads beside the text ones
+
+`QRCodeGenerator` and `RmQRCodeGenerator` gained `Create`, span `Create` and `TryGetRequiredBufferSize` overloads over `ReadOnlySpan<byte>`, and `QRCodeGenerator` a `CreateStructuredAppend` one, which write bytes as they are. A `string`, a `char` span, a `byte[]` and a `"..."u8` literal each pick their overload as before. Empty content written as `default`, `[]` or a `null` literal fits both, so the compiler reports the call as ambiguous (CS0121) when no options follow it. With options the text overload is taken, since the bytes one would still need its assignment's default. Name the kind:
+
+```csharp
+QRCodeGenerator.Create(default, QREccLevel.M);                    // CS0121 now
+QRCodeGenerator.Create("", QREccLevel.M);                         // the empty text, as before
+QRCodeGenerator.Create(ReadOnlySpan<byte>.Empty, QREccLevel.M);   // empty bytes
+```
+
+### Bytes out of the decoders
+
+Additive. `QRCodeDecoder`, `MicroQRCodeDecoder` and `RmQRCodeDecoder` gain `TryDecodeBytes` over a data type, giving an array, and `TryDecodeBytes` over a module matrix and `TryDecodeImageBytes` over a grayscale image, each giving an array or writing into a span you provide. The SkiaSharp image decoders gain `TryDecodeBytes` over an `SKBitmap`. They give the bytes the symbol carries, with no charset applied, including under an ECI assignment this library has no charset for. `QRCodeDecodeInfo` and `RmQRCodeDecodeInfo` gain `EciAssignment`, an `int?`: the text calls report the first assignment the symbol declares, and the bytes calls the one the bytes of its Byte and Kanji segments are under, which passes straight back to the bytes overloads of the generators.
+
 ### Older language versions
 
 Some 2.0.0 spellings need C# features your project may not have enabled. They affect the `netstandard2.0` asset, which is what .NET Framework 4.6.2+ binds, and the `init` ones affect `netstandard2.1` as well. Neither is about the runtime — the compiled library works fine on both; it is about what your compiler will let you write.
@@ -503,7 +517,7 @@ Behavior change, not source or binary breaking. `QRCodeDecoder`, `MicroQRCodeDec
 - **A Byte segment with no ECI header can read as Japanese.** It is UTF-8 when its bytes are valid UTF-8, as before. Otherwise it is Shift_JIS when the bytes are well formed Shift_JIS with no C0 control character but tab, CR, LF and, under FNC1, the separator 0x1D, and hold three half-width katakana in a row or a byte from 0x80 to 0x9F, and ISO-8859-1 when they do not. Such a symbol used to come back as its ISO-8859-1 reading, one character a byte.
 - **Two kinds of Western text read differently for it.** ISO-8859-1 text with three characters from U+00A1 to U+00DF in a row (`ÄÖÜ`, `¼½¾`) reads as half-width katakana. Windows-1252 text, which was never read as written, reads as Japanese where a typographic apostrophe or quote stands before a letter (`l’option`), or fails with `UnmappedCharacter`. It used to keep one character a byte, with a control character in the apostrophe's place. A symbol that declares its charset in an ECI header is read as declared.
 - **The mapping is JIS X 0208**, as in Kanji mode, beside ASCII and the half-width katakana of JIS X 0201. A double-byte character outside it, such as a CP932 circled digit, fails the symbol with `DecodeStatus.UnmappedCharacter`. A segment under ECI 20 that is not well formed Shift_JIS fails with `InvalidBitstream`.
-- **Nothing is written in Shift_JIS.** Japanese text still goes out as UTF-8 or, [on request](#kanji-mode-on-request), in Kanji mode.
+- **The text calls write nothing in Shift_JIS.** Japanese text still goes out as UTF-8 or, [on request](#kanji-mode-on-request), in Kanji mode. Shift_JIS bytes passed to the [bytes overloads](#bytes-overloads-beside-the-text-ones) are written as they are, under ECI 20 when `eciAssignment: 20` is passed.
 
 ### Micro QR writes UTF-8 where its ISO-8859-1 bytes would read as another text
 

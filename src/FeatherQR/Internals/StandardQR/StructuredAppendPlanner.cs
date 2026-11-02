@@ -500,7 +500,8 @@ internal static partial class StructuredAppendPlanner
     /// </summary>
     public static int ChunkBits(ReadOnlySpan<char> chunk, EciMode charset, int version, QRSegmentation segmentation, bool utf8Bom)
     {
-        var analysis = TextAnalyzer.Analyze(chunk, charset);
+        // The analyzer knows only the text charsets. Bytes are analyzed as their set was, under Default, and their header is priced from the charset below.
+        var analysis = TextAnalyzer.Analyze(chunk, charset.IsDeclaredBytes() ? EciMode.Default : charset);
         var bomApplies = utf8Bom && charset == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte;
         var bits = SingleModeChunkBits(in analysis, charset, version, bomApplies);
 

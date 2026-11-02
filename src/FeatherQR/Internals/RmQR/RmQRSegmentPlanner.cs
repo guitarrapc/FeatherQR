@@ -53,7 +53,7 @@ internal static partial class RmQRSegmentPlanner
     // Kanji's narrowest count indicator (R7x43 and R11x27), the header the Kanji screen charges a stretch of characters with a cell. Pinned by KanjiPlanBoundsTest.
     private const int MinCountBitsKanji = 2;
 
-    /// <summary>rMQR ECI prefix: 3-bit mode indicator 111 plus a one-byte assignment designator.</summary>
+    /// <summary>The ECI prefix of a text charset, assignment 3 or 26: 3-bit mode indicator 111 plus a one-codeword designator. Bytes under an assignment price theirs with <see cref="EciModeExtensions.GetRmQrHeaderBits"/>.</summary>
     private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + 8;
 
     /// <summary>
@@ -111,7 +111,7 @@ internal static partial class RmQRSegmentPlanner
         if (mode is EncodingMode.Numeric or EncodingMode.Kanji)
             return RmQRVersionSelector.TrySelect(mode, dataLength, charset, eccLevel, requestedVersion, fitStrategy, height, out selected);
 
-        var eciBits = charset == EciMode.Default ? 0 : EciHeaderBits;
+        var eciBits = charset.GetRmQrHeaderBits();
 
         if (requestedVersion is { } requested)
         {
@@ -425,7 +425,7 @@ internal static partial class RmQRSegmentPlanner
         Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
         var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
-        if (measuredBits != plannedBits || measuredBits + (charset == EciMode.Default ? 0 : EciHeaderBits) > capacityBits)
+        if (measuredBits != plannedBits || measuredBits + charset.GetRmQrHeaderBits() > capacityBits)
         {
             // Either the model disagreed, or this version simply cannot hold the plan (a legitimate answer for a caller that asked about a specific version).
             segmentCount = 0;

@@ -83,13 +83,16 @@ internal static partial class QRMatrixDecoder
             }
             var data = interleaved.Slice(0, eccInfo.TotalDataCodewords);
 
-            // 6. Bitstream → text
-            var status = QRBinaryDecoder.DecodeBitStream(data, version, destination, out charsWritten, out var structuredAppend, out var fnc1);
+            // 6. Bitstream → text, or bytes for a bytes call
+            var status = QRBinaryDecoder.DecodeBitStream(data, version, destination, out charsWritten, out var structuredAppend, out var fnc1, out var eciAssignment, PayloadOutput.IsBytes);
             if (status != DecodeStatus.Success)
                 charsWritten = 0; // only a read counts its characters, not the segments written before a failure
+            // The headers are reported on a read only. The assignment also on a read whose content is no text, so the caller knows what to read the bytes as.
             info = status == DecodeStatus.Success
-                ? new QRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected, structuredAppend, fnc1)
-                : new QRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected); // the headers are reported on a read only
+                ? new QRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected, structuredAppend, fnc1, SegmentDecoders.Reported(eciAssignment))
+                : status is DecodeStatus.UnsupportedContent or DecodeStatus.UnmappedCharacter
+                    ? new QRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected, default, default, SegmentDecoders.Reported(eciAssignment))
+                    : new QRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected);
             return status;
         }
         finally
@@ -100,10 +103,11 @@ internal static partial class QRMatrixDecoder
     }
 
     /// <summary>
-    /// Upper bound of decoded characters for a version, across all ECC levels and modes.
+    /// Upper bound of decoded characters for a version, across all ECC levels and modes, and of decoded bytes.
     /// </summary>
     /// <remarks>
     /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters. 3× codewords is a safe bound.
+    /// As bytes Numeric is the densest too, a byte a digit, ahead of Kanji's two bytes in 13 bits.
     /// </remarks>
     public static int GetMaxCharCount(int version)
         => QRCodeConstants.GetEccInfo(version, QREccLevel.L).TotalDataCodewords * 3;

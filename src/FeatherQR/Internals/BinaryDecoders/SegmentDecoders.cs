@@ -41,6 +41,33 @@ internal static class SegmentDecoders
     // The GS1 field separator (GS), which an Alphanumeric segment under FNC1 writes as % (ISO/IEC 18004 6.4.8.1).
     private const char FieldSeparator = '\u001D';
 
+    /// <summary>The ECI assignment a bitstream decoder reports for a stream that declares none. A designator never holds a negative number.</summary>
+    public const int NoEciAssignment = -1;
+
+    /// <summary>A bitstream decoder's assignment as the decode info reports it: <c>null</c> for none.</summary>
+    public static int? Reported(int eciAssignment) => eciAssignment == NoEciAssignment ? null : eciAssignment;
+
+    /// <summary>The start value of the assignment <see cref="KeepsOneAssignment"/> tracks: no Byte or Kanji segment read yet.</summary>
+    public const int NoDataAssignment = int.MinValue;
+
+    /// <summary>
+    /// For a bytes decode, whether a Byte or Kanji segment read under <paramref name="assignment"/> keeps the stream's bytes under one assignment, no ECI counting as one.
+    /// The first such segment sets <paramref name="dataAssignment"/>.
+    /// </summary>
+    /// <remarks>
+    /// Bytes joined from two charsets with no boundary have no reading, so the decoder refuses such a stream as <see cref="DecodeStatus.UnsupportedContent"/>.
+    /// Numeric and Alphanumeric segments do not count: their bytes are ASCII.
+    /// </remarks>
+    public static bool KeepsOneAssignment(ref int dataAssignment, int assignment)
+    {
+        if (dataAssignment == NoDataAssignment)
+        {
+            dataAssignment = assignment;
+            return true;
+        }
+        return dataAssignment == assignment;
+    }
+
     /// <summary>Decodes a numeric segment payload of <paramref name="count"/> digits.</summary>
     public static DecodeStatus DecodeNumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
@@ -229,6 +256,63 @@ internal static class SegmentDecoders
             destination[charsWritten++] = mapped;
         }
 
+        return DecodeStatus.Success;
+    }
+
+    /// <summary>
+    /// A Kanji segment as the bytes it compacts (ISO/IEC 18004 8.4.5 in reverse): each 13-bit value as its two Shift_JIS bytes, one a char, whether or not JIS X 0208 assigns the cell.
+    /// </summary>
+    /// <remarks>
+    /// A value no Shift_JIS pair can express is <see cref="DecodeStatus.InvalidBitstream"/>, as it is for the text.
+    /// </remarks>
+    public static DecodeStatus DecodeKanjiPayloadBytes(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
+    {
+        // Bitstream sufficiency first. See DecodeNumericPayload for why the order matters.
+        if (totalBits - reader.BitPosition < count * KanjiBitsPerCharacter)
+            return DecodeStatus.InvalidBitstream;
+
+        if (destination.Length - charsWritten < 2 * count)
+            return DecodeStatus.DestinationTooSmall;
+
+        for (var i = 0; i < count; i++)
+        {
+            var value = reader.Reads(KanjiBitsPerCharacter);
+            if (!ShiftJisKanjiTable.IsStructurallyValid(value))
+                return DecodeStatus.InvalidBitstream;
+
+            // The high part counts lead bytes from 0x81, then from 0xE0 once it passes 0x9F
+            var pair = ((value / 0xC0) << 8) | (value % 0xC0);
+            pair += pair < 0x1F00 ? 0x8140 : 0xC140;
+            destination[charsWritten++] = (char)(pair >> 8);
+            destination[charsWritten++] = (char)(pair & 0xFF);
+        }
+
+        return DecodeStatus.Success;
+    }
+
+    /// <summary>
+    /// A Byte segment's <paramref name="count"/> bytes as written, one a char, with no charset applied and a byte order mark kept.
+    /// </summary>
+    /// <param name="reader">Reader positioned at the first byte of the segment. It is advanced past the segment.</param>
+    /// <param name="totalBits">Length of the whole bitstream, in bits. Used to reject a segment that runs past the end.</param>
+    /// <param name="count">Number of bytes in this segment.</param>
+    /// <param name="scratch">Staging for the segment's bytes, at least as long as the codewords the stream came from.</param>
+    /// <param name="destination">Destination for the bytes, one a char.</param>
+    /// <param name="charsWritten">Chars already in <paramref name="destination"/>, advanced past the segment.</param>
+    public static DecodeStatus CopyBytePayload(ref BitReader reader, int totalBits, int count, Span<byte> scratch, Span<char> destination, ref int charsWritten)
+    {
+        // Bitstream sufficiency first. See DecodeNumericPayload for why the order matters.
+        if (totalBits - reader.BitPosition < count * 8)
+            return DecodeStatus.InvalidBitstream;
+
+        if (destination.Length - charsWritten < count)
+            return DecodeStatus.DestinationTooSmall;
+
+        // Read whole, as the text route stages a segment, rather than a byte at a time.
+        var payload = scratch.Slice(0, count);
+        reader.ReadBytes(payload);
+        PayloadOutput.Widen(payload, destination.Slice(charsWritten, count));
+        charsWritten += count;
         return DecodeStatus.Success;
     }
 

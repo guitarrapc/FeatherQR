@@ -6,16 +6,16 @@ namespace FeatherQR;
 public readonly record struct RmQRCodeDecodeInfo
 {
     internal RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected)
-        : this(status, version, eccLevel, errorsCorrected, default, default)
+        : this(status, version, eccLevel, errorsCorrected, default, default, null)
     {
     }
 
-    internal RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected, Fnc1Mode fnc1)
-        : this(status, version, eccLevel, errorsCorrected, default, fnc1)
+    internal RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected, Fnc1Mode fnc1, int? eciAssignment)
+        : this(status, version, eccLevel, errorsCorrected, default, fnc1, eciAssignment)
     {
     }
 
-    private RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected, SymbolCorners corners, Fnc1Mode fnc1)
+    private RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected, SymbolCorners corners, Fnc1Mode fnc1, int? eciAssignment)
     {
         Status = status;
         Version = version;
@@ -23,14 +23,18 @@ public readonly record struct RmQRCodeDecodeInfo
         ErrorsCorrected = errorsCorrected;
         Corners = corners;
         Fnc1 = fnc1;
+        _eciAssignmentPlusOne = eciAssignment is { } number ? number + 1 : 0;
     }
+
+    // Not an int?: its 8 bytes would grow the result arrays the text calls allocate. Zero is none, so a default info reports none.
+    private readonly int _eciAssignmentPlusOne;
 
     /// <summary>
     /// The same result with the symbol's image position attached. The image decoder attaches it to a read, one that did not fit the
     /// destination too, whose corners its scan keeps to skip the candidates inside, and strips it (<c>default</c>) from every
     /// result but a successful one before reporting.
     /// </summary>
-    internal RmQRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, ErrorsCorrected, corners, Fnc1);
+    internal RmQRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, ErrorsCorrected, corners, Fnc1, EciAssignment);
 
     /// <summary>Decode outcome. <see cref="DecodeStatus.Success"/> when text was produced.</summary>
     public DecodeStatus Status { get; }
@@ -49,4 +53,16 @@ public readonly record struct RmQRCodeDecodeInfo
 
     /// <summary>The FNC1 mode, when the symbol carries one (GS1 data, or an industry format with its application indicator). See <see cref="Fnc1Mode"/>. <c>default</c>, neither position, for a symbol that carries none or a failed decode.</summary>
     public Fnc1Mode Fnc1 { get; }
+
+    /// <summary>
+    /// The ECI assignment the content is declared under, or <c>null</c> for none. A conforming symbol's assignments run from 0 to 999999.
+    /// </summary>
+    /// <remarks>
+    /// The text calls report the first assignment the symbol declares.
+    /// A bytes call that reads the symbol (<see cref="RmQRCodeDecoder.TryDecodeBytes(RmQRCodeData, out byte[], out RmQRCodeDecodeInfo)"/>) reports the one the bytes of its Byte and Kanji segments are under, so the bytes can be converted with the charset it names, and the first when no such segment holds a byte.
+    /// Reported on a read and on a read whose content cannot be given as text (<see cref="DecodeStatus.UnsupportedContent"/>, <see cref="DecodeStatus.UnmappedCharacter"/>), which reports the first.
+    /// An assignment the text calls have no charset for fails them with <see cref="DecodeStatus.UnsupportedContent"/>, and the bytes calls read it.
+    /// <c>null</c> after any other failure.
+    /// </remarks>
+    public int? EciAssignment => _eciAssignmentPlusOne == 0 ? null : _eciAssignmentPlusOne - 1;
 }

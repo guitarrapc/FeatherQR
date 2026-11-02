@@ -8,10 +8,11 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR;
 
 /// <summary>
-/// Encodes text into a Standard QR code (ISO/IEC 18004), versions 1 to 40.
+/// Encodes text or bytes into a Standard QR code (ISO/IEC 18004), versions 1 to 40.
 /// </summary>
 /// <remarks>
 /// Writes Numeric, Alphanumeric and Byte mode, the last as ISO-8859-1 or UTF-8 with an ECI header, and Kanji mode.
+/// Bytes are written as they are, under the ECI assignment the caller names or under none.
 /// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header, where UTF-8 would take 16 or 24. It is written only when the caller sets <see cref="QRCodeGeneratorOptions.AllowKanji"/>, the charset is left at <see cref="EciMode.Default"/> and no byte order mark is asked for, and that option is off by default for reader compatibility.
 /// Under <see cref="QRSegmentation.Optimal"/> such text with ASCII in it can be written as Kanji runs beside Numeric, Alphanumeric and Byte runs of the ASCII, where that is the smaller symbol.
 /// A Structured Append set of such text is written in Kanji mode too, with the XOR of the text's Shift_JIS bytes as its parity: under both segmentations when every character is in the table, and under <see cref="QRSegmentation.Optimal"/> with ASCII in it where that set needs fewer symbols than the UTF-8 set, or as many at a lower version.
@@ -24,7 +25,7 @@ public static partial class QRCodeGenerator
     //
     // 1. Header
     // ┌─────────────────┬───────────────┬────────────────┐
-    // │ ECI (0 or 12b)  │ Mode (4b)     │ Count (8-16b)  │
+    // │ ECI (0, 12-28b) │ Mode (4b)     │ Count (8-16b)  │
     // └─────────────────┴───────────────┴────────────────┘
     // 2. Data
     // ┌──────────────────────────────────────────────────┐
@@ -263,7 +264,7 @@ public static partial class QRCodeGenerator
     /// </remarks>
     /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.</param>
-    /// <param name="destination">Where to write the matrix. Needs <see cref="QRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
+    /// <param name="destination">Where to write the matrix. Needs <see cref="QRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize(ReadOnlySpan{char}, QREccLevel, out QRCodeCalculatedSize, in QRCodeGeneratorOptions)"/>.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <returns>The number of bytes written.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
@@ -399,13 +400,21 @@ public static partial class QRCodeGenerator
         // Kanji-eligible text can be a Kanji set: no ECI header in any symbol, and the parity of the
         // text's Shift_JIS bytes (standardqr-encoder.md, "A Kanji-eligible text can be a Kanji set").
         var wholeText = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: options.Segmentation != QRSegmentation.Single);
+        return CreateStructuredAppend(textSpan, eccLevel, in wholeText, in options, planTogether, bytes: false);
+    }
 
+    /// <summary>
+    /// The rest of <see cref="CreateStructuredAppend(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions, bool)"/> from the whole content's analysis.
+    /// With <paramref name="bytes"/> the content is bytes widened one to a char, and every chunk is analyzed the way the whole was, under its charset.
+    /// </summary>
+    private static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult wholeText, in QRCodeGeneratorOptions options, bool planTogether, bool bytes)
+    {
         Span<int> chunkEnds = stackalloc int[StructuredAppendPlanner.MaxSymbols];
         if (!TryPlanSetOrSymbol(textSpan, eccLevel, in wholeText, in options, chunkEnds, out var count, out var version, out var oneRunPlans, out var kanjiSet))
             throw new ArgumentException(DoesNotFitSetMessage(textSpan, in wholeText, eccLevel, in options), nameof(options));
 
         if (count == 1)
-            return [Create(textSpan, eccLevel, options)];
+            return [bytes ? CreateFromBytesAnalysis(textSpan, eccLevel, in wholeText, in options) : Create(textSpan, eccLevel, options)];
 
         if (kanjiSet)
             return CreateKanjiSet(textSpan, eccLevel, in options, chunkEnds.Slice(0, count), version);
@@ -427,7 +436,10 @@ public static partial class QRCodeGenerator
         // its count indicator carries all come from it, and so does which symbols take a plan.
         Span<TextAnalysisResult> analyses = stackalloc TextAnalysisResult[StructuredAppendPlanner.MaxSymbols];
         for (int i = 0, from = 0; i < count; from = chunkEnds[i], i++)
-            analyses[i] = TextAnalyzer.Analyze(textSpan.Slice(from, chunkEnds[i] - from), charset);
+        {
+            var chunk = textSpan.Slice(from, chunkEnds[i] - from);
+            analyses[i] = bytes ? AnalyzeBytes(chunk, charset) : TextAnalyzer.Analyze(chunk, charset);
+        }
 
         var bomWritten = options.Utf8Bom && charset == EciMode.Utf8 && analyses[0].EncodingMode == EncodingMode.Byte;
         var parity = StructuredAppendPlanner.Parity(textSpan, charset, bomWritten);
@@ -723,7 +735,7 @@ public static partial class QRCodeGenerator
     {
         const int Widen = 1, Lower = 2, Plan = 4;
         var message = $"Content does not fit {StructuredAppendPlanner.MaxSymbols} Structured Append symbols of version {options.Version.Max} at ECC level {eccLevel} " +
-            $"(mode: {analysis.EncodingMode}, ECI: {analysis.EciMode}, {analysis.DataLength} data units).";
+            $"(mode: {analysis.EncodingMode}, ECI: {analysis.EciMode.Describe()}, {analysis.DataLength} data units).";
 
         // Marks are refused however short the text is, which the size of the set does not explain: a run no symbol holds
         // with the character ahead of it, or cuts kept off them until sixteen symbols are not enough, which the same text
@@ -798,7 +810,8 @@ public static partial class QRCodeGenerator
         var changed = options with { Version = new QRVersionRange(options.Version.Min, maxVersion), Segmentation = segmentation };
 
         // The segmentation decides whether a text with ASCII in it may be a Kanji set, so a change of it is planned from the analysis it would get.
-        var changedAnalysis = segmentation == options.Segmentation
+        // Without Kanji the analysis does not depend on it, and bytes have their own.
+        var changedAnalysis = segmentation == options.Segmentation || !AllowsKanji(in options)
             ? analysis
             : TextAnalyzer.Analyze(text, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: segmentation != QRSegmentation.Single);
         return TryPlanSetOrSymbol(text, eccLevel, in changedAnalysis, in changed, ends, out _, out _, out _, out _);
@@ -887,12 +900,12 @@ public static partial class QRCodeGenerator
 
     private static string DoesNotFitMessage(QRVersionRange range, QREccLevel eccLevel, in TextAnalysisResult analysis, int fnc1HeaderBits = 0)
         => $"Content does not fit {(range.IsExact ? $"a version {range.Min}" : $"any version in {range}")} QR code at ECC level {eccLevel} " +
-           $"(mode: {analysis.EncodingMode}, ECI: {analysis.EciMode}, {(fnc1HeaderBits > 0 ? $"FNC1: {fnc1HeaderBits} bits, " : "")}{analysis.DataLength} data units). " +
+           $"(mode: {analysis.EncodingMode}, ECI: {analysis.EciMode.Describe()}, {(fnc1HeaderBits > 0 ? $"FNC1: {fnc1HeaderBits} bits, " : "")}{analysis.DataLength} data units). " +
            $"Widen the version range, lower the ECC level, or leave it at QRVersionRange.Any for automatic selection.";
 
     /// <summary>
     /// A narrowed <see cref="QRCodeGeneratorOptions.Version"/> or a boost: the symbol is written from the analysis that resolved its version and level.
-    /// Kept off the entry point, like <see cref="CreateOptimal"/>, so the default path keeps its frame.
+    /// Kept off the entry point, like <see cref="CreateOptimal(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/>, so the default path keeps its frame.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static QRCodeData CreateResolved(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
@@ -1282,7 +1295,7 @@ public static partial class QRCodeGenerator
     /// <param name="length">Data length (in characters or bytes).</param>
     /// <param name="encoding">Encoding mode being used.</param>
     /// <param name="eccLevel">Error correction level.</param>
-    /// <param name="eciMode">The character encoding declared in the QR code. Anything other than Default adds a 12-bit header, leaving less room for the text.</param>
+    /// <param name="eciMode">The character encoding declared in the QR code. Anything other than Default adds a header of 12 bits, or up to 28 for bytes under an assignment, leaving less room for the content.</param>
     /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It costs three bytes of capacity, and only in Byte mode with UTF-8 ECI.</param>
     /// <returns>Version number (1-40).</returns>
     private static int GetVersion(int length, EncodingMode encoding, QREccLevel eccLevel, EciMode eciMode, bool utf8BOM)
@@ -1292,7 +1305,7 @@ public static partial class QRCodeGenerator
 
         throw new InvalidOperationException($"Data too large for QR code (exceeds Version 40 capacity). " +
             $"Required: {eciMode.GetStandardQrHeaderBits() + ModeIndicatorBits} header bits + {length} data units, " +
-            $"Mode: {encoding}, ECC: {eccLevel}, ECI: {eciMode}");
+            $"Mode: {encoding}, ECC: {eccLevel}, ECI: {eciMode.Describe()}");
     }
 
     /// <summary>
@@ -1300,7 +1313,7 @@ public static partial class QRCodeGenerator
     /// </summary>
     /// <remarks>
     /// Calculates required bits including:
-    /// - ECI header (0 or 12 bits)
+    /// - ECI header (0 bits, or 12 to 28 bits)
     /// - Mode indicator (4 bits)
     /// - Character count indicator (8-16 bits, version-dependent)
     /// - Data (variable)
@@ -1414,8 +1427,14 @@ public static partial class QRCodeGenerator
         if (options.Segmentation == QRSegmentation.Single)
             return CreateFnc1(textSpan, eccLevel, in options);
 
-        var fnc1 = options.Fnc1;
         var analysis = AnalyzeForPlan(textSpan, in options);
+        return CreateOptimal(textSpan, eccLevel, in analysis, in options);
+    }
+
+    /// <summary>The rest of <see cref="CreateOptimal(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> from the analysis, which bytes input makes its own way.</summary>
+    private static QRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options)
+    {
+        var fnc1 = options.Fnc1;
 
         // The BOM is a stream-level prefix written only into UTF-8 Byte-mode streams:
         // a split would relocate it into the middle of the decoded text, so that
@@ -1456,7 +1475,7 @@ public static partial class QRCodeGenerator
         }
     }
 
-    /// <summary>The rest of <see cref="CreateOptimal"/>, with the plan's table held (empty for a text whose scan keeps none).</summary>
+    /// <summary>The rest of <see cref="CreateOptimal(ReadOnlySpan{char}, QREccLevel, in TextAnalysisResult, in QRCodeGeneratorOptions)"/>, with the plan's table held (empty for a text whose scan keeps none).</summary>
     private static QRCodeData CreateOptimalPlanned(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<byte> table)
     {
         var fnc1 = options.Fnc1;
@@ -1512,8 +1531,14 @@ public static partial class QRCodeGenerator
         if (options.Segmentation == QRSegmentation.Single)
             return CreateFnc1To(textSpan, eccLevel, destination, in options);
 
-        var fnc1 = options.Fnc1;
         var analysis = AnalyzeForPlan(textSpan, in options);
+        return CreateOptimalTo(textSpan, eccLevel, destination, in analysis, in options);
+    }
+
+    /// <summary>The rest of <see cref="CreateOptimalTo(ReadOnlySpan{char}, QREccLevel, Span{byte}, in QRCodeGeneratorOptions)"/> from the analysis, which bytes input makes its own way.</summary>
+    private static int CreateOptimalTo(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options)
+    {
+        var fnc1 = options.Fnc1;
 
         if (options.Utf8Bom && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {
@@ -1559,7 +1584,7 @@ public static partial class QRCodeGenerator
         return version;
     }
 
-    /// <summary>The rest of <see cref="CreateOptimalTo"/>, with the plan's table held (empty for a text whose scan keeps none).</summary>
+    /// <summary>The rest of <see cref="CreateOptimalTo(ReadOnlySpan{char}, QREccLevel, Span{byte}, in TextAnalysisResult, in QRCodeGeneratorOptions)"/>, with the plan's table held (empty for a text whose scan keeps none).</summary>
     private static int CreateOptimalToPlanned(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<byte> table)
     {
         var fnc1 = options.Fnc1;

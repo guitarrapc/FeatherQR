@@ -31,10 +31,10 @@ internal static partial class RmQRBinaryEncoder
             throw new ArgumentException($"Destination too small: {codewordCount} data codewords required, got {destination.Length} bytes.", nameof(destination));
         if (segments.Length == 0)
             throw new ArgumentException("A segmented rMQR stream needs at least one segment.", nameof(segments));
-        if (charset is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8))
+        if (charset is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8) && !charset.IsDeclaredBytes())
             throw new ArgumentOutOfRangeException(nameof(charset), $"Unsupported charset {charset} for rMQR.");
 
-        var eciBits = charset == EciMode.Default ? 0 : EciHeaderBits;
+        var eciBits = charset.GetRmQrHeaderBits();
         var plannedBits = RmQRSegmentPlanner.MeasurePlan(version, segments) + eciBits;
         if (plannedBits > capacityBits)
             throw new ArgumentException($"Segment plan does not fit rMQR {version} at ECC level {eccLevel}: {plannedBits} bits required, {capacityBits} available.", nameof(segments));

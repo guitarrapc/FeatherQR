@@ -75,34 +75,64 @@ public enum EciMode
 }
 
 /// <summary>
-/// Helpers for <see cref="EciMode"/>.
+/// Helpers for <see cref="EciMode"/>, and the charsets bytes are written under.
 /// </summary>
+/// <remarks>
+/// Inside the encoders an <see cref="EciMode"/> says both how the content becomes bytes and which header precedes them.
+/// Bytes input is written as it is, the way ISO-8859-1 text is, under the assignment the caller names or under none.
+/// None is <see cref="EciMode.Default"/>. A named assignment is a value no caller can pass: <see cref="DeclaredBytesFlag"/> with the number in the bits below it.
+/// The header and the byte form are decided by comparing a charset only with <see cref="EciMode.Default"/>, for the header, and with <see cref="EciMode.Utf8"/>, to transcode, so such a value is written with its header and its bytes as they are.
+/// The code that names the text charsets never sees such a value or admits it by <see cref="IsDeclaredBytes"/>. Bytes are analyzed under <see cref="EciMode.Default"/> and take the value afterwards, the stream writers' charset checks and rMQR's header price admit it, and the FNC1 writers are never reached because bytes refuse FNC1.
+/// </remarks>
 internal static class EciModeExtensions
 {
-    // ECI Header Structure (ISO/IEC 18004):
-    // ┌─────────────────┬────────────────────────┐
-    // │ ECI Indicator   │ ECI Assignment Number  │
-    // │ 0111 (4 bits)   │ Variable (8-24 bits)   │
-    // └─────────────────┴────────────────────────┘
+    // ECI header. rMQR's mode indicator is 3 bits, 111.
+    // ┌───────────────┬─────────────────────────────────────────────────┐
+    // │ ECI indicator │ Designator                                      │
+    // │ 0111 (4 bits) │ 0xxxxxxx                       0 to 127         │
+    // │               │ 10xxxxxx xxxxxxxx              128 to 16383     │
+    // │               │ 110xxxxx xxxxxxxx xxxxxxxx     16384 to 999999  │
+    // └───────────────┴─────────────────────────────────────────────────┘
 
-    /// <summary>
-    /// Gets the Standard QR ECI header size in bits.
-    /// </summary>
-    /// <param name="eciMode">ECI mode.</param>
-    /// <returns>Header size in bits:
-    /// - Default (no ECI): 0 bits
-    /// - With ECI: 4 bits (ECI indicator) + 8 bits (assignment number) = 12 bits</returns>
-    /// <remarks>
-    /// Current implementation supports 0-127 range (8 bits).
-    /// </remarks>
+    /// <summary>The largest assignment number a designator carries.</summary>
+    public const int MaxAssignment = 999_999;
+
+    /// <summary>Marks the charset of bytes declared under an assignment. It is above every assignment number, so the number fits below it.</summary>
+    private const int DeclaredBytesFlag = 1 << 20;
+
+    /// <summary>The charset of bytes input: none, or the assignment, which <see cref="ValidateAssignment"/> has checked.</summary>
+    public static EciMode BytesCharset(int? assignment)
+        => assignment is { } number ? (EciMode)(DeclaredBytesFlag | number) : EciMode.Default;
+
+    /// <summary>Whether the charset is bytes declared under an assignment.</summary>
+    public static bool IsDeclaredBytes(this EciMode eciMode) => ((int)eciMode & DeclaredBytesFlag) != 0;
+
+    /// <summary>The assignment the header carries. The two text charsets' values are their assignments.</summary>
+    public static int Assignment(this EciMode eciMode) => (int)eciMode & (DeclaredBytesFlag - 1);
+
+    /// <summary>The designator's length: one codeword up to 127, two up to 16383, three above.</summary>
+    public static int DesignatorBits(int assignment) => assignment < 128 ? 8 : assignment < 16384 ? 16 : 24;
+
+    /// <summary>The designator as written, its leading 0, 10 or 110 included.</summary>
+    public static int Designator(int assignment)
+        => assignment < 128 ? assignment : assignment < 16384 ? (0b10 << 14) | assignment : (0b110 << 21) | assignment;
+
+    /// <summary>The Standard QR ECI header in bits: none for <see cref="EciMode.Default"/>, otherwise the 4-bit indicator and the designator.</summary>
     internal static int GetStandardQrHeaderBits(this EciMode eciMode)
-    {
-        if (eciMode == EciMode.Default)
-        {
-            return 0;
-        }
+        => eciMode == EciMode.Default ? 0 : 4 + DesignatorBits(eciMode.Assignment());
 
-        // ECI mode indicator (4 bits) + ECI assignment number (8 bits for 0-127)
-        return 4 + 8;
+    /// <summary>The rMQR ECI header in bits: none for <see cref="EciMode.Default"/>, otherwise the 3-bit indicator and the designator.</summary>
+    internal static int GetRmQrHeaderBits(this EciMode eciMode)
+        => eciMode == EciMode.Default ? 0 : 3 + DesignatorBits(eciMode.Assignment());
+
+    /// <summary>The charset as an error message names it: the member's name, or the number of a declared assignment.</summary>
+    public static string Describe(this EciMode eciMode)
+        => eciMode.IsDeclaredBytes() ? eciMode.Assignment().ToString(System.Globalization.CultureInfo.InvariantCulture) : eciMode.ToString();
+
+    /// <summary>Throws for an assignment no designator carries.</summary>
+    public static void ValidateAssignment(int? assignment)
+    {
+        if (assignment is { } number && (uint)number > MaxAssignment)
+            throw new ArgumentOutOfRangeException("eciAssignment", number, $"An ECI assignment runs from 0 to {MaxAssignment}.");
     }
 }

@@ -61,7 +61,7 @@ public static partial class RmQRCodeGenerator
         return requiredSize;
     }
 
-    /// <summary><see cref="TryGetRequiredBufferSize"/>'s fit on the planning route: the plan under a segmentation, or the single-mode fit under FNC1.</summary>
+    /// <summary><see cref="TryGetRequiredBufferSize(ReadOnlySpan{char}, RmQREccLevel, out RmQRCodeCalculatedSize, in RmQRCodeGeneratorOptions)"/>'s fit on the planning route: the plan under a segmentation, or the single-mode fit under FNC1.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool TryGetRequiredBufferSizePlanned(ReadOnlySpan<char> text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options, out RmQRVersion version)
     {
@@ -73,7 +73,7 @@ public static partial class RmQRCodeGenerator
         return RmQRVersionSelector.TrySelectFnc1(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, options.Version, options.FitStrategy, options.Height, options.Fnc1.RmQrHeaderBits, out version);
     }
 
-    /// <summary><see cref="PrepareConfiguration"/> under FNC1: the analysis under the FNC1 rule, and the version fit with the indicator's bits.</summary>
+    /// <summary><see cref="PrepareConfiguration(ReadOnlySpan{char}, RmQREccLevel, EciMode, bool, RmQRVersion?, RmQRFitStrategy, RmQRHeight?)"/> under FNC1: the analysis under the FNC1 rule, and the version fit with the indicator's bits.</summary>
     private static RmQRConfiguration PrepareConfigurationFnc1(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options)
     {
         ValidateEci(textSpan, options.EciMode);
