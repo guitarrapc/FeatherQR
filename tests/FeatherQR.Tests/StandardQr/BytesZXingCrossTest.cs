@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Bytes across an independent reader and writer, ZXing.Net: what the bytes calls write it reads as the same byte segment, and what it writes from bytes the bytes calls read back.
-/// Every byte value is in the payload, so it is no text under any charset, and ZXing.Net's text of it is not what is compared.
+/// Every byte value is in the payload, so ZXing.Net's text of it depends on the charset it guesses or is told, and its byte segments are what is compared.
 /// Only assignments ZXing.Net has a charset for are written, since it refuses a symbol under any other.
 /// </summary>
 public class BytesZXingCrossTest

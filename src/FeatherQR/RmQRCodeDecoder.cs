@@ -266,9 +266,9 @@ public static class RmQRCodeDecoder
     /// Under FNC1 the separator is the byte 0x1D, as it is U+001D in the text. ECI headers are not bytes. The info reports them.
     /// </para>
     /// <para>
-    /// Every ECI assignment reads, and <see cref="RmQRCodeDecodeInfo.EciAssignment"/> names the one the Byte and Kanji segments are under, <c>null</c> when they are under none, and the first declared when the symbol has neither.
+    /// Every ECI assignment reads, and <see cref="RmQRCodeDecodeInfo.EciAssignment"/> names the one the bytes of the Byte and Kanji segments are under, <c>null</c> when they are under none, and the first declared when no such segment holds a byte.
     /// A designator number past the last assignment, 999999, fails with <see cref="DecodeStatus.UnsupportedContent"/>, as it does in the text calls.
-    /// A symbol whose Byte and Kanji segments fall under two different assignments, no ECI counting as one, fails with <see cref="DecodeStatus.UnsupportedContent"/>, because its bytes have no single reading. The text calls read such a symbol when they have a charset for each assignment.
+    /// A symbol whose Byte and Kanji segments hold bytes under two different assignments, no ECI counting as one, fails with <see cref="DecodeStatus.UnsupportedContent"/>, because its bytes have no single reading. The text calls read such a symbol when they have a charset for each assignment.
     /// </para>
     /// </remarks>
     /// <param name="data">The rMQR code to decode.</param>

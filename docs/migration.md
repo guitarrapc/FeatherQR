@@ -202,7 +202,7 @@ QRCodeGenerator.Create(ReadOnlySpan<byte>.Empty, QREccLevel.M);   // empty bytes
 
 ### Bytes out of the decoders
 
-Additive. `QRCodeDecoder`, `MicroQRCodeDecoder` and `RmQRCodeDecoder` gain `TryDecodeBytes` over a data type or a module matrix and `TryDecodeImageBytes` over a grayscale image, each as an array or into a span you provide, and the SkiaSharp image decoders `TryDecodeBytes` over an `SKBitmap`. They give the bytes the symbol carries, with no charset applied, including under an ECI assignment this library has no charset for. `QRCodeDecodeInfo` and `RmQRCodeDecodeInfo` gain `EciAssignment`, an `int?`: the text calls report the first assignment the symbol declares, and the bytes calls the one its bytes are under, which passes straight back to the bytes overloads of the generators.
+Additive. `QRCodeDecoder`, `MicroQRCodeDecoder` and `RmQRCodeDecoder` gain `TryDecodeBytes` over a data type, giving an array, and `TryDecodeBytes` over a module matrix and `TryDecodeImageBytes` over a grayscale image, each giving an array or writing into a span you provide. The SkiaSharp image decoders gain `TryDecodeBytes` over an `SKBitmap`. They give the bytes the symbol carries, with no charset applied, including under an ECI assignment this library has no charset for. `QRCodeDecodeInfo` and `RmQRCodeDecodeInfo` gain `EciAssignment`, an `int?`: the text calls report the first assignment the symbol declares, and the bytes calls the one the bytes of its Byte and Kanji segments are under, which passes straight back to the bytes overloads of the generators.
 
 ### Older language versions
 

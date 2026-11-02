@@ -121,9 +121,9 @@ The parts of a Structured Append set, joined in index order, give the bytes the 
 
 ### The assignment on the decode info
 
-`QRCodeDecodeInfo` and `RmQRCodeDecodeInfo` gain `int? EciAssignment`, `null` for none. A bytes read reports the assignment its Byte and Kanji segments are under, and the first one declared when it has no such segment (ruled 2026-11-03: the first may cover only digits and letters while the bytes sit under a later one). The text calls report the first assignment the stream declares, on success and on the two reads whose content is no text, `UnsupportedContent` and `UnmappedCharacter`, so a caller that gets either with an assignment knows it can read the bytes and decode them with its own `Encoding`. Results of the several-symbol calls carry it through their `Info`. `MicroQRCodeDecodeInfo` gets nothing.
+`QRCodeDecodeInfo` and `RmQRCodeDecodeInfo` gain `int? EciAssignment`, `null` for none. A bytes read reports the assignment the bytes of its Byte and Kanji segments are under, and the first one declared when no such segment holds a byte (ruled 2026-11-03: the first may cover only digits and letters while the bytes sit under a later one). The text calls report the first assignment the stream declares, on success and on the two reads whose content is no text, `UnsupportedContent` and `UnmappedCharacter`, so a caller that gets either with an assignment knows it can read the bytes and decode them with its own `Encoding`. Results of the several-symbol calls carry it through their `Info`. `MicroQRCodeDecodeInfo` gets nothing.
 
-A stream whose Byte and Kanji segments fall under two different assignments, no ECI counting as one, has no single interpretation for its bytes. The bytes calls refuse it (B7). The text calls read it as today when every assignment has a charset here.
+A stream whose Byte and Kanji segments hold bytes under two different assignments, no ECI counting as one, has no single interpretation for its bytes. The bytes calls refuse it (B7). The text calls read it as today when every assignment has a charset here.
 
 ### ECC level and mask on the encode result
 
@@ -277,11 +277,11 @@ Lessons:
 Done: the branch against main, reviewed on five lenses, with every claim put to three verifiers who tried to refute it. What survived was fixed, each code fix behind a test that failed first:
 
 - A Structured Append set from bytes under an assignment with `BoostEccLevel` threw `ArgumentOutOfRangeException`. The boost analyzed each chunk again under the internal charset value, which the analyzer's byte count does not know. The chunk is now analyzed under `Default`, as the set's own chunks are.
-- A bytes read reported the first assignment, which may cover only digits while the bytes sit under a later one, so the bytes and the number passed back wrote another reading. Ruled with the maintainer: a bytes read that succeeds reports the assignment its Byte and Kanji segments are under, and the first declared when it has no such segment. The text calls keep the first. Design amended.
+- A bytes read reported the first assignment, which may cover only digits while the bytes sit under a later one, so the bytes and the number passed back wrote another reading. Ruled with the maintainer: a bytes read that succeeds reports the assignment the bytes of its Byte and Kanji segments are under, and the first declared when no such segment holds a byte. The text calls keep the first. Design amended.
 - A designator number past 999999 read as a success in bytes mode, and `Create` refuses that number. Both calls now give `UnsupportedContent`.
 - An empty Byte segment counted toward the one-assignment rule in Standard QR but not in rMQR, and an empty Kanji segment in both. An empty segment no longer counts.
 - `int? EciAssignment` grew `QRCodeDecodeResult` from 80 to 88 bytes, `RmQRCodeDecodeResult` from 64 to 72 and `SymbolDecodeResult` from 216 to 232, so the text calls that return arrays of results allocated 8 or 16 bytes more a symbol. The two infos store the number plus one in an `int`, which gives back 80, 64 and 216.
-- The bytes copy read one byte at a time and the narrowing was a scalar loop, about 3 µs of a 2,900-byte version 40 read by the verifiers' measurements. Both now go through a whole-segment read and Latin-1.
+- The bytes copy read one byte at a time and the narrowing was a scalar loop, about 3 µs of a 2,900-byte version 40 read by the verifiers' measurements. Both now go through a whole-segment read, and through Latin-1 on .NET 5 and later, where the netstandard builds keep their loops.
 - The span bytes calls rented a char buffer as long as the destination. They rent at most what the largest version holds.
 - `TryDecodeBytes` over a data type searched the matrix border again, so a restored matrix with a light edge that the text call reads failed. It decodes the core as it stands, as the text call does.
 - The bytes set's too-long guard named `data` where the planner names `options`.
@@ -291,6 +291,6 @@ Tests: the assignment cases above, the boost under 899 and 16384, an Optimal pla
 
 Lessons:
 
-- A premise worded "only" needs the grep of every comparison. "The encoders compare a charset only with `Default` and `Utf8`" held for the writers and planners, missed the analyzer, and the one site that analyzed a chunk under the set's charset threw.
+- A premise worded "only" needs the grep of every comparison. "The encoders compare a charset only with `Default` and `Utf8`" held where the header and the byte form are decided. The writers' charset checks and rMQR's header price admitted the internal value by name, the analyzer did not, and the one site that analyzed a chunk under the set's charset threw.
 - A fixture's name is a premise. `Single = new() { QuietZoneSize = 0 }` left the segmentation at its default, and `Optimal` is 0, so the single-segment tests ran Optimal.
 - One assignment is a summary of a stream that may declare several. The first matches what the text calls report, but for bytes the number has to be the one the bytes are under, or the pass-back writes another reading.

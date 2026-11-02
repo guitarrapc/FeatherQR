@@ -59,7 +59,7 @@ public readonly record struct RmQRCodeDecodeInfo
     /// </summary>
     /// <remarks>
     /// The text calls report the first assignment the symbol declares.
-    /// A bytes call that reads the symbol (<see cref="RmQRCodeDecoder.TryDecodeBytes(RmQRCodeData, out byte[], out RmQRCodeDecodeInfo)"/>) reports the one its Byte and Kanji segments are under, so the bytes can be converted with the charset it names, and the first when the symbol has no such segment.
+    /// A bytes call that reads the symbol (<see cref="RmQRCodeDecoder.TryDecodeBytes(RmQRCodeData, out byte[], out RmQRCodeDecodeInfo)"/>) reports the one the bytes of its Byte and Kanji segments are under, so the bytes can be converted with the charset it names, and the first when no such segment holds a byte.
     /// Reported on a read and on a read whose content cannot be given as text (<see cref="DecodeStatus.UnsupportedContent"/>, <see cref="DecodeStatus.UnmappedCharacter"/>), which reports the first.
     /// An assignment the text calls have no charset for fails them with <see cref="DecodeStatus.UnsupportedContent"/>, and the bytes calls read it.
     /// <c>null</c> after any other failure.

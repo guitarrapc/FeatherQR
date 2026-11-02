@@ -780,7 +780,6 @@ public class NetStandardBuildParityTest
 
     private static Func<Type, object> Fnc1Second(int applicationIndicator) => fnc1 => fnc1.GetMethod("SecondPosition", [typeof(int)])!.Invoke(null, [applicationIndicator])!;
 
-    /// <summary>The core's build for <paramref name="targetFramework"/>, loaded once into a load context of its own. A stale build skips the case.</summary>
     /// <summary>
     /// Bytes in and out through Standard QR's span calls, where a netstandard build widens bytes to chars and narrows them back with loops of its own.
     /// Every byte value, once in a payload widened on the stack and once in one long enough to be widened into a rented buffer.
@@ -865,6 +864,7 @@ public class NetStandardBuildParityTest
         return method.CreateDelegate<BytesDecode>();
     }
 
+    /// <summary>The core's build for <paramref name="targetFramework"/>, loaded once into a load context of its own. A stale build skips the case.</summary>
     private static async Task<(Assembly Build, string Path)> LoadBuild(string targetFramework)
     {
         var path = CoreAssemblyDependencyTest.FindCoreBuild(targetFramework);
