@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The three bitstream decoders writing a symbol's bytes instead of its text: every mode as the bytes the standard defines, no charset applied,
-/// the first ECI assignment reported in both outputs, and a stream whose Byte and Kanji segments fall under two assignments refused.
+/// the text output reporting the first ECI assignment and the bytes output the one its Byte and Kanji segments are under, and a stream whose Byte and Kanji segments fall under two assignments refused.
 /// In the bytes output each char holds one byte.
 /// </summary>
 public class BitStreamBytesTest
@@ -98,6 +98,23 @@ public class BitStreamBytesTest
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(bytes).IsEquivalentTo(new byte[] { 0x80, 0x41 }, CollectionOrdering.Matching);
         await Assert.That(eci).IsEqualTo(assignment);
+    }
+
+    /// <summary>A three-codeword designator holds numbers up to 2,097,151, past the last assignment, 999999.</summary>
+    [Test]
+    [Arguments(1_000_000)]
+    [Arguments(2_097_151)]
+    public async Task Qr_NumberPastTheLastAssignment_IsRefusedByBoth(int number)
+    {
+        var data = Bits([(Eci, 4), Designator(number), (Byte, 4), (1, 8), (0x41, 8), (Terminator, 4)]);
+
+        var (textStatus, _, textEci) = QrText(data);
+        await Assert.That(textStatus).IsEqualTo(DecodeStatus.UnsupportedContent);
+        await Assert.That(textEci).IsEqualTo(number);
+
+        var (status, _, eci) = QrBytes(data);
+        await Assert.That(status).IsEqualTo(DecodeStatus.UnsupportedContent);
+        await Assert.That(eci).IsEqualTo(number);
     }
 
     [Test]
@@ -228,6 +245,111 @@ public class BitStreamBytesTest
         await Assert.That(eci).IsEqualTo(26);
     }
 
+    /// <summary>
+    /// The first assignment covers only digits here, and the bytes are under the second.
+    /// The text call reports the first, the bytes call the one its bytes are read under.
+    /// </summary>
+    [Test]
+    public async Task Qr_BytesUnderALaterAssignment_ReportThatAssignment()
+    {
+        var data = Bits(
+            (Eci, 4), (3, 8), (Numeric, 4), (2, 10), (12, 7),
+            (Eci, 4), (26, 8), (Byte, 4), (3, 8), (0xE3, 8), (0x81, 8), (0x82, 8),
+            (Terminator, 4));
+
+        var (textStatus, text, textEci) = QrText(data);
+        await Assert.That(textStatus).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("12あ");
+        await Assert.That(textEci).IsEqualTo(3);
+
+        var (status, bytes, eci) = QrBytes(data);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(bytes).IsEquivalentTo(new byte[] { (byte)'1', (byte)'2', 0xE3, 0x81, 0x82 }, CollectionOrdering.Matching);
+        await Assert.That(eci).IsEqualTo(26);
+    }
+
+    [Test]
+    public async Task Qr_TwoAssignmentsBeforeTheBytes_ReportTheLast()
+    {
+        var data = Bits(
+            (Eci, 4), (3, 8),
+            (Eci, 4), (26, 8), (Byte, 4), (2, 8), (0xC3, 8), (0xA9, 8),
+            (Terminator, 4));
+
+        var (status, _, eci) = QrBytes(data);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(eci).IsEqualTo(26);
+    }
+
+    /// <summary>The assignment comes after the bytes and covers only a digit, so the bytes are undeclared.</summary>
+    [Test]
+    public async Task Qr_UndeclaredBytesBeforeAnAssignment_ReportNone()
+    {
+        var data = Bits(
+            (Byte, 4), (1, 8), (0xE9, 8),
+            (Eci, 4), (26, 8), (Numeric, 4), (1, 10), (5, 4),
+            (Terminator, 4));
+
+        var (textStatus, _, textEci) = QrText(data);
+        await Assert.That(textStatus).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(textEci).IsEqualTo(26);
+
+        var (status, bytes, eci) = QrBytes(data);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(bytes).IsEquivalentTo(new byte[] { 0xE9, (byte)'5' }, CollectionOrdering.Matching);
+        await Assert.That(eci).IsEqualTo(-1);
+    }
+
+    [Test]
+    public async Task Qr_KanjiUnderALaterAssignment_ReportsThatAssignment()
+    {
+        var data = Bits(
+            (Eci, 4), (3, 8), (Numeric, 4), (1, 10), (7, 4),
+            (Eci, 4), (20, 8), (Kanji, 4), (1, 8), (KanjiA, 13),
+            (Terminator, 4));
+
+        var (status, bytes, eci) = QrBytes(data);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(bytes).IsEquivalentTo(new byte[] { (byte)'7', 0x82, 0xA0 }, CollectionOrdering.Matching);
+        await Assert.That(eci).IsEqualTo(20);
+    }
+
+    /// <summary>With no Byte or Kanji segment, no assignment holds bytes, and the first declared is reported, as the text call reports it.</summary>
+    [Test]
+    public async Task Qr_OnlyDigitsUnderTwoAssignments_ReportTheFirst()
+    {
+        var data = Bits(
+            (Eci, 4), Designator(899), (Numeric, 4), (1, 10), (1, 4),
+            (Eci, 4), (26, 8), (Numeric, 4), (1, 10), (2, 4),
+            (Terminator, 4));
+
+        var (status, bytes, eci) = QrBytes(data);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(bytes).IsEquivalentTo("12"u8.ToArray(), CollectionOrdering.Matching);
+        await Assert.That(eci).IsEqualTo(899);
+    }
+
+    /// <summary>An empty segment adds no bytes, so the assignment it falls under conflicts with none.</summary>
+    [Test]
+    [Arguments(Byte)]
+    [Arguments(Kanji)]
+    public async Task Qr_EmptySegmentBeforeTheAssignment_DoesNotCount(int mode)
+    {
+        var data = Bits(
+            (mode, 4), (0, 8),
+            (Eci, 4), (26, 8), (Byte, 4), (1, 8), ('B', 8),
+            (Terminator, 4));
+
+        var (status, bytes, eci) = QrBytes(data);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(bytes).IsEquivalentTo("B"u8.ToArray(), CollectionOrdering.Matching);
+        await Assert.That(eci).IsEqualTo(26);
+    }
+
     [Test]
     public async Task Qr_Fnc1Alphanumeric_GivesTheSeparatorAsGs()
     {
@@ -334,6 +456,108 @@ public class BitStreamBytesTest
         var (status, _, eci) = RmQrBytes(data, version);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.UnsupportedContent);
+        await Assert.That(eci).IsEqualTo(26);
+    }
+
+    [Test]
+    public async Task RmQr_KanjiAndByteUnderTwoAssignments_AreRefused()
+    {
+        var version = RmQRVersion.R13x99;
+        var data = Bits(
+            (0b100, 3), (1, RmQRConstants.GetKanjiCountIndicatorLength(version)), (KanjiA, 13),
+            (0b111, 3), (26, 8), (0b011, 3), (1, RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte)), ('B', 8),
+            (0b000, 3));
+
+        var (status, _, _) = RmQrBytes(data, version);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.UnsupportedContent);
+    }
+
+    [Test]
+    public async Task RmQr_SameAssignmentDeclaredTwice_IsRead()
+    {
+        var version = RmQRVersion.R13x99;
+        var kanjiCount = RmQRConstants.GetKanjiCountIndicatorLength(version);
+        var byteCount = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
+        var data = Bits(
+            (0b111, 3), (20, 8), (0b100, 3), (1, kanjiCount), (KanjiA, 13),
+            (0b111, 3), (20, 8), (0b011, 3), (1, byteCount), ('B', 8),
+            (0b000, 3));
+
+        var (status, bytes, eci) = RmQrBytes(data, version);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(bytes).IsEquivalentTo(new byte[] { 0x82, 0xA0, (byte)'B' }, CollectionOrdering.Matching);
+        await Assert.That(eci).IsEqualTo(20);
+    }
+
+    [Test]
+    public async Task RmQr_BytesUnderALaterAssignment_ReportThatAssignment()
+    {
+        var version = RmQRVersion.R13x99;
+        var data = Bits(
+            (0b111, 3), (3, 8), (0b001, 3), (2, RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric)), (12, 7),
+            (0b111, 3), (26, 8), (0b011, 3), (2, RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte)), (0xC3, 8), (0xA9, 8),
+            (0b000, 3));
+
+        var (textStatus, textEci) = RmQrText(data, version);
+        await Assert.That(textStatus).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(textEci).IsEqualTo(3);
+
+        var (status, bytes, eci) = RmQrBytes(data, version);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(bytes).IsEquivalentTo(new byte[] { (byte)'1', (byte)'2', 0xC3, 0xA9 }, CollectionOrdering.Matching);
+        await Assert.That(eci).IsEqualTo(26);
+    }
+
+    [Test]
+    public async Task RmQr_UndeclaredBytesBeforeAnAssignment_ReportNone()
+    {
+        var version = RmQRVersion.R13x99;
+        var data = Bits(
+            (0b011, 3), (1, RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte)), (0xE9, 8),
+            (0b111, 3), (26, 8), (0b001, 3), (1, RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric)), (5, 4),
+            (0b000, 3));
+
+        var (status, _, eci) = RmQrBytes(data, version);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(eci).IsEqualTo(-1);
+    }
+
+    [Test]
+    public async Task RmQr_NumberPastTheLastAssignment_IsRefusedByBoth()
+    {
+        var version = RmQRVersion.R13x99;
+        var data = Bits([(0b111, 3), Designator(1_000_000), (0b011, 3), (1, RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte)), (0x41, 8), (0b000, 3)]);
+
+        var (textStatus, textEci) = RmQrText(data, version);
+        await Assert.That(textStatus).IsEqualTo(DecodeStatus.UnsupportedContent);
+        await Assert.That(textEci).IsEqualTo(1_000_000);
+
+        var (status, _, eci) = RmQrBytes(data, version);
+        await Assert.That(status).IsEqualTo(DecodeStatus.UnsupportedContent);
+        await Assert.That(eci).IsEqualTo(1_000_000);
+    }
+
+    /// <summary>An empty segment adds no bytes, so the assignment it falls under conflicts with none.</summary>
+    [Test]
+    [Arguments(0b011)]
+    [Arguments(0b100)]
+    public async Task RmQr_EmptySegmentBeforeTheAssignment_DoesNotCount(int mode)
+    {
+        var version = RmQRVersion.R13x99;
+        var byteCount = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
+        var emptyCount = mode == 0b100 ? RmQRConstants.GetKanjiCountIndicatorLength(version) : byteCount;
+        var data = Bits(
+            (mode, 3), (0, emptyCount),
+            (0b111, 3), (26, 8), (0b011, 3), (1, byteCount), ('B', 8),
+            (0b000, 3));
+
+        var (status, bytes, eci) = RmQrBytes(data, version);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(bytes).IsEquivalentTo("B"u8.ToArray(), CollectionOrdering.Matching);
         await Assert.That(eci).IsEqualTo(26);
     }
 

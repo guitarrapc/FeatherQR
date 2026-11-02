@@ -82,9 +82,73 @@ public class QRCodeDecoderBytesTest
         await Assert.That(info.EciAssignment).IsEqualTo(899);
 
         var shortRoom = new byte[binaryPayload.Length - 1];
+        shortRoom.AsSpan().Fill(0xA5);
         await Assert.That(QRCodeDecoder.TryDecodeBytes(modules, 21, shortRoom, out written, out info)).IsFalse();
         await Assert.That(written).IsEqualTo(0);
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
+        await Assert.That(info.EciAssignment).IsNull().Because("the symbol declares 899, and only a read or a refused content reports it");
+        await Assert.That(shortRoom.All(b => b == 0xA5)).IsTrue().Because("the destination is left as it was");
+    }
+
+    /// <summary>No symbol holds more bytes than version 40 does, so a destination far longer than that takes no buffer as long as itself.</summary>
+    [Test]
+    public async Task SpanForms_DestinationFarLargerThanAnySymbol_TakeNoBufferThatLong()
+    {
+        var modules = Eci899Symbol();
+        var (luminance, width, height) = PayloadSymbols.Render(modules, 21, 21);
+        var destination = new byte[16 << 20];
+
+        var (read, readImage, allocated) = DecodeBothSpanForms(modules, luminance, width, height, destination);
+
+        await Assert.That(read).IsTrue();
+        await Assert.That(readImage).IsTrue();
+        await Assert.That(allocated).IsLessThan(destination.Length).Because("a char buffer as long as the destination takes twice its length");
+    }
+
+    /// <summary>
+    /// The bytes calls mark their own decode only. A text call right after them on the same thread reads text, also after a bytes call that threw.
+    /// A mark left set would read the ECI 899 symbol as bytes and the UTF-8 one one byte a char.
+    /// </summary>
+    [Test]
+    public async Task TextCalls_AfterBytesCallsOnTheSameThread_ReadText()
+    {
+        var (afterRead, afterThrow) = TextAfterBytes(Eci899Symbol(), QRCodeGenerator.Create("日本", QREccLevel.M));
+
+        await Assert.That(afterRead).IsEqualTo(DecodeStatus.UnsupportedContent);
+        await Assert.That(afterThrow).IsEqualTo("日本");
+    }
+
+    /// <summary>
+    /// A restored matrix whose whole edge row or column is light still holds its data at most levels, since Reed-Solomon corrects the cleared data modules.
+    /// The text call decodes the core as it stands, so the bytes call reads every matrix the text call reads.
+    /// </summary>
+    [Test]
+    public async Task QRCodeData_WithALightEdge_IsReadAsTheTextCallReadsIt()
+    {
+        var readByText = 0;
+        foreach (var level in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+        {
+            for (var edge = 0; edge < 4; edge++)
+            {
+                var restored = WithLightEdge(QRCodeGenerator.Create("HELLO BYTES", level), edge);
+                if (restored is null || !QRCodeDecoder.TryDecode(restored, out var text, out _))
+                    continue;
+                readByText++;
+
+                await Assert.That(QRCodeDecoder.TryDecodeBytes(restored, out var bytes, out var info)).IsTrue();
+                await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
+                await Assert.That(bytes).IsEquivalentTo(Encoding.ASCII.GetBytes(text), CollectionOrdering.Matching);
+            }
+        }
+
+        await Assert.That(readByText).IsGreaterThan(0).Because("the premise: some light edges leave the matrix readable as text");
+    }
+
+    [Test]
+    public async Task NullData_Throws_AsTheTextCallDoes()
+    {
+        await Assert.That(() => QRCodeDecoder.TryDecodeBytes((QRCodeData)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => QRCodeImageDecoder.TryDecodeBytes((global::SkiaSharp.SKBitmap)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
     }
 
     [Test]
@@ -187,8 +251,64 @@ public class QRCodeDecoderBytesTest
         await Assert.That(joined.ToArray()).IsEquivalentTo(Encoding.UTF8.GetBytes(text), CollectionOrdering.Matching);
     }
 
+    // Helpers
+
+    private static (bool Read, bool ReadImage, long Allocated) DecodeBothSpanForms(byte[] modules, byte[] luminance, int width, int height, byte[] destination)
+    {
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var read = QRCodeDecoder.TryDecodeBytes(modules, 21, destination, out _, out _);
+        var readImage = QRCodeDecoder.TryDecodeImageBytes(luminance, width, height, destination, out _, out _);
+        return (read, readImage, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    /// <summary>Text calls made right after bytes calls, with no await between that could move the work to another thread.</summary>
+    private static (DecodeStatus AfterRead, string AfterThrow) TextAfterBytes(byte[] eci899, QRCodeData utf8)
+    {
+        QRCodeDecoder.TryDecodeBytes(eci899, 21, out _, out _);
+        QRCodeDecoder.TryDecode(eci899, 21, out _, out var afterRead);
+
+        try
+        {
+            QRCodeDecoder.TryDecodeBytes(new byte[20], 21, out _, out _);
+        }
+        catch (ArgumentException)
+        {
+        }
+        QRCodeDecoder.TryDecode(utf8, out var text, out _);
+        return (afterRead.Status, text);
+    }
+
+    /// <summary>The symbol restored from its raw data with one whole edge light: 0 top, 1 bottom, 2 left, 3 right. <c>null</c> when the restore refuses the format information that leaves.</summary>
+    private static QRCodeData? WithLightEdge(QRCodeData data, int edge)
+    {
+        var raw = data.GetRawData();
+        int size = raw[3];
+        for (var i = 0; i < size; i++)
+        {
+            var (row, col) = edge switch
+            {
+                0 => (0, i),
+                1 => (size - 1, i),
+                2 => (i, 0),
+                _ => (i, size - 1),
+            };
+            var bit = row * size + col;
+            raw[4 + (bit >> 3)] &= (byte)~(1 << (7 - (bit & 7)));
+        }
+
+        try
+        {
+            return new QRCodeData(raw, 0);
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
-    /// Numeric gives the most bytes a bit (a byte a digit, three digits in 10 bits) and Kanji the next most (two bytes in 13 bits), so their full symbols are the largest byte counts a version holds.
+    /// Numeric gives the most bytes a bit (a byte a digit, three digits in 10 bits), so its full symbol is the largest byte count a version holds.
+    /// Kanji is the one mode whose bytes outnumber its characters (two bytes a character), so its full symbol shows the bound holds bytes and not only characters.
     /// The counts are the standard's capacities at level L.
     /// </summary>
     [Test]

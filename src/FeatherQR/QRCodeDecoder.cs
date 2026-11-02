@@ -268,7 +268,8 @@ public static class QRCodeDecoder
     /// Under FNC1 the separator is the byte 0x1D, as it is U+001D in the text. ECI and Structured Append headers are not bytes. The info reports them.
     /// </para>
     /// <para>
-    /// Every ECI assignment reads, and <see cref="QRCodeDecodeInfo.EciAssignment"/> names the one the bytes are in, <c>null</c> when the symbol declares none.
+    /// Every ECI assignment reads, and <see cref="QRCodeDecodeInfo.EciAssignment"/> names the one the Byte and Kanji segments are under, <c>null</c> when they are under none, and the first declared when the symbol has neither.
+    /// A designator number past the last assignment, 999999, fails with <see cref="DecodeStatus.UnsupportedContent"/>, as it does in the text calls.
     /// A symbol whose Byte and Kanji segments fall under two different assignments, no ECI counting as one, fails with <see cref="DecodeStatus.UnsupportedContent"/>, because its bytes have no single reading. The text calls read such a symbol when they have a charset for each assignment.
     /// </para>
     /// <para>
@@ -287,14 +288,24 @@ public static class QRCodeDecoder
 
         var size = data.GetCoreSize();
         var rented = ArrayPool<byte>.Shared.Rent(size * size);
+        var maxBytes = QRMatrixDecoder.GetMaxCharCount(data.Version);
+        var rentedChars = ArrayPool<char>.Shared.Rent(maxBytes);
         try
         {
-            var modules = rented.AsSpan(0, size * size);
-            data.GetCoreData(modules);
-            return TryDecodeBytes(modules, size, out bytes, out info);
+            var core = rented.AsSpan(0, size * size);
+            data.GetCoreData(core);
+            var chars = rentedChars.AsSpan(0, maxBytes);
+            DecodeStatus status;
+            int written;
+            // The core as it stands, as the text call decodes it. A search for its border could cut a light edge row off.
+            using (PayloadOutput.Bytes())
+                status = QRMatrixDecoder.DecodeMatrix(core, size, chars, out written, out info);
+            bytes = status == DecodeStatus.Success ? PayloadOutput.ToArray(chars.Slice(0, written)) : [];
+            return status == DecodeStatus.Success;
         }
         finally
         {
+            ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
             ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
     }
@@ -340,10 +351,12 @@ public static class QRCodeDecoder
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, Span<byte> destination, out int bytesWritten, out QRCodeDecodeInfo info)
     {
-        var rentedChars = ArrayPool<char>.Shared.Rent(destination.Length);
+        // No symbol holds more bytes than the largest version, so a longer destination needs no longer buffer.
+        var room = Math.Min(destination.Length, QRMatrixDecoder.GetMaxCharCount(40));
+        var rentedChars = ArrayPool<char>.Shared.Rent(room);
         try
         {
-            var chars = rentedChars.AsSpan(0, destination.Length);
+            var chars = rentedChars.AsSpan(0, room);
             bool success;
             using (PayloadOutput.Bytes())
                 success = TryDecode(modules, size, chars, out bytesWritten, out info);
@@ -360,7 +373,8 @@ public static class QRCodeDecoder
     /// Finds a QR code in a grayscale image and decodes its bytes, as <see cref="TryDecodeBytes(QRCodeData, out byte[], out QRCodeDecodeInfo)"/> reads them.
     /// </summary>
     /// <remarks>
-    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out QRCodeDecodeInfo)"/> searches it, so the same symbol is found. Only what is read from it differs.
+    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out QRCodeDecodeInfo)"/> searches it, and a symbol whose content a call cannot give does not stop the search.
+    /// The bytes calls read some symbols the text calls cannot, such as one under an assignment with no charset here, and refuse one whose bytes fall under two assignments. So in an image of several symbols the two calls can return different ones.
     /// </remarks>
     /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -404,10 +418,12 @@ public static class QRCodeDecoder
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, Span<byte> destination, out int bytesWritten, out QRCodeDecodeInfo info)
     {
-        var rentedChars = ArrayPool<char>.Shared.Rent(destination.Length);
+        // No symbol holds more bytes than the largest version, so a longer destination needs no longer buffer.
+        var room = Math.Min(destination.Length, QRMatrixDecoder.GetMaxCharCount(40));
+        var rentedChars = ArrayPool<char>.Shared.Rent(room);
         try
         {
-            var chars = rentedChars.AsSpan(0, destination.Length);
+            var chars = rentedChars.AsSpan(0, room);
             bool success;
             using (PayloadOutput.Bytes())
                 success = TryDecodeImage(luminance, width, height, chars, out bytesWritten, out info);

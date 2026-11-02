@@ -25,8 +25,11 @@ public readonly record struct QRCodeDecodeInfo
         Corners = corners;
         StructuredAppend = structuredAppend;
         Fnc1 = fnc1;
-        EciAssignment = eciAssignment;
+        _eciAssignmentPlusOne = eciAssignment is { } number ? number + 1 : 0;
     }
+
+    // Not an int?: its 8 bytes would grow the result arrays the text calls allocate. Zero is none, so a default info reports none.
+    private readonly int _eciAssignmentPlusOne;
 
     /// <summary>The same result with the symbol's image position attached. The image decoders call this on success.</summary>
     internal QRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, MaskPattern, ErrorsCorrected, corners, StructuredAppend, Fnc1, EciAssignment);
@@ -56,12 +59,14 @@ public readonly record struct QRCodeDecodeInfo
     public Fnc1Mode Fnc1 { get; }
 
     /// <summary>
-    /// The first ECI assignment the symbol declares, or <c>null</c> when it declares none. A conforming symbol's assignments run from 0 to 999999.
+    /// The ECI assignment the content is declared under, or <c>null</c> for none. A conforming symbol's assignments run from 0 to 999999.
     /// </summary>
     /// <remarks>
-    /// Reported on a read and on a read whose content cannot be given as text (<see cref="DecodeStatus.UnsupportedContent"/>, <see cref="DecodeStatus.UnmappedCharacter"/>).
-    /// An assignment the text calls have no charset for fails them with <see cref="DecodeStatus.UnsupportedContent"/>, and the bytes calls (<see cref="QRCodeDecoder.TryDecodeBytes(QRCodeData, out byte[], out QRCodeDecodeInfo)"/>) read it, so the bytes can be converted with the charset the assignment names.
+    /// The text calls report the first assignment the symbol declares.
+    /// A bytes call that reads the symbol (<see cref="QRCodeDecoder.TryDecodeBytes(QRCodeData, out byte[], out QRCodeDecodeInfo)"/>) reports the one its Byte and Kanji segments are under, so the bytes can be converted with the charset it names, and the first when the symbol has no such segment.
+    /// Reported on a read and on a read whose content cannot be given as text (<see cref="DecodeStatus.UnsupportedContent"/>, <see cref="DecodeStatus.UnmappedCharacter"/>), which reports the first.
+    /// An assignment the text calls have no charset for fails them with <see cref="DecodeStatus.UnsupportedContent"/>, and the bytes calls read it.
     /// <c>null</c> after any other failure.
     /// </remarks>
-    public int? EciAssignment { get; }
+    public int? EciAssignment => _eciAssignmentPlusOne == 0 ? null : _eciAssignmentPlusOne - 1;
 }

@@ -27,10 +27,10 @@ public static partial class RmQRCodeGenerator
     //
     // 1. Header
     // ┌─────────────────┬───────────────┬────────────────┐
-    // │ ECI (0 or 11b)  │ Mode (3b)     │ Count (per ver)│
+    // │ ECI (0, 11-27b) │ Mode (3b)     │ Count (per ver)│
     // └─────────────────┴───────────────┴────────────────┘
-    //   The ECI header is 11 bits, not Standard QR's 12: the rMQR mode
-    //   indicator is 3 bits wide, so it is 3 + 8 designator bits.
+    //   The ECI header is one bit shorter than Standard QR's: the rMQR mode
+    //   indicator is 3 bits wide, so it is 3 + 8, 16 or 24 designator bits.
     // 2. Data
     // ┌──────────────────────────────────────────────────┐
     // │ Encoded data (variable length)                   │
@@ -67,7 +67,7 @@ public static partial class RmQRCodeGenerator
         //    - Select the version: a pinned RmQRVersion, or the best fit among those
         //      that hold the content by RmQRFitStrategy, optionally within one RmQRHeight
         // 3. Encode data codewords:
-        //    - Write the ECI header (11 bits) when a charset is declared
+        //    - Write the ECI header (11 to 27 bits) when a charset is declared
         //    - Write the FNC1 indicator (3 bits, 11 in second position) when one is requested
         //    - Write mode indicator (3 bits) and character count indicator
         //    - Write the data bits

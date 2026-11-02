@@ -25,7 +25,7 @@ public static partial class QRCodeGenerator
     //
     // 1. Header
     // ┌─────────────────┬───────────────┬────────────────┐
-    // │ ECI (0 or 12b)  │ Mode (4b)     │ Count (8-16b)  │
+    // │ ECI (0, 12-28b) │ Mode (4b)     │ Count (8-16b)  │
     // └─────────────────┴───────────────┴────────────────┘
     // 2. Data
     // ┌──────────────────────────────────────────────────┐
@@ -1295,7 +1295,7 @@ public static partial class QRCodeGenerator
     /// <param name="length">Data length (in characters or bytes).</param>
     /// <param name="encoding">Encoding mode being used.</param>
     /// <param name="eccLevel">Error correction level.</param>
-    /// <param name="eciMode">The character encoding declared in the QR code. Anything other than Default adds a 12-bit header, leaving less room for the text.</param>
+    /// <param name="eciMode">The character encoding declared in the QR code. Anything other than Default adds a header of 12 bits, or up to 28 for bytes under an assignment, leaving less room for the content.</param>
     /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It costs three bytes of capacity, and only in Byte mode with UTF-8 ECI.</param>
     /// <returns>Version number (1-40).</returns>
     private static int GetVersion(int length, EncodingMode encoding, QREccLevel eccLevel, EciMode eciMode, bool utf8BOM)
@@ -1313,7 +1313,7 @@ public static partial class QRCodeGenerator
     /// </summary>
     /// <remarks>
     /// Calculates required bits including:
-    /// - ECI header (0 or 12 bits)
+    /// - ECI header (0 bits, or 12 to 28 bits)
     /// - Mode indicator (4 bits)
     /// - Character count indicator (8-16 bits, version-dependent)
     /// - Data (variable)

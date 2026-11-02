@@ -36,7 +36,7 @@ internal static class RmQRBinaryDecoder
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
     /// <param name="fnc1">The FNC1 mode when the stream carries one, with its application indicator in second position, and default otherwise.</param>
-    /// <param name="eciAssignment">The first ECI assignment the stream declares, also when the decode then fails, or <see cref="SegmentDecoders.NoEciAssignment"/>.</param>
+    /// <param name="eciAssignment">The first ECI assignment the stream declares, also when the decode then fails, or <see cref="SegmentDecoders.NoEciAssignment"/>. A bytes read that succeeds reports instead the assignment its Byte and Kanji segments are under, when it has any.</param>
     /// <param name="bytes">Write the symbol's bytes, one a char, instead of its text, as <see cref="StandardQR.QRBinaryDecoder.DecodeBitStream"/> does.</param>
     public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, RmQRVersion version, Span<char> destination, out int charsWritten, out Fnc1Mode fnc1, out int eciAssignment, bool bytes = false)
     {
@@ -100,7 +100,8 @@ internal static class RmQRBinaryDecoder
                                     {
                                         if (!SegmentDecoders.KeepsOneAssignment(ref dataAssignment, currentAssignment))
                                             return DecodeStatus.UnsupportedContent;
-                                        status = SegmentDecoders.CopyBytePayload(ref reader, totalBits, count, destination, ref charsWritten);
+                                        rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
+                                        status = SegmentDecoders.CopyBytePayload(ref reader, totalBits, count, rentedBytes, destination, ref charsWritten);
                                         break;
                                     }
                                     // Data codewords top out at 152 bytes (R17x139-M).
@@ -121,7 +122,12 @@ internal static class RmQRBinaryDecoder
                                 eciAssignment = eciValue;
                             currentAssignment = eciValue;
                             if (bytes)
-                                break; // the bytes take no charset, so every assignment reads
+                            {
+                                // The bytes take no charset, so every assignment reads. A designator also holds numbers past the last assignment, which no symbol may declare.
+                                if (eciValue > EciModeExtensions.MaxAssignment)
+                                    return DecodeStatus.UnsupportedContent;
+                                break;
+                            }
                             switch (eciValue)
                             {
                                 case EciIso8859_1a:
@@ -150,7 +156,8 @@ internal static class RmQRBinaryDecoder
                             DecodeStatus status;
                             if (bytes)
                             {
-                                if (!SegmentDecoders.KeepsOneAssignment(ref dataAssignment, currentAssignment))
+                                // An empty segment adds no bytes, so the assignment it falls under conflicts with none. The Byte case skips empty segments before this point.
+                                if (count > 0 && !SegmentDecoders.KeepsOneAssignment(ref dataAssignment, currentAssignment))
                                     return DecodeStatus.UnsupportedContent;
                                 status = SegmentDecoders.DecodeKanjiPayloadBytes(ref reader, totalBits, count, destination, ref charsWritten);
                             }
@@ -186,6 +193,9 @@ internal static class RmQRBinaryDecoder
                 }
             }
 
+            // The first assignment may cover only digits and letters. The bytes are read under the one their Byte and Kanji segments share.
+            if (bytes && dataAssignment != SegmentDecoders.NoDataAssignment)
+                eciAssignment = dataAssignment;
             return DecodeStatus.Success;
         }
         finally

@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class RmQRCodeGeneratorBytesTest
 {
-    private static readonly RmQRCodeGeneratorOptions Single = new() { QuietZoneSize = 0 };
+    private static readonly RmQRCodeGeneratorOptions Single = new() { QuietZoneSize = 0, Segmentation = RmQRSegmentation.Single };
     private static readonly RmQRCodeGeneratorOptions Optimal = new() { QuietZoneSize = 0, Segmentation = RmQRSegmentation.Optimal };
 
     // Round trip
@@ -45,6 +45,7 @@ public class RmQRCodeGeneratorBytesTest
     {
         int?[] assignments = [null, 0, 3, 26, 127, 128, 899, 16383, 16384, 999999];
         var random = new Random(seed);
+        var fitted = 0;
         for (var trial = 0; trial < 40; trial++)
         {
             var payload = RunsPayload(random, random.Next(0, 160));
@@ -54,7 +55,11 @@ public class RmQRCodeGeneratorBytesTest
             var label = $"seed {seed} trial {trial}: {payload.Length} bytes, ECI {eci?.ToString() ?? "none"}, {level}, {options.Segmentation}, {options.FitStrategy}";
 
             if (!RmQRCodeGenerator.TryGetRequiredBufferSize(payload, level, out var size, options, eci))
+            {
+                await Assert.That(() => RmQRCodeGenerator.Create(payload, level, options, eci)).ThrowsExactly<ArgumentException>().Because($"{label}: sizing says it does not fit");
                 continue;
+            }
+            fitted++;
             var data = RmQRCodeGenerator.Create(payload, level, options, eci);
             await Assert.That(data.Version).IsEqualTo(size.Version).Because(label);
 
@@ -66,6 +71,8 @@ public class RmQRCodeGeneratorBytesTest
             await Assert.That(RmQRCodeGenerator.Create(payload, level, destination, options, eci)).IsEqualTo(size.BufferSize).Because(label);
             await Assert.That(destination).IsEquivalentTo(Modules(data), CollectionOrdering.Matching).Because(label);
         }
+
+        await Assert.That(fitted).IsGreaterThan(0).Because("the premise: the trials exercise the forms, not only the refusal");
     }
 
     /// <summary>An empty payload is a Byte segment of no bytes, declared or not, and reads back empty.</summary>
@@ -166,12 +173,17 @@ public class RmQRCodeGeneratorBytesTest
                 continue;
 
             await Assert.That(RmQRCodeGenerator.Create(Filled(capacity), level, options, eci).Version).IsEqualTo(version);
+            await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(Filled(capacity), level, out var size, options, eci)).IsTrue();
+            await Assert.That(size.Version).IsEqualTo(version);
             await Assert.That(() => RmQRCodeGenerator.Create(Filled(capacity + 1), level, options, eci)).ThrowsExactly<ArgumentException>();
             await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(Filled(capacity + 1), level, out _, options, eci)).IsFalse();
         }
     }
 
-    /// <summary>The automatic fit prices the designator's codewords too: a payload one larger assignment no longer fits moves to the next version.</summary>
+    /// <summary>
+    /// The automatic fit prices the designator's codewords too.
+    /// One byte more than R7x139-M holds behind the assignment's header is refused at height 7, and without the height it takes another version.
+    /// </summary>
     [Test]
     [Arguments(127)]
     [Arguments(128)]
@@ -198,6 +210,42 @@ public class RmQRCodeGeneratorBytesTest
         await Assert.That(() => RmQRCodeGenerator.Create(Filled(length), RmQREccLevel.M, new byte[100], Single)).ThrowsExactly<ArgumentException>();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(Filled(length), RmQREccLevel.M, out _)).IsFalse();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(Filled(length), RmQREccLevel.M, out _, Optimal)).IsFalse();
+    }
+
+    /// <summary>Digits are a byte each in Numeric mode, so 361 of them fit R17x139-M though it holds 150 bytes in Byte mode, and 362 are refused.</summary>
+    [Test]
+    public async Task Digits_AreWrittenInNumericMode_SoTheyFitPastTheByteCapacity()
+    {
+        var digits = Enumerable.Repeat((byte)'7', 361).ToArray();
+        var data = RmQRCodeGenerator.Create(digits, RmQREccLevel.M);
+        await Assert.That(data.Version).IsEqualTo(RmQRVersion.R17x139);
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(digits, RmQREccLevel.M, out var size)).IsTrue();
+        await Assert.That(size.Version).IsEqualTo(RmQRVersion.R17x139);
+        await Assert.That(RmQRCodeDecoder.TryDecodeBytes(data, out var bytes, out _)).IsTrue();
+        await Assert.That(bytes).IsEquivalentTo(digits, CollectionOrdering.Matching);
+
+        var tooMany = Enumerable.Repeat((byte)'7', 362).ToArray();
+        await Assert.That(() => RmQRCodeGenerator.Create(tooMany, RmQREccLevel.M)).ThrowsExactly<ArgumentException>();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(tooMany, RmQREccLevel.M, out _)).IsFalse();
+    }
+
+    /// <summary>The span form of a single-segment stream lays out the class form's modules, quiet zone included, over a destination that held anything.</summary>
+    [Test]
+    [Arguments(-1)]
+    [Arguments(899)]
+    public async Task SpanForm_WithAQuietZone_WritesTheClassFormsModules(int assignment)
+    {
+        int? eci = assignment < 0 ? null : assignment;
+        var options = Single with { QuietZoneSize = 2 };
+        var payload = Filled(20);
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(payload, RmQREccLevel.M, out var size, options, eci)).IsTrue();
+
+        var destination = new byte[size.BufferSize];
+        destination.AsSpan().Fill(1);
+        await Assert.That(RmQRCodeGenerator.Create(payload, RmQREccLevel.M, destination, options, eci)).IsEqualTo(size.BufferSize);
+
+        await Assert.That(destination).IsEquivalentTo(Modules(RmQRCodeGenerator.Create(payload, RmQREccLevel.M, options, eci)), CollectionOrdering.Matching);
+        await Assert.That(() => RmQRCodeGenerator.Create(payload, RmQREccLevel.M, new byte[size.BufferSize - 1], options, eci)).ThrowsExactly<ArgumentException>();
     }
 
     // The text call's symbols

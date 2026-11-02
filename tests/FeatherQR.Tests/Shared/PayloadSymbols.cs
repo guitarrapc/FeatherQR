@@ -7,7 +7,7 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Symbols carrying a stream the test wrote field by field, for content no generator writes (an ECI assignment without a charset, bytes that are no text), and their images.
+/// Symbols carrying a stream the test wrote field by field, so the stream is exactly the one under test whatever a generator would choose (a Kanji segment under an ECI, a Micro QR Byte segment of chosen bytes), and their images.
 /// Every symbol is the core only, row-major, one byte per module.
 /// </summary>
 internal static class PayloadSymbols

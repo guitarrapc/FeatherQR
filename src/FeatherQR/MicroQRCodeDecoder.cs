@@ -269,14 +269,24 @@ public static class MicroQRCodeDecoder
 
         var size = data.GetCoreSize();
         var rented = ArrayPool<byte>.Shared.Rent(size * size);
+        var maxBytes = MicroQRMatrixDecoder.GetMaxCharCount(data.Version);
+        var rentedChars = ArrayPool<char>.Shared.Rent(maxBytes);
         try
         {
-            var modules = rented.AsSpan(0, size * size);
-            data.GetCoreData(modules);
-            return TryDecodeBytes(modules, size, out bytes, out info);
+            var core = rented.AsSpan(0, size * size);
+            data.GetCoreData(core);
+            var chars = rentedChars.AsSpan(0, maxBytes);
+            DecodeStatus status;
+            int written;
+            // The core as it stands, as the text call decodes it. A search for its border could cut a light edge row off.
+            using (PayloadOutput.Bytes())
+                status = MicroQRMatrixDecoder.DecodeMatrix(core, size, chars, out written, out info);
+            bytes = status == DecodeStatus.Success ? PayloadOutput.ToArray(chars.Slice(0, written)) : [];
+            return status == DecodeStatus.Success;
         }
         finally
         {
+            ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
             ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
     }
@@ -322,10 +332,12 @@ public static class MicroQRCodeDecoder
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, Span<byte> destination, out int bytesWritten, out MicroQRCodeDecodeInfo info)
     {
-        var rentedChars = ArrayPool<char>.Shared.Rent(destination.Length);
+        // No symbol holds more bytes than the largest version, so a longer destination needs no longer buffer.
+        var room = Math.Min(destination.Length, MicroQRMatrixDecoder.GetMaxCharCount(MicroQRVersion.M4));
+        var rentedChars = ArrayPool<char>.Shared.Rent(room);
         try
         {
-            var chars = rentedChars.AsSpan(0, destination.Length);
+            var chars = rentedChars.AsSpan(0, room);
             bool success;
             using (PayloadOutput.Bytes())
                 success = TryDecode(modules, size, chars, out bytesWritten, out info);
@@ -342,7 +354,8 @@ public static class MicroQRCodeDecoder
     /// Finds a Micro QR code in a grayscale image and decodes its bytes, as <see cref="TryDecodeBytes(MicroQRCodeData, out byte[], out MicroQRCodeDecodeInfo)"/> reads them.
     /// </summary>
     /// <remarks>
-    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out MicroQRCodeDecodeInfo)"/> searches it, so the same symbol is found. Only what is read from it differs.
+    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out MicroQRCodeDecodeInfo)"/> searches it, and a symbol whose content a call cannot give does not stop the search.
+    /// The bytes calls read some symbols the text calls cannot, such as a Kanji cell outside JIS X 0208. So in an image of several symbols the two calls can return different ones.
     /// </remarks>
     /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -386,10 +399,12 @@ public static class MicroQRCodeDecoder
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, Span<byte> destination, out int bytesWritten, out MicroQRCodeDecodeInfo info)
     {
-        var rentedChars = ArrayPool<char>.Shared.Rent(destination.Length);
+        // No symbol holds more bytes than the largest version, so a longer destination needs no longer buffer.
+        var room = Math.Min(destination.Length, MicroQRMatrixDecoder.GetMaxCharCount(MicroQRVersion.M4));
+        var rentedChars = ArrayPool<char>.Shared.Rent(room);
         try
         {
-            var chars = rentedChars.AsSpan(0, destination.Length);
+            var chars = rentedChars.AsSpan(0, room);
             bool success;
             using (PayloadOutput.Bytes())
                 success = TryDecodeImage(luminance, width, height, chars, out bytesWritten, out info);

@@ -266,7 +266,8 @@ public static class RmQRCodeDecoder
     /// Under FNC1 the separator is the byte 0x1D, as it is U+001D in the text. ECI headers are not bytes. The info reports them.
     /// </para>
     /// <para>
-    /// Every ECI assignment reads, and <see cref="RmQRCodeDecodeInfo.EciAssignment"/> names the one the bytes are in, <c>null</c> when the symbol declares none.
+    /// Every ECI assignment reads, and <see cref="RmQRCodeDecodeInfo.EciAssignment"/> names the one the Byte and Kanji segments are under, <c>null</c> when they are under none, and the first declared when the symbol has neither.
+    /// A designator number past the last assignment, 999999, fails with <see cref="DecodeStatus.UnsupportedContent"/>, as it does in the text calls.
     /// A symbol whose Byte and Kanji segments fall under two different assignments, no ECI counting as one, fails with <see cref="DecodeStatus.UnsupportedContent"/>, because its bytes have no single reading. The text calls read such a symbol when they have a charset for each assignment.
     /// </para>
     /// </remarks>
@@ -283,14 +284,24 @@ public static class RmQRCodeDecoder
         var width = data.GetCoreWidth();
         var height = data.GetCoreHeight();
         var rented = ArrayPool<byte>.Shared.Rent(width * height);
+        var maxBytes = RmQRMatrixDecoder.GetMaxCharCount(data.Version);
+        var rentedChars = ArrayPool<char>.Shared.Rent(maxBytes);
         try
         {
-            var modules = rented.AsSpan(0, width * height);
-            data.GetCoreData(modules);
-            return TryDecodeBytes(modules, width, height, out bytes, out info);
+            var core = rented.AsSpan(0, width * height);
+            data.GetCoreData(core);
+            var chars = rentedChars.AsSpan(0, maxBytes);
+            DecodeStatus status;
+            int written;
+            // The core as it stands, as the text call decodes it. A search for its border could cut a light edge row off.
+            using (PayloadOutput.Bytes())
+                status = RmQRMatrixDecoder.DecodeMatrix(core, width, height, chars, out written, out info);
+            bytes = status == DecodeStatus.Success ? PayloadOutput.ToArray(chars.Slice(0, written)) : [];
+            return status == DecodeStatus.Success;
         }
         finally
         {
+            ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
             ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
     }
@@ -338,10 +349,12 @@ public static class RmQRCodeDecoder
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int width, int height, Span<byte> destination, out int bytesWritten, out RmQRCodeDecodeInfo info)
     {
-        var rentedChars = ArrayPool<char>.Shared.Rent(destination.Length);
+        // No symbol holds more bytes than the largest version, so a longer destination needs no longer buffer.
+        var room = Math.Min(destination.Length, RmQRMatrixDecoder.GetMaxCharCount(RmQRVersion.R17x139));
+        var rentedChars = ArrayPool<char>.Shared.Rent(room);
         try
         {
-            var chars = rentedChars.AsSpan(0, destination.Length);
+            var chars = rentedChars.AsSpan(0, room);
             bool success;
             using (PayloadOutput.Bytes())
                 success = TryDecode(modules, width, height, chars, out bytesWritten, out info);
@@ -358,7 +371,8 @@ public static class RmQRCodeDecoder
     /// Finds an rMQR code in a grayscale image and decodes its bytes, as <see cref="TryDecodeBytes(RmQRCodeData, out byte[], out RmQRCodeDecodeInfo)"/> reads them.
     /// </summary>
     /// <remarks>
-    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> searches it, so the same symbol is found. Only what is read from it differs.
+    /// The image is searched as <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> searches it, and a symbol whose content a call cannot give does not stop the search.
+    /// The bytes calls read some symbols the text calls cannot, such as one under an assignment with no charset here, and refuse one whose bytes fall under two assignments. So in an image of several symbols the two calls can return different ones.
     /// </remarks>
     /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -402,10 +416,12 @@ public static class RmQRCodeDecoder
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeImageBytes(ReadOnlySpan<byte> luminance, int width, int height, Span<byte> destination, out int bytesWritten, out RmQRCodeDecodeInfo info)
     {
-        var rentedChars = ArrayPool<char>.Shared.Rent(destination.Length);
+        // No symbol holds more bytes than the largest version, so a longer destination needs no longer buffer.
+        var room = Math.Min(destination.Length, RmQRMatrixDecoder.GetMaxCharCount(RmQRVersion.R17x139));
+        var rentedChars = ArrayPool<char>.Shared.Rent(room);
         try
         {
-            var chars = rentedChars.AsSpan(0, destination.Length);
+            var chars = rentedChars.AsSpan(0, room);
             bool success;
             using (PayloadOutput.Bytes())
                 success = TryDecodeImage(luminance, width, height, chars, out bytesWritten, out info);

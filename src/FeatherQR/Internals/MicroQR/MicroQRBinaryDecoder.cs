@@ -126,7 +126,8 @@ internal static class MicroQRBinaryDecoder
                         {
                             if (bytes)
                             {
-                                var copyStatus = SegmentDecoders.CopyBytePayload(ref reader, totalBits, count, destination, ref charsWritten);
+                                rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
+                                var copyStatus = SegmentDecoders.CopyBytePayload(ref reader, totalBits, count, rentedBytes, destination, ref charsWritten);
                                 if (copyStatus != DecodeStatus.Success)
                                     return copyStatus;
                                 break;

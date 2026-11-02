@@ -53,7 +53,7 @@ internal static partial class RmQRSegmentPlanner
     // Kanji's narrowest count indicator (R7x43 and R11x27), the header the Kanji screen charges a stretch of characters with a cell. Pinned by KanjiPlanBoundsTest.
     private const int MinCountBitsKanji = 2;
 
-    /// <summary>rMQR ECI prefix: 3-bit mode indicator 111 plus a one-byte assignment designator.</summary>
+    /// <summary>The ECI prefix of a text charset, assignment 3 or 26: 3-bit mode indicator 111 plus a one-codeword designator. Bytes under an assignment price theirs with <see cref="EciModeExtensions.GetRmQrHeaderBits"/>.</summary>
     private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + 8;
 
     /// <summary>

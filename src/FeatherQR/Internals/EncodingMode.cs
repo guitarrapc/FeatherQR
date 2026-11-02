@@ -32,7 +32,7 @@ internal enum EncodingMode
     Kanji = 8,
     /// <summary>
     /// Extended Channel Interpretation (metadata only).
-    /// Mode indicator: 0111 + 8-bit assignment number Specifies character encoding for Byte mode:
+    /// Mode indicator: 0111 + a designator of 8, 16 or 24 bits. Specifies character encoding for Byte mode:
     ///   - ECI 3: ISO-8859-1
     ///   - ECI 4: ISO-8859-2
     ///   - ECI 26: UTF-8 Always followed by another mode (typically Byte).

@@ -22,20 +22,21 @@ public static partial class RmQRCodeGenerator
     /// <para>
     /// The bytes are the bytes in the symbol. Runs of digits may be written in Numeric mode and runs of uppercase letters in Alphanumeric mode, which carry the same ASCII bytes in fewer bits, the way text takes those modes.
     /// <paramref name="eciAssignment"/> declares how the bytes are interpreted, for example 899 for binary data, 20 for Shift_JIS or 26 for UTF-8, and is written as an ECI header of 11 to 27 bits. With none, as by default, no header is written.
-    /// The assignment <see cref="RmQRCodeDecodeInfo.EciAssignment"/> reports passes straight back, so a symbol's bytes and its assignment write the symbol again.
+    /// The assignment a bytes call of <see cref="RmQRCodeDecoder"/> reports passes straight back, so the bytes it read are written again under the declaration they were read under.
+    /// Kanji mode and FNC1 are not part of the bytes and are not written again. Kanji pairs take 16 bits each in Byte mode, where Kanji mode takes 13, so they can need a larger symbol.
     /// </para>
     /// <para>
     /// <see cref="RmQRCodeGeneratorOptions.Version"/>, <see cref="RmQRCodeGeneratorOptions.FitStrategy"/>, <see cref="RmQRCodeGeneratorOptions.Height"/>, <see cref="RmQRCodeGeneratorOptions.QuietZoneSize"/> and <see cref="RmQRCodeGeneratorOptions.Segmentation"/> apply as they do to text.
     /// The options that mean something only for text are refused: an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/>, <see cref="RmQRCodeGeneratorOptions.AllowKanji"/> and an FNC1 mode.
     /// </para>
     /// </remarks>
-    /// <param name="data">The bytes to encode. An array converts implicitly. An empty payload needs a typed argument, such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>, since <c>[]</c> and <c>default</c> fit the text overload too.</param>
+    /// <param name="data">The bytes to encode. An array converts implicitly. An empty payload needs a typed argument, such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>, since <c>[]</c>, <c>default</c> and <c>null</c> fit the text overload too.</param>
     /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
     /// <param name="options">Version, fit, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
     /// <returns>The module matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the content does not fit, when the options contradict each other, or when they carry a setting only text uses.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value, or an assignment outside 0 to 999999.</exception>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit, when the options contradict each other, or when they carry an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy or segmentation, or an assignment outside 0 to 999999.</exception>
     public static RmQRCodeData Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(in options, eciAssignment);
@@ -79,8 +80,8 @@ public static partial class RmQRCodeGenerator
     /// <param name="options">Version, fit, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header. Size <paramref name="destination"/> with the same assignment.</param>
     /// <returns>The number of bytes written.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, when the options contradict each other, or when they carry a setting only text uses.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value, or an assignment outside 0 to 999999.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, when the options contradict each other, or when they carry an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy or segmentation, or an assignment outside 0 to 999999.</exception>
     public static int Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(in options, eciAssignment);
@@ -127,7 +128,7 @@ public static partial class RmQRCodeGenerator
     /// <param name="options">Version, fit, quiet zone and segmentation settings.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
     /// <returns><c>true</c> when the content fits.</returns>
-    /// <exception cref="ArgumentException">Thrown when <see cref="RmQRCodeGeneratorOptions.Version"/> and <see cref="RmQRCodeGeneratorOptions.Height"/> disagree, or when the options carry a setting only text uses.</exception>
+    /// <exception cref="ArgumentException">Thrown when <see cref="RmQRCodeGeneratorOptions.Version"/> and <see cref="RmQRCodeGeneratorOptions.Height"/> disagree, or when the options carry an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy or segmentation, or an assignment outside 0 to 999999.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {

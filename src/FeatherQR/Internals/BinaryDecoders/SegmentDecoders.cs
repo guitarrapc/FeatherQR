@@ -293,7 +293,13 @@ internal static class SegmentDecoders
     /// <summary>
     /// A Byte segment's <paramref name="count"/> bytes as written, one a char, with no charset applied and a byte order mark kept.
     /// </summary>
-    public static DecodeStatus CopyBytePayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
+    /// <param name="reader">Reader positioned at the first byte of the segment. It is advanced past the segment.</param>
+    /// <param name="totalBits">Length of the whole bitstream, in bits. Used to reject a segment that runs past the end.</param>
+    /// <param name="count">Number of bytes in this segment.</param>
+    /// <param name="scratch">Staging for the segment's bytes, at least as long as the codewords the stream came from.</param>
+    /// <param name="destination">Destination for the bytes, one a char.</param>
+    /// <param name="charsWritten">Chars already in <paramref name="destination"/>, advanced past the segment.</param>
+    public static DecodeStatus CopyBytePayload(ref BitReader reader, int totalBits, int count, Span<byte> scratch, Span<char> destination, ref int charsWritten)
     {
         // Bitstream sufficiency first. See DecodeNumericPayload for why the order matters.
         if (totalBits - reader.BitPosition < count * 8)
@@ -302,9 +308,11 @@ internal static class SegmentDecoders
         if (destination.Length - charsWritten < count)
             return DecodeStatus.DestinationTooSmall;
 
-        for (var i = 0; i < count; i++)
-            destination[charsWritten++] = (char)reader.Reads(8);
-
+        // Read whole, as the text route stages a segment, rather than a byte at a time.
+        var payload = scratch.Slice(0, count);
+        reader.ReadBytes(payload);
+        PayloadOutput.Widen(payload, destination.Slice(charsWritten, count));
+        charsWritten += count;
         return DecodeStatus.Success;
     }
 

@@ -24,21 +24,22 @@ public static partial class QRCodeGenerator
     /// <remarks>
     /// <para>
     /// The bytes are the bytes in the symbol. Runs of digits may be written in Numeric mode and runs of uppercase letters in Alphanumeric mode, which carry the same ASCII bytes in fewer bits, the way text takes those modes.
-    /// <paramref name="eciAssignment"/> declares how the bytes are interpreted, for example 899 for binary data, 20 for Shift_JIS or 26 for UTF-8, and is written as an ECI header of 12 to 28 bits. With none, as by default, no header is written, which is what a binary payload usually carries and what every reader takes.
-    /// The assignment <see cref="QRCodeDecodeInfo.EciAssignment"/> reports passes straight back, so a symbol's bytes and its assignment write the symbol again.
+    /// <paramref name="eciAssignment"/> declares how the bytes are interpreted, for example 899 for binary data, 20 for Shift_JIS or 26 for UTF-8, and is written as an ECI header of 12 to 28 bits. With none, as by default, no header is written, which is what a binary payload usually carries.
+    /// The assignment a bytes call of <see cref="QRCodeDecoder"/> reports passes straight back, so the bytes it read are written again under the declaration they were read under.
+    /// Kanji mode, FNC1 and a Structured Append header are not part of the bytes and are not written again. Kanji pairs take 16 bits each in Byte mode, where Kanji mode takes 13, so they can need a larger symbol.
     /// </para>
     /// <para>
     /// <see cref="QRCodeGeneratorOptions.Version"/>, <see cref="QRCodeGeneratorOptions.QuietZoneSize"/>, <see cref="QRCodeGeneratorOptions.MaskPattern"/>, <see cref="QRCodeGeneratorOptions.BoostEccLevel"/> and <see cref="QRCodeGeneratorOptions.Segmentation"/> apply as they do to text.
     /// The options that mean something only for text are refused: an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/>, <see cref="QRCodeGeneratorOptions.Utf8Bom"/>, <see cref="QRCodeGeneratorOptions.AllowKanji"/> and an FNC1 mode.
     /// </para>
     /// </remarks>
-    /// <param name="data">The bytes to encode. An array converts implicitly. An empty payload needs a typed argument, such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>, since <c>[]</c> and <c>default</c> fit the text overload too.</param>
+    /// <param name="data">The bytes to encode. An array converts implicitly. An empty payload needs a typed argument, such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>, since <c>[]</c>, <c>default</c> and <c>null</c> fit the text overload too.</param>
     /// <param name="eccLevel">How much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.</param>
     /// <param name="options">Version, quiet zone, mask, boost and segmentation settings. Omit for the defaults.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
     /// <returns>The module matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options carry a setting only text uses.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static QRCodeData Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
@@ -74,8 +75,8 @@ public static partial class QRCodeGenerator
     /// <param name="options">Version, quiet zone, mask, boost and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header. Size <paramref name="destination"/> with the same assignment.</param>
     /// <returns>The number of bytes written.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options carry a setting only text uses.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static int Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
@@ -114,8 +115,8 @@ public static partial class QRCodeGenerator
     /// <param name="options">Version, quiet zone, mask, boost and segmentation settings.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
     /// <returns><c>true</c> when the content fits.</returns>
-    /// <exception cref="ArgumentException">Thrown when the options carry a setting only text uses.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
+    /// <exception cref="ArgumentException">Thrown when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         size = default;
@@ -157,14 +158,14 @@ public static partial class QRCodeGenerator
     /// <param name="options">Version, quiet zone, mask, boost and segmentation settings. The version range bounds the size of every symbol.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
     /// <returns>The symbols in set order: one when the bytes fit a single symbol, otherwise two to sixteen.</returns>
-    /// <exception cref="ArgumentException">Thrown when the bytes do not fit sixteen symbols of the largest version in the range, or when the options carry a setting only text uses.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
+    /// <exception cref="ArgumentException">Thrown when the bytes do not fit sixteen symbols of the largest version in the range, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
     public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<byte> data, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(eccLevel, in options, eciAssignment);
         if (data.Length > StructuredAppendPlanner.MaxSymbols * MaxSymbolBytes)
         {
-            throw new ArgumentException($"Content does not fit {StructuredAppendPlanner.MaxSymbols} Structured Append symbols: {data.Length} bytes is more than sixteen symbols hold in any mode.", nameof(data));
+            throw new ArgumentException($"Content does not fit {StructuredAppendPlanner.MaxSymbols} Structured Append symbols: {data.Length} bytes is more than sixteen symbols hold in any mode.", nameof(options));
         }
 
         char[]? rented = null;

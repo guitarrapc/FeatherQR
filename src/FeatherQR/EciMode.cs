@@ -81,7 +81,8 @@ public enum EciMode
 /// Inside the encoders an <see cref="EciMode"/> says both how the content becomes bytes and which header precedes them.
 /// Bytes input is written as it is, the way ISO-8859-1 text is, under the assignment the caller names or under none.
 /// None is <see cref="EciMode.Default"/>. A named assignment is a value no caller can pass: <see cref="DeclaredBytesFlag"/> with the number in the bits below it.
-/// The encoders compare a charset only with <see cref="EciMode.Default"/>, for the header, and with <see cref="EciMode.Utf8"/>, to transcode, so such a value is written with its header and its bytes as they are.
+/// The header and the byte form are decided by comparing a charset only with <see cref="EciMode.Default"/>, for the header, and with <see cref="EciMode.Utf8"/>, to transcode, so such a value is written with its header and its bytes as they are.
+/// The code that names the text charsets never sees such a value or admits it by <see cref="IsDeclaredBytes"/>. Bytes are analyzed under <see cref="EciMode.Default"/> and take the value afterwards, the stream writers' charset checks and rMQR's header price admit it, and the FNC1 writers are never reached because bytes refuse FNC1.
 /// </remarks>
 internal static class EciModeExtensions
 {

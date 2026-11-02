@@ -1,3 +1,7 @@
+#if NET5_0_OR_GREATER
+using System.Text;
+#endif
+
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
@@ -28,11 +32,27 @@ internal static class PayloadOutput
         return default;
     }
 
+    /// <summary>Copies bytes to chars one to one, U+0000 to U+00FF, as a bytes decode writes them.</summary>
+    public static void Widen(ReadOnlySpan<byte> bytes, Span<char> destination)
+    {
+#if NET5_0_OR_GREATER
+        Encoding.Latin1.GetChars(bytes, destination);
+#else
+        for (var i = 0; i < bytes.Length; i++)
+            destination[i] = (char)bytes[i];
+#endif
+    }
+
     /// <summary>Copies a bytes decode's chars to bytes. Every char of one is below 0x100.</summary>
     public static void Narrow(ReadOnlySpan<char> chars, Span<byte> destination)
     {
+#if NET5_0_OR_GREATER
+        // Latin-1 maps every char below 0x100 to itself, so its fallback for the others never runs.
+        Encoding.Latin1.GetBytes(chars, destination);
+#else
         for (var i = 0; i < chars.Length; i++)
             destination[i] = (byte)chars[i];
+#endif
     }
 
     /// <summary>A bytes decode's chars as a new array.</summary>

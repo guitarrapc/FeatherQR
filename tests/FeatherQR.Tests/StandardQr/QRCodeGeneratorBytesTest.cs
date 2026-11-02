@@ -11,7 +11,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class QRCodeGeneratorBytesTest
 {
-    private static readonly QRCodeGeneratorOptions Single = new() { QuietZoneSize = 0 };
+    private static readonly QRCodeGeneratorOptions Single = new() { QuietZoneSize = 0, Segmentation = QRSegmentation.Single };
     private static readonly QRCodeGeneratorOptions Optimal = new() { QuietZoneSize = 0, Segmentation = QRSegmentation.Optimal };
 
     /// <summary>Every byte value once, in order: digits and uppercase letters in runs a plan can take into Numeric and Alphanumeric, and every other value beside them.</summary>
@@ -45,6 +45,7 @@ public class QRCodeGeneratorBytesTest
     /// <summary>
     /// Payloads of runs drawn from digits, uppercase letters and any byte, so plans mix all three modes, under assignments of every designator length.
     /// The span form writes the class form's modules, and sizing reports the version both use.
+    /// Every payload fits, since 699 bytes is less than 40-H holds behind the longest header.
     /// </summary>
     [Test]
     [Arguments(1)]
@@ -62,8 +63,7 @@ public class QRCodeGeneratorBytesTest
             var options = new QRCodeGeneratorOptions { QuietZoneSize = 0, Segmentation = random.Next(2) == 0 ? QRSegmentation.Single : QRSegmentation.Optimal };
             var label = $"seed {seed} trial {trial}: {payload.Length} bytes, ECI {eci?.ToString() ?? "none"}, {level}, {options.Segmentation}";
 
-            if (!QRCodeGenerator.TryGetRequiredBufferSize(payload, level, out var size, options, eci))
-                continue;
+            await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(payload, level, out var size, options, eci)).IsTrue().Because(label);
             var data = QRCodeGenerator.Create(payload, level, options, eci);
             await Assert.That(data.Version).IsEqualTo(size.Version).Because(label);
 
@@ -179,6 +179,8 @@ public class QRCodeGeneratorBytesTest
 
         var full = QRCodeGenerator.Create(Filled(capacity), level, options);
         await Assert.That(full.Version).IsEqualTo(version);
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(Filled(capacity), level, out var size, options)).IsTrue();
+        await Assert.That(size.Version).IsEqualTo(version);
         await Assert.That(() => QRCodeGenerator.Create(Filled(capacity + 1), level, options)).ThrowsExactly<ArgumentException>();
     }
 
@@ -195,11 +197,58 @@ public class QRCodeGeneratorBytesTest
         var options = Single with { Version = 40 };
 
         await Assert.That(QRCodeGenerator.Create(Filled(capacity), QREccLevel.L, options, eci).Version).IsEqualTo(40);
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(Filled(capacity), QREccLevel.L, out var size, options, eci)).IsTrue();
+        await Assert.That(size.Version).IsEqualTo(40);
         await Assert.That(() => QRCodeGenerator.Create(Filled(capacity + 1), QREccLevel.L, options, eci)).ThrowsExactly<ArgumentException>();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(Filled(capacity + 1), QREccLevel.L, out _, options, eci)).IsFalse();
     }
 
-    /// <summary>Digits are a byte each in Numeric mode, so 7,089 of them fit 40-L though it holds 2,953 bytes of anything else, and 7,090 are refused.</summary>
+    /// <summary>
+    /// 100 bytes no other mode takes, then digits: the cheapest plan is a Byte segment and a Numeric one, which the test prices from the standard's bit costs.
+    /// At 10-L the most digits that plan fits behind each header are written at 10, and one more digit is refused.
+    /// </summary>
+    [Test]
+    [Arguments(-1)]
+    [Arguments(127)]
+    [Arguments(128)]
+    [Arguments(16384)]
+    public async Task Optimal_TheDesignatorComesOutOfThePlansRoom(int assignment)
+    {
+        int? eci = assignment < 0 ? null : assignment;
+        var headerBits = eci is { } number ? 4 + (number < 128 ? 8 : number < 16384 ? 16 : 24) : 0;
+        var dataBits = QRCodeConstants.GetEccInfo(10, QREccLevel.L).TotalDataCodewords * 8;
+        var bytePart = 4 + EncodingMode.Byte.GetCountIndicatorLength(10) + 100 * 8;
+        var numericHeader = 4 + EncodingMode.Numeric.GetCountIndicatorLength(10);
+        var digits = 0;
+        while (headerBits + bytePart + numericHeader + NumericBits(digits + 1) <= dataBits)
+            digits++;
+        var options = Optimal with { Version = 10 };
+
+        await Assert.That(QRCodeGenerator.Create(BytesThenDigits(digits), QREccLevel.L, options, eci).Version).IsEqualTo(10);
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(BytesThenDigits(digits), QREccLevel.L, out var size, options, eci)).IsTrue();
+        await Assert.That(size.Version).IsEqualTo(10);
+        await Assert.That(() => QRCodeGenerator.Create(BytesThenDigits(digits + 1), QREccLevel.L, options, eci)).ThrowsExactly<ArgumentException>();
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(BytesThenDigits(digits + 1), QREccLevel.L, out _, options, eci)).IsFalse();
+    }
+
+    /// <summary>At a pinned version every symbol of a set holds its Byte capacity behind the set header and the assignment's header: two symbols' worth is two symbols, one byte more is three.</summary>
+    [Test]
+    [Arguments(-1)]
+    [Arguments(127)]
+    [Arguments(128)]
+    [Arguments(16384)]
+    public async Task StructuredAppend_EachSymbolHoldsItsCapacityBehindBothHeaders(int assignment)
+    {
+        int? eci = assignment < 0 ? null : assignment;
+        var headerBits = 20 + (eci is { } number ? 4 + (number < 128 ? 8 : number < 16384 ? 16 : 24) : 0);
+        var perSymbol = ByteCapacity(5, QREccLevel.L, headerBits);
+        var options = Single with { Version = 5 };
+
+        await Assert.That(QRCodeGenerator.CreateStructuredAppend(Filled(2 * perSymbol), QREccLevel.L, options, eci).Length).IsEqualTo(2);
+        await Assert.That(QRCodeGenerator.CreateStructuredAppend(Filled(2 * perSymbol + 1), QREccLevel.L, options, eci).Length).IsEqualTo(3);
+    }
+
+    /// <summary>Digits are a byte each in Numeric mode, so 7,089 of them fit 40-L though it holds 2,953 bytes in Byte mode, and 7,090 are refused.</summary>
     [Test]
     public async Task Digits_AreWrittenInNumericMode_SoTheyFitPastTheByteCapacity()
     {
@@ -230,14 +279,21 @@ public class QRCodeGeneratorBytesTest
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(payload, QREccLevel.L, out _, Optimal)).IsFalse();
     }
 
-    /// <summary>Sixteen 40-L symbols hold 47,216 bytes no mode but Byte takes, 2,951 each behind the set header.</summary>
+    /// <summary>
+    /// Sixteen 40-L symbols hold 47,216 bytes no mode but Byte takes, 2,951 each behind the set header.
+    /// 1,000,000 bytes is past what sixteen symbols hold even in Numeric mode, so it is refused before the planner runs, and names the same argument the planner does.
+    /// </summary>
     [Test]
     [Arguments(47_217)]
     [Arguments(1_000_000)]
     public async Task StructuredAppend_TooLongForSixteenSymbols_IsRefused(int length)
     {
         await Assert.That(QRCodeGenerator.CreateStructuredAppend(Filled(47_216), QREccLevel.L).Length).IsEqualTo(16).Because("the premise: the largest set holds this much");
-        await Assert.That(() => QRCodeGenerator.CreateStructuredAppend(Filled(length), QREccLevel.L)).ThrowsExactly<ArgumentException>();
+
+        var exception = Assert.Throws<ArgumentException>(() => QRCodeGenerator.CreateStructuredAppend(Filled(length), QREccLevel.L));
+
+        await Assert.That(exception.GetType()).IsEqualTo(typeof(ArgumentException));
+        await Assert.That(exception.ParamName).IsEqualTo("options");
     }
 
     // The text call's symbols
@@ -379,16 +435,25 @@ public class QRCodeGeneratorBytesTest
         await Assert.That(Modules(parts[0])).IsEquivalentTo(Modules(QRCodeGenerator.Create(payload, QREccLevel.M, Single, 899)), CollectionOrdering.Matching);
     }
 
+    /// <summary>The boost prices every chunk again, and a declared chunk is priced with its header.</summary>
     [Test]
-    public async Task StructuredAppend_Boost_RaisesTheWholeSet()
+    [Arguments(-1)]
+    [Arguments(899)]
+    [Arguments(16384)]
+    public async Task StructuredAppend_Boost_RaisesTheWholeSet(int assignment)
     {
         var payload = Filled(220);
+        int? eci = assignment < 0 ? null : assignment;
 
-        var parts = QRCodeGenerator.CreateStructuredAppend(payload, QREccLevel.L, new QRCodeGeneratorOptions { Version = 5, BoostEccLevel = true });
+        var parts = QRCodeGenerator.CreateStructuredAppend(payload, QREccLevel.L, new QRCodeGeneratorOptions { Version = 5, BoostEccLevel = true }, eci);
 
-        await Assert.That(parts.Length).IsEqualTo(3).Because("5-L holds 104 bytes behind the set header, so 220 need three symbols");
+        await Assert.That(parts.Length).IsEqualTo(3).Because("5-L holds 104 bytes behind the set header and 100 behind 16384's header too, so 220 need three symbols");
         foreach (var part in parts)
-            await Assert.That(part.EccLevel).IsEqualTo(QREccLevel.M).Because("74 bytes a symbol take 624 bits: within 5-M's 688, over 5-Q's 496");
+        {
+            await Assert.That(part.EccLevel).IsEqualTo(QREccLevel.M).Because("74 bytes a symbol take 624 bits, 652 behind 16384's header: within 5-M's 688, over 5-Q's 496");
+            await Assert.That(QRCodeDecoder.TryDecodeBytes(part, out _, out var info)).IsTrue();
+            await Assert.That(info.EciAssignment).IsEqualTo(eci);
+        }
     }
 
     // Helpers
@@ -396,6 +461,18 @@ public class QRCodeGeneratorBytesTest
     /// <summary>The standard's Byte capacity of a version and level: its data bits less the header, the Byte mode indicator and count indicator, in whole bytes.</summary>
     private static int ByteCapacity(int version, QREccLevel level, int headerBits)
         => (QRCodeConstants.GetEccInfo(version, level).TotalDataCodewords * 8 - headerBits - 4 - EncodingMode.Byte.GetCountIndicatorLength(version)) / 8;
+
+    /// <summary>The Numeric payload bits of a run of digits: 10 for three, 7 for two left over, 4 for one.</summary>
+    private static int NumericBits(int digits) => digits / 3 * 10 + (digits % 3) switch { 1 => 4, 2 => 7, _ => 0 };
+
+    /// <summary>100 bytes of 0xFF, then a run of digits.</summary>
+    private static byte[] BytesThenDigits(int digits)
+    {
+        var payload = new byte[100 + digits];
+        payload.AsSpan(0, 100).Fill(0xFF);
+        payload.AsSpan(100).Fill((byte)'7');
+        return payload;
+    }
 
     /// <summary>A payload of 0xFF bytes, which no mode but Byte holds.</summary>
     private static byte[] Filled(int length)
