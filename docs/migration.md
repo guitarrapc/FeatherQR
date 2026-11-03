@@ -192,10 +192,10 @@ The one spelling that needs an edit is a named argument: `plainText:` becomes `t
 
 ### Bytes overloads beside the text ones
 
-`QRCodeGenerator` and `RmQRCodeGenerator` gained `Create`, span `Create` and `TryGetRequiredBufferSize` overloads over `ReadOnlySpan<byte>`, and `QRCodeGenerator` a `CreateStructuredAppend` one, which write bytes as they are. A `string`, a `char` span, a `byte[]` and a `"..."u8` literal each pick their overload as before. Empty content written as `default`, `[]` or a `null` literal fits both, so the compiler reports the call as ambiguous (CS0121) when no options follow it. With options the text overload is taken, since the bytes one would still need its assignment's default. Name the kind:
+`QRCodeGenerator`, `MicroQRCodeGenerator` and `RmQRCodeGenerator` gained `Create`, span `Create` and `TryGetRequiredBufferSize` overloads over `ReadOnlySpan<byte>`, and `QRCodeGenerator` a `CreateStructuredAppend` one, which write bytes as they are. A `string`, a `char` span, a `byte[]` and a `"..."u8` literal each pick their overload as before. Empty content written as `default`, `[]` or a `null` literal fits both. From C# 13 such a call takes the text overload, as before, because the bytes overloads carry `[OverloadResolutionPriority(-1)]`. Earlier language versions ignore that attribute and report the call as ambiguous (CS0121) when no options follow it. With options the Standard QR and rMQR text overload is taken, since the bytes one would still need its assignment's default. Micro QR's bytes overloads take no assignment, so there the call is ambiguous with options too. A project on net8.0 is at C# 12 by default, and one on .NET Framework at C# 7.3 ([Older language versions](#older-language-versions)). Below C# 13, name the kind:
 
 ```csharp
-QRCodeGenerator.Create(default, QREccLevel.M);                    // CS0121 now
+QRCodeGenerator.Create(default, QREccLevel.M);                    // the empty text from C# 13, CS0121 before
 QRCodeGenerator.Create("", QREccLevel.M);                         // the empty text, as before
 QRCodeGenerator.Create(ReadOnlySpan<byte>.Empty, QREccLevel.M);   // empty bytes
 ```

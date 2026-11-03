@@ -817,6 +817,45 @@ public class NetStandardBuildParityTest
         }
     }
 
+    /// <summary>
+    /// A payload longer than any symbol holds through Standard QR's span call, whose error names the mode a netstandard build reads with a loop of its own.
+    /// The last byte decides some payloads, so the loop reads to the end. The first decides others, so a later byte must not undo what it decided.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Frameworks))]
+    public async Task BytesTooLong_FailAsThisHostsBuild(string targetFramework)
+    {
+        var (build, path) = await LoadBuild(targetFramework);
+        var create = BindBytesCreate(build, path);
+        var options = Activator.CreateInstance(build.GetType("FeatherQR.QRCodeGeneratorOptions", throwOnError: true)!)!;
+
+        foreach (var (first, last) in new[] { ('7', '7'), ('7', 'A'), ('7', 'a'), ('A', '7'), ('a', 'A') })
+        {
+            var payload = Enumerable.Repeat((byte)'7', 7090).ToArray();
+            payload[0] = (byte)first;
+            payload[^1] = (byte)last;
+            var label = $"'{first}' first, '{last}' last";
+            var expected = Thrown(() => QRCodeGenerator.Create(payload, QREccLevel.L, new byte[100]));
+            var actual = Thrown(() => create(payload, (int)QREccLevel.L, new byte[100], options, null));
+
+            await Assert.That(actual.GetType()).IsEqualTo(expected.GetType()).Because(label);
+            await Assert.That(actual.Message).IsEqualTo(expected.Message).Because(label);
+        }
+
+        static Exception Thrown(Action call)
+        {
+            try
+            {
+                call();
+            }
+            catch (Exception exception)
+            {
+                return exception;
+            }
+            throw new InvalidOperationException("The call did not throw.");
+        }
+    }
+
     /// <summary>The loaded build's <c>QRCodeGenerator.Create(ReadOnlySpan&lt;byte&gt;, ecc, Span&lt;byte&gt;, in options, int?)</c>, taking arrays.</summary>
     private static BytesCreate BindBytesCreate(Assembly build, string path)
     {

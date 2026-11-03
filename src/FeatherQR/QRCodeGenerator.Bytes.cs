@@ -2,6 +2,8 @@ using System.Buffers;
 #if NET5_0_OR_GREATER
 using System.Text;
 #endif
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using FeatherQR.Internals;
 using FeatherQR.Internals.StandardQR;
 
@@ -33,7 +35,7 @@ public static partial class QRCodeGenerator
     /// The options that mean something only for text are refused: an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/>, <see cref="QRCodeGeneratorOptions.Utf8Bom"/>, <see cref="QRCodeGeneratorOptions.AllowKanji"/> and an FNC1 mode.
     /// </para>
     /// </remarks>
-    /// <param name="data">The bytes to encode. An array converts implicitly. An empty payload needs a typed argument, such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>, since <c>[]</c>, <c>default</c> and <c>null</c> fit the text overload too.</param>
+    /// <param name="data">The bytes to encode. An array converts implicitly. From C# 13, <c>[]</c>, <c>default</c> and <c>null</c> take the text overload unless an assignment is given. Before it they can be ambiguous, so pass a typed empty payload such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>.</param>
     /// <param name="eccLevel">How much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.</param>
     /// <param name="options">Version, quiet zone, mask, boost and segmentation settings. Omit for the defaults.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
@@ -41,11 +43,12 @@ public static partial class QRCodeGenerator
     /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
+    [OverloadResolutionPriority(-1)]
     public static QRCodeData Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(eccLevel, in options, eciAssignment);
         if (data.Length > MaxSymbolBytes)
-            ThrowBytesDoNotFit(data.Length, charset, eccLevel, in options);
+            ThrowBytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, charset, eccLevel, in options);
 
         char[]? rented = null;
         Span<char> buffer = data.Length <= StackWidenedBytes ? stackalloc char[StackWidenedBytes] : (rented = ArrayPool<char>.Shared.Rent(data.Length));
@@ -78,11 +81,12 @@ public static partial class QRCodeGenerator
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
+    [OverloadResolutionPriority(-1)]
     public static int Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(eccLevel, in options, eciAssignment);
         if (data.Length > MaxSymbolBytes)
-            ThrowBytesDoNotFit(data.Length, charset, eccLevel, in options);
+            ThrowBytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, charset, eccLevel, in options);
 
         char[]? rented = null;
         Span<char> buffer = data.Length <= StackWidenedBytes ? stackalloc char[StackWidenedBytes] : (rented = ArrayPool<char>.Shared.Rent(data.Length));
@@ -117,6 +121,7 @@ public static partial class QRCodeGenerator
     /// <returns><c>true</c> when the content fits.</returns>
     /// <exception cref="ArgumentException">Thrown when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
+    [OverloadResolutionPriority(-1)]
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         size = default;
@@ -160,6 +165,7 @@ public static partial class QRCodeGenerator
     /// <returns>The symbols in set order: one when the bytes fit a single symbol, otherwise two to sixteen.</returns>
     /// <exception cref="ArgumentException">Thrown when the bytes do not fit sixteen symbols of the largest version in the range, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
+    [OverloadResolutionPriority(-1)]
     public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<byte> data, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(eccLevel, in options, eciAssignment);
@@ -214,9 +220,9 @@ public static partial class QRCodeGenerator
         return EciModeExtensions.BytesCharset(eciAssignment);
     }
 
-    /// <summary>The failure of a payload longer than any symbol holds, which <see cref="ThrowDoesNotFit"/> describes as the text calls do.</summary>
-    private static void ThrowBytesDoNotFit(int length, EciMode charset, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
-        => ThrowDoesNotFit(new TextAnalysisResult(EncodingMode.Byte, charset, length), eccLevel, in options);
+    /// <summary>The failure of a payload longer than any symbol holds, in the mode its bytes take, which <see cref="ThrowDoesNotFit"/> describes as the text calls do.</summary>
+    private static void ThrowBytesDoNotFit(ref byte first, int length, EciMode charset, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
+        => ThrowDoesNotFit(new TextAnalysisResult(TextAnalyzer.ModeOfBytes(ref first, length), charset, length), eccLevel, in options);
 
     /// <summary>The bytes one to a char, U+0000 to U+00FF, which every writer turns back into the same bytes.</summary>
     private static ReadOnlySpan<char> Widen(ReadOnlySpan<byte> data, Span<char> buffer)
@@ -231,7 +237,7 @@ public static partial class QRCodeGenerator
         return widened;
     }
 
-    /// <summary>The analysis of widened bytes: the mode their characters allow, as text gets, under the charset of the bytes.</summary>
+    /// <summary>The analysis of widened bytes. The mode is the one text of the same characters takes, and the charset is the bytes' own.</summary>
     private static TextAnalysisResult AnalyzeBytes(ReadOnlySpan<char> widened, EciMode charset)
         => TextAnalyzer.Analyze(widened, EciMode.Default) with { EciMode = charset };
 }

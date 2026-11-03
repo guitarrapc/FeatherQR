@@ -90,6 +90,26 @@ public class RmQRCodeGeneratorBytesTest
         await Assert.That(info.EciAssignment).IsEqualTo(eci);
     }
 
+    /// <summary>
+    /// Without options, <c>default</c>, <c>[]</c> and <c>null</c> fit the bytes overload and the text one equally, so these calls compile only because the bytes overloads rank lower.
+    /// With options the text overload is already the closer fit, since the bytes one leaves the assignment to its default.
+    /// </summary>
+    [Test]
+    public async Task UntypedEmptyArgument_WithoutOptions_WritesTheEmptySymbol()
+    {
+        var expected = Modules(RmQRCodeGenerator.Create("", RmQREccLevel.M));
+        await Assert.That(Modules(RmQRCodeGenerator.Create(ReadOnlySpan<byte>.Empty, RmQREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching)
+            .Because("the premise: either overload writes the same symbol");
+
+        await Assert.That(Modules(RmQRCodeGenerator.Create(default, RmQREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(Modules(RmQRCodeGenerator.Create([], RmQREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(Modules(RmQRCodeGenerator.Create(null, RmQREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(default, RmQREccLevel.M, out var size)).IsTrue();
+        var destination = new byte[size.BufferSize];
+        await Assert.That(RmQRCodeGenerator.Create(default, RmQREccLevel.M, destination)).IsEqualTo(size.BufferSize);
+        await Assert.That(destination).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
     // What the stream holds
 
     [Test]
@@ -210,6 +230,25 @@ public class RmQRCodeGeneratorBytesTest
         await Assert.That(() => RmQRCodeGenerator.Create(Filled(length), RmQREccLevel.M, new byte[100], Single)).ThrowsExactly<ArgumentException>();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(Filled(length), RmQREccLevel.M, out _)).IsFalse();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(Filled(length), RmQREccLevel.M, out _, Optimal)).IsFalse();
+    }
+
+    /// <summary>More bytes than any symbol holds are refused before the analysis, and the error still names the mode the text call names.</summary>
+    [Test]
+    [Arguments('7')]
+    [Arguments('A')]
+    public async Task TooLong_ReportsWhatTheTextCallReports(char character)
+    {
+        var text = new string(character, 362);
+        var payload = Encoding.ASCII.GetBytes(text);
+        foreach (var options in new[] { Single, Optimal })
+        {
+            var expected = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(text, RmQREccLevel.M, options));
+            foreach (var actual in new[] { Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(payload, RmQREccLevel.M, options)), Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(payload, RmQREccLevel.M, new byte[100], options)) })
+            {
+                await Assert.That(actual.Message).IsEqualTo(expected.Message).Because($"{options.Segmentation}");
+                await Assert.That(actual.ParamName).IsEqualTo(expected.ParamName).Because($"{options.Segmentation}");
+            }
+        }
     }
 
     /// <summary>Digits are a byte each in Numeric mode, so 361 of them fit R17x139-M though it holds 150 bytes in Byte mode, and 362 are refused.</summary>
