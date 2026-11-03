@@ -2,6 +2,7 @@ using System.Buffers;
 #if NET5_0_OR_GREATER
 using System.Text;
 #endif
+using System.Runtime.InteropServices;
 using FeatherQR.Internals;
 using FeatherQR.Internals.StandardQR;
 
@@ -45,7 +46,7 @@ public static partial class QRCodeGenerator
     {
         var charset = ValidateBytes(eccLevel, in options, eciAssignment);
         if (data.Length > MaxSymbolBytes)
-            ThrowBytesDoNotFit(data.Length, charset, eccLevel, in options);
+            ThrowBytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, charset, eccLevel, in options);
 
         char[]? rented = null;
         Span<char> buffer = data.Length <= StackWidenedBytes ? stackalloc char[StackWidenedBytes] : (rented = ArrayPool<char>.Shared.Rent(data.Length));
@@ -82,7 +83,7 @@ public static partial class QRCodeGenerator
     {
         var charset = ValidateBytes(eccLevel, in options, eciAssignment);
         if (data.Length > MaxSymbolBytes)
-            ThrowBytesDoNotFit(data.Length, charset, eccLevel, in options);
+            ThrowBytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, charset, eccLevel, in options);
 
         char[]? rented = null;
         Span<char> buffer = data.Length <= StackWidenedBytes ? stackalloc char[StackWidenedBytes] : (rented = ArrayPool<char>.Shared.Rent(data.Length));
@@ -214,9 +215,9 @@ public static partial class QRCodeGenerator
         return EciModeExtensions.BytesCharset(eciAssignment);
     }
 
-    /// <summary>The failure of a payload longer than any symbol holds, which <see cref="ThrowDoesNotFit"/> describes as the text calls do.</summary>
-    private static void ThrowBytesDoNotFit(int length, EciMode charset, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
-        => ThrowDoesNotFit(new TextAnalysisResult(EncodingMode.Byte, charset, length), eccLevel, in options);
+    /// <summary>The failure of a payload longer than any symbol holds, in the mode its bytes take, which <see cref="ThrowDoesNotFit"/> describes as the text calls do.</summary>
+    private static void ThrowBytesDoNotFit(ref byte first, int length, EciMode charset, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
+        => ThrowDoesNotFit(new TextAnalysisResult(TextAnalyzer.ModeOfBytes(ref first, length), charset, length), eccLevel, in options);
 
     /// <summary>The bytes one to a char, U+0000 to U+00FF, which every writer turns back into the same bytes.</summary>
     private static ReadOnlySpan<char> Widen(ReadOnlySpan<byte> data, Span<char> buffer)
@@ -231,7 +232,7 @@ public static partial class QRCodeGenerator
         return widened;
     }
 
-    /// <summary>The analysis of widened bytes: the mode their characters allow, as text gets, under the charset of the bytes.</summary>
+    /// <summary>The analysis of widened bytes. The mode is the one text of the same characters takes, and the charset is the bytes' own.</summary>
     private static TextAnalysisResult AnalyzeBytes(ReadOnlySpan<char> widened, EciMode charset)
         => TextAnalyzer.Analyze(widened, EciMode.Default) with { EciMode = charset };
 }

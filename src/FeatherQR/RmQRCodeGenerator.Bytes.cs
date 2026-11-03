@@ -2,6 +2,7 @@ using System.Buffers;
 #if NET5_0_OR_GREATER
 using System.Text;
 #endif
+using System.Runtime.InteropServices;
 using FeatherQR.Internals;
 using FeatherQR.Internals.RmQR;
 
@@ -41,7 +42,7 @@ public static partial class RmQRCodeGenerator
     {
         var charset = ValidateBytes(in options, eciAssignment);
         if (data.Length > MaxSymbolBytes)
-            ThrowBytesDoNotFit(data.Length, charset, eccLevel, in options);
+            ThrowBytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, charset, eccLevel, in options);
 
         Span<char> buffer = stackalloc char[MaxSymbolBytes];
         var widened = Widen(data, buffer);
@@ -86,7 +87,7 @@ public static partial class RmQRCodeGenerator
     {
         var charset = ValidateBytes(in options, eciAssignment);
         if (data.Length > MaxSymbolBytes)
-            ThrowBytesDoNotFit(data.Length, charset, eccLevel, in options);
+            ThrowBytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, charset, eccLevel, in options);
 
         Span<char> buffer = stackalloc char[MaxSymbolBytes];
         var widened = Widen(data, buffer);
@@ -179,10 +180,10 @@ public static partial class RmQRCodeGenerator
         return EciModeExtensions.BytesCharset(eciAssignment);
     }
 
-    /// <summary>The selector's "content is too long" error for a payload longer than any symbol holds, after the checks of the level, version, fit and height it makes first.</summary>
-    private static void ThrowBytesDoNotFit(int length, EciMode charset, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options)
+    /// <summary>The selector's "content is too long" error for a payload longer than any symbol holds, in the mode its bytes take, after the checks of the level, version, fit and height it makes first.</summary>
+    private static void ThrowBytesDoNotFit(ref byte first, int length, EciMode charset, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options)
     {
-        _ = PrepareConfiguration(new TextAnalysisResult(EncodingMode.Byte, charset, length), eccLevel, options.Version, options.FitStrategy, options.Height);
+        _ = PrepareConfiguration(new TextAnalysisResult(TextAnalyzer.ModeOfBytes(ref first, length), charset, length), eccLevel, options.Version, options.FitStrategy, options.Height);
         throw new InvalidOperationException($"No rMQR version holds {length} bytes, so the selector refuses them first.");
     }
 
@@ -199,7 +200,7 @@ public static partial class RmQRCodeGenerator
         return widened;
     }
 
-    /// <summary>The analysis of widened bytes: the mode their characters allow, as text gets, under the charset of the bytes.</summary>
+    /// <summary>The analysis of widened bytes. The mode is the one text of the same characters takes, and the charset is the bytes' own.</summary>
     private static TextAnalysisResult AnalyzeBytes(ReadOnlySpan<char> widened, EciMode charset)
         => TextAnalyzer.Analyze(widened, EciMode.Default) with { EciMode = charset };
 }

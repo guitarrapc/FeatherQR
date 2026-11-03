@@ -258,7 +258,7 @@ public static partial class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// The analysis every entry point starts from, under the default charset rules with one more.
+    /// The analysis every text entry point starts from, under the default charset rules with one more.
     /// With no ECI to declare a charset, ISO-8859-1 text is written one byte a character only where this library's decoder reads those bytes back as ISO-8859-1.
     /// Text it would read as UTF-8 or as Shift_JIS is analysed as UTF-8, which it reads as written.
     /// </summary>

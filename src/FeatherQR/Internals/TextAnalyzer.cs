@@ -3,10 +3,14 @@
 using System.Runtime.Intrinsics.X86;
 #endif
 #if NET8_0_OR_GREATER
+using System.Buffers;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.Wasm;
 #endif
 using System.Runtime.CompilerServices;
+#if !NETSTANDARD2_0
+using System.Runtime.InteropServices;
+#endif
 using System.Text;
 
 namespace FeatherQR.Internals;
@@ -99,6 +103,51 @@ internal static partial class TextAnalyzer
             ? ResolveKanji(text, in analysis, planKanji)
             : analysis;
     }
+
+    /// <summary>
+    /// The mode <see cref="Analyze(ReadOnlySpan{char}, EciMode)"/> gives these bytes widened one to a char.
+    /// The bytes calls refuse a payload longer than any symbol holds before they widen it, and its error names this mode, as the text call's names the analysis's.
+    /// </summary>
+    public static EncodingMode ModeOfBytes(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.IsEmpty)
+            return EncodingMode.Byte;
+
+#if NET8_0_OR_GREATER
+        // A refused payload can be of any length, and its digits and letters are read to the end
+        if (bytes.IndexOfAnyExceptInRange((byte)'0', (byte)'9') < 0)
+            return EncodingMode.Numeric;
+        return bytes.IndexOfAnyExcept(AlphanumericBytes) < 0 ? EncodingMode.Alphanumeric : EncodingMode.Byte;
+#else
+        var mode = EncodingMode.Numeric;
+        foreach (var b in bytes)
+        {
+            if (CharacterSets.IsNumeric((char)b))
+                continue;
+            if (!CharacterSets.IsAlphanumeric((char)b))
+                return EncodingMode.Byte;
+            mode = EncodingMode.Alphanumeric;
+        }
+        return mode;
+#endif
+    }
+
+    /// <summary><see cref="ModeOfBytes(ReadOnlySpan{byte})"/> of the <paramref name="length"/> bytes from <paramref name="first"/> on.</summary>
+    /// <remarks>The bytes calls hand their payload to this as a reference and a length, since a span argument would take a slot in their frame on every call, error or not.</remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static unsafe EncodingMode ModeOfBytes(ref byte first, int length)
+    {
+#if NETSTANDARD2_0
+        fixed (byte* bytes = &first)
+            return ModeOfBytes(new ReadOnlySpan<byte>(bytes, length));
+#else
+        return ModeOfBytes(MemoryMarshal.CreateReadOnlySpan(ref first, length));
+#endif
+    }
+
+#if NET8_0_OR_GREATER
+    private static readonly SearchValues<byte> AlphanumericBytes = SearchValues.Create("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"u8);
+#endif
 
     /// <summary>
     /// The Kanji analysis of a UTF-8 text when every character has an encoder cell. With <paramref name="planKanji"/>, the UTF-8 analysis marked plannable when every character is ASCII or has one. Otherwise the UTF-8 analysis unchanged.

@@ -239,7 +239,7 @@ internal static class MicroQRSegmentPlanner
 
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
-    /// Returns false when the content is unplannable at this version, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Latin-1 run the charset heuristic reads as UTF-8 or Shift_JIS, or a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit. The caller answers all four by falling back to the single-mode stream.
+    /// Returns false when the content is unplannable at this version, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Byte run opened at a mid-content U+FEFF, which the program does not build, or, under <see cref="EciMode.Iso8859_1"/>, a Latin-1 run the charset heuristic reads as UTF-8 or Shift_JIS), or the exact re-costed stream would not fit. The caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -263,6 +263,7 @@ internal static class MicroQRSegmentPlanner
         // Two shapes are misread once a split isolates them, and both fall back to the single-mode stream:
         //  - a mid-content U+FEFF at a run start is consumed as a BOM. The program builds no such plan under UTF-8, so this refuses a model that disagreed.
         //  - a Latin-1 run whose narrowed bytes read as UTF-8 or Shift_JIS, because the disambiguating bytes now live in another run.
+        //    The check runs under ISO-8859-1 alone. Bytes plan under the default charset and skip it, since the decoder's bytes calls return them as written.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount))
             || (charset == EciMode.Iso8859_1 && HasLatin1RunTheHeuristicReadsOtherwise(text, segments.Slice(0, segmentCount))))
         {

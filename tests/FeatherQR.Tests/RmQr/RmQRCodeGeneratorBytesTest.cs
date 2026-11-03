@@ -212,6 +212,25 @@ public class RmQRCodeGeneratorBytesTest
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(Filled(length), RmQREccLevel.M, out _, Optimal)).IsFalse();
     }
 
+    /// <summary>More bytes than any symbol holds are refused before the analysis, and the error still names the mode the text call names.</summary>
+    [Test]
+    [Arguments('7')]
+    [Arguments('A')]
+    public async Task TooLong_ReportsWhatTheTextCallReports(char character)
+    {
+        var text = new string(character, 362);
+        var payload = Encoding.ASCII.GetBytes(text);
+        foreach (var options in new[] { Single, Optimal })
+        {
+            var expected = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(text, RmQREccLevel.M, options));
+            foreach (var actual in new[] { Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(payload, RmQREccLevel.M, options)), Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(payload, RmQREccLevel.M, new byte[100], options)) })
+            {
+                await Assert.That(actual.Message).IsEqualTo(expected.Message).Because($"{options.Segmentation}");
+                await Assert.That(actual.ParamName).IsEqualTo(expected.ParamName).Because($"{options.Segmentation}");
+            }
+        }
+    }
+
     /// <summary>Digits are a byte each in Numeric mode, so 361 of them fit R17x139-M though it holds 150 bytes in Byte mode, and 362 are refused.</summary>
     [Test]
     public async Task Digits_AreWrittenInNumericMode_SoTheyFitPastTheByteCapacity()

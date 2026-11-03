@@ -316,3 +316,23 @@ Lessons:
 
 - A route split after its analysis costs the text a call. The first version gave the bytes the text's Optimal and narrowed routes through methods that take the analysis, and Optimal sizing of a short text read 1.5 ns slower (3 %) in all three rounds. The bytes now have their own route, which is also shorter, since bytes never take a Kanji plan.
 - A test of a price needs a size where the price changes the answer. The set's boost test checked M at a size every header leaves at M.
+
+### Review of Phase 4 (2026-11-03)
+
+Done: the branch against main, reviewed on five lenses in five rounds, the last with no finding, with every claim put to three verifiers who tried to refute it. What survived was fixed, each code fix behind a test that failed first or a planted fault it now catches:
+
+- A bytes payload longer than any symbol holds was refused with an error built in Byte mode. In Micro QR, 36 digits at `ErrorDetectionOnly`, in M1-M2 or with M2 pinned read as Byte mode not being available there, and at L as "at most 15 bytes" where 35 digits fit. Standard QR named Byte mode for digits and letters, and rMQR also its Byte capacity. The error now names the mode the bytes take (`TextAnalyzer.ModeOfBytes`). In Micro QR it is the text call's error for the same bytes read one to a character, and in Standard QR and rMQR it is for ASCII bytes.
+- The first form of that fix passed the payload to the error helpers as a span. Under full optimization on x64 its copy took 16 bytes of frame, zeroed on every call, in four of the six bytes `Create` methods. The helpers take a reference and a length, and the frames are back to what they were, Standard QR's span form 16 bytes smaller. On .NET 8 and later the mode is read with vectorized searches: the error for 1,000,000 digits takes 16 to 30 µs once warm, against 280 to 300 µs with the first form's loop, 2.3 to 5 µs before the fix, and 130 to 175 µs for the text call's own error.
+- Tests: Optimal splits beside digits at M3, where five 0xFF bytes leave one bit of M3-L free, and C3A9 and C4D6DC are runs the planner refuses under ISO-8859-1. An analysis left under ISO-8859-1 failed no test before and fails 2 cases now. Byte runs priced as UTF-8 by the version scan failed none and fail 3. `ModeOfBytes` in both its forms against the analysis on every byte value after each mode and on seeded payloads, the too-long errors against the text call's in all three symbologies, and the netstandard builds' loop against this host's through Standard QR's span call, with the deciding byte first or last. `MicroQRCodeGeneratorBytesTest` has 46 cases a framework and one more in Release.
+- Docs: comments the bytes route made false (the Micro QR text analysis named as every entry point's, and the planner's Latin-1 refusal stated for every charset), the public remark on `MicroQRSegmentation.Optimal` (a plan read in another charset gives way to the single-mode stream rather than reporting "does not fit", and bytes skip that check), the spec map's bytes row naming both text checks it leaves out and its segment row scoped to text, private summaries reworded, and test summaries stating their premises.
+
+Open, for the maintainer:
+
+- Under `Single` the Micro QR bytes `Create` methods zero the 288-byte plan buffer they never use. Allocating it under `Optimal` alone measured no difference on the span form. The class form was about 3 % faster under tiered compilation in all three measurements, and no faster in the one under full optimization. `Optimal`, the default, was not measured with it.
+- `Create(default, ecc, options)` stays ambiguous on Micro QR, as B4 accepted. `OverloadResolutionPriority` on the text overloads would bind the empty shapes to text for callers on C# 13 and later, on every target.
+
+Lessons:
+
+- A fix on an error path can cost the success path through its arguments. A span handed to a throw helper takes a frame slot that the prolog zeroes on every call, and a reference and a length do not.
+- Phase 4's lesson on prices held again. The Optimal test of high bytes had 16 bits to spare, so a byte priced as UTF-8 left its answer alone.
+- A test of a refusal needs content the refusal applies to. The decoder's guess reads a lone 0xFF run as ISO-8859-1, so the planner's Latin-1 check never refused the old test's run, whatever charset its analysis carried.

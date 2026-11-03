@@ -279,6 +279,26 @@ public class QRCodeGeneratorBytesTest
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(payload, QREccLevel.L, out _, Optimal)).IsFalse();
     }
 
+    /// <summary>More bytes than any symbol holds are refused before the analysis, and the error still names the mode the text call names.</summary>
+    [Test]
+    [Arguments('7')]
+    [Arguments('A')]
+    public async Task TooLong_ReportsWhatTheTextCallReports(char character)
+    {
+        var text = new string(character, 7090);
+        var payload = Encoding.ASCII.GetBytes(text);
+        foreach (var options in new[] { Single, Optimal, Single with { Version = QRVersionRange.AtMost(10) } })
+        {
+            var label = $"{options.Segmentation}, {options.Version}";
+            var expected = Thrown(() => QRCodeGenerator.Create(text, QREccLevel.L, options));
+            foreach (var actual in new[] { Thrown(() => QRCodeGenerator.Create(payload, QREccLevel.L, options)), Thrown(() => QRCodeGenerator.Create(payload, QREccLevel.L, new byte[100], options)) })
+            {
+                await Assert.That(actual.GetType()).IsEqualTo(expected.GetType()).Because(label);
+                await Assert.That(actual.Message).IsEqualTo(expected.Message).Because(label);
+            }
+        }
+    }
+
     /// <summary>
     /// Sixteen 40-L symbols hold 47,216 bytes no mode but Byte takes, 2,951 each behind the set header.
     /// 1,000,000 bytes is past what sixteen symbols hold even in Numeric mode, so it is refused before the planner runs, and names the same argument the planner does.
@@ -501,6 +521,19 @@ public class QRCodeGeneratorBytesTest
         payload.AsSpan(0, 100).Fill(0xFF);
         payload.AsSpan(100).Fill((byte)'7');
         return payload;
+    }
+
+    private static Exception Thrown(Action call)
+    {
+        try
+        {
+            call();
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+        throw new InvalidOperationException("The call did not throw.");
     }
 
     /// <summary>A payload of 0xFF bytes, which no mode but Byte holds.</summary>

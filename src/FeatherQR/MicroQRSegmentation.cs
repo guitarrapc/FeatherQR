@@ -13,7 +13,7 @@ public enum MicroQRSegmentation
     /// Never selects a larger version than <see cref="Single"/>, and preserves the Single bit stream when splitting would not shrink the symbol.
     /// With <see cref="MicroQRCodeGeneratorOptions.AllowKanji"/>, eligible text can mix Kanji and ASCII runs when that produces a smaller symbol.
     /// Can encode content that exceeds single-mode capacity. U+FEFF inside UTF-8 content is preserved.
-    /// Reports "does not fit" if the minimal plan would be decoded with a different charset, rather than emitting text that cannot round-trip.
+    /// For text, a minimal plan the decoder would read in a different charset gives way to the single-mode stream, and "does not fit" is reported when single mode does not hold the text either. Bytes are planned without that check, since the decoder's bytes calls return them as written.
     /// <para/>
     /// The search prices candidate versions and allocates nothing (Micro QR content never exceeds 35 characters). <see cref="Single"/> skips it.
     /// The plan respects each version's mode set (M1 is Numeric-only and M2 has no Byte mode), so a version is never selected for a plan whose runs it cannot carry.

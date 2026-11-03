@@ -156,25 +156,34 @@ public class MicroQRCodeGeneratorBytesTest
             .Because("the premise: the text call writes the same characters as UTF-8");
     }
 
+    /// <summary>
+    /// A Byte run and a Numeric run fit M3-L, where Byte mode alone needs M4 or fits nothing.
+    /// Five 0xFF bytes leave one of M3-L's 84 bits free, so the plan fits only if each byte is priced at eight bits.
+    /// The text read guesses UTF-8 or Shift_JIS from the runs C3A9 and C4D6DC, which the planner refuses under ISO-8859-1. Bytes plan them all the same.
+    /// </summary>
     [Test]
-    public async Task Optimal_SplitsDigitsFromBytes_IntoASmallerSymbol()
+    [Arguments("FF", "12345678901234", MicroQRVersion.M4, false)]     // 14 + 54 bits
+    [Arguments("FFFFFFFFFF", "123456789", MicroQRVersion.M4, false)] // 46 + 37 bits
+    [Arguments("C3A9", "12345678901234", null, true)]                // 22 + 54 bits, and 16 bytes fit no version in Byte mode
+    [Arguments("C4D6DC", "123456789", MicroQRVersion.M4, true)]      // 30 + 37 bits
+    public async Task Optimal_SplitsDigitsFromBytes_IntoASmallerSymbol(string hex, string digits, MicroQRVersion? singleVersion, bool readAsAnotherText)
     {
-        var payload = new byte[15];
-        payload[0] = 0xFF;
-        Encoding.ASCII.GetBytes("12345678901234", payload.AsSpan(1));
+        byte[] payload = [.. Convert.FromHexString(hex), .. Encoding.ASCII.GetBytes(digits)];
 
-        var single = MicroQRCodeGenerator.Create(payload, MicroQREccLevel.L, Single);
         var optimal = MicroQRCodeGenerator.Create(payload, MicroQREccLevel.L, Optimal);
 
-        await Assert.That(single.Version).IsEqualTo(MicroQRVersion.M4).Because("15 bytes need M4-L in Byte mode");
-        await Assert.That(optimal.Version).IsEqualTo(MicroQRVersion.M3).Because("one Byte run and one Numeric run take 68 of M3-L's 84 bits");
+        await Assert.That(optimal.Version).IsEqualTo(MicroQRVersion.M3);
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(payload, MicroQREccLevel.L, out var size, Optimal)).IsTrue();
         await Assert.That(size.Version).IsEqualTo(MicroQRVersion.M3);
-        foreach (var data in new[] { single, optimal })
-        {
-            await Assert.That(MicroQRCodeDecoder.TryDecodeBytes(data, out var bytes, out _)).IsTrue();
-            await Assert.That(bytes).IsEquivalentTo(payload, CollectionOrdering.Matching);
-        }
+        await Assert.That(MicroQRCodeDecoder.TryDecodeBytes(optimal, out var bytes, out _)).IsTrue();
+        await Assert.That(bytes).IsEquivalentTo(payload, CollectionOrdering.Matching);
+
+        if (singleVersion is { } version)
+            await Assert.That(MicroQRCodeGenerator.Create(payload, MicroQREccLevel.L, Single).Version).IsEqualTo(version).Because("the premise: Byte mode alone needs a larger symbol");
+        else
+            await Assert.That(() => MicroQRCodeGenerator.Create(payload, MicroQREccLevel.L, Single)).ThrowsExactly<ArgumentException>().Because("the premise: Byte mode alone fits nothing");
+        await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var text)).IsTrue();
+        await Assert.That(text != Encoding.Latin1.GetString(payload)).IsEqualTo(readAsAnotherText).Because("the premise: whether the text read guesses another charset");
     }
 
     // Capacity
@@ -254,7 +263,42 @@ public class MicroQRCodeGeneratorBytesTest
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(Filled(length), MicroQREccLevel.L, out _, Single)).IsFalse();
     }
 
-    /// <summary>A payload too long for any symbol still reports a bad argument first, as the text call does.</summary>
+    /// <summary>More bytes than any symbol holds are refused before the analysis, and the error still names the mode the text call names.</summary>
+    [Test]
+    [Arguments("7")]
+    [Arguments("A")]
+    [Arguments("ÿ")]
+    public async Task TooLong_ReportsWhatTheTextCallReports(string character)
+    {
+        var text = string.Concat(Enumerable.Repeat(character, 36));
+        var payload = Encoding.Latin1.GetBytes(text);
+        (MicroQREccLevel Level, MicroQRVersionRange Range)[] settings =
+        [
+            (MicroQREccLevel.L, MicroQRVersionRange.Any),
+            (MicroQREccLevel.ErrorDetectionOnly, MicroQRVersionRange.Any),
+            (MicroQREccLevel.L, new MicroQRVersionRange(MicroQRVersion.M1, MicroQRVersion.M2)),
+            (MicroQREccLevel.L, MicroQRVersionRange.Exactly(MicroQRVersion.M2)),
+            (MicroQREccLevel.Q, MicroQRVersionRange.Exactly(MicroQRVersion.M4)),
+        ];
+        foreach (var (level, range) in settings)
+        {
+            foreach (var options in new[] { Single with { Version = range }, Optimal with { Version = range } })
+            {
+                var label = $"{level}, {range}, {options.Segmentation}";
+                var expected = Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create(text, level, options));
+                foreach (var actual in new[] { Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create(payload, level, options)), Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create(payload, level, new byte[1000], options)) })
+                {
+                    await Assert.That(actual.Message).IsEqualTo(expected.Message).Because(label);
+                    await Assert.That(actual.ParamName).IsEqualTo(expected.ParamName).Because(label);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// A bad argument is reported before the length, as the text call reports it.
+    /// Ten bytes go through the analysis, and 36, more than any symbol holds, are refused without one.
+    /// </summary>
     [Test]
     [Arguments(10)]
     [Arguments(36)]

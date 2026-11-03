@@ -1,6 +1,7 @@
 #if NET5_0_OR_GREATER
 using System.Text;
 #endif
+using System.Runtime.InteropServices;
 using FeatherQR.Internals;
 using FeatherQR.Internals.MicroQR;
 
@@ -9,7 +10,7 @@ namespace FeatherQR;
 public static partial class MicroQRCodeGenerator
 {
     // Bytes take the text pipeline widened one to a char, U+0000 to U+00FF, analyzed under the default charset, so every writer narrows such a char back to its byte.
-    // The text route's rewrite into UTF-8 of text the decoder would read otherwise is left out: there is no ECI to declare anything, and the bytes are what the caller gave.
+    // The text route writes as UTF-8 the text the decoder would read as another text, and refuses a plan whose Latin-1 run it would misread. Bytes skip both, since the decoder's bytes calls return them as written.
     // The bytes have a route of their own past the analysis. Sharing the text's would put a call on the text's path, and bytes never take a Kanji plan.
 
     /// <summary>
@@ -36,7 +37,7 @@ public static partial class MicroQRCodeGenerator
     {
         ValidateBytes(in options);
         if (data.Length > MicroQRSegmentPlanner.MaxPlannableChars)
-            throw BytesDoNotFit(data.Length, eccLevel, options.Version);
+            throw BytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, eccLevel, options.Version);
 
         Span<char> buffer = stackalloc char[MicroQRSegmentPlanner.MaxPlannableChars];
         var widened = Widen(data, buffer);
@@ -74,7 +75,7 @@ public static partial class MicroQRCodeGenerator
     {
         ValidateBytes(in options);
         if (data.Length > MicroQRSegmentPlanner.MaxPlannableChars)
-            throw BytesDoNotFit(data.Length, eccLevel, options.Version);
+            throw BytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, eccLevel, options.Version);
 
         Span<char> buffer = stackalloc char[MicroQRSegmentPlanner.MaxPlannableChars];
         var widened = Widen(data, buffer);
@@ -90,7 +91,7 @@ public static partial class MicroQRCodeGenerator
         if (destination.Length < requiredSize)
             throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {version}, {totalSize}x{totalSize} modules), got {destination.Length} bytes. Use {nameof(TryGetRequiredBufferSize)} to calculate the required size.", nameof(destination));
 
-        // As the text's span form: the margins cleared, then the core straight into the window
+        // The margins are cleared before the core, since their clear can zero the end of a core row. The placer then writes every core module.
         var target = destination.Slice(0, requiredSize);
         if (quietZoneSize > 0)
             QuietZoneWindow.ClearMargins(target, size, size, quietZoneSize);
@@ -148,7 +149,7 @@ public static partial class MicroQRCodeGenerator
     /// The version the bytes take, and the plan written there, as the text's routes decide them. No segment means the single-mode stream.
     /// Under <see cref="MicroQRSegmentation.Optimal"/> a plan the version scan chose but that cannot be built falls back to the single-mode fit, as on the text route.
     /// </summary>
-    /// <remarks>The planner's check of Latin-1 runs the decoder would read as another text runs under <see cref="EciMode.Iso8859_1"/> alone, so it never refuses bytes.</remarks>
+    /// <remarks>The planner checks Latin-1 runs against the decoder's charset guess only under <see cref="EciMode.Iso8859_1"/>, so the check never refuses bytes.</remarks>
     private static bool TryPlanBytes(ReadOnlySpan<char> widened, MicroQREccLevel eccLevel, in TextAnalysisResult analysis, in MicroQRCodeGeneratorOptions options, Span<ModeSegment> plan, out MicroQRVersion version, out int segmentCount)
     {
         segmentCount = 0;
@@ -173,12 +174,12 @@ public static partial class MicroQRCodeGenerator
             WriteCoreModulesPlanned(widened, version, eccLevel, analysis.EciMode, plan, core, size, stride, maskPattern);
     }
 
-    /// <summary>The selector's "content is too long" error for a payload longer than any symbol holds, after the checks of the level and the range it makes first.</summary>
-    private static ArgumentException BytesDoNotFit(int length, MicroQREccLevel eccLevel, MicroQRVersionRange range)
+    /// <summary>For a payload longer than any symbol holds, the error the text call gives the same bytes read one to a character, after the level and range checks the fit makes first.</summary>
+    private static ArgumentException BytesDoNotFit(ref byte first, int length, MicroQREccLevel eccLevel, MicroQRVersionRange range)
     {
-        var analysis = new TextAnalysisResult(EncodingMode.Byte, EciMode.Default, length);
+        var analysis = new TextAnalysisResult(TextAnalyzer.ModeOfBytes(ref first, length), EciMode.Default, length);
         _ = TrySelectVersionInRange(in analysis, eccLevel, range, out _);
-        return NotFittingError(EncodingMode.Byte, length, eccLevel, range);
+        return NotFittingError(analysis.EncodingMode, length, eccLevel, range);
     }
 
     /// <summary>The bytes one to a char, U+0000 to U+00FF, which every writer turns back into the same bytes.</summary>
@@ -194,7 +195,7 @@ public static partial class MicroQRCodeGenerator
         return widened;
     }
 
-    /// <summary>The analysis of widened bytes: the mode their characters allow, as text gets, under the default charset, which narrows every char back to its byte.</summary>
+    /// <summary>The analysis of widened bytes. The mode is the one text of the same characters takes, and the charset is the default, under which every writer narrows a char back to its byte.</summary>
     private static TextAnalysisResult AnalyzeBytes(ReadOnlySpan<char> widened)
         => TextAnalyzer.Analyze(widened, EciMode.Default) with { EciMode = EciMode.Default };
 }
