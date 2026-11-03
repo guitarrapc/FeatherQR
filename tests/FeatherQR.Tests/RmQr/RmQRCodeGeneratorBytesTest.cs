@@ -90,6 +90,26 @@ public class RmQRCodeGeneratorBytesTest
         await Assert.That(info.EciAssignment).IsEqualTo(eci);
     }
 
+    /// <summary>
+    /// Without options, <c>default</c>, <c>[]</c> and <c>null</c> fit the bytes overload and the text one equally, so these calls compile only because the bytes overloads rank lower.
+    /// With options the text overload is already the closer fit, since the bytes one leaves the assignment to its default.
+    /// </summary>
+    [Test]
+    public async Task UntypedEmptyArgument_WithoutOptions_WritesTheEmptySymbol()
+    {
+        var expected = Modules(RmQRCodeGenerator.Create("", RmQREccLevel.M));
+        await Assert.That(Modules(RmQRCodeGenerator.Create(ReadOnlySpan<byte>.Empty, RmQREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching)
+            .Because("the premise: either overload writes the same symbol");
+
+        await Assert.That(Modules(RmQRCodeGenerator.Create(default, RmQREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(Modules(RmQRCodeGenerator.Create([], RmQREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(Modules(RmQRCodeGenerator.Create(null, RmQREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(default, RmQREccLevel.M, out var size)).IsTrue();
+        var destination = new byte[size.BufferSize];
+        await Assert.That(RmQRCodeGenerator.Create(default, RmQREccLevel.M, destination)).IsEqualTo(size.BufferSize);
+        await Assert.That(destination).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
     // What the stream holds
 
     [Test]

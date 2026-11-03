@@ -1,6 +1,7 @@
 #if NET5_0_OR_GREATER
 using System.Text;
 #endif
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using FeatherQR.Internals;
 using FeatherQR.Internals.MicroQR;
@@ -27,12 +28,13 @@ public static partial class MicroQRCodeGenerator
     /// <see cref="MicroQRCodeGeneratorOptions.AllowKanji"/>, which means something only for text, is refused.
     /// </para>
     /// </remarks>
-    /// <param name="data">The bytes to encode. An array converts implicitly. An empty payload needs a typed argument, such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>, since <c>[]</c>, <c>default</c> and <c>null</c> fit the text overload too.</param>
+    /// <param name="data">The bytes to encode. An array converts implicitly. From C# 13, <c>[]</c>, <c>default</c> and <c>null</c> take the text overload. Before it they are ambiguous, so pass a typed empty payload such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>.</param>
     /// <param name="eccLevel">How much damage the Micro QR code can survive. M1 accepts <see cref="MicroQREccLevel.ErrorDetectionOnly"/> alone, and Q is available on M4 alone.</param>
     /// <param name="options">Version, quiet zone, mask and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
     /// <exception cref="ArgumentException">Thrown when the content does not fit, when the version, level and mode cannot be combined, or when the options carry <see cref="MicroQRCodeGeneratorOptions.AllowKanji"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, or a quiet zone outside 0 to 10,000.</exception>
+    [OverloadResolutionPriority(-1)]
     public static MicroQRCodeData Create(ReadOnlySpan<byte> data, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options = default)
     {
         ValidateBytes(in options);
@@ -42,8 +44,11 @@ public static partial class MicroQRCodeGenerator
         Span<char> buffer = stackalloc char[MicroQRSegmentPlanner.MaxPlannableChars];
         var widened = Widen(data, buffer);
         var analysis = AnalyzeBytes(widened);
-        Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
-        if (!TryPlanBytes(widened, eccLevel, in analysis, in options, plan, out var version, out var segmentCount))
+        if (!TrySelectBytesVersion(widened, eccLevel, in analysis, in options, out var version, out var useSegments))
+            throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
+        Span<ModeSegment> plan = useSegments ? stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars] : default;
+        var segmentCount = 0;
+        if (useSegments && !TryBuildBytesPlan(widened, eccLevel, in analysis, options.Version, plan, ref version, out segmentCount))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
 
         var size = MicroQRConstants.SizeFromVersion(version);
@@ -71,6 +76,7 @@ public static partial class MicroQRCodeGenerator
     /// <returns>The number of bytes written.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, when the version, level and mode cannot be combined, or when the options carry <see cref="MicroQRCodeGeneratorOptions.AllowKanji"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, or a quiet zone outside 0 to 10,000.</exception>
+    [OverloadResolutionPriority(-1)]
     public static int Create(ReadOnlySpan<byte> data, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options = default)
     {
         ValidateBytes(in options);
@@ -80,8 +86,11 @@ public static partial class MicroQRCodeGenerator
         Span<char> buffer = stackalloc char[MicroQRSegmentPlanner.MaxPlannableChars];
         var widened = Widen(data, buffer);
         var analysis = AnalyzeBytes(widened);
-        Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
-        if (!TryPlanBytes(widened, eccLevel, in analysis, in options, plan, out var version, out var segmentCount))
+        if (!TrySelectBytesVersion(widened, eccLevel, in analysis, in options, out var version, out var useSegments))
+            throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
+        Span<ModeSegment> plan = useSegments ? stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars] : default;
+        var segmentCount = 0;
+        if (useSegments && !TryBuildBytesPlan(widened, eccLevel, in analysis, options.Version, plan, ref version, out segmentCount))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
 
         var quietZoneSize = options.QuietZoneSize;
@@ -112,6 +121,7 @@ public static partial class MicroQRCodeGenerator
     /// <returns><c>true</c> when the content fits.</returns>
     /// <exception cref="ArgumentException">Thrown when no version in the range offers <paramref name="eccLevel"/> at all, which no content could satisfy, or when the options carry <see cref="MicroQRCodeGeneratorOptions.AllowKanji"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, or a quiet zone outside 0 to 10,000.</exception>
+    [OverloadResolutionPriority(-1)]
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options = default)
     {
         size = default;
@@ -126,8 +136,10 @@ public static partial class MicroQRCodeGenerator
         Span<char> buffer = stackalloc char[MicroQRSegmentPlanner.MaxPlannableChars];
         var widened = Widen(data, buffer);
         var analysis = AnalyzeBytes(widened);
-        Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
-        if (!TryPlanBytes(widened, eccLevel, in analysis, in options, plan, out var version, out _))
+        if (!TrySelectBytesVersion(widened, eccLevel, in analysis, in options, out var version, out var useSegments))
+            return false;
+        Span<ModeSegment> plan = useSegments ? stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars] : default;
+        if (useSegments && !TryBuildBytesPlan(widened, eccLevel, in analysis, options.Version, plan, ref version, out _))
             return false;
 
         var totalSize = MicroQRConstants.SizeFromVersion(version) + options.QuietZoneSize * 2;
@@ -145,24 +157,27 @@ public static partial class MicroQRCodeGenerator
             throw new ArgumentException("AllowKanji lets text take Kanji mode. Bytes are written in Numeric, Alphanumeric and Byte mode.", nameof(options));
     }
 
-    /// <summary>
-    /// The version the bytes take, and the plan written there, as the text's routes decide them. No segment means the single-mode stream.
-    /// Under <see cref="MicroQRSegmentation.Optimal"/> a plan the version scan chose but that cannot be built falls back to the single-mode fit, as on the text route.
-    /// </summary>
-    /// <remarks>The planner checks Latin-1 runs against the decoder's charset guess only under <see cref="EciMode.Iso8859_1"/>, so the check never refuses bytes.</remarks>
-    private static bool TryPlanBytes(ReadOnlySpan<char> widened, MicroQREccLevel eccLevel, in TextAnalysisResult analysis, in MicroQRCodeGeneratorOptions options, Span<ModeSegment> plan, out MicroQRVersion version, out int segmentCount)
+    /// <summary>The version the bytes take, as the text's routes choose it, and whether the version scan chose a plan of runs.</summary>
+    private static bool TrySelectBytesVersion(ReadOnlySpan<char> widened, MicroQREccLevel eccLevel, in TextAnalysisResult analysis, in MicroQRCodeGeneratorOptions options, out MicroQRVersion version, out bool useSegments)
     {
-        segmentCount = 0;
         if (options.Segmentation == MicroQRSegmentation.Single)
+        {
+            useSegments = false;
             return TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version);
+        }
 
-        if (!MicroQRSegmentPlanner.TrySelectVersion(widened, in analysis, eccLevel, options.Version, out version, out var useSegments, out _))
-            return false;
-        if (!useSegments || MicroQRSegmentPlanner.TryBuildPlan(widened, analysis.EciMode, version, eccLevel, plan, out segmentCount))
+        return MicroQRSegmentPlanner.TrySelectVersion(widened, in analysis, eccLevel, options.Version, out version, out useSegments, out _);
+    }
+
+    /// <summary>Builds the plan the version scan chose. One that cannot be built falls back to the single-mode fit, as on the text route, and leaves no segment.</summary>
+    /// <remarks>The planner checks Latin-1 runs against the decoder's charset guess only under <see cref="EciMode.Iso8859_1"/>, so the check never refuses bytes.</remarks>
+    private static bool TryBuildBytesPlan(ReadOnlySpan<char> widened, MicroQREccLevel eccLevel, in TextAnalysisResult analysis, MicroQRVersionRange range, Span<ModeSegment> plan, ref MicroQRVersion version, out int segmentCount)
+    {
+        if (MicroQRSegmentPlanner.TryBuildPlan(widened, analysis.EciMode, version, eccLevel, plan, out segmentCount))
             return true;
 
         segmentCount = 0;
-        return TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version);
+        return TrySelectVersionInRange(in analysis, eccLevel, range, out version);
     }
 
     /// <summary>Writes the single-mode stream when <paramref name="plan"/> is empty, and the planned runs otherwise.</summary>

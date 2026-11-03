@@ -114,6 +114,26 @@ public class MicroQRCodeGeneratorBytesTest
         await Assert.That(Modules(data)).IsEquivalentTo(Modules(MicroQRCodeGenerator.Create("", MicroQREccLevel.L, options)), CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// <c>default</c>, <c>[]</c> and <c>null</c> fit the bytes overload and the text one.
+    /// The calls carry <see cref="MicroQRCodeGeneratorOptions.AllowKanji"/>, which the bytes route refuses, so they succeed only on the text overload.
+    /// </summary>
+    [Test]
+    public async Task UntypedEmptyArgument_CallsTheTextOverload()
+    {
+        var options = Single with { AllowKanji = true };
+        await Assert.That(() => MicroQRCodeGenerator.Create(ReadOnlySpan<byte>.Empty, MicroQREccLevel.L, options)).ThrowsExactly<ArgumentException>();
+        var expected = Modules(MicroQRCodeGenerator.Create("", MicroQREccLevel.L, options));
+
+        await Assert.That(Modules(MicroQRCodeGenerator.Create(default, MicroQREccLevel.L, options))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(Modules(MicroQRCodeGenerator.Create([], MicroQREccLevel.L, options))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(Modules(MicroQRCodeGenerator.Create(null, MicroQREccLevel.L, options))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(default, MicroQREccLevel.L, out var size, options)).IsTrue();
+        var destination = new byte[size.BufferSize];
+        await Assert.That(MicroQRCodeGenerator.Create(default, MicroQREccLevel.L, destination, options)).IsEqualTo(size.BufferSize);
+        await Assert.That(destination).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
     // What the stream holds
 
     [Test]

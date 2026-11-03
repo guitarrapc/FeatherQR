@@ -2,6 +2,7 @@ using System.Buffers;
 #if NET5_0_OR_GREATER
 using System.Text;
 #endif
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using FeatherQR.Internals;
 using FeatherQR.Internals.RmQR;
@@ -31,13 +32,14 @@ public static partial class RmQRCodeGenerator
     /// The options that mean something only for text are refused: an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/>, <see cref="RmQRCodeGeneratorOptions.AllowKanji"/> and an FNC1 mode.
     /// </para>
     /// </remarks>
-    /// <param name="data">The bytes to encode. An array converts implicitly. An empty payload needs a typed argument, such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>, since <c>[]</c>, <c>default</c> and <c>null</c> fit the text overload too.</param>
+    /// <param name="data">The bytes to encode. An array converts implicitly. From C# 13, <c>[]</c>, <c>default</c> and <c>null</c> take the text overload unless an assignment is given. Before it they can be ambiguous, so pass a typed empty payload such as <c>ReadOnlySpan&lt;byte&gt;.Empty</c>.</param>
     /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
     /// <param name="options">Version, fit, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
     /// <returns>The module matrix.</returns>
     /// <exception cref="ArgumentException">Thrown when the content does not fit, when the options contradict each other, or when they carry an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy, height or segmentation, or an assignment outside 0 to 999999.</exception>
+    [OverloadResolutionPriority(-1)]
     public static RmQRCodeData Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(in options, eciAssignment);
@@ -83,6 +85,7 @@ public static partial class RmQRCodeGenerator
     /// <returns>The number of bytes written.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, when the options contradict each other, or when they carry an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy, height or segmentation, or an assignment outside 0 to 999999.</exception>
+    [OverloadResolutionPriority(-1)]
     public static int Create(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         var charset = ValidateBytes(in options, eciAssignment);
@@ -131,6 +134,7 @@ public static partial class RmQRCodeGenerator
     /// <returns><c>true</c> when the content fits.</returns>
     /// <exception cref="ArgumentException">Thrown when <see cref="RmQRCodeGeneratorOptions.Version"/> and <see cref="RmQRCodeGeneratorOptions.Height"/> disagree, or when the options carry an <see cref="RmQRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, an undefined level, version, fit strategy, height or segmentation, or an assignment outside 0 to 999999.</exception>
+    [OverloadResolutionPriority(-1)]
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
         size = default;

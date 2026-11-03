@@ -93,6 +93,29 @@ public class QRCodeGeneratorBytesTest
         await Assert.That(info.EciAssignment).IsEqualTo(eci);
     }
 
+    /// <summary>
+    /// Without options, <c>default</c>, <c>[]</c> and <c>null</c> fit the bytes overload and the text one equally, so these calls compile only because the bytes overloads rank lower.
+    /// With options the text overload is already the closer fit, since the bytes one leaves the assignment to its default.
+    /// </summary>
+    [Test]
+    public async Task UntypedEmptyArgument_WithoutOptions_WritesTheEmptySymbol()
+    {
+        var expected = Modules(QRCodeGenerator.Create("", QREccLevel.M));
+        await Assert.That(Modules(QRCodeGenerator.Create(ReadOnlySpan<byte>.Empty, QREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching)
+            .Because("the premise: either overload writes the same symbol");
+
+        await Assert.That(Modules(QRCodeGenerator.Create(default, QREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(Modules(QRCodeGenerator.Create([], QREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(Modules(QRCodeGenerator.Create(null, QREccLevel.M))).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(default, QREccLevel.M, out var size)).IsTrue();
+        var destination = new byte[size.BufferSize];
+        await Assert.That(QRCodeGenerator.Create(default, QREccLevel.M, destination)).IsEqualTo(size.BufferSize);
+        await Assert.That(destination).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        var parts = QRCodeGenerator.CreateStructuredAppend(default, QREccLevel.M);
+        await Assert.That(parts.Length).IsEqualTo(1);
+        await Assert.That(Modules(parts[0])).IsEquivalentTo(Modules(QRCodeGenerator.CreateStructuredAppend("", QREccLevel.M)[0]), CollectionOrdering.Matching);
+    }
+
     // What the stream holds
 
     [Test]
