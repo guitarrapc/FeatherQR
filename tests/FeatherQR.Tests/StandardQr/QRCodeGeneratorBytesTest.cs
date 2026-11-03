@@ -435,22 +435,51 @@ public class QRCodeGeneratorBytesTest
         await Assert.That(Modules(parts[0])).IsEquivalentTo(Modules(QRCodeGenerator.Create(payload, QREccLevel.M, Single, 899)), CollectionOrdering.Matching);
     }
 
-    /// <summary>The boost prices every chunk again, and a declared chunk is priced with its header.</summary>
+    /// <summary>
+    /// The boost prices the designator its number needs. At 1-L a symbol is raised to M when its stream fits 1-M's 128 bits, and none fits 1-Q's 104.
+    /// Twelve bytes take 108 bits bare, 120 behind a one-codeword designator, 128 behind two and 136 behind three. Thirteen take 8 more.
+    /// </summary>
     [Test]
-    [Arguments(-1)]
-    [Arguments(899)]
-    [Arguments(16384)]
-    public async Task StructuredAppend_Boost_RaisesTheWholeSet(int assignment)
+    [Arguments(12, -1, QREccLevel.M)]
+    [Arguments(12, 127, QREccLevel.M)]
+    [Arguments(12, 16383, QREccLevel.M)]
+    [Arguments(12, 16384, QREccLevel.L)]
+    [Arguments(13, 127, QREccLevel.M)]
+    [Arguments(13, 128, QREccLevel.L)]
+    public async Task Boost_PricesTheDesignatorItsNumberNeeds(int length, int assignment, QREccLevel expected)
     {
-        var payload = Filled(220);
+        int? eci = assignment < 0 ? null : assignment;
+
+        var data = QRCodeGenerator.Create(Filled(length), QREccLevel.L, Single with { Version = 1, BoostEccLevel = true }, eci);
+
+        await Assert.That(data.EccLevel).IsEqualTo(expected);
+        await Assert.That(QRCodeDecoder.TryDecodeBytes(data, out var bytes, out var info)).IsTrue();
+        await Assert.That(bytes).IsEquivalentTo(Filled(length), CollectionOrdering.Matching);
+        await Assert.That(info.EciAssignment).IsEqualTo(eci);
+    }
+
+    /// <summary>
+    /// The boost prices every chunk again, and a declared chunk is priced with its header.
+    /// 5-L holds 104 bytes behind the set header, 101 behind 899's header and 100 behind 16384's, so each payload here takes three symbols of equal chunks.
+    /// A chunk is raised to M when its stream fits 5-M's 688 bits: 79 bytes take 664 bits bare, 684 under 899 and 692 under 16384, and 82 bytes 24 more.
+    /// </summary>
+    [Test]
+    [Arguments(237, -1, QREccLevel.M)]
+    [Arguments(237, 899, QREccLevel.M)]
+    [Arguments(237, 16384, QREccLevel.L)]
+    [Arguments(246, -1, QREccLevel.M)]
+    [Arguments(246, 899, QREccLevel.L)]
+    public async Task StructuredAppend_Boost_RaisesTheWholeSet(int length, int assignment, QREccLevel expected)
+    {
+        var payload = Filled(length);
         int? eci = assignment < 0 ? null : assignment;
 
         var parts = QRCodeGenerator.CreateStructuredAppend(payload, QREccLevel.L, new QRCodeGeneratorOptions { Version = 5, BoostEccLevel = true }, eci);
 
-        await Assert.That(parts.Length).IsEqualTo(3).Because("5-L holds 104 bytes behind the set header and 100 behind 16384's header too, so 220 need three symbols");
+        await Assert.That(parts.Length).IsEqualTo(3);
         foreach (var part in parts)
         {
-            await Assert.That(part.EccLevel).IsEqualTo(QREccLevel.M).Because("74 bytes a symbol take 624 bits, 652 behind 16384's header: within 5-M's 688, over 5-Q's 496");
+            await Assert.That(part.EccLevel).IsEqualTo(expected);
             await Assert.That(QRCodeDecoder.TryDecodeBytes(part, out _, out var info)).IsTrue();
             await Assert.That(info.EciAssignment).IsEqualTo(eci);
         }

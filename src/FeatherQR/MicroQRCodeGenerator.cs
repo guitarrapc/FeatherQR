@@ -8,7 +8,7 @@ using FeatherQR.Internals.MicroQR;
 namespace FeatherQR;
 
 /// <summary>
-/// Encodes text into a Micro QR code (ISO/IEC 18004), versions M1 to M4.
+/// Encodes text or bytes into a Micro QR code (ISO/IEC 18004), versions M1 to M4.
 /// </summary>
 /// <remarks>
 /// What each version accepts differs, and a combination it does not offer throws rather than quietly falling back:
@@ -20,8 +20,9 @@ namespace FeatherQR;
 /// </list>
 /// Micro QR has no ECI. Text outside ISO-8859-1 goes out as raw UTF-8 in Byte mode, which a reader has to recognise as UTF-8. With <see cref="MicroQRCodeGeneratorOptions.AllowKanji"/>, text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) goes out in Kanji mode instead, at 13 bits a character, which is the standard's own way to carry it.
 /// Under <see cref="MicroQRSegmentation.Optimal"/>, such text with ASCII in it can be written as Kanji runs beside runs of the ASCII, where that is the smaller symbol.
+/// Bytes are written as they are, with nothing to declare them.
 /// </remarks>
-public static class MicroQRCodeGenerator
+public static partial class MicroQRCodeGenerator
 {
     // -----------------------------------------------------
     // Micro QR Data Structure
@@ -192,7 +193,7 @@ public static class MicroQRCodeGenerator
     /// </remarks>
     /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the Micro QR code should survive. M1 takes <see cref="MicroQREccLevel.ErrorDetectionOnly"/> alone, and Q needs M4.</param>
-    /// <param name="destination">Where to write the matrix. Needs <see cref="MicroQRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
+    /// <param name="destination">Where to write the matrix. Needs <see cref="MicroQRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize(ReadOnlySpan{char}, MicroQREccLevel, out MicroQRCodeCalculatedSize, in MicroQRCodeGeneratorOptions)"/>.</param>
     /// <param name="options">Version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <returns>The number of bytes written.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, or when the version, level and mode cannot be combined.</exception>

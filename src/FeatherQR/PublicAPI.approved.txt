@@ -103,8 +103,11 @@ namespace FeatherQR
 
     public static class MicroQRCodeGenerator
     {
+        public static MicroQRCodeData Create(ReadOnlySpan<byte> data, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options = null);
         public static MicroQRCodeData Create(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options = null);
+        public static bool TryGetRequiredBufferSize(ReadOnlySpan<byte> data, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options = null);
         public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options = null);
+        public static int Create(ReadOnlySpan<byte> data, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options = null);
         public static int Create(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options = null);
     }
 
