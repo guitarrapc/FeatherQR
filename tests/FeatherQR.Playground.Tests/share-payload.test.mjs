@@ -43,6 +43,8 @@ for (const [name, encode] of [['plain', plain], ['compressed', compressed]]) {
     ['ecc', { toString: 0 }], ['foreground', ['#ffffff']], ['background', 42], ['content', []],
     ['moduleShape', 'unknown'], ['finderShape', {}], ['size', '512'], ['version', null], ['height', []],
     ['symbology', 'unknown'], ['dataFormat', []], ['gs1Stem', {}], ['eccBoost', 1], ['quietZone', null],
+    ['contentKind', 'hex'], ['contentKind', 1], ['contentKind', null], ['eciAssignment', 1000000], ['eciAssignment', -1],
+    ['eciAssignment', 1.5], ['eciAssignment', '899'], ['eciAssignment', true], ['eciAssignment', []],
   ]) {
     test(`${name}: refuses invalid ${field} (${JSON.stringify(value)})`, async () => {
       const [parent, child] = field.split('.');
@@ -63,6 +65,19 @@ test('encode and decode round-trip the entire state', async () => {
   const result = await decodeShareHash(await encodeShareState(completeState));
   assert.equal(result.ok, true, result.error);
   assert.deepEqual(result.state, { ...completeState, v: SHARE_PAYLOAD_VERSION });
+});
+
+test('bytes states round-trip their content kind and assignment', async () => {
+  for (const extra of [
+    { contentKind: 'bytes', eciAssignment: 899 }, { contentKind: 'bytes', eciAssignment: 0 },
+    { contentKind: 'bytes', eciAssignment: 999999 }, { contentKind: 'bytes', eciAssignment: null },
+    { contentKind: 'text', eciAssignment: null },
+  ]) {
+    const state = { ...completeState, content: 'DE AD BE EF', ...extra };
+    const result = await decodeShareHash(await encodeShareState(state));
+    assert.equal(result.ok, true, result.error);
+    assert.deepEqual(result.state, { ...state, v: SHARE_PAYLOAD_VERSION });
+  }
 });
 
 test('plain fallback remains readable when compression is unavailable', async () => {

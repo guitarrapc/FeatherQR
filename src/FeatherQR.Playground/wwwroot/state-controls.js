@@ -1,12 +1,20 @@
 import { ECC_OPTIONS, RMQR_VERSIONS } from './symbol-options.js';
+import { eciAssignmentError, parseHex, readEciAssignmentField } from './binary-content.js';
 
 /** Binds state collection and application once, without loading the WASM host. */
 export function createStateControls(document, hooks) {
   const contentEl = document.getElementById('content');
+  const contentKindSelect = document.getElementById('content-kind-select');
+  const contentFileBtn = document.getElementById('content-file-btn');
+  const contentHexStatus = document.getElementById('content-hex-status');
+  const bytesModeHint = document.getElementById('bytes-mode-hint');
+  const eciAssignmentRow = document.getElementById('eci-assignment-row');
+  const eciAssignmentInput = document.getElementById('eci-assignment-input');
   const symbologySelect = document.getElementById('symbology-select');
   const eccSelect = document.getElementById('ecc-select');
   const eccBoostRow = document.getElementById('ecc-boost-row');
   const eccBoostCheck = document.getElementById('ecc-boost-check');
+  const allowKanjiRow = document.getElementById('allow-kanji-row');
   const allowKanjiCheck = document.getElementById('allow-kanji-check');
   const appIndicatorRow = document.getElementById('app-indicator-row');
   const appIndicatorInput = document.getElementById('app-indicator-input');
@@ -50,6 +58,7 @@ export function createStateControls(document, hooks) {
   const DATA_FORMATS = ['text', 'gs1', 'link', 'aim'];
   const isMicroSymbology = () => symbologySelect.value === 'microqr';
   const isRmqrSymbology = () => symbologySelect.value === 'rmqr';
+  const isBytesContent = () => contentKindSelect.value === 'bytes';
 
   /** True while applyStateToControls runs, so input events do not flip the preset to (custom). */
   let applyingState = false;
@@ -58,6 +67,8 @@ export function createStateControls(document, hooks) {
   function collectState() {
     return {
       content: contentEl.value,
+      contentKind: contentKindSelect.value,
+      eciAssignment: readEciAssignmentField(eciAssignmentInput.value),
       symbology: symbologySelect.value,
       ecc: eccSelect.value,
       eccBoost: eccBoostCheck.checked,
@@ -96,6 +107,9 @@ export function createStateControls(document, hooks) {
     applyingState = true;
     try {
       if (typeof state.content === 'string') contentEl.value = state.content;
+      if (state.contentKind === 'text' || state.contentKind === 'bytes') contentKindSelect.value = state.contentKind;
+      if (state.eciAssignment === null) eciAssignmentInput.value = '';
+      else if (Number.isInteger(state.eciAssignment)) eciAssignmentInput.value = String(state.eciAssignment);
       if (state.symbology === 'qr' || state.symbology === 'microqr' || state.symbology === 'rmqr') symbologySelect.value = state.symbology;
       // Micro QR ECC choices depend on the restored version.
       populateVersionSelect();
@@ -223,9 +237,29 @@ export function createStateControls(document, hooks) {
     eccBoostRow.hidden = isMicroSymbology() || isRmqrSymbology();
     finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
     logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();
+    // Bytes are written exactly as given, so the library refuses the options that shape text: Kanji mode,
+    // FNC1 and the GS1 carriers. They are disabled rather than cleared, so a return to text finds them as they were.
+    const bytes = isBytesContent();
+    allowKanjiCheck.disabled = bytes;
+    allowKanjiRow.classList.toggle('field--disabled', bytes);
+    formatSelect.disabled = bytes;
+    formatRow.classList.toggle('field--disabled', bytes);
+    bytesModeHint.hidden = !bytes;
+    bytesModeHint.textContent = isMicroSymbology()
+      ? 'Bytes are written exactly as given, so Kanji mode is off. Micro QR has no ECI, so it takes no assignment.'
+      : 'Bytes are written exactly as given, so Kanji mode and the GS1 and AIM data formats are off.';
+    contentFileBtn.hidden = !bytes;
+    contentEl.placeholder = bytes ? 'Hex bytes, such as 48 65 6C 6C 6F' : 'Text or URL to encode';
+    contentEl.classList.toggle('content--hex', bytes);
+    contentHexStatus.hidden = !bytes;
+    if (bytes) contentHexStatus.textContent = hexStatus(contentEl.value);
+    // Text takes its charset from the library, and Micro QR has no ECI, so the assignment applies to bytes on the other two.
+    eciAssignmentRow.hidden = !bytes;
+    eciAssignmentRow.classList.toggle('field--disabled', isMicroSymbology());
+    eciAssignmentInput.disabled = isMicroSymbology();
     // Micro QR has neither FNC1 nor a GS1 carrier. The stem belongs to a Digital Link and the indicator
     // to an AIM format alone.
-    const format = isMicroSymbology() ? 'text' : formatSelect.value;
+    const format = isMicroSymbology() || bytes ? 'text' : formatSelect.value;
     formatRow.hidden = isMicroSymbology();
     gs1StemRow.hidden = format !== 'link';
     appIndicatorRow.hidden = format !== 'aim';
@@ -249,6 +283,57 @@ export function createStateControls(document, hooks) {
   populateEccSelect();
 
   return { collectState, applyStateToControls, syncDerivedControls, syncSymbologyControls, syncVersionControls, get applyingState() { return applyingState; } };
+}
+
+/** The line under the content field in bytes mode: the byte count, or why the hex does not read. */
+function hexStatus(content) {
+  const parsed = parseHex(content);
+  if (!parsed.ok) return `⚠ ${parsed.error}`;
+  if (parsed.length === 0) return 'No bytes yet';
+  return parsed.length === 1 ? '1 byte' : `${parsed.length.toLocaleString('en-US')} bytes`;
+}
+
+/**
+ * The WASM request for a playground state. The data format names the route: a GS1 format goes through
+ * the GS1 entry points, which check the data and set the mode, and an AIM format is plain text under
+ * FNC1 in second position. First position is written through the GS1 entry point alone, so a symbol
+ * that claims GS1 data has passed the checks. The page shows the separator as ␝, so in every format but
+ * plain text each ␝ is sent as U+001D, the separator a reader returns. Micro QR has neither FNC1 nor a
+ * GS1 carrier, so its request is plain text whatever the hidden control holds.
+ * Bytes go through the bytes calls, which refuse Kanji mode, FNC1 and the GS1 carriers, so a bytes request
+ * is plain whatever those controls hold. Its content is the hex with nothing between the digits.
+ */
+export function requestFor(state) {
+  const bytes = state.contentKind === 'bytes';
+  const format = state.symbology === 'microqr' || bytes ? 'text' : state.dataFormat;
+  const gs1 = format === 'gs1' ? 'qr' : format === 'link' ? 'link' : 'none';
+  const fnc1 = format === 'aim' ? 'second' : 'none';
+  if (!bytes) {
+    const content = format === 'text' ? state.content : state.content.replace(/␝/g, '\u001d');
+    return { ...state, gs1, fnc1, content, contentKind: 'text', eciAssignment: null };
+  }
+  // Hex that does not read is sent as typed, so the WASM side refuses it with its own message.
+  const parsed = parseHex(state.content);
+  return {
+    ...state, gs1, fnc1,
+    content: parsed.ok ? parsed.hex : state.content,
+    contentKind: 'bytes',
+    allowKanji: false,
+    // Micro QR has no ECI, so its bytes carry no assignment.
+    eciAssignment: state.symbology === 'microqr' ? null : state.eciAssignment ?? null,
+  };
+}
+
+/**
+ * Why a bytes state cannot be generated, or null. Checked before a call, since JSON would write an
+ * assignment that is not a number as null, which reads as none. Text states have their own checks.
+ */
+export function requestError(state) {
+  if (state.contentKind !== 'bytes') return null;
+  const parsed = parseHex(state.content);
+  if (!parsed.ok) return parsed.error;
+  if (parsed.length === 0) return 'Enter hex bytes to encode.';
+  return state.symbology === 'microqr' ? null : eciAssignmentError(state.eciAssignment);
 }
 
 /** Flat preset entry → state shape used by applyStateToControls / share links. */

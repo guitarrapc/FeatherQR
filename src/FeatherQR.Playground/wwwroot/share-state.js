@@ -9,6 +9,9 @@ const oneOf = (...values) => (value) => values.includes(value);
 
 const fields = {
   content: string,
+  contentKind: oneOf('text', 'bytes'),
+  // Null is none, as a blank field reads. A link without the field opens as text with none.
+  eciAssignment: (value) => value === null || (Number.isInteger(value) && value >= 0 && value <= 999999),
   symbology: oneOf('qr', 'microqr', 'rmqr'),
   ecc: oneOf('L', 'M', 'Q', 'H', 'EDO'),
   eccBoost: boolean,

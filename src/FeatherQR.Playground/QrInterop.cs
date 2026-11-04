@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices.JavaScript;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FeatherQR.Gs1;
@@ -125,6 +126,7 @@ public static partial class QrInterop
     /// Standard QR, Micro QR and rMQR are tried in that order. rMQR reports maskPattern as -1.
     /// FNC1 results include their mode and second-position application indicator. Separators remain U+001D in text.
     /// GS1 interpretation adds HRI and elements, plus validation errors when applicable. See the payload types for JSON fields.
+    /// Each symbol also reports its bytes and ECI assignment. Content that is not text the library can convert, such as binary data under ECI 899, succeeds with bytes and no text.
     /// </remarks>
     /// <param name="imageBytes">Encoded image file bytes.</param>
     [JSExport]
@@ -139,14 +141,10 @@ public static partial class QrInterop
             using var bitmap = DecodeBitmap(imageBytes);
             var image = new DecodedImage(bitmap.Width, bitmap.Height, ReadOrigin(imageBytes));
 
-            DecodePayload payload;
-            if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
-            {
-                payload = StandardPayload(text, info, ElapsedMs(stopwatch), image);
-            }
-            else
-            {
-                payload = DecodeMicroOrRmqr(bitmap, stopwatch, image) ?? new DecodePayload(
+            var payload = ReadStandard(bitmap, stopwatch, image, out var info)
+                ?? ReadMicro(bitmap, stopwatch, image, out _)
+                ?? ReadRmqr(bitmap, stopwatch, image, out _)
+                ?? new DecodePayload(
                     Ok: false,
                     Text: null,
                     Status: info.Status.ToString(),
@@ -159,7 +157,6 @@ public static partial class QrInterop
                     ImageWidth: image.Width,
                     ImageHeight: image.Height,
                     Orientation: image.Orientation);
-            }
             return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
         }
         catch (Exception ex)
@@ -174,7 +171,7 @@ public static partial class QrInterop
     /// <remarks>
     /// With <paramref name="everySymbology"/>, the shared scan returns all symbologies, Standard QR first, without duplicates.
     /// Otherwise it scans Standard QR, then Micro QR if none decoded, then rMQR if neither decoded, in discovery order.
-    /// Each symbol has the diagnostics of <see cref="Decode"/>. No match returns <c>ok:false</c> and an empty symbols array; unexpected failure returns <c>error</c>.
+    /// Each symbol has the diagnostics of <see cref="Decode"/>, with its ECI assignment. Bytes come with a symbol only when it is the one symbol read. No match returns <c>ok:false</c> and an empty symbols array. An unexpected failure returns <c>error</c>.
     /// </remarks>
     /// <param name="imageBytes">Encoded image file bytes.</param>
     /// <param name="everySymbology">Whether to read the symbols of every symbology together.</param>
@@ -219,10 +216,18 @@ public static partial class QrInterop
                 symbols = Array.ConvertAll(rmqr, r => RmqrPayload(r.Text, r.Info, ms, image));
             }
 
+            // The several-symbol calls give text alone, and no bytes form of them exists. The single-symbol bytes call
+            // picks a symbol of its own, which can be another one, since it also reads symbols the text calls refuse.
+            // So bytes are added only to the one symbol read, and only when the bytes call finds that same symbol.
+            // The time is taken first, since the bytes read is for the view and not part of the read timed.
+            var totalMs = ElapsedMs(stopwatch);
+            if (symbols.Length == 1)
+                symbols[0] = WithBytesOfSameSymbol(symbols[0], bitmap);
+
             var payload = new DecodeSymbolsPayload(
                 Ok: symbols.Length > 0,
                 Symbols: symbols,
-                TotalMs: ElapsedMs(stopwatch),
+                TotalMs: totalMs,
                 ImageWidth: image.Width,
                 ImageHeight: image.Height,
                 Orientation: image.Orientation);
@@ -245,9 +250,10 @@ public static partial class QrInterop
 
     private static double ElapsedMs(Stopwatch stopwatch) => Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1);
 
-    private static DecodePayload StandardPayload(string text, QRCodeDecodeInfo info, double totalMs, DecodedImage image)
+    /// <param name="text">The text, or null for a symbol read as bytes alone.</param>
+    private static DecodePayload StandardPayload(string? text, QRCodeDecodeInfo info, double totalMs, DecodedImage image)
     {
-        var gs1 = ReadGs1(text, info.Fnc1);
+        var gs1 = text is null ? default : ReadGs1(text, info.Fnc1);
         return new DecodePayload(
             Ok: true,
             Text: text,
@@ -267,18 +273,98 @@ public static partial class QrInterop
             Gs1Hri: gs1.Hri,
             Gs1Elements: gs1.Elements,
             Gs1Error: gs1.Error,
-            Gs1Check: gs1.Check);
+            Gs1Check: gs1.Check,
+            EciAssignment: info.EciAssignment);
     }
 
-    /// <summary>One Micro QR symbol, else one rMQR symbol, or null when neither decodes. Each has its own detector.</summary>
-    private static DecodePayload? DecodeMicroOrRmqr(SKBitmap bitmap, Stopwatch stopwatch, DecodedImage image)
+    // One symbol of each symbology, read as text and then as bytes. Each read searches the bitmap on its own,
+    // so the bytes are kept only when they come from the symbol the text came from (see WithBytesOfSameSymbol).
+    // A symbol whose content the text call cannot convert is read as bytes alone, with no text.
+    // A symbol read as text is timed by that read alone, since the bytes read after it only fills the view.
+
+    /// <summary>One Standard QR symbol, or null when none reads. <paramref name="info"/> is the text read's, for the failure the page shows.</summary>
+    private static DecodePayload? ReadStandard(SKBitmap bitmap, Stopwatch stopwatch, DecodedImage image, out QRCodeDecodeInfo info)
     {
-        if (MicroQRCodeDecoder.TryDecode(bitmap, out var microText, out var microInfo))
-            return MicroPayload(microText, microInfo, ElapsedMs(stopwatch), image);
-        return RmQRCodeDecoder.TryDecode(bitmap, out var rmText, out var rmInfo) ? RmqrPayload(rmText, rmInfo, ElapsedMs(stopwatch), image) : null;
+        if (QRCodeDecoder.TryDecode(bitmap, out var text, out info))
+            return WithBytesOfSameSymbol(StandardPayload(text, info, ElapsedMs(stopwatch), image), bitmap);
+        if (IsNotText(info.Status) && QRCodeDecoder.TryDecodeBytes(bitmap, out var bytes, out var bytesInfo))
+            return WithBytes(StandardPayload(null, bytesInfo, ElapsedMs(stopwatch), image), bytes, bytesInfo.EciAssignment);
+        return null;
     }
 
-    private static DecodePayload MicroPayload(string text, MicroQRCodeDecodeInfo info, double totalMs, DecodedImage image)
+    /// <summary>One Micro QR symbol, or null when none reads.</summary>
+    private static DecodePayload? ReadMicro(SKBitmap bitmap, Stopwatch stopwatch, DecodedImage image, out MicroQRCodeDecodeInfo info)
+    {
+        if (MicroQRCodeDecoder.TryDecode(bitmap, out var text, out info))
+            return WithBytesOfSameSymbol(MicroPayload(text, info, ElapsedMs(stopwatch), image), bitmap);
+        if (IsNotText(info.Status) && MicroQRCodeDecoder.TryDecodeBytes(bitmap, out var bytes, out var bytesInfo))
+            return WithBytes(MicroPayload(null, bytesInfo, ElapsedMs(stopwatch), image), bytes, null);
+        return null;
+    }
+
+    /// <summary>One rMQR symbol, or null when none reads.</summary>
+    private static DecodePayload? ReadRmqr(SKBitmap bitmap, Stopwatch stopwatch, DecodedImage image, out RmQRCodeDecodeInfo info)
+    {
+        if (RmQRCodeDecoder.TryDecode(bitmap, out var text, out info))
+            return WithBytesOfSameSymbol(RmqrPayload(text, info, ElapsedMs(stopwatch), image), bitmap);
+        if (IsNotText(info.Status) && RmQRCodeDecoder.TryDecodeBytes(bitmap, out var bytes, out var bytesInfo))
+            return WithBytes(RmqrPayload(null, bytesInfo, ElapsedMs(stopwatch), image), bytes, bytesInfo.EciAssignment);
+        return null;
+    }
+
+    /// <summary>A text read that failed on what the symbol holds, not on finding it: a charset the library does not know, such as binary data under ECI 899, or a character it cannot map.</summary>
+    private static bool IsNotText(DecodeStatus status) => status is DecodeStatus.UnsupportedContent or DecodeStatus.UnmappedCharacter;
+
+    /// <summary>
+    /// The symbol with its bytes read by the single-symbol bytes call of its symbology, or as it was when that call finds another symbol or none.
+    /// The assignment becomes the one the bytes call reports, the one the bytes are under. A symbol that declares several can hold it apart from the first one, which the text read reports.
+    /// </summary>
+    private static DecodePayload WithBytesOfSameSymbol(DecodePayload symbol, SKBitmap bitmap)
+    {
+        switch (symbol.Symbology)
+        {
+            case "qr":
+                if (QRCodeDecoder.TryDecodeBytes(bitmap, out var bytes, out var info) && SameSymbol(symbol.Corners, Flatten(info.Corners)))
+                    return WithBytes(symbol, bytes, info.EciAssignment);
+                break;
+            case "microqr":
+                if (MicroQRCodeDecoder.TryDecodeBytes(bitmap, out var microBytes, out var microInfo) && SameSymbol(symbol.Corners, Flatten(microInfo.Corners)))
+                    return WithBytes(symbol, microBytes, null);
+                break;
+            case "rmqr":
+                if (RmQRCodeDecoder.TryDecodeBytes(bitmap, out var rmBytes, out var rmInfo) && SameSymbol(symbol.Corners, Flatten(rmInfo.Corners)))
+                    return WithBytes(symbol, rmBytes, rmInfo.EciAssignment);
+                break;
+        }
+        return symbol;
+    }
+
+    private static DecodePayload WithBytes(DecodePayload symbol, byte[] bytes, int? eciAssignment)
+        => symbol with { BytesHex = Convert.ToHexString(bytes), EciAssignment = eciAssignment };
+
+    /// <summary>
+    /// Whether two reads found the same symbol, by the corners each reports. Symbols do not overlap, so another symbol's centre
+    /// lies at least half of this one's shorter side away. Centres closer than a quarter of it are taken as one symbol.
+    /// </summary>
+    private static bool SameSymbol(float[]? a, float[]? b)
+    {
+        if (a is null || b is null)
+            return false;
+        var shortestSide = float.MaxValue;
+        for (var i = 0; i < 8; i += 2)
+        {
+            var next = (i + 2) % 8;
+            shortestSide = Math.Min(shortestSide, MathF.Sqrt(Square(a[next] - a[i]) + Square(a[next + 1] - a[i + 1])));
+        }
+        var dx = (a[0] + a[2] + a[4] + a[6] - b[0] - b[2] - b[4] - b[6]) / 4;
+        var dy = (a[1] + a[3] + a[5] + a[7] - b[1] - b[3] - b[5] - b[7]) / 4;
+        return MathF.Sqrt(Square(dx) + Square(dy)) < shortestSide / 4;
+    }
+
+    private static float Square(float value) => value * value;
+
+    /// <param name="text">The text, or null for a symbol read as bytes alone.</param>
+    private static DecodePayload MicroPayload(string? text, MicroQRCodeDecodeInfo info, double totalMs, DecodedImage image)
         => new(
             Ok: true,
             Text: text,
@@ -294,10 +380,11 @@ public static partial class QrInterop
             ImageHeight: image.Height,
             Orientation: image.Orientation);
 
-    private static DecodePayload RmqrPayload(string text, RmQRCodeDecodeInfo info, double totalMs, DecodedImage image)
+    /// <param name="text">The text, or null for a symbol read as bytes alone.</param>
+    private static DecodePayload RmqrPayload(string? text, RmQRCodeDecodeInfo info, double totalMs, DecodedImage image)
     {
         // rMQR has a single fixed mask, so no mask pattern is reported (-1).
-        var gs1 = ReadGs1(text, info.Fnc1);
+        var gs1 = text is null ? default : ReadGs1(text, info.Fnc1);
         return new DecodePayload(
             Ok: true,
             Text: text,
@@ -317,7 +404,8 @@ public static partial class QrInterop
             Gs1Hri: gs1.Hri,
             Gs1Elements: gs1.Elements,
             Gs1Error: gs1.Error,
-            Gs1Check: gs1.Check);
+            Gs1Check: gs1.Check,
+            EciAssignment: info.EciAssignment);
     }
 
     /// <summary>The FNC1 mode for the page: "first" (GS1), "second" (an AIM industry format), or null without FNC1.</summary>
@@ -427,6 +515,8 @@ public static partial class QrInterop
         var text = request.Content.AsSpan();
         var ecc = ParseEcc(request.Ecc);
         var options = StandardOptions(request);
+        if (ContentBytes(request) is { } bytes)
+            return QRCodeGenerator.Create(bytes, ecc, options, request.EciAssignment);
         return Gs1Carrier(request) switch
         {
             "qr" => QRCodeGenerator.CreateGs1(text, ecc, options),
@@ -449,6 +539,8 @@ public static partial class QrInterop
         var text = request.Content.AsSpan();
         var ecc = ParseRmEcc(request.Ecc);
         var options = RmOptions(request);
+        if (ContentBytes(request) is { } bytes)
+            return RmQRCodeGenerator.Create(bytes, ecc, options, request.EciAssignment);
         return Gs1Carrier(request) switch
         {
             "qr" => RmQRCodeGenerator.CreateGs1(text, ecc, options),
@@ -553,6 +645,11 @@ public static partial class QrInterop
     {
         RequireNoFnc1(request);
         RequireNoGs1(request);
+        if (ContentBytes(request) is { } bytes)
+        {
+            RequireNoEciAssignment(request);
+            return MicroQRCodeGenerator.Create(bytes, ParseMicroEcc(request.Ecc), MicroOptions(request));
+        }
         return MicroQRCodeGenerator.Create(
             request.Content.AsSpan(),
             ParseMicroEcc(request.Ecc),
@@ -562,6 +659,70 @@ public static partial class QrInterop
                 QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
                 AllowKanji = request.AllowKanji,
             });
+    }
+
+    private static MicroQRCodeGeneratorOptions MicroOptions(QrRequest request) => new()
+    {
+        Version = ParseMicroVersion(request.Version),
+        QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
+        AllowKanji = request.AllowKanji,
+    };
+
+    /// <summary>Micro QR has no ECI. The page disables the field and sends none, so an assignment is a malformed request rather than one to ignore.</summary>
+    private static void RequireNoEciAssignment(QrRequest request)
+    {
+        if (request.EciAssignment is not null)
+            throw new ArgumentException("Micro QR has no ECI, so it takes no ECI assignment. Use Standard QR or rMQR, or leave the assignment blank.");
+    }
+
+    /// <summary>
+    /// The bytes of a bytes request, or null for text, which keeps its own route.
+    /// The bytes calls have no GS1 entry point, so a GS1 carrier is refused here. The library refuses Kanji mode and FNC1 with bytes itself.
+    /// An assignment belongs to bytes, so a text request that carries one is malformed.
+    /// </summary>
+    private static byte[]? ContentBytes(QrRequest request)
+    {
+        switch ((request.ContentKind ?? "text").ToLowerInvariant())
+        {
+            case "text":
+                if (request.EciAssignment is not null)
+                    throw new ArgumentException("An ECI assignment applies to bytes. Text is written in the charset the library picks for it.");
+                return null;
+            case "bytes":
+                if (Gs1Carrier(request) != "none")
+                    throw new ArgumentException("GS1 data is written as text. Switch the content to Text for a GS1 format.");
+                return ParseHex(request.Content);
+            default:
+                throw new ArgumentException($"Unknown content kind '{request.ContentKind}'. Use text or bytes.");
+        }
+    }
+
+    /// <summary>
+    /// The bytes of hex content, by the rule the page checks first: either case, with whitespace, ':' and '-' between digits skipped.
+    /// The page sends checked hex, so these messages reach it only from a request it did not build.
+    /// </summary>
+    private static byte[] ParseHex(string content)
+    {
+        var digits = new char[content.Length];
+        var count = 0;
+        var position = 0;
+        foreach (var rune in content.EnumerateRunes())
+        {
+            position++;
+            if (Rune.IsWhiteSpace(rune) || rune.Value is ':' or '-')
+                continue;
+            if (!rune.IsAscii || !char.IsAsciiHexDigit((char)rune.Value))
+            {
+                var shown = Rune.IsControl(rune) ? $"U+{rune.Value:X4}" : $"'{rune}'";
+                throw new ArgumentException($"{shown} at position {position} is not a hex digit. Use 0-9 and A-F, with spaces, ':' or '-' between bytes if you like.");
+            }
+            digits[count++] = (char)rune.Value;
+        }
+        if (count % 2 != 0)
+            throw new ArgumentException($"The hex has {count} digits, an odd number. Each byte takes two digits.");
+        if (count == 0)
+            throw new ArgumentException("Content is empty.");
+        return Convert.FromHexString(digits.AsSpan(0, count));
     }
 
     /// <summary>
@@ -677,6 +838,21 @@ public static partial class QrInterop
             if (count is <= 0 or > 1_000_000)
                 throw new ArgumentOutOfRangeException(nameof(count), "Batch count must be between 1 and 1,000,000.");
 
+            // The render loops build each symbol through the Create*Data methods, which take bytes as they take text.
+            if (ContentBytes(request) is { } bytes)
+            {
+                return (mode, IsRmQR(request), IsMicroQR(request)) switch
+                {
+                    ("encode", true, _) => BenchmarkRmBytesEncode(request, bytes, count),
+                    ("render", true, _) => BenchmarkRmRender(request, count),
+                    ("encode", _, true) => BenchmarkMicroBytesEncode(request, bytes, count),
+                    ("render", _, true) => BenchmarkMicroRender(request, count),
+                    ("encode", _, _) => BenchmarkBytesEncode(request, bytes, startIndex, count),
+                    ("render", _, _) => BenchmarkBytesRender(request, bytes, startIndex, count, customLogo),
+                    _ => throw new ArgumentException($"Unknown benchmark mode '{mode}'. Use 'encode' or 'render'."),
+                };
+            }
+
             if (Gs1Carrier(request) != "none")
             {
                 return mode switch
@@ -791,6 +967,143 @@ public static partial class QrInterop
         return string.Create(
             CultureInfo.InvariantCulture,
             $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
+    }
+
+    /// <summary>
+    /// <see cref="BenchmarkEncode"/> for bytes: the same unique suffix, <c>" #&lt;index+1&gt;"</c>, appended as its ASCII bytes, so each code is new as it is for text.
+    /// The bytes are composed in a pooled buffer and the matrix written into one sized for version 40, so the loop allocates nothing.
+    /// </summary>
+    private static string BenchmarkBytesEncode(QrRequest request, byte[] bytes, int startIndex, int count)
+    {
+        var ecc = ParseEcc(request.Ecc);
+        var options = StandardOptions(request);
+        var quietZone = options.QuietZoneSize;
+        var prefixLength = bytes.Length;
+
+        // " #" + int.MaxValue digits
+        var dataBuffer = ArrayPool<byte>.Shared.Rent(prefixLength + 2 + 11);
+        // Version 40 with quiet zone is the largest possible matrix.
+        var maxSide = 177 + 2 * quietZone;
+        var moduleBuffer = ArrayPool<byte>.Shared.Rent(maxSide * maxSide);
+        try
+        {
+            bytes.CopyTo(dataBuffer, 0);
+            dataBuffer[prefixLength] = (byte)' ';
+            dataBuffer[prefixLength + 1] = (byte)'#';
+
+            long bytesTotal = 0;
+            var written = 0;
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < count; i++)
+            {
+                (startIndex + i + 1).TryFormat(dataBuffer.AsSpan(prefixLength + 2), out var digits, provider: CultureInfo.InvariantCulture);
+                var data = dataBuffer.AsSpan(0, prefixLength + 2 + digits);
+                written = QRCodeGenerator.Create(data, ecc, moduleBuffer, options, request.EciAssignment);
+                bytesTotal += written;
+            }
+            stopwatch.Stop();
+
+            var matrixSize = (int)Math.Sqrt(written);
+            var qrVersion = (matrixSize - 2 * quietZone - 17) / 4;
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(moduleBuffer, clearArray: false);
+            ArrayPool<byte>.Shared.Return(dataBuffer, clearArray: false);
+        }
+    }
+
+    /// <summary><see cref="BenchmarkRender"/> for bytes, with the suffix appended as its ASCII bytes.</summary>
+    private static string BenchmarkBytesRender(QrRequest request, byte[] bytes, int startIndex, int count, byte[] customLogo)
+    {
+        var ecc = ParseEcc(request.Ecc);
+        var options = StandardOptions(request);
+
+        long bytesTotal = 0;
+        var qrVersion = 0;
+        var matrixSize = 0;
+        var stopwatch = Stopwatch.StartNew();
+        for (var i = 0; i < count; i++)
+        {
+            byte[] data = [.. bytes, .. Encoding.ASCII.GetBytes(string.Create(CultureInfo.InvariantCulture, $" #{startIndex + i + 1}"))];
+            var symbol = QRCodeGenerator.Create(data, ecc, options, request.EciAssignment);
+            qrVersion = symbol.Version;
+            matrixSize = symbol.Size;
+            bytesTotal += CreateBuilder(request, symbol, customLogo).ToByteArray().Length;
+        }
+        stopwatch.Stop();
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
+    }
+
+    /// <summary><see cref="BenchmarkMicroEncode"/> for bytes: the same bytes every iteration, since a suffix would overflow most Micro QR payloads.</summary>
+    private static string BenchmarkMicroBytesEncode(QrRequest request, byte[] bytes, int count)
+    {
+        RequireNoFnc1(request);
+        RequireNoEciAssignment(request);
+        var ecc = ParseMicroEcc(request.Ecc);
+        var options = MicroOptions(request);
+        var quietZone = options.QuietZoneSize;
+
+        // M4 with quiet zone is the largest possible Micro QR matrix.
+        var maxSide = 17 + 2 * quietZone;
+        var moduleBuffer = ArrayPool<byte>.Shared.Rent(maxSide * maxSide);
+        try
+        {
+            long bytesTotal = 0;
+            var written = 0;
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < count; i++)
+            {
+                written = MicroQRCodeGenerator.Create(bytes, ecc, moduleBuffer, options);
+                bytesTotal += written;
+            }
+            stopwatch.Stop();
+
+            var matrixSize = (int)Math.Sqrt(written);
+            var qrVersion = (matrixSize - 2 * quietZone - 9) / 2;
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(moduleBuffer, clearArray: false);
+        }
+    }
+
+    /// <summary><see cref="BenchmarkRmEncode"/> for bytes: the same bytes every iteration, as for text.</summary>
+    private static string BenchmarkRmBytesEncode(QrRequest request, byte[] bytes, int count)
+    {
+        var ecc = ParseRmEcc(request.Ecc);
+        var options = RmOptions(request);
+        if (!RmQRCodeGenerator.TryGetRequiredBufferSize(bytes, ecc, out var calculated, options, request.EciAssignment))
+            throw new ArgumentException($"Content does not fit any rMQR symbol under the requested constraints ({bytes.Length} bytes, ECC {ecc}, Version {(options.Version is null ? "auto" : options.Version.ToString())}, FitStrategy {options.FitStrategy}, Height {(options.Height is null ? "auto" : options.Height.ToString())}, QuietZone {options.QuietZoneSize}).", nameof(request));
+
+        var moduleBuffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
+        try
+        {
+            long bytesTotal = 0;
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < count; i++)
+            {
+                bytesTotal += RmQRCodeGenerator.Create(bytes, ecc, moduleBuffer, options, request.EciAssignment);
+            }
+            stopwatch.Stop();
+
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"symbology\":\"rmqr\",\"qrVersion\":{(int)calculated.Version},\"matrixSize\":{calculated.Width},\"matrixHeight\":{calculated.Height},\"bytesTotal\":{bytesTotal}}}");
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(moduleBuffer, clearArray: false);
+        }
     }
 
     /// <summary>
@@ -1165,6 +1478,10 @@ public static partial class QrInterop
 public sealed record QrRequest
 {
     public string Content { get; init; } = "";
+    /// <summary>How <see cref="Content"/> is read: text (the text calls) or bytes (hex, written exactly as given through the bytes calls).</summary>
+    public string ContentKind { get; init; } = "text";
+    /// <summary>Bytes on Standard QR and rMQR only: the ECI assignment (0-999999) written as a header before the bytes, or null for none.</summary>
+    public int? EciAssignment { get; init; }
     /// <summary>Symbology: "qr" (Standard QR), "microqr" (Micro QR M1-M4) or "rmqr" (rMQR R7x43-R17x139).</summary>
     public string Symbology { get; init; } = "qr";
     /// <summary>rMQR automatic fit: area (fewest modules, default), width or height.</summary>
@@ -1256,6 +1573,8 @@ public sealed record Gs1ElementDto(string Ai, string Value);
 /// <param name="Gs1Elements">The same data's elements, AI and value, in the order the element string holds them.</param>
 /// <param name="Gs1Error">Under FNC1 in first position, why the text does not read as GS1 data, else null.</param>
 /// <param name="Gs1Check">For GS1 data that reads, why its element string fails the GS1 checks, with the place in the element string, else null.</param>
+/// <param name="BytesHex">The bytes the symbol carries, as uppercase hex with nothing between the digits, or null when they were not read. A success with no <see cref="Text"/> holds content that is not text the library can convert.</param>
+/// <param name="EciAssignment">The ECI assignment the content is declared under, or null for none. Micro QR has no ECI and reports none.</param>
 public sealed record DecodePayload(
     bool Ok,
     string? Text,
@@ -1275,7 +1594,9 @@ public sealed record DecodePayload(
     string? Gs1Hri = null,
     Gs1ElementDto[]? Gs1Elements = null,
     string? Gs1Error = null,
-    string? Gs1Check = null);
+    string? Gs1Check = null,
+    string? BytesHex = null,
+    int? EciAssignment = null);
 
 /// <summary>Result of a <see cref="QrInterop.DecodeAll"/> call, serialized to the page script.</summary>
 /// <param name="Ok">Whether any symbol decoded.</param>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStateControls, presetToState } from '../../src/FeatherQR.Playground/wwwroot/state-controls.js';
+import { createStateControls, presetToState, requestError, requestFor } from '../../src/FeatherQR.Playground/wwwroot/state-controls.js';
 
 import { readFileSync } from 'node:fs';
 import { PRESETS } from '../../src/FeatherQR.Playground/wwwroot/presets.js';
@@ -294,5 +294,160 @@ for (const version of [1, 2, 4]) {
     el('symbology-select').value = 'qr';
     controls.syncSymbologyControls();
     assert.equal(controls.collectState().ecc, 'M');
+  });
+}
+
+for (const symbology of ['qr', 'microqr', 'rmqr']) {
+  test(`${symbology} bytes mode turns off the options bytes refuse and keeps their values`, () => {
+    const { controls, el } = fixture();
+    controls.applyStateToControls({ symbology, contentKind: 'bytes', content: '48 65 6C 6C 6F',
+      dataFormat: 'gs1', allowKanji: true, applicationIndicator: 'A', eciAssignment: 899 });
+    assert.equal(el('allow-kanji-check').disabled, true);
+    assert.equal(el('format-select').disabled, true);
+    assert.equal(el('separator-row').hidden, true);
+    assert.equal(el('gs1-stem-row').hidden, true);
+    assert.equal(el('app-indicator-row').hidden, true);
+    assert.equal(el('gs1-example-btn').hidden, true);
+    assert.equal(el('bytes-mode-hint').hidden, false);
+    assert.match(el('bytes-mode-hint').textContent, /Kanji/);
+    assert.equal(/no ECI/.test(el('bytes-mode-hint').textContent), symbology === 'microqr');
+    assert.equal(el('content-file-btn').hidden, false);
+    assert.equal(el('eci-assignment-row').hidden, false);
+    assert.equal(el('eci-assignment-input').disabled, symbology === 'microqr');
+    const state = controls.collectState();
+    assert.equal(state.contentKind, 'bytes');
+    assert.equal(state.dataFormat, 'gs1');
+    assert.equal(state.allowKanji, true);
+    assert.equal(state.eciAssignment, 899);
+    const request = requestFor(state);
+    assert.equal(request.contentKind, 'bytes');
+    assert.equal(request.content, '48656C6C6F');
+    assert.equal(request.gs1, 'none');
+    assert.equal(request.fnc1, 'none');
+    assert.equal(request.allowKanji, false);
+    assert.equal(request.eciAssignment, symbology === 'microqr' ? null : 899);
+    assert.equal(requestError(state), null);
+  });
+
+  test(`${symbology} text mode hides the bytes controls and sends no assignment`, () => {
+    const { controls, el } = fixture();
+    controls.applyStateToControls({ symbology, contentKind: 'bytes', dataFormat: 'aim', allowKanji: true, eciAssignment: 26 });
+    controls.applyStateToControls({ contentKind: 'text' });
+    assert.equal(el('allow-kanji-check').disabled, false);
+    assert.equal(el('format-select').disabled, false);
+    assert.equal(el('app-indicator-row').hidden, symbology === 'microqr');
+    assert.equal(el('separator-row').hidden, symbology === 'microqr');
+    assert.equal(el('bytes-mode-hint').hidden, true);
+    assert.equal(el('content-file-btn').hidden, true);
+    assert.equal(el('eci-assignment-row').hidden, true);
+    assert.equal(el('content-hex-status').hidden, true);
+    const state = controls.collectState();
+    // The hidden field keeps its value for a return to bytes, and the request leaves it out.
+    assert.equal(state.eciAssignment, 26);
+    const request = requestFor(state);
+    assert.equal(request.contentKind, 'text');
+    assert.equal(request.eciAssignment, null);
+    assert.equal(request.allowKanji, true);
+    assert.equal(request.fnc1, symbology === 'microqr' ? 'none' : 'second');
+  });
+}
+
+test('text requests keep the content and data format routes they had', () => {
+  const { controls } = fixture();
+  controls.applyStateToControls({ content: '(01)09520123456788␝', dataFormat: 'gs1' });
+  const request = requestFor(controls.collectState());
+  assert.equal(request.content, '(01)09520123456788\u001d');
+  assert.equal(request.gs1, 'qr');
+  controls.applyStateToControls({ content: 'a␝b', dataFormat: 'text' });
+  assert.equal(requestFor(controls.collectState()).content, 'a␝b');
+  assert.equal(requestError(controls.collectState()), null);
+});
+
+for (const [content, status] of [
+  ['de ad be ef', '4 bytes'], ['00', '1 byte'], ['', 'No bytes yet'], ['abc', /odd/], ['zz', /'z' at position 1/],
+]) {
+  test(`hex status for ${JSON.stringify(content)}`, () => {
+    const { controls, el } = fixture();
+    controls.applyStateToControls({ contentKind: 'bytes', content });
+    assert.equal(el('content-hex-status').hidden, false);
+    if (typeof status === 'string') assert.equal(el('content-hex-status').textContent, status);
+    else assert.match(el('content-hex-status').textContent, status);
+  });
+}
+
+for (const [state, pattern] of [
+  [{ contentKind: 'bytes', content: 'abc' }, /odd/],
+  [{ contentKind: 'bytes', content: 'xy' }, /'x'/],
+  [{ contentKind: 'bytes', content: ' : ' }, /Enter hex/],
+  [{ contentKind: 'bytes', content: '41', eciAssignment: 1000000 }, /ECI assignment/],
+  [{ contentKind: 'bytes', content: '41', eciAssignment: 1.5 }, /ECI assignment/],
+  [{ contentKind: 'bytes', content: '41', symbology: 'rmqr', eciAssignment: -1 }, /ECI assignment/],
+]) {
+  test(`request error for ${JSON.stringify(state)}`, () => {
+    assert.match(requestError({ symbology: 'qr', eciAssignment: null, ...state }), pattern);
+  });
+}
+
+for (const state of [
+  { contentKind: 'bytes', content: '41', symbology: 'microqr', eciAssignment: 1000000 },
+  { contentKind: 'text', content: 'not hex', symbology: 'qr', eciAssignment: 1000000 },
+  { contentKind: 'bytes', content: '41', symbology: 'qr', eciAssignment: 0 },
+  { contentKind: 'bytes', content: '41', symbology: 'rmqr', eciAssignment: 999999 },
+]) {
+  test(`no request error for ${JSON.stringify(state)}`, () => {
+    assert.equal(requestError(state), null);
+  });
+}
+
+test('the assignment field reads blank as none and restores none as blank', () => {
+  const { controls, el } = fixture();
+  controls.applyStateToControls({ contentKind: 'bytes', eciAssignment: 0 });
+  assert.equal(el('eci-assignment-input').value, '0');
+  assert.equal(controls.collectState().eciAssignment, 0);
+  controls.applyStateToControls({ eciAssignment: null });
+  assert.equal(el('eci-assignment-input').value, '');
+  assert.equal(controls.collectState().eciAssignment, null);
+  el('eci-assignment-input').value = ' 899 ';
+  assert.equal(controls.collectState().eciAssignment, 899);
+});
+
+test('bytes content, kind and assignment survive a share link', async () => {
+  const { controls } = fixture();
+  controls.applyStateToControls({ symbology: 'rmqr', contentKind: 'bytes', content: 'DE AD BE EF', eciAssignment: 899 });
+  const state = controls.collectState();
+  assert.equal(validateShareState(state), null);
+  const decoded = await decodeShareHash(await encodeShareState(state));
+  assert.equal(decoded.ok, true, decoded.error);
+  const restored = fixture();
+  restored.controls.applyStateToControls(decoded.state);
+  assert.deepEqual(restored.controls.collectState(), state);
+  assert.equal(restored.el('eci-assignment-row').hidden, false);
+});
+
+test('a new page starts as text with no assignment', () => {
+  const { controls, el } = fixture();
+  // The page syncs the controls once at startup, and the markup hides the bytes controls before that.
+  controls.syncDerivedControls();
+  const state = controls.collectState();
+  assert.equal(state.contentKind, 'text');
+  assert.equal(state.eciAssignment, null);
+  assert.equal(el('eci-assignment-row').hidden, true);
+  for (const id of ['eci-assignment-row', 'content-file-btn', 'content-hex-status', 'bytes-mode-hint']) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*\\shidden\\b`), id);
+  }
+});
+
+for (const old of [{ content: 'old link' }, { v: 1, content: 'old link', symbology: 'qr', ecc: 'H', dataFormat: 'text' }]) {
+  test(`an old link ${JSON.stringify(old)} restores as text with no assignment`, async () => {
+    const decoded = await decodeShareHash(`0.${Buffer.from(JSON.stringify(old)).toString('base64url')}`);
+    assert.equal(decoded.ok, true, decoded.error);
+    const { controls, el } = fixture();
+    controls.applyStateToControls(decoded.state);
+    const state = controls.collectState();
+    assert.equal(state.content, 'old link');
+    assert.equal(state.contentKind, 'text');
+    assert.equal(state.eciAssignment, null);
+    assert.equal(requestFor(state).contentKind, 'text');
+    assert.equal(el('eci-assignment-row').hidden, true);
   });
 }

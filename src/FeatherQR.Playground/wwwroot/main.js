@@ -1,6 +1,7 @@
 import { RMQR_VERSIONS } from './symbol-options.js';
 import { PRESETS } from './presets.js';
-import { createStateControls, presetToState } from './state-controls.js';
+import { createStateControls, presetToState, requestError, requestFor } from './state-controls.js';
+import { MAX_SYMBOL_BYTES, convertContent, eciAssignmentError, formatHex, hexDump } from './binary-content.js';
 import { dotnet } from './_framework/dotnet.js';
 import {
   decodeShareHash,
@@ -134,6 +135,10 @@ function removeToastElement(el) {
 const loading = document.getElementById('loading');
 const versionEl = document.getElementById('playground-version');
 const contentEl = document.getElementById('content');
+const contentKindSelect = document.getElementById('content-kind-select');
+const contentFileBtn = document.getElementById('content-file-btn');
+const contentFileInput = document.getElementById('content-file');
+const eciAssignmentInput = document.getElementById('eci-assignment-input');
 const presetSelect = document.getElementById('preset-select');
 const symbologySelect = document.getElementById('symbology-select');
 const eccSelect = document.getElementById('ecc-select');
@@ -199,6 +204,7 @@ const decodeCornersCheck = document.getElementById('decode-corners-check');
 const decodeEveryCheck = document.getElementById('decode-every-check');
 const decodeMixedCheck = document.getElementById('decode-mixed-check');
 const decodeResultEl = document.getElementById('decode-result');
+const decodeBytesEl = document.getElementById('decode-bytes');
 const decodeSymbolsEl = document.getElementById('decode-symbols');
 const decodePreviewEl = document.getElementById('decode-preview');
 const decodeCanvasEl = document.getElementById('decode-canvas');
@@ -251,20 +257,45 @@ function displayText(text) {
   return text.replace(/\u001d/g, '␝');
 }
 
+/** An ECI assignment for display: its number, or none. */
+function eciLabel(assignment) {
+  return Number.isInteger(assignment) ? String(assignment) : 'none';
+}
+
+function byteCount(count) {
+  return `${count.toLocaleString()} ${count === 1 ? 'byte' : 'bytes'}`;
+}
+
+/** Whether a read holds the bytes a bytes request wrote, under the assignment it wrote them with. A reader takes the bytes by the assignment, so both must come back. */
+function bytesMatch(read, request) {
+  return read.bytesHex === request.content && (read.eciAssignment ?? null) === (request.eciAssignment ?? null);
+}
+
 /**
- * The WASM request for a playground state. The data format names the route: a GS1 format goes through
- * the GS1 entry points, which check the data and set the mode, and an AIM format is plain text under
- * FNC1 in second position. First position is written through the GS1 entry point alone, so a symbol
- * that claims GS1 data has passed the checks. The page shows the separator as ␝, so in every format but
- * plain text each ␝ is sent as U+001D, the separator a reader returns. Micro QR has neither FNC1 nor a
- * GS1 carrier, so its request is plain text whatever the hidden control holds.
+ * The bytes view of one decoded symbol: its ECI assignment, and its bytes as a hex dump that folds away.
+ * The dump starts open for a symbol with no text, since its bytes are then all it shows.
+ * A read of every code carries no bytes for a symbol it cannot tie them to, and then shows the assignment alone.
  */
-function requestFor(state) {
-  const format = state.symbology === 'microqr' ? 'text' : state.dataFormat;
-  const gs1 = format === 'gs1' ? 'qr' : format === 'link' ? 'link' : 'none';
-  const fnc1 = format === 'aim' ? 'second' : 'none';
-  const content = format === 'text' ? state.content : state.content.replace(/␝/g, '\u001d');
-  return { ...state, gs1, fnc1, content };
+function renderDecodedBytes(symbol) {
+  decodeBytesEl.replaceChildren();
+  decodeBytesEl.hidden = !symbol;
+  if (!symbol) return;
+  const assignment = `ECI assignment: ${eciLabel(symbol.eciAssignment)}`;
+  if (typeof symbol.bytesHex !== 'string') {
+    const line = document.createElement('div');
+    line.textContent = assignment;
+    decodeBytesEl.appendChild(line);
+    return;
+  }
+  const details = document.createElement('details');
+  details.open = typeof symbol.text !== 'string';
+  const summary = document.createElement('summary');
+  summary.textContent = `Bytes · ${byteCount(symbol.bytesHex.length / 2)} · ${assignment}`;
+  const dump = document.createElement('pre');
+  dump.className = 'hex-dump';
+  dump.textContent = hexDump(symbol.bytesHex) || '(no bytes)';
+  details.append(summary, dump);
+  decodeBytesEl.appendChild(details);
 }
 
 /**
@@ -487,6 +518,11 @@ function generate() {
     showGenerateError('Enter content to encode.');
     return;
   }
+  const bytesError = requestError(state);
+  if (bytesError) {
+    showGenerateError(bytesError);
+    return;
+  }
 
   const request = requestFor(state);
   const logoBytes = state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;
@@ -593,6 +629,10 @@ function runVerifyDecode(pngBytes, request) {
     decodeVerifyEl.textContent = '';
     return;
   }
+  if (request.contentKind === 'bytes' && result.ok) {
+    decodeVerifyEl.textContent = bytesVerdict(result, request);
+    return;
+  }
   // The mode changes how the text reads, so a symbol is only right when both come back.
   if (result.ok && result.text === request.content && decodedModeMatches(result, request)) {
     const corrected = result.errorsCorrected > 0 ? ` · ${result.errorsCorrected} codewords corrected` : '';
@@ -609,6 +649,18 @@ function runVerifyDecode(pngBytes, request) {
     decodeVerifyEl.textContent =
       `Self-check: ${result.status}, the built-in decoder could not read this styling; a camera app may still scan it.`;
   }
+}
+
+/** The self-check line for a symbol read from bytes: it compares the bytes and the assignment, as the text check compares the text and the mode. */
+function bytesVerdict(result, request) {
+  if (result.bytesHex !== request.content) return '⚠ Self-check decoded different bytes, please test-scan this code.';
+  if (!bytesMatch(result, request)) {
+    return `⚠ Self-check read the bytes under another ECI assignment (${eciLabel(result.eciAssignment)}), please test-scan this code.`;
+  }
+  const corrected = result.errorsCorrected > 0 ? ` · ${result.errorsCorrected} codewords corrected` : '';
+  const ecc = result.ecc ? ` · ECC ${result.ecc}` : '';
+  return `✓ Decodes back to the input bytes (self-check · ${byteCount(request.content.length / 2)}`
+    + ` · ECI assignment ${eciLabel(result.eciAssignment)}${ecc}${corrected} · ${result.totalMs} ms)`;
 }
 
 /**
@@ -653,7 +705,9 @@ function symbolSummary(symbol) {
   const decodedLabel = symbolLabel(symbol.symbology, symbol.qrVersion);
   // rMQR has one fixed mask, so no mask pattern is reported for it.
   const maskLabel = symbol.maskPattern >= 0 ? ` · mask ${symbol.maskPattern}` : '';
-  return `“${displayText(symbol.text)}” · ${decodedLabel}${fnc1Label(symbol)} · ECC ${symbol.ecc}${maskLabel}`
+  // Content the decoder cannot give as text, such as binary data under ECI 899, is read as bytes alone.
+  const content = typeof symbol.text === 'string' ? `“${displayText(symbol.text)}”` : 'No text (binary content)';
+  return `${content} · ${decodedLabel}${fnc1Label(symbol)} · ECC ${symbol.ecc}${maskLabel}`
     + ` · ${symbol.errorsCorrected} codewords corrected`;
 }
 
@@ -872,6 +926,7 @@ async function decodeImageFile(file) {
 
   decodePreviewEl.hidden = true;
   renderDecodedGs1(null);
+  renderDecodedBytes(null);
   decodeSymbolsEl.replaceChildren();
   decodeSymbolsEl.hidden = true;
   lastDecodeImage?.close();
@@ -916,12 +971,14 @@ async function decodeImageFile(file) {
       `No QR code decoded${status}. The built-in decoder targets clean, screen-rendered images.`;
   } else if (symbols.length === 1) {
     decodeResultEl.textContent = `${symbolSummary(symbols[0])} · ${result.totalMs} ms`;
+    renderDecodedBytes(symbols[0]);
     renderDecodedGs1(symbols[0]);
   } else {
     decodeResultEl.textContent = `${symbols.length} QR codes decoded · ${result.totalMs} ms`;
     for (const symbol of symbols) {
       const item = document.createElement('li');
-      item.textContent = symbolSummary(symbol);
+      const assignment = Number.isInteger(symbol.eciAssignment) ? ` · ECI assignment ${symbol.eciAssignment}` : '';
+      item.textContent = symbolSummary(symbol) + assignment;
       const gs1 = document.createElement('div');
       gs1.className = 'decode-gs1';
       if (fillGs1View(gs1, symbol)) item.appendChild(gs1);
@@ -1076,14 +1133,19 @@ function photoRequest() {
     jpeg: Number(photoJpegSelect.value),
     scene: photoSceneCheck.checked,
     seed: Math.max(0, Math.trunc(Number(photoSeedInput.value) || 0)),
+    // A code written from bytes is checked by its bytes, so the read takes them too.
+    bytes: photoSource?.expected.contentKind === 'bytes',
   };
   for (const slider of PHOTO_SLIDERS) request[slider.key] = Number(slider.input.value);
   return request;
 }
 
-/** Whether a read is the text the generated code holds, under the mode it was written with. */
+/** Whether a read is the text the generated code holds under the mode it was written with, or for bytes the bytes under their assignment. */
 function readsAsGenerated(read, expected) {
-  return Boolean(read?.ok) && read.text === expected.content && decodedModeMatches(read, expected);
+  if (!read?.ok) return false;
+  return expected.contentKind === 'bytes'
+    ? bytesMatch(read, expected)
+    : read.text === expected.content && decodedModeMatches(read, expected);
 }
 
 /** Hands the last generated image to the WASM side as the card. Returns false, with the reason shown, when it cannot. */
@@ -1144,7 +1206,7 @@ async function takePhotograph() {
   const verdict = readsAsGenerated(read, photoSource.expected)
     ? `✓ Reads · ${symbolSummary(read)}`
     : read.ok
-      ? `⚠ Reads another text · ${symbolSummary(read)}`
+      ? `⚠ Reads ${photoSource.expected.contentKind === 'bytes' ? 'other bytes' : 'another text'} · ${symbolSummary(read)}`
       : `✗ Does not read (${read.status})`;
   const capped = payload.pixelsPerModule < request.pixelsPerModule ? ' (capped)' : '';
   photoResultEl.textContent = `${verdict} · photograph ${payload.width}×${payload.height} px at `
@@ -1373,7 +1435,7 @@ function markCustomPreset() {
 }
 
 for (const el of [
-  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, formatSelect, appIndicatorInput, gs1StemInput,
+  contentEl, eciAssignmentInput, eccSelect, eccBoostCheck, allowKanjiCheck, formatSelect, appIndicatorInput, gs1StemInput,
   rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
@@ -1399,6 +1461,44 @@ symbologySelect.addEventListener('input', () => {
   stateControls.syncSymbologyControls();
   markCustomPreset();
   scheduleGenerate();
+});
+
+// A switch rewrites the field into what the new kind reads, so the default text does not turn into a hex error (see convertContent).
+contentKindSelect.addEventListener('input', () => {
+  const toBytes = contentKindSelect.value === 'bytes';
+  // The separator shows as ␝ outside plain text, so the text is converted as it would be written, with U+001D, and shown with ␝ again.
+  const showsSeparator = symbologySelect.value !== 'microqr' && formatSelect.value !== 'text';
+  if (toBytes) {
+    contentEl.value = convertContent(requestFor({ ...collectState(), contentKind: 'text' }).content, 'text', 'bytes');
+  } else {
+    const text = convertContent(contentEl.value, 'bytes', 'text');
+    contentEl.value = showsSeparator ? displayText(text) : text;
+  }
+  syncDerivedControls();
+  markCustomPreset();
+  scheduleGenerate();
+});
+
+contentFileBtn.addEventListener('click', () => contentFileInput.click());
+
+// The file's bytes go into the field as hex, so the code, the self-check and a share link treat them as typed content.
+contentFileInput.addEventListener('change', async () => {
+  const file = contentFileInput.files?.[0];
+  // Cleared so that choosing the same file again reads it again.
+  contentFileInput.value = '';
+  if (!file) return;
+  // A larger file fits no symbol, and its hex would only slow the page down.
+  if (file.size > MAX_SYMBOL_BYTES) {
+    showToast(`The file has ${byteCount(file.size)}, more than any QR code holds (${byteCount(MAX_SYMBOL_BYTES)} at most).`, 'error');
+    return;
+  }
+  try {
+    contentEl.value = formatHex(new Uint8Array(await file.arrayBuffer()));
+  } catch (e) {
+    showToast(`Could not read the file: ${e?.message ?? e}`, 'error');
+    return;
+  }
+  contentEl.dispatchEvent(new Event('input', { bubbles: true }));
 });
 
 // A textarea cannot take U+001D from a keyboard, so the button puts its visible stand-in at the cursor.
@@ -1465,6 +1565,11 @@ downloadSvgBtn.addEventListener('click', () => {
 
   const state = collectState();
   if (!state.content.trim()) return;
+  const bytesError = requestError(state);
+  if (bytesError) {
+    showToast(bytesError, 'error');
+    return;
+  }
 
   const logoBytes = state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;
   let bytes;
@@ -1560,6 +1665,15 @@ permalinkBtn.addEventListener('click', async () => {
       state.logo = { ...state.logo, mode: 'default' };
       showToast('Uploaded logo images are not included in share links, the link uses the built-in logo instead.', 'info');
     }
+    const assignmentError = eciAssignmentError(state.eciAssignment);
+    if (assignmentError) {
+      if (state.contentKind === 'bytes' && state.symbology !== 'microqr') {
+        showToast(assignmentError, 'error');
+        return;
+      }
+      // The assignment applies to Standard QR and rMQR bytes alone, so a value left in its hidden or disabled field is not shared.
+      state.eciAssignment = null;
+    }
     const hash = await encodeShareState(state);
     const url = `${location.pathname}${location.search}#${hash}`;
     const fullUrl = `${location.origin}${url}`;
@@ -1612,6 +1726,11 @@ async function runBenchmark() {
   const state = collectState();
   if (!state.content.trim()) {
     showToast('Enter content to encode before running the benchmark.', 'info');
+    return;
+  }
+  const bytesError = requestError(state);
+  if (bytesError) {
+    showToast(bytesError, 'error');
     return;
   }
   // Snapshot options once so mid-run control edits do not skew results.
