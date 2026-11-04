@@ -26,39 +26,22 @@ namespace FeatherQR.Internals.StandardQR;
 /// </para>
 /// <para>
 /// A run long enough for a step runs its steps on a local copy of the writer, stored back before anything else writes: reached through its
-/// reference, the writer's fields go to memory on every append. The copy stays in registers only on .NET 10. The .NET 8 JIT and NativeAOT 8
-/// keep it on the stack (BitWriter is a span and three more fields, which .NET 8 does not promote), so every append there goes through
-/// memory and the steps gain less. The dispatch therefore enters each step from a length of its own per runtime
-/// (<see cref="AlphanumericAdvSimdMinimum"/>, <see cref="NumericAdvSimdMinimum"/>).
+/// reference, the writer's fields go to memory on every append, while the copy stays in registers.
 /// </para>
 /// </remarks>
 internal ref partial struct QRBinaryEncoder
 {
-#if NET10_0_OR_GREATER
     /// <summary>
-    /// The shortest run the Alphanumeric step is entered for: every run the dispatch passes on .NET 10, where the step is no slower than
-    /// the portable writer from 8 characters.
+    /// The shortest run the Alphanumeric step is entered for: every run the dispatch passes, since the step is no slower than the portable
+    /// writer from 8 characters.
     /// </summary>
     private const int AlphanumericAdvSimdMinimum = 8;
 
     /// <summary>
-    /// The shortest run the Numeric step is entered for on .NET 10. A step reads sixteen chars to write fifteen, so below 40 digits it runs
-    /// once or twice, and there it can lose to the portable writer.
+    /// The shortest run the Numeric step is entered for. A step reads sixteen chars to write fifteen, so below 40 digits it runs once or
+    /// twice, and there it can lose to the portable writer.
     /// </summary>
     private const int NumericAdvSimdMinimum = 40;
-#else
-    /// <summary>
-    /// The shortest run the Alphanumeric step is entered for on .NET 8. A run of 15 or 31 characters, which ends in the step of eight and a
-    /// tail of seven, is slower there than on the portable writer.
-    /// </summary>
-    private const int AlphanumericAdvSimdMinimum = 32;
-
-    /// <summary>
-    /// The shortest run the Numeric step is entered for on .NET 8, where the step loses to the portable writer up to 48 digits and wins
-    /// from 160.
-    /// </summary>
-    private const int NumericAdvSimdMinimum = 160;
-#endif
 
     /// <summary>The value plus one of each character 0x20-0x5F, 0 outside the alphabet.</summary>
     private static ReadOnlySpan<byte> AlphanumericValuesPlusOne =>

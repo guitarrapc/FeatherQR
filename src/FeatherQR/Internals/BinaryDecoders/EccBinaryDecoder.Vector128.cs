@@ -6,7 +6,7 @@ using System.Runtime.Intrinsics;
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
-/// 128-bit syndrome kernel for the targets with neither GFNI nor NEON: x64 without the GFNI tier (no 256-bit GFNI, or .NET 8), and WebAssembly. The ARM64 kernel's
+/// 128-bit syndrome kernel for the targets with neither GFNI nor NEON: x64 without the GFNI tier (no 256-bit GFNI), and WebAssembly. The ARM64 kernel's
 /// structure (two 16-lane accumulator groups, the same step tables for the data terms, eight bytes a step as a tree), with its one
 /// multiply that has no portable instruction done by linearity.
 /// </summary>

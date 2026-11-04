@@ -37,11 +37,6 @@ internal static partial class PerspectiveGridSampler
                 // ConvertToInt32 truncates toward zero like the scalar cast, so both take the pixel containing the point.
                 var px = Vector256.ConvertToInt32(x);
                 var py = Vector256.ConvertToInt32(y);
-#if !NET9_0_OR_GREATER
-                // Before .NET 9 the conversion writes int.MinValue past the positive edge too: flip it to int.MaxValue, which clamps to the far side as the scalar tier does
-                px ^= Vector256.GreaterThanOrEqual(x, Vector256.Create(2147483648f)).AsInt32();
-                py ^= Vector256.GreaterThanOrEqual(y, Vector256.Create(2147483648f)).AsInt32();
-#endif
                 px = Vector256.Max(Vector256.Min(px, maxPx), zero);
                 py = Vector256.Max(Vector256.Min(py, maxPy), zero);
 

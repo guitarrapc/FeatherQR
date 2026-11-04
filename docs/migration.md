@@ -4,7 +4,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 | Upgrading to | What it means for existing code |
 |---|---|
-| [2.0.0](#200) | **Breaking.** `Optimal` segmentation is the default on every generator, three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable apart from the generator options, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas or render area fits the symbol instead of stretching it, padding takes the background colour rather than transparency, and a finder shape draws only its dark modules. Seven encode and decode changes: `Optimal` keeps a U+FEFF inside the content in its Byte run, Structured Append symbols decode instead of failing, FNC1 symbols decode instead of failing, a matrix decode that fails reports no characters written, Shift_JIS Byte segments decode, Micro QR writes UTF-8 where its ISO-8859-1 bytes would read as another text, and a forced ISO-8859-1 over text it cannot hold throws |
+| [2.0.0](#200) | **Breaking.** `Optimal` segmentation is the default on every generator, three packages instead of one, no net8.0 build (apps on .NET 8 and 9 get the netstandard2.1 one), new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable apart from the generator options, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas or render area fits the symbol instead of stretching it, padding takes the background colour rather than transparency, and a finder shape draws only its dark modules. Seven encode and decode changes: `Optimal` keeps a U+FEFF inside the content in its Byte run, Structured Append symbols decode instead of failing, FNC1 symbols decode instead of failing, a matrix decode that fails reports no characters written, Shift_JIS Byte segments decode, Micro QR writes UTF-8 where its ISO-8859-1 bytes would read as another text, and a forced ISO-8859-1 over text it cannot hold throws |
 | [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
 | [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
 | [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
@@ -40,11 +40,15 @@ Rendering is where most behavior changed. Four sections below are behavior chang
 
 | Package | Contents | Depends on |
 |---|---|---|
-| `FeatherQR` | Generators, decoders, data types, options, `GetModuleRectangles` | nothing on .NET 8+; `System.Memory` / `System.Runtime.CompilerServices.Unsafe` on .NET Standard |
+| `FeatherQR` | Generators, decoders, data types, options, `GetModuleRectangles` | nothing on .NET 10+; `System.Memory` / `System.Runtime.CompilerServices.Unsafe` on .NET Standard |
 | `FeatherQR.SkiaSharp` | Image builders, `SymbolRenderer`, `SKCanvas` extensions, `IconData` and shapes, `SKBitmap` decoding | `FeatherQR`, `SkiaSharp` |
 | `SkiaSharp.QrCode` | Nothing. A compatibility metapackage | `FeatherQR.SkiaSharp` |
 
 An existing `<PackageReference Include="SkiaSharp.QrCode" />` keeps working: it now resolves `FeatherQR.SkiaSharp` and `FeatherQR` transitively. Switch the reference to `FeatherQR.SkiaSharp` when convenient, or to `FeatherQR` alone if you never render images. All three ship at the same version from the same release.
+
+### Target frameworks
+
+The packages build for netstandard2.0, netstandard2.1 and net10.0. 1.x also built for net8.0, which apps on .NET 8 and .NET 9 bound. Both runtimes reach end of support on 2026-11-10, so 2.0.0 has no net8.0 build, and an app on .NET 8 or 9 binds the netstandard2.1 one. It has the same public API and writes and reads the same symbols, but it has no hardware intrinsics, so every SIMD kernel runs its scalar form there. Move the app to .NET 10 to get them back.
 
 ### Namespaces
 
@@ -75,7 +79,7 @@ if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)) { }
 if (QRCodeDecoder.TryDecode(bitmap, out text, out info)) { }
 ```
 
-The classes are `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`; both overloads (`out string` and `out string, out …DecodeInfo`) exist on each. A net8.0 project defaults to C# 12, so if the 1.x spelling stops compiling there, either add `using FeatherQR.SkiaSharp;` and switch to the class name, or raise `LangVersion`. This is not a missing overload.
+The classes are `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`; both overloads (`out string` and `out string, out …DecodeInfo`) exist on each. A .NET Framework project defaults to C# 7.3, so if the 1.x spelling stops compiling there, add `using FeatherQR.SkiaSharp;` and switch to the class name. This is not a missing overload.
 
 The luminance overloads, `TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, …)`, keep their signatures and remain in the core. They are the way to decode from any image library other than SkiaSharp. A width or height below one now throws naming that argument ([A luminance read names a size below one](#a-luminance-read-names-a-size-below-one)). Composite transparent pixels against white before converting.
 
@@ -192,7 +196,7 @@ The one spelling that needs an edit is a named argument: `plainText:` becomes `t
 
 ### Bytes overloads beside the text ones
 
-`QRCodeGenerator`, `MicroQRCodeGenerator` and `RmQRCodeGenerator` gained `Create`, span `Create` and `TryGetRequiredBufferSize` overloads over `ReadOnlySpan<byte>`, and `QRCodeGenerator` a `CreateStructuredAppend` one, which write bytes as they are. A `string`, a `char` span, a `byte[]` and a `"..."u8` literal each pick their overload as before. Empty content written as `default`, `[]` or a `null` literal fits both. From C# 13 such a call takes the text overload, as before, because the bytes overloads carry `[OverloadResolutionPriority(-1)]`. Earlier language versions ignore that attribute and report the call as ambiguous (CS0121) when no options follow it. With options the Standard QR and rMQR text overload is taken, since the bytes one would still need its assignment's default. Micro QR's bytes overloads take no assignment, so there the call is ambiguous with options too. A project on net8.0 is at C# 12 by default, and one on .NET Framework at C# 7.3 ([Older language versions](#older-language-versions)). Below C# 13, name the kind:
+`QRCodeGenerator`, `MicroQRCodeGenerator` and `RmQRCodeGenerator` gained `Create`, span `Create` and `TryGetRequiredBufferSize` overloads over `ReadOnlySpan<byte>`, and `QRCodeGenerator` a `CreateStructuredAppend` one, which write bytes as they are. A `string`, a `char` span, a `byte[]` and a `"..."u8` literal each pick their overload as before. Empty content written as `default`, `[]` or a `null` literal fits both. From C# 13 such a call takes the text overload, as before, because the bytes overloads carry `[OverloadResolutionPriority(-1)]`. Earlier language versions ignore that attribute and report the call as ambiguous (CS0121) when no options follow it. With options the Standard QR and rMQR text overload is taken, since the bytes one would still need its assignment's default. Micro QR's bytes overloads take no assignment, so there the call is ambiguous with options too. A project on .NET Framework is at C# 7.3 by default, and a netstandard2.1 library at C# 8 ([Older language versions](#older-language-versions)). Below C# 13, name the kind:
 
 ```csharp
 QRCodeGenerator.Create(default, QREccLevel.M);                    // the empty text from C# 13, CS0121 before
@@ -212,7 +216,7 @@ Some 2.0.0 spellings need C# features your project may not have enabled. They af
 |---|---|---|---|
 | net472 / net48 / netstandard2.0 | 7.3 | needs C# 14 | needs C# 9 |
 | netstandard2.1 | 8.0 | works | needs C# 9 |
-| net8.0 | 12.0 | works | works |
+| net8.0 / net9.0 (the netstandard2.1 asset) | 12.0 / 13.0 | works | works |
 | net10.0 | 14.0 | works | works |
 
 `string` converts to `ReadOnlySpan<char>` through a conversion the compiler synthesizes, and on netstandard2.0 the span comes from the `System.Memory` package rather than the framework, where only C# 14 synthesizes it. Every version through C# 13 reports `CS1503`. `IconData`'s members are `init`, a C# 9 feature, so an object initializer that assigns one reports `CS8370` or `CS8400` below that.

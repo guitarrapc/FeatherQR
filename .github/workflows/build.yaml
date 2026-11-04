@@ -42,9 +42,7 @@ jobs:
           persist-credentials: false
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
-          dotnet-version: |
-            10.0.x
-            8.0.x
+          dotnet-version: 10.0.x
       - name: Build
         # Remove WASM projects only from this job's checkout; the dedicated jobs build them below.
         shell: bash
@@ -162,8 +160,8 @@ jobs:
         run: dotnet workload install wasm-tools
       - name: Build BlazorWasm sample
         run: dotnet build samples/BlazorWasm/BlazorWasm.csproj -c Release
-      # No -r browser-wasm: it would propagate to the multi-targeted library reference
-      # and require the wasm-tools-net8 workload; the WebAssembly SDK defaults the RID anyway.
+      # No -r browser-wasm: it would propagate to the multi-targeted library reference,
+      # and the WebAssembly SDK defaults the RID anyway.
       - name: Publish Playground (browser-wasm Release, no AOT)
         run: dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -p:RunAOTCompilation=false -p:PlaygroundSoftFingerprint=true -o publish/playground/
 

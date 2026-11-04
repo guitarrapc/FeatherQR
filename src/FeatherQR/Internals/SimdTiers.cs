@@ -134,13 +134,8 @@ internal static class SimdTiers
         internal static bool Sse41 => X86.Sse41.IsSupported;
         internal static bool Avx2 => X86.Avx2.IsSupported;
         internal static bool Avx2Pext => X86.Avx2.IsSupported && HardwareCapabilities.HasFastPext;
-#if NET10_0_OR_GREATER
         internal static bool Gfni => X86.Gfni.IsSupported;
         internal static bool GfniV256 => X86.Gfni.V256.IsSupported;
-#else
-        internal static bool Gfni => false;
-        internal static bool GfniV256 => false;
-#endif
         internal static bool AdvSimd => Arm.AdvSimd.Arm64.IsSupported;
         internal static bool AdvSimdDp => Arm.Dp.IsSupported && Arm.AdvSimd.Arm64.IsSupported;
         internal static bool PackedSimd => Wasm.PackedSimd.IsSupported;

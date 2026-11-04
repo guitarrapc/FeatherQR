@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <IsTestProject>true</IsTestProject>
     <!-- An unawaited async assertion helper cannot fail its test: its exception stays inside the dropped Task. -->
