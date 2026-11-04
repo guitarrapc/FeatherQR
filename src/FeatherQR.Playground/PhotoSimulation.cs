@@ -130,7 +130,9 @@ public static partial class QrInterop
             }
 
             stopwatch.Restart();
-            var read = ReadPhotograph(compressed ?? taken, card.Symbology);
+            var read = request.Bytes
+                ? ReadPhotographBytes(compressed ?? taken, card.Symbology)
+                : ReadPhotograph(compressed ?? taken, card.Symbology);
             var readMs = ElapsedMs(stopwatch);
             return (image, new PhotoPayload(read, Math.Round(pixelsPerModule, 2), renderMs, readMs, photo.Width, photo.Height));
         }
@@ -168,6 +170,31 @@ public static partial class QrInterop
                     return new DecodePayload(false, null, info.Status.ToString(), null, info.Version, null, info.MaskPattern, info.ErrorsCorrected, 0,
                         ImageWidth: image.Width, ImageHeight: image.Height);
                 }
+        }
+    }
+
+    /// <summary>
+    /// A photograph of a code written from bytes, read as <see cref="Decode"/> reads a symbol, so the page can check the bytes and the assignment.
+    /// It takes a second read on a success, which text cards do without.
+    /// </summary>
+    private static DecodePayload ReadPhotographBytes(SKBitmap bitmap, string symbology)
+    {
+        var image = new DecodedImage(bitmap.Width, bitmap.Height, 1);
+        var clock = Stopwatch.StartNew();
+        switch (symbology)
+        {
+            case "microqr":
+                return ReadMicro(bitmap, clock, image, out var microInfo)
+                    ?? new DecodePayload(false, null, microInfo.Status.ToString(), null, (int)microInfo.Version, null,
+                        microInfo.MaskPattern, microInfo.ErrorsCorrected, 0, ImageWidth: image.Width, ImageHeight: image.Height);
+            case "rmqr":
+                return ReadRmqr(bitmap, clock, image, out var rmInfo)
+                    ?? new DecodePayload(false, null, rmInfo.Status.ToString(), null, (int)rmInfo.Version, null,
+                        -1, rmInfo.ErrorsCorrected, 0, ImageWidth: image.Width, ImageHeight: image.Height);
+            default:
+                return ReadStandard(bitmap, clock, image, out var info)
+                    ?? new DecodePayload(false, null, info.Status.ToString(), null, info.Version, null,
+                        info.MaskPattern, info.ErrorsCorrected, 0, ImageWidth: image.Width, ImageHeight: image.Height);
         }
     }
 
@@ -328,6 +355,8 @@ public sealed record PhotoRequest
     public int Jpeg { get; init; }
     /// <summary>Seeds the noise and the scene.</summary>
     public int Seed { get; init; }
+    /// <summary>The card holds a code written from bytes, so the read reports its bytes and ECI assignment as well.</summary>
+    public bool Bytes { get; init; }
 }
 
 /// <summary>A photograph's read, serialized to the page script.</summary>

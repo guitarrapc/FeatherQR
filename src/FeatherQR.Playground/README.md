@@ -6,7 +6,8 @@ It runs FeatherQR and SkiaSharp through WebAssembly. Text and images are process
 ## Using the Playground
 
 - **Create codes:** choose QR Code, Micro QR or rMQR, then adjust colors, shapes and error correction. Download the result as PNG or SVG.
-- **Check readability:** each generated image is decoded back as a self-check. Use **Decode an image** to read an existing image.
+- **Encode bytes:** switch Content to **Bytes (hex)** to write bytes exactly as given. Type hex, or use **Load file…** to fill the field with a file's bytes. For Standard QR and rMQR, an optional **ECI assignment** tells readers how to interpret the bytes, such as 899 for binary data. Kanji mode and the GS1 and AIM data formats apply to text only, so they are off in this mode.
+- **Check readability:** each generated image is decoded back as a self-check, which compares the bytes and the assignment in Bytes mode. Use **Decode an image** to read an existing image. Its **Bytes** view shows the symbol's bytes as a hex dump with its ECI assignment, and a symbol that holds no text, such as binary data, shows its bytes only.
 - **Simulate a photograph:** **Photograph the code** applies tilt, blur, noise, lighting and other camera effects. **Find the limit** increases one effect to explore when decoding fails.
 - **Measure throughput:** **Performance benchmark** runs either encoding alone or the full encode, render and PNG pipeline. Results measure the WebAssembly runtime in your browser, not native .NET performance.
 - **Browse the API:** the [API reference](https://guitarrapc.github.io/FeatherQR/api/index.html) lists public types and members with their documentation.
@@ -55,7 +56,7 @@ Run the JavaScript tests with Node.js 22 or later:
 node --experimental-default-type=module --test tests/FeatherQR.Playground.Tests/*.test.mjs
 ```
 
-The tests cover preset and symbology combinations, control edits and share-link restoration.
+The tests cover preset and symbology combinations, control edits, share-link restoration, hex parsing and the Bytes mode control rules.
 Also verify generation, decode preview, the benchmark panel and a share-link round trip in the published app.
 The `build-playground` job in [build.yaml](../../.github/workflows/build.yaml) runs the JavaScript tests and publishes Release without AOT.
 
@@ -75,6 +76,7 @@ The release workflow regenerates the page with `--source-links` to link declarat
 - [state-controls.js](wwwroot/state-controls.js) collects and applies control state, synchronizes visibility and converts presets.
 - [share-state.js](wwwroot/share-state.js) validates the shared state before it reaches the controls.
 - [share-payload.js](wwwroot/share-payload.js) encodes and decodes URL payloads.
+- [binary-content.js](wwwroot/binary-content.js) parses hex content and formats the decoded hex dump.
 - [main.js](wwwroot/main.js) connects events, rendering hooks and WebAssembly.
 
 Links use `#1.<base64url>` for deflate-raw UTF-8 JSON or `#0.<base64url>` for uncompressed UTF-8 JSON.

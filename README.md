@@ -58,6 +58,7 @@ FeatherQR is a modern, high-performance QR code library. It allocates memory onl
 - **High Performance**: Optimal speed and minimum memory allocation
 - **Flexible Symbology Support**: Standard QR, Micro QR, and rMQR
 - **GS1 Support**: Full support for GS1 QR Codes and GS1 Digital Link URIs
+- **Binary Data**: Bytes written and read as they are, with any ECI assignment
 - **Highly Customizable**: Gradients, icons, custom shapes, colors, and more
 - **Cross-Platform**: Windows, Linux, macOS, iOS, Android, WebAssembly
 - **Zero Dependencies**: The `FeatherQR` core package depends on nothing on .NET 8+ (BCL shims only on .NET Standard)
@@ -330,6 +331,8 @@ new QRCodeGeneratorOptions { }                                           // auto
 
 The generator normally scores the data mask patterns the specification defines (eight for Standard QR, four for Micro QR) and applies the best one. `MaskPattern` pins a specific pattern instead. Pinning is the way to reproduce a symbol produced elsewhere byte-for-byte, or to exercise a scanner against every pattern.
 
+The generated data reports what it carries: `QRCodeData.EccLevel`, the level after any boost, and `QRCodeData.MaskPattern`, the pattern the generator chose. They are read from the symbol's format information, so asking costs nothing at generation and the values survive `GetRawData` and a restore. `MicroQRCodeData` has both, and `RmQRCodeData` has `EccLevel` alone.
+
 ```csharp
 // Reproduce a symbol: decode reports the mask, encode accepts it back
 QRCodeDecoder.TryDecode(scanned, out var text, out var info);
@@ -572,6 +575,32 @@ foreach (var symbol in SymbolImageDecoder.DecodeSymbols(sheet))
     Console.WriteLine($"{symbol.Symbology}: {symbol.Text}");
 }
 ```
+
+### Binary data
+
+The generators also take bytes, which go into the symbol as they are, and the decoders give back the bytes a symbol carries with no character set applied. Use them for a payload that is not text, such as compressed data or a key, or for text in an encoding FeatherQR does not write.
+
+```csharp
+using FeatherQR;
+
+byte[] payload = ...;
+var qrData = QRCodeGenerator.Create(payload, QREccLevel.M);                         // no ECI header
+var declared = QRCodeGenerator.Create(payload, QREccLevel.M, eciAssignment: 899);  // declared as binary data
+
+if (QRCodeDecoder.TryDecodeBytes(qrData, out var bytes, out var info))
+{
+    Console.WriteLine($"{bytes.Length} bytes, ECI {info.EciAssignment?.ToString() ?? "none"}");
+}
+```
+
+- `eciAssignment` writes an ECI header that names the encoding of the bytes, from 0 to 999999, such as 899 for binary data or 20 for Shift JIS. Without it no header is written, which is what a binary payload usually carries.
+- `RmQRCodeGenerator` has the same overloads, and `MicroQRCodeGenerator` has them without `eciAssignment`, since Micro QR has no ECI. `CreateStructuredAppend` splits bytes across a set, and the parts read as bytes and joined in index order are the original bytes.
+- `TryDecodeBytes` on a data type or a module matrix, `TryDecodeImageBytes` on luminance, and `TryDecodeBytes` on an `SKBitmap` (`QRCodeImageDecoder` and its Micro QR and rMQR twins) return Byte segments as written, digits and letters as ASCII, and Kanji as Shift JIS pairs. `info.EciAssignment` is the ECI the bytes are declared under, or `null`.
+- The text calls report `EciAssignment` too, also when they fail with `UnsupportedContent` because the symbol declares an encoding FeatherQR does not read as text. Read the symbol's bytes then and convert them with the `Encoding` you need.
+- The options that only text uses, `EciMode`, `Utf8Bom`, `AllowKanji` and `Fnc1`, throw with bytes.
+
+> [!NOTE]
+> A phone camera may not show a binary payload at all. On an iPhone the camera recognized such a code and showed no content, and a QR reader app could not read it, with and without ECI 899. Bytes are for readers your app controls. For content a general reader should show, encode it as text, for example Base45 in Alphanumeric mode, which takes about 3% more space than the bytes, where Base64 in Byte mode takes 33% more.
 
 ### Async and stream I/O
 
@@ -906,7 +935,7 @@ On x64, a default publish runs slower than the JIT, and [x64 SIMD on NativeAOT](
 
 ### Are ISO-8859-2 and other encodings supported?
 
-FeatherQR writes/reads ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208). Text in other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) is not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice. Bytes already in such an encoding are written as they are by the bytes overloads of `QRCodeGenerator.Create` and `RmQRCodeGenerator.Create`, declared with `eciAssignment` (4 for ISO-8859-2, 20 for Shift JIS).
+FeatherQR writes/reads ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208). Text in other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) is not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice. Bytes already in such an encoding are written as they are by the bytes overloads of `QRCodeGenerator.Create` and `RmQRCodeGenerator.Create`, declared with `eciAssignment` (4 for ISO-8859-2, 20 for Shift JIS). Shift JIS is read as text, under ECI 20, and without a header where its bytes show it. A symbol in an encoding FeatherQR does not read as text, such as ISO-8859-2, fails a text decode with `UnsupportedContent` and reports the encoding in `EciAssignment`, and `TryDecodeBytes` returns its bytes for you to convert ([Binary data](#binary-data)).
 
 | Supported | Encoding Mode | Encoding |
 | --- | --- | --- |

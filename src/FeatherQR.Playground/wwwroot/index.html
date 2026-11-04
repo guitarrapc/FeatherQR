@@ -70,11 +70,23 @@
     <section id="playground">
       <div class="controls-column">
         <div class="panel">
-          <label class="field">
-            <span class="field__label">Content</span>
+          <div class="field">
+            <div class="content-head">
+              <label class="field__label" for="content">Content</label>
+              <select id="content-kind-select" aria-label="Content kind"
+                title="Text is written in the charset the library picks for it. Bytes (hex) are written exactly as given, for binary data or text in a charset of your own.">
+                <option value="text">Text</option>
+                <option value="bytes">Bytes (hex)</option>
+              </select>
+              <button type="button" id="content-file-btn" class="small-btn" hidden
+                title="Reads a file's bytes into the field as hex, so a share link carries them like any content.">Load file…</button>
+              <input type="file" id="content-file" hidden />
+            </div>
             <textarea id="content" rows="3" spellcheck="false"
               placeholder="Text or URL to encode">https://github.com/guitarrapc/FeatherQR</textarea>
-          </label>
+            <span id="content-hex-status" class="field__hint content-hex-status" aria-live="polite" hidden></span>
+            <p id="bytes-mode-hint" class="field__hint bytes-mode-hint" hidden></p>
+          </div>
           <div class="separator-row" id="separator-row" hidden>
             <button type="button" id="insert-separator-btn" class="small-btn"
               title="Insert the separator at the cursor. It shows as ␝ and is written as U+001D, the GS character a reader returns.">Insert separator ␝</button>
@@ -102,6 +114,12 @@
               <span class="field__label">Application indicator</span>
               <input type="text" id="app-indicator-input" value="00" maxlength="2" spellcheck="false" autocomplete="off"
                 title="The AIM industry format the data follows: a number 00-99 in one or two digits, or one letter A-Z or a-z." />
+            </label>
+            <label class="field" id="eci-assignment-row" hidden>
+              <span class="field__label">ECI assignment</span>
+              <input type="number" id="eci-assignment-input" min="0" max="999999" step="1" inputmode="numeric"
+                placeholder="none" autocomplete="off"
+                title="Tells a reader how to interpret the bytes, written as an ECI header before them: 899 for binary data, 26 for UTF-8, 20 for Shift_JIS. Blank writes none, as a binary payload usually carries. Standard QR and rMQR only." />
             </label>
           </div>
           <label class="field">
@@ -302,6 +320,7 @@
               <span class="field__label" title="Reads the codes of every symbology together, Standard QR, Micro QR and rMQR, such as an rMQR code beside a QR code on one label, and slower than reading one symbology. Used with Read every QR Code in the image.">Read every symbology together</span>
             </label>
             <div id="decode-result" class="qr-stats" aria-live="polite"></div>
+            <div id="decode-bytes" class="decode-bytes" hidden></div>
             <div id="decode-gs1" class="decode-gs1" hidden></div>
             <ol id="decode-symbols" class="decode-symbols" hidden></ol>
             <figure id="decode-preview" class="decode-preview" hidden>
@@ -475,8 +494,8 @@
           <progress id="bench-progress" value="0" max="100" hidden></progress>
           <div id="bench-result" class="qr-stats" aria-live="polite"></div>
           <p class="field__hint">
-            Generates unique codes sequentially (content is suffixed with #1, #2, …) using the current
-            settings, single-threaded on the WASM runtime in this tab. Native .NET throughput is much
+            Generates unique codes sequentially (content is suffixed with #1, #2, …, as ASCII bytes in Bytes mode)
+            using the current settings, single-threaded on the WASM runtime in this tab. Native .NET throughput is much
             higher, see the repository benchmarks.
           </p>
         </details>
