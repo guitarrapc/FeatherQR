@@ -7,6 +7,7 @@
     <Project Path="samples/BlazorWasm/BlazorWasm.csproj" Id="d1437501-8214-4f19-b99f-aa3210ea3a32" />
     <Project Path="samples/ConsoleApp/ConsoleApp.csproj" />
     <Project Path="samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj" />
+    <Project Path="samples/CoreImageOutput/CoreImageOutput.csproj" />
     <Project Path="samples/NanoServerGenerate/NanoServerGenerate.csproj" />
     <Project Path="samples/SimpleGenerate/SimpleGenerate.csproj" />
     <Project Path="samples/SimpleSerialize/SimpleSerialize.csproj" />
