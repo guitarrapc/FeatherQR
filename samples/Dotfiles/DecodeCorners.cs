@@ -43,7 +43,7 @@ foreach (var (name, what, matrix) in scenes)
 {
     using var scene = Compose(flat, matrix);
 
-    if (!QRCodeImageDecoder.TryDecode(scene, out var text, out var info))
+    if (!QRCodeDecoder.TryDecode(scene, out var text, out var info))
     {
         // A verification sample: a scene that stops decoding is a failure, not a note.
         Console.WriteLine($"{name,-12} {what}: NO DECODE ({info.Status})");

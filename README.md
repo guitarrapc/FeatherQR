@@ -220,8 +220,8 @@ Start with an image builder for most applications. All generators and decoders a
 | --- | --- | --- | --- |
 | Create styled PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
 | Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
-| Decode an `SKBitmap` or an image file | `QRCodeImageDecoder` | `MicroQRCodeImageDecoder` | `RmQRCodeImageDecoder` |
-| Decode every symbol of an `SKBitmap` or an image file, whatever its symbology | `SymbolImageDecoder` | `SymbolImageDecoder` | `SymbolImageDecoder` |
+| Decode an `SKBitmap` or an image file | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
+| Decode every symbol of an `SKBitmap` or an image file, whatever its symbology | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
 
 ### Image Writing (Simple)
 
@@ -574,7 +574,7 @@ if (QRCodeDecoder.TryDecode(qrData, out var text))
 }
 ```
 
-`FeatherQR.SkiaSharp` adds decoding from an `SKBitmap`.
+`FeatherQR.SkiaSharp` adds overloads to the decoders that read an `SKBitmap`. They are C# 14 extension members, so on C# 13 and older call them on `QRCodeDecoderExtensions`, `MicroQRCodeDecoderExtensions`, `RmQRCodeDecoderExtensions` and `SymbolDecoderExtensions` instead.
 
 ```csharp
 using SkiaSharp;
@@ -583,7 +583,7 @@ using FeatherQR.SkiaSharp;
 
 // Decode from an SKBitmap
 using var bitmap = SKBitmap.Decode("qr.png");
-if (QRCodeImageDecoder.TryDecode(bitmap, out text, out var info))
+if (QRCodeDecoder.TryDecode(bitmap, out text, out var info))
 {
     Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
 
@@ -618,17 +618,17 @@ using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 using var sheet = SKBitmap.Decode("sheet.jpg");
-foreach (var result in QRCodeImageDecoder.DecodeSymbols(sheet))
+foreach (var result in QRCodeDecoder.DecodeSymbols(sheet))
 {
     var corner = result.Info.Corners.TopLeft;
     Console.WriteLine($"{result.Text} at ({corner.X}, {corner.Y})");
 }
 ```
 
-To read the codes of every symbology at once, such as an rMQR code beside a QR code on one label, call `DecodeSymbols` on `SymbolImageDecoder` with an `SKBitmap` or a stream, or `SymbolDecoder.DecodeImageSymbols` on luminance. Each result says which symbology it is in `Symbology`, gives its `Text` and `Corners`, and holds that symbology's own result in `StandardQR`, `MicroQR` or `RmQR`, the other two left default. The Standard QR codes are read first, and then every other finder of the image is searched for a Micro QR or an rMQR symbol, so this takes longer than the read for one symbology, the longest on an image whose finders read as nothing, such as a photograph of a QR code that does not read. When you know the symbology of your images, call its decoder.
+To read the codes of every symbology at once, such as an rMQR code beside a QR code on one label, call `SymbolDecoder.DecodeSymbols` with an `SKBitmap` or a stream, or `SymbolDecoder.DecodeImageSymbols` on luminance. Each result says which symbology it is in `Symbology`, gives its `Text` and `Corners`, and holds that symbology's own result in `StandardQR`, `MicroQR` or `RmQR`, the other two left default. The Standard QR codes are read first, and then every other finder of the image is searched for a Micro QR or an rMQR symbol, so this takes longer than the read for one symbology, the longest on an image whose finders read as nothing, such as a photograph of a QR code that does not read. When you know the symbology of your images, call its decoder.
 
 ```csharp
-foreach (var symbol in SymbolImageDecoder.DecodeSymbols(sheet))
+foreach (var symbol in SymbolDecoder.DecodeSymbols(sheet))
 {
     Console.WriteLine($"{symbol.Symbology}: {symbol.Text}");
 }
@@ -653,7 +653,7 @@ if (QRCodeDecoder.TryDecodeBytes(qrData, out var bytes, out var info))
 
 - `eciAssignment` writes an ECI header that names the encoding of the bytes, from 0 to 999999, such as 899 for binary data or 20 for Shift JIS. Without it no header is written, which is what a binary payload usually carries.
 - `RmQRCodeGenerator` has the same overloads, and `MicroQRCodeGenerator` has them without `eciAssignment`, since Micro QR has no ECI. `CreateStructuredAppend` splits bytes across a set, and the parts read as bytes and joined in index order are the original bytes.
-- `TryDecodeBytes` on a data type or a module matrix, `TryDecodeImageBytes` on luminance, and `TryDecodeBytes` on an `SKBitmap` (`QRCodeImageDecoder` and its Micro QR and rMQR twins) return Byte segments as written, digits and letters as ASCII, and Kanji as Shift JIS pairs. `info.EciAssignment` is the ECI the bytes are declared under, or `null`.
+- `TryDecodeBytes` on a data type or a module matrix, `TryDecodeImageBytes` on luminance, and `TryDecodeBytes` on an `SKBitmap` with `FeatherQR.SkiaSharp` return Byte segments as written, digits and letters as ASCII, and Kanji as Shift JIS pairs. `info.EciAssignment` is the ECI the bytes are declared under, or `null`.
 - The text calls report `EciAssignment` too, also when they fail with `UnsupportedContent` because the symbol declares an encoding FeatherQR does not read as text. Read the symbol's bytes then and convert them with the `Encoding` you need.
 - The options that only text uses, `EciMode`, `Utf8Bom`, `AllowKanji` and `Fnc1`, throw with bytes.
 
@@ -662,9 +662,7 @@ if (QRCodeDecoder.TryDecodeBytes(qrData, out var bytes, out var info))
 
 ### Async and stream I/O
 
-Every method that writes an image to a `Stream` has an `...Async` twin, `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The decoders read an encoded image, a PNG, JPEG or WebP among others, from a `Stream`: `DecodeAsync` on the three and `DecodeSymbolsAsync` for every code of an image, and `Decode` and `DecodeSymbols` where the thread may wait.
-
-The calls pair up as below. Micro QR and rMQR write and read the same way, through their own builders and `MicroQRCodeDecoder` and `RmQRCodeDecoder`.
+Every method that writes an image to a `Stream` has an `...Async` twin, `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder.
 
 | What | Synchronous | Asynchronous |
 |---|---|---|
@@ -675,8 +673,6 @@ The calls pair up as below. Micro QR and rMQR write and read the same way, throu
 | Read a stream under limits of your own | `Decode(stream, limits)`, `DecodeSymbols(stream, limits)` | `DecodeAsync(stream, limits, ct)`, `DecodeSymbolsAsync(stream, limits, ct)` |
 | Write to memory or a buffer writer | `ToByteArray()`, `ToSvgString()`, `SaveTo(IBufferWriter<byte>)`, `GetPngBytes(content)` and the other helpers | None, since there is no I/O to wait on |
 | Read from memory | `TryDecode(bitmap, out text)`, `TryDecodeImage(luminance, width, height, out text, out info)`, `DecodeSymbols(bitmap)`, `DecodeImageSymbols(luminance, width, height)` | None, since there is no I/O to wait on |
-
-With C# 14 the stream reads are reachable as `QRCodeDecoder.DecodeAsync(stream)`, as above. On older language versions, such as the C# 7.3 a .NET Framework project uses by default, call them on `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`.
 
 Sample usage of asynchronous stream I/O.
 

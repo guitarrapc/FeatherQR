@@ -161,7 +161,7 @@ public class SymbolDecoderTest
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        Assert.Throws<OperationCanceledException>(() => SymbolImageDecoder.DecodeEverySymbol(bitmap, cancellation.Token));
+        Assert.Throws<OperationCanceledException>(() => SymbolDecoderExtensions.DecodeEverySymbol(bitmap, cancellation.Token));
     }
 
     [Test]

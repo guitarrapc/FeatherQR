@@ -88,14 +88,14 @@ using FeatherQR.SkiaSharp;
 
 using var bitmap = SKBitmap.Decode("qr.png");
 
-// Every language version: the enclosing class name.
-if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)) { }
-
 // C# 14 (net10.0 default, or <LangVersion>14</LangVersion>): the 1.x spelling still compiles.
-if (QRCodeDecoder.TryDecode(bitmap, out text, out info)) { }
+if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info)) { }
+
+// Every language version: the class that holds the extension members.
+if (QRCodeDecoderExtensions.TryDecode(bitmap, out text, out info)) { }
 ```
 
-The classes are `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`; both overloads (`out string` and `out string, out …DecodeInfo`) exist on each. A .NET Framework project defaults to C# 7.3, so if the 1.x spelling stops compiling there, add `using FeatherQR.SkiaSharp;` and switch to the class name. This is not a missing overload.
+The classes are `QRCodeDecoderExtensions`, `MicroQRCodeDecoderExtensions` and `RmQRCodeDecoderExtensions`; both overloads (`out string` and `out string, out …DecodeInfo`) exist on each. A .NET Framework project defaults to C# 7.3, so if the 1.x spelling stops compiling there, add `using FeatherQR.SkiaSharp;` and switch to the class name. This is not a missing overload.
 
 The luminance overloads, `TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, …)`, keep their signatures and remain in the core. They are the way to decode from any image library other than SkiaSharp. A width or height below one now throws naming that argument ([A luminance read names a size below one](#a-luminance-read-names-a-size-below-one)). Composite transparent pixels against white before converting.
 
@@ -359,7 +359,7 @@ A `null` colour array is the one case whose *exception type* moved. It used to b
 Additive: nothing to migrate, but new in 2.0.0. `QRCodeDecodeInfo`, `MicroQRCodeDecodeInfo` and `RmQRCodeDecodeInfo` gain `Corners`, a `SymbolCorners` holding the four outer corners of the symbol's module area (quiet zone excluded) as `ImagePoint`s in the input image's continuous pixel coordinates — (0, 0) is the top-left corner of the top-left pixel, so the values plot directly on the bitmap or luminance buffer you decoded.
 
 ```csharp
-if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info))
+if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
 {
     var c = info.Corners;
     using var builder = new SKPathBuilder();
@@ -420,7 +420,7 @@ var parts = new SortedDictionary<int, string>();
 QRStructuredAppend set = default;
 foreach (var bitmap in captures)
 {
-    if (!QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info) || info.StructuredAppend.IsEmpty)
+    if (!QRCodeDecoder.TryDecode(bitmap, out var text, out var info) || info.StructuredAppend.IsEmpty)
         continue;
     var header = info.StructuredAppend;
     if (set.IsEmpty)
@@ -469,7 +469,7 @@ Behavior change, not source or binary breaking: code that branches on `Unsupport
 
 Additive. Every method that writes an image to a `Stream` has an `...Async` twin: `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The image decoders read an encoded image from a `Stream`: `DecodeAsync` and `Decode` on the three, and `DecodeSymbolsAsync` and `DecodeSymbols` for every code of an image on the three. A stream read for one symbol returns a result type, `QRCodeDecodeResult` (`MicroQRCodeDecodeResult`, `RmQRCodeDecodeResult`), with `Text`, `Info` and `Success`, and one for every symbol an array of them. The README's [Async and stream I/O](../README.md#async-and-stream-io) describes how the calls behave.
 
-The calls pair up as below. The writes to a stream and the reads from memory are the 1.x calls as they were, and the calls marked new are new in 2.0.0, as is every async call. With C# 14 the stream and bitmap reads are reachable on `QRCodeDecoder`, as here, and on older language versions on `QRCodeImageDecoder` (see [`TryDecode(SKBitmap)` moved](#trydecodeskbitmap-moved)). The luminance reads, `TryDecodeImage` and `DecodeImageSymbols`, stay on `QRCodeDecoder` at every language version. Micro QR and rMQR write and read the same way, through `MicroQRCodeDecoder` and `RmQRCodeDecoder`.
+The calls pair up as below. The writes to a stream and the reads from memory are the 1.x calls as they were, and the calls marked new are new in 2.0.0, as is every async call. With C# 14 the stream and bitmap reads are reachable on `QRCodeDecoder`, as here, and on C# 13 and older on `QRCodeDecoderExtensions` (see [`TryDecode(SKBitmap)` moved](#trydecodeskbitmap-moved)). The luminance reads, `TryDecodeImage` and `DecodeImageSymbols`, stay on `QRCodeDecoder` at every language version. Micro QR and rMQR write and read the same way, through `MicroQRCodeDecoder` and `RmQRCodeDecoder`.
 
 | What | Synchronous | Asynchronous |
 |---|---|---|
@@ -487,17 +487,17 @@ Code that decoded a stream into a bitmap itself can hand the stream over instead
 ```csharp
 // Before
 using var bitmap = SKBitmap.Decode(stream);
-if (bitmap is not null && QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info))
+if (bitmap is not null && QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
     Console.WriteLine(text);
 
 // After
-var result = await QRCodeImageDecoder.DecodeAsync(stream, cancellationToken);
+var result = await QRCodeDecoder.DecodeAsync(stream, cancellationToken);
 if (result.Success)
     Console.WriteLine(result.Text);
 
 // After, for an image past 4,096 × 4,096 pixels, which the code before read
 var limits = new ImageStreamReadLimits { MaxPixels = 16_384L * 16_384, MaxBytes = 256 * 1024 * 1024 };
-var large = await QRCodeImageDecoder.DecodeAsync(stream, limits, cancellationToken);
+var large = await QRCodeDecoder.DecodeAsync(stream, limits, cancellationToken);
 ```
 
 - **The result is the same within the limits.** The stream read decodes the image as `SKBitmap.Decode(stream)` does and reads it as `TryDecode` reads that bitmap.
@@ -507,9 +507,9 @@ var large = await QRCodeImageDecoder.DecodeAsync(stream, limits, cancellationTok
 
 ### Several symbols in one image
 
-Additive. `QRCodeDecoder.DecodeImageSymbols` reads every Standard QR code of a grayscale image, as an array or into a span you provide, and `QRCodeImageDecoder.DecodeSymbols` reads them from an `SKBitmap` or a stream, with `DecodeSymbolsAsync` beside it. Each symbol is returned once with its corners, and only the symbols that decode: one whose content cannot be given as text is left out, and so is one that lies inside a symbol already read. The span form returns how many symbols it wrote from the start of the span, and leaves the entries past them as they were, so a span used again still holds the symbols of the call before past that count. It stops once the span is full, and a full span does not say whether the image held more. `MicroQRCodeDecoder.DecodeImageSymbols` and `RmQRCodeDecoder.DecodeImageSymbols`, with `DecodeSymbols` and `DecodeSymbolsAsync` on `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`, do the same for Micro QR and rMQR.
+Additive. `QRCodeDecoder.DecodeImageSymbols` reads every Standard QR code of a grayscale image, as an array or into a span you provide, and `QRCodeDecoder.DecodeSymbols` reads them from an `SKBitmap` or a stream, with `DecodeSymbolsAsync` beside it. Each symbol is returned once with its corners, and only the symbols that decode: one whose content cannot be given as text is left out, and so is one that lies inside a symbol already read. The span form returns how many symbols it wrote from the start of the span, and leaves the entries past them as they were, so a span used again still holds the symbols of the call before past that count. It stops once the span is full, and a full span does not say whether the image held more. `MicroQRCodeDecoder.DecodeImageSymbols` and `RmQRCodeDecoder.DecodeImageSymbols`, with `DecodeSymbols` and `DecodeSymbolsAsync` on the same decoders, do the same for Micro QR and rMQR.
 
-`SymbolDecoder.DecodeImageSymbols` reads the symbols of every symbology, Standard QR, Micro QR and rMQR, in one call, as an array or into a span, and `SymbolImageDecoder` reads them from an `SKBitmap` or a stream, with `DecodeSymbolsAsync`. Each result is a `SymbolDecodeResult`: its `Symbology`, `Text`, `Corners` and `Success`, and the symbology's own result in `StandardQR`, `MicroQR` or `RmQR`, the other two default.
+`SymbolDecoder.DecodeImageSymbols` reads the symbols of every symbology, Standard QR, Micro QR and rMQR, in one call, as an array or into a span, and `SymbolDecoder.DecodeSymbols` reads them from an `SKBitmap` or a stream, with `DecodeSymbolsAsync`. Each result is a `SymbolDecodeResult`: its `Symbology`, `Text`, `Corners` and `Success`, and the symbology's own result in `StandardQR`, `MicroQR` or `RmQR`, the other two default.
 
 ### Images from the core package
 

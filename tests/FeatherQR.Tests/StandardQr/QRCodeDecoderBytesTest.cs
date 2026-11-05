@@ -5,7 +5,7 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The bytes calls of <see cref="QRCodeDecoder"/> and <see cref="QRCodeImageDecoder"/>, and the ECI assignment both outputs report.
+/// The bytes calls of <see cref="QRCodeDecoder"/> and <see cref="QRCodeDecoderExtensions"/>, and the ECI assignment both outputs report.
 /// </summary>
 public class QRCodeDecoderBytesTest
 {
@@ -148,7 +148,7 @@ public class QRCodeDecoderBytesTest
     public async Task NullData_Throws_AsTheTextCallDoes()
     {
         await Assert.That(() => QRCodeDecoder.TryDecodeBytes((QRCodeData)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
-        await Assert.That(() => QRCodeImageDecoder.TryDecodeBytes((global::SkiaSharp.SKBitmap)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => QRCodeDecoderExtensions.TryDecodeBytes((global::SkiaSharp.SKBitmap)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
     }
 
     [Test]
@@ -218,7 +218,7 @@ public class QRCodeDecoderBytesTest
     {
         using var bitmap = PayloadSymbols.Bitmap(Eci899Symbol(), 21, 21);
 
-        await Assert.That(QRCodeImageDecoder.TryDecodeBytes(bitmap, out var bytes, out var info)).IsTrue();
+        await Assert.That(QRCodeDecoderExtensions.TryDecodeBytes(bitmap, out var bytes, out var info)).IsTrue();
         await Assert.That(bytes).IsEquivalentTo(binaryPayload, CollectionOrdering.Matching);
         await Assert.That(info.EciAssignment).IsEqualTo(899);
     }
@@ -228,7 +228,7 @@ public class QRCodeDecoderBytesTest
     {
         using var bitmap = new global::SkiaSharp.SKBitmap(8, 8);
 
-        await Assert.That(QRCodeImageDecoder.TryDecodeBytes(bitmap, out var bytes, out var info)).IsFalse();
+        await Assert.That(QRCodeDecoderExtensions.TryDecodeBytes(bitmap, out var bytes, out var info)).IsFalse();
         await Assert.That(bytes).IsEmpty();
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }

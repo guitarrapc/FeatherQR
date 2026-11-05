@@ -5,7 +5,7 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The bytes calls of <see cref="MicroQRCodeDecoder"/> and <see cref="MicroQRCodeImageDecoder"/>. Micro QR has no ECI, so the bytes are the undeclared Byte segments as written.
+/// The bytes calls of <see cref="MicroQRCodeDecoder"/> and <see cref="MicroQRCodeDecoderExtensions"/>. Micro QR has no ECI, so the bytes are the undeclared Byte segments as written.
 /// </summary>
 public class MicroQRCodeDecoderBytesTest
 {
@@ -80,7 +80,7 @@ public class MicroQRCodeDecoderBytesTest
         await Assert.That(destination.AsSpan(0, written).ToArray()).IsEquivalentTo(payload, CollectionOrdering.Matching);
 
         using var bitmap = PayloadSymbols.Bitmap(modules, 17, 17);
-        await Assert.That(MicroQRCodeImageDecoder.TryDecodeBytes(bitmap, out bytes, out _)).IsTrue();
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecodeBytes(bitmap, out bytes, out _)).IsTrue();
         await Assert.That(bytes).IsEquivalentTo(payload, CollectionOrdering.Matching);
     }
 
@@ -126,7 +126,7 @@ public class MicroQRCodeDecoderBytesTest
     public async Task NullData_Throws_AsTheTextCallDoes()
     {
         await Assert.That(() => MicroQRCodeDecoder.TryDecodeBytes((MicroQRCodeData)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
-        await Assert.That(() => MicroQRCodeImageDecoder.TryDecodeBytes((global::SkiaSharp.SKBitmap)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => MicroQRCodeDecoderExtensions.TryDecodeBytes((global::SkiaSharp.SKBitmap)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
     }
 
     // Helpers

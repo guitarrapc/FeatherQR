@@ -358,21 +358,21 @@
         <a class="toc-item" href="#FeatherQR.SkiaSharp.ImageIconShape" data-for="FeatherQR.SkiaSharp.ImageIconShape">ImageIconShape</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.ImageStreamReadLimits" data-for="FeatherQR.SkiaSharp.ImageStreamReadLimits">ImageStreamReadLimits</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.ImageTextIconShape" data-for="FeatherQR.SkiaSharp.ImageTextIconShape">ImageTextIconShape</a>
+        <a class="toc-item" href="#FeatherQR.SkiaSharp.MicroQRCodeDecoderExtensions" data-for="FeatherQR.SkiaSharp.MicroQRCodeDecoderExtensions">MicroQRCodeDecoderExtensions</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.MicroQRCodeImageBuilder" data-for="FeatherQR.SkiaSharp.MicroQRCodeImageBuilder">MicroQRCodeImageBuilder</a>
-        <a class="toc-item" href="#FeatherQR.SkiaSharp.MicroQRCodeImageDecoder" data-for="FeatherQR.SkiaSharp.MicroQRCodeImageDecoder">MicroQRCodeImageDecoder</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.ModuleShape" data-for="FeatherQR.SkiaSharp.ModuleShape">ModuleShape</a>
+        <a class="toc-item" href="#FeatherQR.SkiaSharp.QRCodeDecoderExtensions" data-for="FeatherQR.SkiaSharp.QRCodeDecoderExtensions">QRCodeDecoderExtensions</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.QRCodeImageBuilder" data-for="FeatherQR.SkiaSharp.QRCodeImageBuilder">QRCodeImageBuilder</a>
-        <a class="toc-item" href="#FeatherQR.SkiaSharp.QRCodeImageDecoder" data-for="FeatherQR.SkiaSharp.QRCodeImageDecoder">QRCodeImageDecoder</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.RectangleFinderPatternShape" data-for="FeatherQR.SkiaSharp.RectangleFinderPatternShape">RectangleFinderPatternShape</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.RectangleModuleShape" data-for="FeatherQR.SkiaSharp.RectangleModuleShape">RectangleModuleShape</a>
+        <a class="toc-item" href="#FeatherQR.SkiaSharp.RmQRCodeDecoderExtensions" data-for="FeatherQR.SkiaSharp.RmQRCodeDecoderExtensions">RmQRCodeDecoderExtensions</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.RmQRCodeImageBuilder" data-for="FeatherQR.SkiaSharp.RmQRCodeImageBuilder">RmQRCodeImageBuilder</a>
-        <a class="toc-item" href="#FeatherQR.SkiaSharp.RmQRCodeImageDecoder" data-for="FeatherQR.SkiaSharp.RmQRCodeImageDecoder">RmQRCodeImageDecoder</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape" data-for="FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape">RoundedRectangleCircleFinderPatternShape</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape" data-for="FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape">RoundedRectangleFinderPatternShape</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.RoundedRectangleModuleShape" data-for="FeatherQR.SkiaSharp.RoundedRectangleModuleShape">RoundedRectangleModuleShape</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.SKCanvasExtensions" data-for="FeatherQR.SkiaSharp.SKCanvasExtensions">SKCanvasExtensions</a>
+        <a class="toc-item" href="#FeatherQR.SkiaSharp.SymbolDecoderExtensions" data-for="FeatherQR.SkiaSharp.SymbolDecoderExtensions">SymbolDecoderExtensions</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.SymbolImageBuilderBase" data-for="FeatherQR.SkiaSharp.SymbolImageBuilderBase">SymbolImageBuilderBase</a>
-        <a class="toc-item" href="#FeatherQR.SkiaSharp.SymbolImageDecoder" data-for="FeatherQR.SkiaSharp.SymbolImageDecoder">SymbolImageDecoder</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.SymbolRenderer" data-for="FeatherQR.SkiaSharp.SymbolRenderer">SymbolRenderer</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.TextVerticalAlignment" data-for="FeatherQR.SkiaSharp.TextVerticalAlignment">TextVerticalAlignment</a>
       </nav>
@@ -3507,6 +3507,61 @@
             </div>
           </div>
         </article>
+        <article class="type" id="FeatherQR.SkiaSharp.MicroQRCodeDecoderExtensions" data-name="featherqr.skiasharp.microqrcodedecoderextensions" data-text="featherqr.skiasharp.microqrcodedecoderextensions public static class microqrcodedecoderextensions adds overloads to microqrcodedecoder that decode micro qr codes from skiasharp bitmaps, and from encoded images read from a stream. with c# 14 call them on microqrcodedecoder , as microqrcodedecoder.trydecode(bitmap, ...) and microqrcodedecoder.decodeasync(stream). on c# 13 and older call them on this class.  method public static microqrcodedecoderesult decode(stream image);  method public static microqrcodedecoderesult decode(stream image, imagestreamreadlimits? limits);  method public static microqrcodedecoderesult[] decodesymbols(skbitmap bitmap);  method public static microqrcodedecoderesult[] decodesymbols(stream image);  method public static microqrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits);  method public static task&lt;microqrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;microqrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static task&lt;microqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;microqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static bool trydecode(skbitmap bitmap, out string text);  method public static bool trydecode(skbitmap bitmap, out string text, out microqrcodedecodeinfo info);  method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out microqrcodedecodeinfo info); ">
+          <h3><a class="anchor" href="#FeatherQR.SkiaSharp.MicroQRCodeDecoderExtensions" aria-label="Link to FeatherQR.SkiaSharp.MicroQRCodeDecoderExtensions">#</a><span class="kind">class</span> <span class="name">MicroQRCodeDecoderExtensions</span></h3>
+          <pre class="sig"><code>public static class MicroQRCodeDecoderExtensions</code></pre>
+          <p class="doc">Adds overloads to MicroQRCodeDecoder that decode Micro QR codes from SkiaSharp bitmaps, and from encoded images read from a stream. With C# 14 call them on MicroQRCodeDecoder , as MicroQRCodeDecoder.TryDecode(bitmap, ...) and MicroQRCodeDecoder.DecodeAsync(stream). On C# 13 and older call them on this class.</p>
+          <div class="members">
+            <div class="member" data-text="method public static microqrcodedecoderesult decode(stream image); ">
+              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
+              <pre class="sig"><code>public static MicroQRCodeDecodeResult Decode(Stream image);</code></pre>
+            </div>
+            <div class="member" data-text="method public static microqrcodedecoderesult decode(stream image, imagestreamreadlimits? limits); ">
+              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
+              <pre class="sig"><code>public static MicroQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);</code></pre>
+            </div>
+            <div class="member" data-text="method public static microqrcodedecoderesult[] decodesymbols(skbitmap bitmap); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static MicroQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);</code></pre>
+            </div>
+            <div class="member" data-text="method public static microqrcodedecoderesult[] decodesymbols(stream image); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image);</code></pre>
+            </div>
+            <div class="member" data-text="method public static microqrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;microqrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;MicroQRCodeDecodeResult&gt; DecodeAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;microqrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;MicroQRCodeDecodeResult&gt; DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;microqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;MicroQRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;microqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;MicroQRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text); ">
+              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
+              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text, out microqrcodedecodeinfo info); ">
+              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
+              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out microqrcodedecodeinfo info); ">
+              <h4><span class="kind">method</span> <span class="name">TryDecodeBytes</span></h4>
+              <pre class="sig"><code>public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out MicroQRCodeDecodeInfo info);</code></pre>
+            </div>
+          </div>
+        </article>
         <article class="type" id="FeatherQR.SkiaSharp.MicroQRCodeImageBuilder" data-name="featherqr.skiasharp.microqrcodeimagebuilder" data-text="featherqr.skiasharp.microqrcodeimagebuilder public sealed class microqrcodeimagebuilder : symbolimagebuilderbase&lt;microqrcodeimagebuilder&gt; turns text into a micro qr image, as png, jpeg, webp or svg. the same shape as qrcodeimagebuilder , with micro qr versions and levels and the 2-module quiet zone the specification asks for. icon overlays are not supported. its one finder pattern can be styled with withfinderpatternshape . for a plain image with no skiasharp, symbolimagewriter in the core writes svg, png, raw pixels and terminal text at a whole number of pixels a module. constructor public microqrcodeimagebuilder(microqrcodedata microqrcodedata); starts a builder that draws a micro qr code you have already generated. the micro qr code is drawn exactly as given, so only the appearance options apply and the encoding options throw invalidoperationexception . the level and mask it was written with are ecclevel and maskpattern .  constructor public microqrcodeimagebuilder(string content); starts a builder that will encode content when you ask for an image. error correction, version and every other option keep their defaults until you set them.  method public microqrcodeimagebuilder witherrorcorrection(microqrecclevel ecclevel); sets how much damage the micro qr code should survive. what is available depends on the version: m1 takes errordetectiononly alone, m2 and m3 take l and m, and m4 adds q. a combination that does not exist throws when the micro qr code is generated. method public microqrcodeimagebuilder withmaskpattern(int? maskpattern); pin one of the four micro qr data mask patterns (0-3) instead of the automatic edge-score selection. see maskpattern .  method public microqrcodeimagebuilder withsegmentation(microqrsegmentation segmentation); split the content into mixed-mode segments when that lowers the version (see microqrsegmentation ). defaults to optimal . never selects a larger version, and produces the identical micro qr code when a split would not shrink it.  method public microqrcodeimagebuilder withversion(microqrversion version); pins the version instead of letting the content choose it. the pinned case of withversion . method public microqrcodeimagebuilder withversion(microqrversionrange versionrange); narrows the versions the generator may choose from, for a micro qr code that has to reach or stay under a physical size.  method public static task savepngasync(microqrcodedata microqrcodedata, stream output, int size = 512, cancellationtoken cancellationtoken = null); renders the micro qr code and writes a png to a stream asynchronously. writes what savepng writes, as savetoasync does. method public static task savepngasync(string content, stream output, microqrecclevel ecclevel = 2, int size = 512, cancellationtoken cancellationtoken = null); encodes the content and writes a png to a stream asynchronously. writes what savepng writes, as savetoasync does. method public static task savesvgasync(microqrcodedata microqrcodedata, stream output, int size = 512, cancellationtoken cancellationtoken = null); renders the micro qr code and writes an svg document to a stream asynchronously. writes what savesvg writes, as savetosvgasync does. method public static task savesvgasync(string content, stream output, microqrecclevel ecclevel = 2, int size = 512, cancellationtoken cancellationtoken = null); encodes the content and writes an svg document to a stream asynchronously. writes what savesvg writes, as savetosvgasync does. method public static byte[] getimagebytes(microqrcodedata microqrcodedata, skencodedimageformat format, int size = 512, int quality = 100); renders the micro qr code and returns an image in the format you choose.  method public static byte[] getimagebytes(string content, skencodedimageformat format, microqrecclevel ecclevel = 2, int size = 512, int quality = 100); encodes the content and returns an image in the format you choose.  method public static byte[] getpngbytes(microqrcodedata microqrcodedata, int size = 512); renders the micro qr code and returns a png image.  method public static byte[] getpngbytes(string content, microqrecclevel ecclevel = 2, int size = 512); encodes the content and returns a png image.  method public static byte[] getsvgbytes(microqrcodedata microqrcodedata, int size = 512); renders the micro qr code and returns an svg document as utf-8 bytes.  method public static byte[] getsvgbytes(string content, microqrecclevel ecclevel = 2, int size = 512); encodes the content and returns an svg document as utf-8 bytes.  method public static string getsvgstring(microqrcodedata microqrcodedata, int size = 512); renders the micro qr code and returns an svg document as a string.  method public static string getsvgstring(string content, microqrecclevel ecclevel = 2, int size = 512); encodes the content and returns an svg document as a string.  method public static void savepng(microqrcodedata microqrcodedata, stream output, int size = 512); renders the micro qr code and writes a png to a stream.  method public static void savepng(string content, stream output, microqrecclevel ecclevel = 2, int size = 512); encodes the content and writes a png to a stream.  method public static void savesvg(microqrcodedata microqrcodedata, stream output, int size = 512); renders the micro qr code and writes an svg document to a stream.  method public static void savesvg(string content, stream output, microqrecclevel ecclevel = 2, int size = 512); encodes the content and writes an svg document to a stream.  method public static void writeimage(microqrcodedata microqrcodedata, ibufferwriter&lt;byte&gt; writer, skencodedimageformat format, int size = 512, int quality = 100); renders the micro qr code and writes an image in the format you choose to a buffer writer.  method public static void writeimage(string content, ibufferwriter&lt;byte&gt; writer, skencodedimageformat format, microqrecclevel ecclevel = 2, int size = 512, int quality = 100); encodes the content and writes an image in the format you choose to a buffer writer.  method public static void writepng(microqrcodedata microqrcodedata, ibufferwriter&lt;byte&gt; writer, int size = 512); renders the micro qr code and writes a png to a buffer writer.  method public static void writepng(string content, ibufferwriter&lt;byte&gt; writer, microqrecclevel ecclevel = 2, int size = 512); encodes the content and writes a png to a buffer writer.  method public static void writesvg(microqrcodedata microqrcodedata, ibufferwriter&lt;byte&gt; writer, int size = 512); renders the micro qr code and writes an svg document to a buffer writer.  method public static void writesvg(string content, ibufferwriter&lt;byte&gt; writer, microqrecclevel ecclevel = 2, int size = 512); encodes the content and writes an svg document to a buffer writer. ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.MicroQRCodeImageBuilder" aria-label="Link to FeatherQR.SkiaSharp.MicroQRCodeImageBuilder">#</a><span class="kind">class</span> <span class="name">MicroQRCodeImageBuilder</span></h3>
           <pre class="sig"><code>public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase&lt;MicroQRCodeImageBuilder&gt;</code></pre>
@@ -3687,61 +3742,6 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.MicroQRCodeImageDecoder" data-name="featherqr.skiasharp.microqrcodeimagedecoder" data-text="featherqr.skiasharp.microqrcodeimagedecoder public static class microqrcodeimagedecoder decodes micro qr codes from skiasharp bitmaps, and from encoded images read from a stream. extends microqrcodedecoder , so with c# 14 the overloads are also reachable as microqrcodedecoder.trydecode(bitmap, ...) and microqrcodedecoder.decodeasync(stream). on older language versions call them on this class.  method public static microqrcodedecoderesult decode(stream image);  method public static microqrcodedecoderesult decode(stream image, imagestreamreadlimits? limits);  method public static microqrcodedecoderesult[] decodesymbols(skbitmap bitmap);  method public static microqrcodedecoderesult[] decodesymbols(stream image);  method public static microqrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits);  method public static task&lt;microqrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;microqrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static task&lt;microqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;microqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static bool trydecode(skbitmap bitmap, out string text);  method public static bool trydecode(skbitmap bitmap, out string text, out microqrcodedecodeinfo info);  method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out microqrcodedecodeinfo info); ">
-          <h3><a class="anchor" href="#FeatherQR.SkiaSharp.MicroQRCodeImageDecoder" aria-label="Link to FeatherQR.SkiaSharp.MicroQRCodeImageDecoder">#</a><span class="kind">class</span> <span class="name">MicroQRCodeImageDecoder</span></h3>
-          <pre class="sig"><code>public static class MicroQRCodeImageDecoder</code></pre>
-          <p class="doc">Decodes Micro QR codes from SkiaSharp bitmaps, and from encoded images read from a stream. Extends MicroQRCodeDecoder , so with C# 14 the overloads are also reachable as MicroQRCodeDecoder.TryDecode(bitmap, ...) and MicroQRCodeDecoder.DecodeAsync(stream). On older language versions call them on this class.</p>
-          <div class="members">
-            <div class="member" data-text="method public static microqrcodedecoderesult decode(stream image); ">
-              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
-              <pre class="sig"><code>public static MicroQRCodeDecodeResult Decode(Stream image);</code></pre>
-            </div>
-            <div class="member" data-text="method public static microqrcodedecoderesult decode(stream image, imagestreamreadlimits? limits); ">
-              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
-              <pre class="sig"><code>public static MicroQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);</code></pre>
-            </div>
-            <div class="member" data-text="method public static microqrcodedecoderesult[] decodesymbols(skbitmap bitmap); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static MicroQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);</code></pre>
-            </div>
-            <div class="member" data-text="method public static microqrcodedecoderesult[] decodesymbols(stream image); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image);</code></pre>
-            </div>
-            <div class="member" data-text="method public static microqrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;microqrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;MicroQRCodeDecodeResult&gt; DecodeAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;microqrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;MicroQRCodeDecodeResult&gt; DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;microqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;MicroQRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;microqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;MicroQRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text); ">
-              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
-              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text);</code></pre>
-            </div>
-            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text, out microqrcodedecodeinfo info); ">
-              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
-              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info);</code></pre>
-            </div>
-            <div class="member" data-text="method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out microqrcodedecodeinfo info); ">
-              <h4><span class="kind">method</span> <span class="name">TryDecodeBytes</span></h4>
-              <pre class="sig"><code>public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out MicroQRCodeDecodeInfo info);</code></pre>
-            </div>
-          </div>
-        </article>
         <article class="type" id="FeatherQR.SkiaSharp.ModuleShape" data-name="featherqr.skiasharp.moduleshape" data-text="featherqr.skiasharp.moduleshape public abstract class moduleshape how the individual modules of a symbol are drawn.  constructor protected moduleshape();  property public abstract bool requiresantialiasing { get; } whether the shape needs antialiasing. return true for curves, false for straight edges.  method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws one module. ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.ModuleShape" aria-label="Link to FeatherQR.SkiaSharp.ModuleShape">#</a><span class="kind">class</span> <span class="name">ModuleShape</span></h3>
           <pre class="sig"><code>public abstract class ModuleShape</code></pre>
@@ -3760,6 +3760,61 @@
               <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
               <pre class="sig"><code>public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);</code></pre>
               <p class="doc">Draws one module.</p>
+            </div>
+          </div>
+        </article>
+        <article class="type" id="FeatherQR.SkiaSharp.QRCodeDecoderExtensions" data-name="featherqr.skiasharp.qrcodedecoderextensions" data-text="featherqr.skiasharp.qrcodedecoderextensions public static class qrcodedecoderextensions adds overloads to qrcodedecoder that decode qr codes from skiasharp bitmaps, and from encoded images read from a stream. with c# 14 call them on qrcodedecoder , as qrcodedecoder.trydecode(bitmap, ...) and qrcodedecoder.decodeasync(stream). on c# 13 and older call them on this class.  method public static qrcodedecoderesult decode(stream image);  method public static qrcodedecoderesult decode(stream image, imagestreamreadlimits? limits);  method public static qrcodedecoderesult[] decodesymbols(skbitmap bitmap);  method public static qrcodedecoderesult[] decodesymbols(stream image);  method public static qrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits);  method public static task&lt;qrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;qrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static task&lt;qrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;qrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static bool trydecode(skbitmap bitmap, out string text);  method public static bool trydecode(skbitmap bitmap, out string text, out qrcodedecodeinfo info);  method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out qrcodedecodeinfo info); ">
+          <h3><a class="anchor" href="#FeatherQR.SkiaSharp.QRCodeDecoderExtensions" aria-label="Link to FeatherQR.SkiaSharp.QRCodeDecoderExtensions">#</a><span class="kind">class</span> <span class="name">QRCodeDecoderExtensions</span></h3>
+          <pre class="sig"><code>public static class QRCodeDecoderExtensions</code></pre>
+          <p class="doc">Adds overloads to QRCodeDecoder that decode QR codes from SkiaSharp bitmaps, and from encoded images read from a stream. With C# 14 call them on QRCodeDecoder , as QRCodeDecoder.TryDecode(bitmap, ...) and QRCodeDecoder.DecodeAsync(stream). On C# 13 and older call them on this class.</p>
+          <div class="members">
+            <div class="member" data-text="method public static qrcodedecoderesult decode(stream image); ">
+              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
+              <pre class="sig"><code>public static QRCodeDecodeResult Decode(Stream image);</code></pre>
+            </div>
+            <div class="member" data-text="method public static qrcodedecoderesult decode(stream image, imagestreamreadlimits? limits); ">
+              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
+              <pre class="sig"><code>public static QRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);</code></pre>
+            </div>
+            <div class="member" data-text="method public static qrcodedecoderesult[] decodesymbols(skbitmap bitmap); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static QRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);</code></pre>
+            </div>
+            <div class="member" data-text="method public static qrcodedecoderesult[] decodesymbols(stream image); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static QRCodeDecodeResult[] DecodeSymbols(Stream image);</code></pre>
+            </div>
+            <div class="member" data-text="method public static qrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static QRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;qrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;QRCodeDecodeResult&gt; DecodeAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;qrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;QRCodeDecodeResult&gt; DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;qrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;QRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;qrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;QRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text); ">
+              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
+              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text, out qrcodedecodeinfo info); ">
+              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
+              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out qrcodedecodeinfo info); ">
+              <h4><span class="kind">method</span> <span class="name">TryDecodeBytes</span></h4>
+              <pre class="sig"><code>public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out QRCodeDecodeInfo info);</code></pre>
             </div>
           </div>
         </article>
@@ -3958,61 +4013,6 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.QRCodeImageDecoder" data-name="featherqr.skiasharp.qrcodeimagedecoder" data-text="featherqr.skiasharp.qrcodeimagedecoder public static class qrcodeimagedecoder decodes qr codes from skiasharp bitmaps, and from encoded images read from a stream. extends qrcodedecoder , so with c# 14 the overloads are also reachable as qrcodedecoder.trydecode(bitmap, ...) and qrcodedecoder.decodeasync(stream). on older language versions call them on this class.  method public static qrcodedecoderesult decode(stream image);  method public static qrcodedecoderesult decode(stream image, imagestreamreadlimits? limits);  method public static qrcodedecoderesult[] decodesymbols(skbitmap bitmap);  method public static qrcodedecoderesult[] decodesymbols(stream image);  method public static qrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits);  method public static task&lt;qrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;qrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static task&lt;qrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;qrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static bool trydecode(skbitmap bitmap, out string text);  method public static bool trydecode(skbitmap bitmap, out string text, out qrcodedecodeinfo info);  method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out qrcodedecodeinfo info); ">
-          <h3><a class="anchor" href="#FeatherQR.SkiaSharp.QRCodeImageDecoder" aria-label="Link to FeatherQR.SkiaSharp.QRCodeImageDecoder">#</a><span class="kind">class</span> <span class="name">QRCodeImageDecoder</span></h3>
-          <pre class="sig"><code>public static class QRCodeImageDecoder</code></pre>
-          <p class="doc">Decodes QR codes from SkiaSharp bitmaps, and from encoded images read from a stream. Extends QRCodeDecoder , so with C# 14 the overloads are also reachable as QRCodeDecoder.TryDecode(bitmap, ...) and QRCodeDecoder.DecodeAsync(stream). On older language versions call them on this class.</p>
-          <div class="members">
-            <div class="member" data-text="method public static qrcodedecoderesult decode(stream image); ">
-              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
-              <pre class="sig"><code>public static QRCodeDecodeResult Decode(Stream image);</code></pre>
-            </div>
-            <div class="member" data-text="method public static qrcodedecoderesult decode(stream image, imagestreamreadlimits? limits); ">
-              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
-              <pre class="sig"><code>public static QRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);</code></pre>
-            </div>
-            <div class="member" data-text="method public static qrcodedecoderesult[] decodesymbols(skbitmap bitmap); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static QRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);</code></pre>
-            </div>
-            <div class="member" data-text="method public static qrcodedecoderesult[] decodesymbols(stream image); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static QRCodeDecodeResult[] DecodeSymbols(Stream image);</code></pre>
-            </div>
-            <div class="member" data-text="method public static qrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static QRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;qrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;QRCodeDecodeResult&gt; DecodeAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;qrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;QRCodeDecodeResult&gt; DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;qrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;QRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;qrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;QRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text); ">
-              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
-              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text);</code></pre>
-            </div>
-            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text, out qrcodedecodeinfo info); ">
-              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
-              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info);</code></pre>
-            </div>
-            <div class="member" data-text="method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out qrcodedecodeinfo info); ">
-              <h4><span class="kind">method</span> <span class="name">TryDecodeBytes</span></h4>
-              <pre class="sig"><code>public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out QRCodeDecodeInfo info);</code></pre>
-            </div>
-          </div>
-        </article>
         <article class="type" id="FeatherQR.SkiaSharp.RectangleFinderPatternShape" data-name="featherqr.skiasharp.rectanglefinderpatternshape" data-text="featherqr.skiasharp.rectanglefinderpatternshape public sealed class rectanglefinderpatternshape : finderpatternshape the standard finder pattern: three nested squares.  field public static readonly rectanglefinderpatternshape default; a ready-made instance to use as-is.  property public override bool requiresantialiasing { get; } off: straight edges render cleanly without it.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RectangleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.RectangleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">RectangleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class RectangleFinderPatternShape : FinderPatternShape</code></pre>
@@ -4052,6 +4052,61 @@
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
               <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
               <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);</code></pre>
+            </div>
+          </div>
+        </article>
+        <article class="type" id="FeatherQR.SkiaSharp.RmQRCodeDecoderExtensions" data-name="featherqr.skiasharp.rmqrcodedecoderextensions" data-text="featherqr.skiasharp.rmqrcodedecoderextensions public static class rmqrcodedecoderextensions adds overloads to rmqrcodedecoder that decode rmqr codes from skiasharp bitmaps, and from encoded images read from a stream. with c# 14 call them on rmqrcodedecoder , as rmqrcodedecoder.trydecode(bitmap, ...) and rmqrcodedecoder.decodeasync(stream). on c# 13 and older call them on this class.  method public static rmqrcodedecoderesult decode(stream image);  method public static rmqrcodedecoderesult decode(stream image, imagestreamreadlimits? limits);  method public static rmqrcodedecoderesult[] decodesymbols(skbitmap bitmap);  method public static rmqrcodedecoderesult[] decodesymbols(stream image);  method public static rmqrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits);  method public static task&lt;rmqrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;rmqrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static task&lt;rmqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;rmqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static bool trydecode(skbitmap bitmap, out string text);  method public static bool trydecode(skbitmap bitmap, out string text, out rmqrcodedecodeinfo info);  method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out rmqrcodedecodeinfo info); ">
+          <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RmQRCodeDecoderExtensions" aria-label="Link to FeatherQR.SkiaSharp.RmQRCodeDecoderExtensions">#</a><span class="kind">class</span> <span class="name">RmQRCodeDecoderExtensions</span></h3>
+          <pre class="sig"><code>public static class RmQRCodeDecoderExtensions</code></pre>
+          <p class="doc">Adds overloads to RmQRCodeDecoder that decode rMQR Codes from SkiaSharp bitmaps, and from encoded images read from a stream. With C# 14 call them on RmQRCodeDecoder , as RmQRCodeDecoder.TryDecode(bitmap, ...) and RmQRCodeDecoder.DecodeAsync(stream). On C# 13 and older call them on this class.</p>
+          <div class="members">
+            <div class="member" data-text="method public static rmqrcodedecoderesult decode(stream image); ">
+              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
+              <pre class="sig"><code>public static RmQRCodeDecodeResult Decode(Stream image);</code></pre>
+            </div>
+            <div class="member" data-text="method public static rmqrcodedecoderesult decode(stream image, imagestreamreadlimits? limits); ">
+              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
+              <pre class="sig"><code>public static RmQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);</code></pre>
+            </div>
+            <div class="member" data-text="method public static rmqrcodedecoderesult[] decodesymbols(skbitmap bitmap); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static RmQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);</code></pre>
+            </div>
+            <div class="member" data-text="method public static rmqrcodedecoderesult[] decodesymbols(stream image); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image);</code></pre>
+            </div>
+            <div class="member" data-text="method public static rmqrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;rmqrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;RmQRCodeDecodeResult&gt; DecodeAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;rmqrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;RmQRCodeDecodeResult&gt; DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;rmqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;RmQRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;rmqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;RmQRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text); ">
+              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
+              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text, out rmqrcodedecodeinfo info); ">
+              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
+              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);</code></pre>
+            </div>
+            <div class="member" data-text="method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out rmqrcodedecodeinfo info); ">
+              <h4><span class="kind">method</span> <span class="name">TryDecodeBytes</span></h4>
+              <pre class="sig"><code>public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out RmQRCodeDecodeInfo info);</code></pre>
             </div>
           </div>
         </article>
@@ -4237,61 +4292,6 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.RmQRCodeImageDecoder" data-name="featherqr.skiasharp.rmqrcodeimagedecoder" data-text="featherqr.skiasharp.rmqrcodeimagedecoder public static class rmqrcodeimagedecoder decodes rmqr codes from skiasharp bitmaps, and from encoded images read from a stream. extends rmqrcodedecoder , so with c# 14 the overloads are also reachable as rmqrcodedecoder.trydecode(bitmap, ...) and rmqrcodedecoder.decodeasync(stream). on older language versions call them on this class.  method public static rmqrcodedecoderesult decode(stream image);  method public static rmqrcodedecoderesult decode(stream image, imagestreamreadlimits? limits);  method public static rmqrcodedecoderesult[] decodesymbols(skbitmap bitmap);  method public static rmqrcodedecoderesult[] decodesymbols(stream image);  method public static rmqrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits);  method public static task&lt;rmqrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;rmqrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static task&lt;rmqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;rmqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null);  method public static bool trydecode(skbitmap bitmap, out string text);  method public static bool trydecode(skbitmap bitmap, out string text, out rmqrcodedecodeinfo info);  method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out rmqrcodedecodeinfo info); ">
-          <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RmQRCodeImageDecoder" aria-label="Link to FeatherQR.SkiaSharp.RmQRCodeImageDecoder">#</a><span class="kind">class</span> <span class="name">RmQRCodeImageDecoder</span></h3>
-          <pre class="sig"><code>public static class RmQRCodeImageDecoder</code></pre>
-          <p class="doc">Decodes rMQR Codes from SkiaSharp bitmaps, and from encoded images read from a stream. Extends RmQRCodeDecoder , so with C# 14 the overloads are also reachable as RmQRCodeDecoder.TryDecode(bitmap, ...) and RmQRCodeDecoder.DecodeAsync(stream). On older language versions call them on this class.</p>
-          <div class="members">
-            <div class="member" data-text="method public static rmqrcodedecoderesult decode(stream image); ">
-              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
-              <pre class="sig"><code>public static RmQRCodeDecodeResult Decode(Stream image);</code></pre>
-            </div>
-            <div class="member" data-text="method public static rmqrcodedecoderesult decode(stream image, imagestreamreadlimits? limits); ">
-              <h4><span class="kind">method</span> <span class="name">Decode</span></h4>
-              <pre class="sig"><code>public static RmQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);</code></pre>
-            </div>
-            <div class="member" data-text="method public static rmqrcodedecoderesult[] decodesymbols(skbitmap bitmap); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static RmQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);</code></pre>
-            </div>
-            <div class="member" data-text="method public static rmqrcodedecoderesult[] decodesymbols(stream image); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image);</code></pre>
-            </div>
-            <div class="member" data-text="method public static rmqrcodedecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;rmqrcodedecoderesult&gt; decodeasync(stream image, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;RmQRCodeDecodeResult&gt; DecodeAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;rmqrcodedecoderesult&gt; decodeasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;RmQRCodeDecodeResult&gt; DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;rmqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;RmQRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;rmqrcodedecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;RmQRCodeDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text); ">
-              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
-              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text);</code></pre>
-            </div>
-            <div class="member" data-text="method public static bool trydecode(skbitmap bitmap, out string text, out rmqrcodedecodeinfo info); ">
-              <h4><span class="kind">method</span> <span class="name">TryDecode</span></h4>
-              <pre class="sig"><code>public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);</code></pre>
-            </div>
-            <div class="member" data-text="method public static bool trydecodebytes(skbitmap bitmap, out byte[] bytes, out rmqrcodedecodeinfo info); ">
-              <h4><span class="kind">method</span> <span class="name">TryDecodeBytes</span></h4>
-              <pre class="sig"><code>public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out RmQRCodeDecodeInfo info);</code></pre>
-            </div>
-          </div>
-        </article>
         <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape" data-name="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape" data-text="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape public sealed class roundedrectanglecirclefinderpatternshape : finderpatternshape two nested rounded rectangles around an oval, a circle on a square area.  field public static readonly roundedrectanglecirclefinderpatternshape default; a ready-made instance to use as-is.  constructor public roundedrectanglecirclefinderpatternshape(float cornerradiuspercent = 0.3); creates the shape with a corner radius of your own.  property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">RoundedRectangleCircleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShape</code></pre>
@@ -4432,6 +4432,33 @@
                 <summary>Notes</summary>
                 <p class="doc remarks">The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. Icon overlays are not supported for rMQR. Its one finder pattern takes a shape like any other symbology.</p>
               </details>
+            </div>
+          </div>
+        </article>
+        <article class="type" id="FeatherQR.SkiaSharp.SymbolDecoderExtensions" data-name="featherqr.skiasharp.symboldecoderextensions" data-text="featherqr.skiasharp.symboldecoderextensions public static class symboldecoderextensions adds overloads to symboldecoder that decode the symbols of every symbology, standard qr, micro qr and rmqr, from skiasharp bitmaps, and from encoded images read from a stream. with c# 14 call them on symboldecoder , as symboldecoder.decodesymbols(bitmap) and symboldecoder.decodesymbolsasync(stream). on c# 13 and older call them on this class.  method public static symboldecoderesult[] decodesymbols(skbitmap bitmap);  method public static symboldecoderesult[] decodesymbols(stream image);  method public static symboldecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits);  method public static task&lt;symboldecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;symboldecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
+          <h3><a class="anchor" href="#FeatherQR.SkiaSharp.SymbolDecoderExtensions" aria-label="Link to FeatherQR.SkiaSharp.SymbolDecoderExtensions">#</a><span class="kind">class</span> <span class="name">SymbolDecoderExtensions</span></h3>
+          <pre class="sig"><code>public static class SymbolDecoderExtensions</code></pre>
+          <p class="doc">Adds overloads to SymbolDecoder that decode the symbols of every symbology, Standard QR, Micro QR and rMQR, from SkiaSharp bitmaps, and from encoded images read from a stream. With C# 14 call them on SymbolDecoder , as SymbolDecoder.DecodeSymbols(bitmap) and SymbolDecoder.DecodeSymbolsAsync(stream). On C# 13 and older call them on this class.</p>
+          <div class="members">
+            <div class="member" data-text="method public static symboldecoderesult[] decodesymbols(skbitmap bitmap); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static SymbolDecodeResult[] DecodeSymbols(SKBitmap bitmap);</code></pre>
+            </div>
+            <div class="member" data-text="method public static symboldecoderesult[] decodesymbols(stream image); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static SymbolDecodeResult[] DecodeSymbols(Stream image);</code></pre>
+            </div>
+            <div class="member" data-text="method public static symboldecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
+              <pre class="sig"><code>public static SymbolDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;symboldecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;SymbolDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
+            </div>
+            <div class="member" data-text="method public static task&lt;symboldecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
+              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
+              <pre class="sig"><code>public static Task&lt;SymbolDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
             </div>
           </div>
         </article>
@@ -4604,33 +4631,6 @@
                 <summary>Notes</summary>
                 <p class="doc remarks">The symbol is drawn as vector shapes, so it scales without losing quality, and the colors, shapes, gradients and icons all apply, on a background of any alpha. The root element carries a viewBox, so the document resizes when embedded at another size. Plain square modules get shape-rendering=&quot;crispEdges&quot; to avoid antialiasing seams. Custom shapes keep antialiasing for smooth curves. WithFormat does not apply, since SVG is not a raster format. The size options set the viewport instead.</p>
               </details>
-            </div>
-          </div>
-        </article>
-        <article class="type" id="FeatherQR.SkiaSharp.SymbolImageDecoder" data-name="featherqr.skiasharp.symbolimagedecoder" data-text="featherqr.skiasharp.symbolimagedecoder public static class symbolimagedecoder decodes the symbols of every symbology, standard qr, micro qr and rmqr, from skiasharp bitmaps, and from encoded images read from a stream. extends symboldecoder , so with c# 14 the overloads are also reachable as symboldecoder.decodesymbols(bitmap) and symboldecoder.decodesymbolsasync(stream). on older language versions call them on this class.  method public static symboldecoderesult[] decodesymbols(skbitmap bitmap);  method public static symboldecoderesult[] decodesymbols(stream image);  method public static symboldecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits);  method public static task&lt;symboldecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null);  method public static task&lt;symboldecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
-          <h3><a class="anchor" href="#FeatherQR.SkiaSharp.SymbolImageDecoder" aria-label="Link to FeatherQR.SkiaSharp.SymbolImageDecoder">#</a><span class="kind">class</span> <span class="name">SymbolImageDecoder</span></h3>
-          <pre class="sig"><code>public static class SymbolImageDecoder</code></pre>
-          <p class="doc">Decodes the symbols of every symbology, Standard QR, Micro QR and rMQR, from SkiaSharp bitmaps, and from encoded images read from a stream. Extends SymbolDecoder , so with C# 14 the overloads are also reachable as SymbolDecoder.DecodeSymbols(bitmap) and SymbolDecoder.DecodeSymbolsAsync(stream). On older language versions call them on this class.</p>
-          <div class="members">
-            <div class="member" data-text="method public static symboldecoderesult[] decodesymbols(skbitmap bitmap); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static SymbolDecodeResult[] DecodeSymbols(SKBitmap bitmap);</code></pre>
-            </div>
-            <div class="member" data-text="method public static symboldecoderesult[] decodesymbols(stream image); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static SymbolDecodeResult[] DecodeSymbols(Stream image);</code></pre>
-            </div>
-            <div class="member" data-text="method public static symboldecoderesult[] decodesymbols(stream image, imagestreamreadlimits? limits); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbols</span></h4>
-              <pre class="sig"><code>public static SymbolDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;symboldecoderesult[]&gt; decodesymbolsasync(stream image, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;SymbolDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);</code></pre>
-            </div>
-            <div class="member" data-text="method public static task&lt;symboldecoderesult[]&gt; decodesymbolsasync(stream image, imagestreamreadlimits? limits, cancellationtoken cancellationtoken = null); ">
-              <h4><span class="kind">method</span> <span class="name">DecodeSymbolsAsync</span></h4>
-              <pre class="sig"><code>public static Task&lt;SymbolDecodeResult[]&gt; DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);</code></pre>
             </div>
           </div>
         </article>

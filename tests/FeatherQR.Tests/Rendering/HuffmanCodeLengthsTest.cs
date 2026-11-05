@@ -27,7 +27,7 @@ public class HuffmanCodeLengthsTest
 
             await AssertComplete(counts, lengths, limit);
             var optimal = OptimalCost(counts);
-            // The limit binds only for skewed counts; otherwise the code must be a Huffman code.
+            // The limit binds only for skewed counts. When a Huffman code fits it, the result must cost as little.
             if (optimal.MaxLength <= limit)
                 await Assert.That(Cost(counts, lengths)).IsEqualTo(optimal.Cost);
         }

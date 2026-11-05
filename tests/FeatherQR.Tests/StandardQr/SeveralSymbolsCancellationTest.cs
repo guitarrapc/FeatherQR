@@ -106,7 +106,7 @@ public class SeveralSymbolsCancellationTest
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        Assert.Throws<OperationCanceledException>(() => QRCodeImageDecoder.DecodeEverySymbol(sheet, cancellation.Token));
+        Assert.Throws<OperationCanceledException>(() => QRCodeDecoderExtensions.DecodeEverySymbol(sheet, cancellation.Token));
     }
 
     [Test]

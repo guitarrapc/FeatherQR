@@ -7,10 +7,10 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Decodes QR codes from SkiaSharp bitmaps, and from encoded images read from a stream.
-/// Extends <see cref="QRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>QRCodeDecoder.TryDecode(bitmap, ...)</c> and <c>QRCodeDecoder.DecodeAsync(stream)</c>. On older language versions call them on this class.
+/// Adds overloads to <see cref="QRCodeDecoder"/> that decode QR codes from SkiaSharp bitmaps, and from encoded images read from a stream.
+/// With C# 14 call them on <see cref="QRCodeDecoder"/>, as <c>QRCodeDecoder.TryDecode(bitmap, ...)</c> and <c>QRCodeDecoder.DecodeAsync(stream)</c>. On C# 13 and older call them on this class.
 /// </summary>
-public static class QRCodeImageDecoder
+public static class QRCodeDecoderExtensions
 {
     extension(QRCodeDecoder)
     {

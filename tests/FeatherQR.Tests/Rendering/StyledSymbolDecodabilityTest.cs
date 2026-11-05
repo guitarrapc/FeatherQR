@@ -47,7 +47,7 @@ public class StyledSymbolDecodabilityTest
             .WithModuleShape(ShapeOf(style), sizePercent / 100f)
             .ToBitmap();
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)).IsTrue()
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info)).IsTrue()
             .Because($"status={info.Status}");
         await Assert.That(text).IsEqualTo("https://github.com/guitarrapc/FeatherQR");
     }
@@ -70,7 +70,7 @@ public class StyledSymbolDecodabilityTest
             .WithModuleShape(ShapeOf(style), sizePercent / 100f)
             .ToBitmap();
 
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)).IsTrue()
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info)).IsTrue()
             .Because($"status={info.Status}");
         await Assert.That(text).IsEqualTo("https://githu");
     }
@@ -94,7 +94,7 @@ public class StyledSymbolDecodabilityTest
             .WithModuleShape(ShapeOf(style), sizePercent / 100f)
             .ToBitmap();
 
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)).IsTrue()
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info)).IsTrue()
             .Because($"status={info.Status}");
         await Assert.That(text).IsEqualTo("https://githu");
     }
@@ -123,7 +123,7 @@ public class StyledSymbolDecodabilityTest
             .WithFinderPatternShape(shape)
             .ToBitmap();
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out _, out var info)).IsTrue()
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(bitmap, out _, out var info)).IsTrue()
             .Because($"status={info.Status}");
     }
 
@@ -218,7 +218,7 @@ public class StyledSymbolDecodabilityTest
         var data = QRCodeGenerator.Create("HELLO FEATHERQR 12345", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
 
         using var plain = new QRCodeImageBuilder(data).WithSize(width, height).WithColors(SKColors.Black, SKColors.White).ToBitmap();
-        if (!QRCodeImageDecoder.TryDecode(plain, out _, out _))
+        if (!QRCodeDecoderExtensions.TryDecode(plain, out _, out _))
             return; // The plain render does not decode either, so there is nothing to compare.
 
         using var styled = new QRCodeImageBuilder(data)
@@ -227,7 +227,7 @@ public class StyledSymbolDecodabilityTest
             .WithModuleShape(RectangleModuleShape.Default, 0.9f)
             .ToBitmap();
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(styled, out _, out var info)).IsTrue()
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(styled, out _, out var info)).IsTrue()
             .Because($"plain decodes at {width}x{height} but styled reported {info.Status}");
     }
 
@@ -288,7 +288,7 @@ public class StyledSymbolDecodabilityTest
         var styled = Render(FinderShapeOf(finder));
         using var bitmap = SKBitmap.Decode(styled);
 
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)).IsTrue()
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info)).IsTrue()
             .Because($"status={info.Status}");
         await Assert.That(text).IsEqualTo("https://githu");
         // The shape has to reach the renderer, not just be accepted: a builder that drops the
@@ -317,7 +317,7 @@ public class StyledSymbolDecodabilityTest
         var styled = Render(FinderShapeOf(finder));
         using var bitmap = SKBitmap.Decode(styled);
 
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)).IsTrue()
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info)).IsTrue()
             .Because($"status={info.Status}");
         await Assert.That(text).IsEqualTo("https://githu");
         await Assert.That(styled).IsNotEquivalentTo(Render(null));
@@ -811,7 +811,7 @@ public class StyledSymbolDecodabilityTest
             .WithFinderPatternShape(FinderShapeOf(finder))
             .ToBitmap();
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out _, out var info)).IsTrue()
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(bitmap, out _, out var info)).IsTrue()
             .Because($"status={info.Status}");
     }
 
@@ -900,8 +900,8 @@ public class StyledSymbolDecodabilityTest
 
         using var decoded = SKBitmap.Decode(styled);
         var ok = symbology == "rmqr"
-            ? RmQRCodeImageDecoder.TryDecode(decoded, out _, out _)
-            : MicroQRCodeImageDecoder.TryDecode(decoded, out _, out _);
+            ? RmQRCodeDecoderExtensions.TryDecode(decoded, out _, out _)
+            : MicroQRCodeDecoderExtensions.TryDecode(decoded, out _, out _);
         await Assert.That(ok).IsTrue();
     }
 
@@ -936,7 +936,7 @@ public class StyledSymbolDecodabilityTest
             .WithModuleShape(RectangleModuleShape.Default, 0.75f)
             .ToBitmap();
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)).IsTrue()
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info)).IsTrue()
             .Because($"status={info.Status}");
         await Assert.That(text).IsEqualTo(content);
     }

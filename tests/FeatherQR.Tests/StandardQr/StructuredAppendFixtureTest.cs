@@ -119,7 +119,7 @@ public class StructuredAppendFixtureTest
         var manifest = Manifests.Value[fixtureId];
         using var bitmap = SKBitmap.Decode(PngPath(fixtureId));
 
-        var success = QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info);
+        var success = QRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info);
 
         await Assert.That(success).IsTrue().Because($"{fixtureId}: {info.Status}");
         await Assert.That(text).IsEqualTo(manifest.PayloadText);

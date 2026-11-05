@@ -687,7 +687,7 @@ public class QRCodeImageBuilderTest
         await Assert.That(bitmap.Width).IsEqualTo(400);
         await Assert.That(bitmap.Height).IsEqualTo(400);
         await Assert.That(bitmap.GetPixel(0, 0)).IsEqualTo(SKColors.LightYellow);
-        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out var decoded, out _)).IsTrue();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(bitmap, out var decoded, out _)).IsTrue();
         await Assert.That(decoded).IsEqualTo(TestContent);
     }
 
@@ -711,7 +711,7 @@ public class QRCodeImageBuilderTest
         await Assert.That(bitmap.Width).IsEqualTo(600);
         await Assert.That(bitmap.Height).IsEqualTo(600);
         await Assert.That(bitmap.GetPixel(0, 0)).IsEqualTo(SKColors.Beige);
-        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out var decoded, out _)).IsTrue();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(bitmap, out var decoded, out _)).IsTrue();
         await Assert.That(decoded).IsEqualTo(TestContent);
 
         // The gradient is the option that would be silently lost here, and the one the chain exists

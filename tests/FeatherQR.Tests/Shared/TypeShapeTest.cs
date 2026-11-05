@@ -663,7 +663,7 @@ public class TypeShapeTest
     /// object initializer over <c>set</c> accessors compiles at C# 7.3, where <c>init</c>
     /// needs C# 9. That is why these are settable. It is a decision made for them and
     /// not a default: a new struct that is not <c>readonly</c> fails here. A new set of
-    /// options is added to <c>OptionStructTypes</c> on purpose, as the image options were, and the
+    /// options is added to <c>OptionStructTypes</c> on purpose, and the
     /// rules of this class that read that list then apply to it.
     /// <see cref="GeneratorOptionsAssignmentTest"/> does not read the list, so it needs a
     /// table for the new struct. A struct that has to change for another reason, an
