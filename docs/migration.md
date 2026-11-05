@@ -49,7 +49,22 @@ An existing `<PackageReference Include="SkiaSharp.QrCode" />` keeps working: it 
 
 ### Target frameworks
 
-The packages build for netstandard2.0, netstandard2.1 and net10.0. 1.x also built for net8.0, which apps on .NET 8 and .NET 9 bound. Both runtimes reach end of support on 2026-11-10, so 2.0.0 has no net8.0 build, and an app on .NET 8 or 9 binds the netstandard2.1 one. It has the same public API and writes and reads the same symbols, but it has no hardware intrinsics, so every SIMD kernel runs its scalar form there. Move the app to .NET 10 to get them back.
+The packages build for netstandard2.0, netstandard2.1 and net10.0. 1.x also built for net8.0, which apps on .NET 8 and .NET 9 bound. An app on .NET 8 or 9 falls back to .NET Standard 2.1.
+
+| Operation | .NET 8, net8.0 build | .NET 8, netstandard2.1 build | Slower by | .NET 10, net10.0 build |
+|---|---:|---:|---:|---:|
+| Encode a short URL, Standard QR | 1.4 µs | 4.4 µs | 3.1× | 1.3 µs |
+| Encode 1,500 characters, Standard QR | 24 µs | 102 µs | 4.2× | 23 µs |
+| Encode Micro QR | 212 ns | 322 ns | 1.5× | 199 ns |
+| Encode rMQR | 495 ns | 762 ns | 1.5× | 432 ns |
+| Decode a module matrix, 1,500 characters | 14 µs | 56 µs | 4.1× | 12 µs |
+| Decode a clean image, Standard QR | 90 µs | 529 µs | 5.9× | 81 µs |
+| Decode a clean image, rMQR | 4.3 µs | 11.8 µs | 2.7× | 3.9 µs |
+| Decode a clean image, Micro QR | 4.5 µs | 10.6 µs | 2.4× | 4.0 µs |
+| Decode a 1.2 MP image with no symbol | 2.2 ms | 15.1 ms | 6.7× | 1.9 ms |
+| Decode 54 photographs (242 MP) | 191 ms | 1,263 ms | 6.6× | 188 ms |
+
+Measured 2026-11-05 on an AMD Ryzen 9 7950X3D (x64) under .NET 8.0.33 and .NET 10.0.14, one thread on two pinned cores, the median of three runs. The net8.0 column is 2.0.0-preview.7, the last release with that build, and the other two are 2.0.0-preview.8. preview.7's own netstandard2.1 build is within 6 % of preview.8's, so the gap comes from the build, not from code changes. .NET 9 binds the same netstandard2.1 build and was not measured.
 
 ### Namespaces
 
