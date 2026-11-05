@@ -52,7 +52,7 @@ See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these 
 
 ## Overview
 
-FeatherQR is a modern, high-performance QR code library. It allocates memory only for the actual QR code data, with zero additional allocations during processing, and renders through SkiaSharp when you want images.
+FeatherQR is a modern, high-performance QR code library. It allocates memory only for the actual QR code data, with zero additional allocations during processing. It writes plain SVG, PNG, raw pixels and terminal text itself, and renders styled images through SkiaSharp.
 
 - **Simple API**: One-liner QR code generation with sensible defaults
 - **High Performance**: Optimal speed and minimum memory allocation
@@ -225,7 +225,7 @@ Start with an image builder for most applications. All generators and decoders a
 
 ### Image Writing (Simple)
 
-`SymbolImageWriter` writes `QRCodeData`, `MicroQRCodeData`, and `RmQRCodeData` as SVG, PNG, raw pixels, or text for a terminal, using only the `FeatherQR` package. Every module is a sharp square of `ModulePixelSize` pixels (8 by default), the quiet zone is the one the symbol was made with, and the same symbol gives the same bytes on every target framework. See [samples/CoreImageOutput](samples/CoreImageOutput) for examples.
+`SymbolImageWriter` writes `QRCodeData`, `MicroQRCodeData`, and `RmQRCodeData` as SVG, PNG, raw pixels, or text for a terminal, using only the `FeatherQR` package. Every module is a sharp square of `ModulePixelSize` pixels (8 by default), the quiet zone is the one the symbol was made with, and the same symbol gives the same bytes on every target framework. See [samples/ConsoleAppCore](samples/ConsoleAppCore) for examples.
 
 ```csharp
 using FeatherQR;
@@ -235,11 +235,12 @@ var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
 // The writer keeps the quiet zone of the symbol it is writing.
 File.WriteAllText("qrcode.svg", SymbolImageWriter.GetSvgString(qr));
 File.WriteAllBytes("qrcode.png", SymbolImageWriter.GetPngBytes(qr));
-Console.Write(SymbolImageWriter.GetText(qr));                // dark modules drawn, for a light terminal
-Console.Write(SymbolImageWriter.GetText(qr, invert: true));  // light modules drawn, for a dark terminal
+Console.OutputEncoding = System.Text.Encoding.UTF8;                  // a CJK code page prints some half blocks as ?
+Console.Write(SymbolImageWriter.GetTerminalText(qr));                // dark modules drawn, for a light terminal
+Console.Write(SymbolImageWriter.GetTerminalText(qr, invert: true));  // light modules drawn, for a dark terminal
 ```
 
-Colors and the module size go in `SymbolImageOptions`. A color has an optional alpha, and a fully transparent light color leaves the background out.
+Colors and the module size go in `SymbolImageOptions`. A color has an optional alpha. The dark color is painted over the light one, and a fully transparent light color leaves the background out.
 
 ```csharp
 var options = new SymbolImageOptions
@@ -256,7 +257,7 @@ var noMargin = new QRCodeData(qr.GetRawData(), quietZoneSize: 0);
 var svgNoMargin = SymbolImageWriter.GetSvgString(noMargin);
 ```
 
-`WriteSvg` and `WritePng` write into an `IBufferWriter<byte>` without allocating. `TryWritePixels` writes raw pixels into your buffer, as `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x`, with the rows packed. A `Gray8` buffer goes straight into the decoders' `TryDecodeImage`.
+`WriteSvg` and `WritePng` write into an `IBufferWriter<byte>` without allocating once warm. `TryWritePixels` writes raw pixels into your buffer, as `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x`, with the rows packed. A `Gray8` buffer goes straight into the decoders' `TryDecodeImage`.
 
 ```csharp
 var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Bgra8888)];

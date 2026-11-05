@@ -74,9 +74,9 @@ Console.WriteLine($"Bgra8888 pixels, {width} x {height}, {bgra.Length} bytes");
 Console.OutputEncoding = Encoding.UTF8;
 Console.WriteLine();
 Console.WriteLine("Micro QR for a light background:");
-Console.Write(SymbolImageWriter.GetText(micro));
+Console.Write(SymbolImageWriter.GetTerminalText(micro));
 Console.WriteLine("Micro QR for a dark background:");
-Console.Write(SymbolImageWriter.GetText(micro, invert: true));
+Console.Write(SymbolImageWriter.GetTerminalText(micro, invert: true));
 
 Console.WriteLine();
 Console.WriteLine($"Images written to {outputDir}");

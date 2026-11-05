@@ -96,15 +96,15 @@ public class SymbolImageWriterAllocationTest
     }
 
     [Test]
-    public async Task GetText_AllocatesTheStringAlone()
+    public async Task GetTerminalText_AllocatesTheStringAlone()
     {
         var qr = QRCodeGenerator.Create("allocation", QREccLevel.M, new QRCodeGeneratorOptions { Version = 10 });
-        var length = SymbolImageWriter.GetText(qr).Length;
+        var length = SymbolImageWriter.GetTerminalText(qr).Length;
 
         // Four calls a round, so four strings of the same length.
         var oneString = SteadyStateBytes(() => _ = new string('x', length)) / 4;
-        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetText(qr)) / 4).IsEqualTo(oneString);
-        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetText(qr, invert: true)) / 4).IsEqualTo(oneString);
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetTerminalText(qr)) / 4).IsEqualTo(oneString);
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetTerminalText(qr, invert: true)) / 4).IsEqualTo(oneString);
     }
 
     /// <summary>A writer over one array that starts again at its front on <see cref="Rewind"/>.</summary>

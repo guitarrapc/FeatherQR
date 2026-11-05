@@ -11,8 +11,8 @@ public class SymbolImageWriterTextTest
     public async Task StandardQr_IsTheMatrixInHalfBlocks_EveryVersionAndLevel(int version, QREccLevel level)
     {
         var data = QRCodeGenerator.Create("1", level, new QRCodeGeneratorOptions { Version = version });
-        await Assert.That(SymbolImageWriter.GetText(data)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: false));
-        await Assert.That(SymbolImageWriter.GetText(data, invert: true)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: true));
+        await Assert.That(SymbolImageWriter.GetTerminalText(data)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: false));
+        await Assert.That(SymbolImageWriter.GetTerminalText(data, invert: true)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: true));
     }
 
     [Test]
@@ -20,8 +20,8 @@ public class SymbolImageWriterTextTest
     public async Task MicroQr_IsTheMatrixInHalfBlocks_EveryVersionAndLevel(MicroQRVersion version, MicroQREccLevel level)
     {
         var data = MicroQRCodeGenerator.Create("1", level, new MicroQRCodeGeneratorOptions { Version = version });
-        await Assert.That(SymbolImageWriter.GetText(data)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: false));
-        await Assert.That(SymbolImageWriter.GetText(data, invert: true)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: true));
+        await Assert.That(SymbolImageWriter.GetTerminalText(data)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: false));
+        await Assert.That(SymbolImageWriter.GetTerminalText(data, invert: true)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: true));
     }
 
     [Test]
@@ -29,8 +29,8 @@ public class SymbolImageWriterTextTest
     public async Task RmQr_IsTheMatrixInHalfBlocks_EveryVersionAndLevel(RmQRVersion version, RmQREccLevel level)
     {
         var data = RmQRCodeGenerator.Create("1", level, new RmQRCodeGeneratorOptions { Version = version });
-        await Assert.That(SymbolImageWriter.GetText(data)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: false));
-        await Assert.That(SymbolImageWriter.GetText(data, invert: true)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: true));
+        await Assert.That(SymbolImageWriter.GetTerminalText(data)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: false));
+        await Assert.That(SymbolImageWriter.GetTerminalText(data, invert: true)).IsEqualTo(Reference(SymbolImageWriterPngTest.Grid.Of(data), invert: true));
     }
 
     /// <summary>
@@ -43,11 +43,11 @@ public class SymbolImageWriterTextTest
     {
         var micro = MicroQRCodeGenerator.Create("1", MicroQREccLevel.ErrorDetectionOnly, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M1 });
 
-        var lines = SymbolImageWriter.GetText(micro).Split('\n');
+        var lines = SymbolImageWriter.GetTerminalText(micro).Split('\n');
         await Assert.That(lines[0]).IsEqualTo(new string(' ', 15));
         await Assert.That(lines[1]).StartsWith("  █▀▀▀▀▀█ ");
 
-        var inverted = SymbolImageWriter.GetText(micro, invert: true).Split('\n');
+        var inverted = SymbolImageWriter.GetTerminalText(micro, invert: true).Split('\n');
         await Assert.That(inverted[0]).IsEqualTo(new string('█', 15));
         await Assert.That(inverted[1]).StartsWith("██ ▄▄▄▄▄ █");
     }
@@ -59,8 +59,8 @@ public class SymbolImageWriterTextTest
     public async Task LastLine_HasALightLowerHalf()
     {
         var rm = RmQRCodeGenerator.Create("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
-        var lines = SymbolImageWriter.GetText(rm).Split('\n');
-        var inverted = SymbolImageWriter.GetText(rm, invert: true).Split('\n');
+        var lines = SymbolImageWriter.GetTerminalText(rm).Split('\n');
+        var inverted = SymbolImageWriter.GetTerminalText(rm, invert: true).Split('\n');
 
         // 7 rows and a quiet zone of 2 above and below make 11 rows, so 6 lines and an empty string after the last \n.
         await Assert.That(lines.Length).IsEqualTo(7);
@@ -73,7 +73,7 @@ public class SymbolImageWriterTextTest
     public async Task EveryLine_IsTheSymbolsWidth_EndedByANewline()
     {
         var qr = QRCodeGenerator.Create("lines", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 1 });
-        var text = SymbolImageWriter.GetText(qr);
+        var text = SymbolImageWriter.GetTerminalText(qr);
 
         await Assert.That(text).EndsWith("\n");
         await Assert.That(text).DoesNotContain("\r");
@@ -86,9 +86,9 @@ public class SymbolImageWriterTextTest
     [Test]
     public async Task NullData_Throws()
     {
-        await Assert.That(() => SymbolImageWriter.GetText((QRCodeData)null!)).Throws<ArgumentNullException>();
-        await Assert.That(() => SymbolImageWriter.GetText((MicroQRCodeData)null!)).Throws<ArgumentNullException>();
-        await Assert.That(() => SymbolImageWriter.GetText((RmQRCodeData)null!)).Throws<ArgumentNullException>();
+        await Assert.That(() => SymbolImageWriter.GetTerminalText((QRCodeData)null!)).Throws<ArgumentNullException>();
+        await Assert.That(() => SymbolImageWriter.GetTerminalText((MicroQRCodeData)null!)).Throws<ArgumentNullException>();
+        await Assert.That(() => SymbolImageWriter.GetTerminalText((RmQRCodeData)null!)).Throws<ArgumentNullException>();
     }
 
     /// <summary>Half blocks from the module grid: upper half, lower half, both, or neither, with a row past the end light.</summary>

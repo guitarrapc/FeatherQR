@@ -47,7 +47,7 @@ public class SymbolImageWriterPixelsTest
             layout => SymbolImageWriter.GetPixelBufferSize(data, layout, options));
     }
 
-    /// <summary>Every layout, at sizes that fill and split bytes, with quiet zones of 0 and 4, colours, and alphas below 255.</summary>
+    /// <summary>Every layout, at one pixel a module where no row is repeated, at 3 and at the default 8, with quiet zones of 0 and 4, colours, and alphas below 255.</summary>
     [Test]
     [Arguments(1)]
     [Arguments(3)]
@@ -71,9 +71,10 @@ public class SymbolImageWriterPixelsTest
 
     /// <summary>
     /// Gray8 is what the decoders compute from the RGBA buffer: each alpha below 255 composited over white, then BT.601.
+    /// The decoders read Rgb888x without its fourth byte, and the same Gray8 must be their reading of that buffer too.
     /// </summary>
     [Test]
-    public async Task Gray8_IsTheLuminanceTheDecodersReadFromRgba()
+    public async Task Gray8_IsTheLuminanceTheDecodersReadFromRgbaAndRgb888x()
     {
         var rng = new Random(8);
         var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
@@ -85,15 +86,32 @@ public class SymbolImageWriterPixelsTest
                 DarkColor = new SymbolColor((byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256)),
                 LightColor = new SymbolColor((byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256)),
             };
-            var rgba = new byte[SymbolImageWriter.GetPixelBufferSize(micro, PixelLayout.Rgba8888, options)];
             var gray = new byte[SymbolImageWriter.GetPixelBufferSize(micro, PixelLayout.Gray8, options)];
-            SymbolImageWriter.TryWritePixels(micro, rgba, PixelLayout.Rgba8888, out var width, out var height, options);
-            SymbolImageWriter.TryWritePixels(micro, gray, PixelLayout.Gray8, out _, out _, options);
-
-            var expected = new byte[width * height];
-            LuminanceConverter.Convert(rgba, width, height, width * 4, PixelLayout.Rgba8888, premultipliedAlpha: false, expected);
-            await Assert.That(gray.AsSpan().SequenceEqual(expected)).IsTrue().Because($"{options.DarkColor} on {options.LightColor}");
+            SymbolImageWriter.TryWritePixels(micro, gray, PixelLayout.Gray8, out var width, out var height, options);
+            foreach (var layout in new[] { PixelLayout.Rgba8888, PixelLayout.Rgb888x })
+            {
+                var color = new byte[SymbolImageWriter.GetPixelBufferSize(micro, layout, options)];
+                SymbolImageWriter.TryWritePixels(micro, color, layout, out _, out _, options);
+                var expected = new byte[width * height];
+                LuminanceConverter.Convert(color, width, height, width * 4, layout, premultipliedAlpha: false, expected);
+                await Assert.That(gray.AsSpan().SequenceEqual(expected)).IsTrue().Because($"{layout}: {options.DarkColor} on {options.LightColor}");
+            }
         }
+    }
+
+    /// <summary>
+    /// A layout with no alpha shows a transparent colour as white. So transparent black, which is <c>default</c>, must not turn the light modules black.
+    /// The last line pins the expected pixel to white, so the test cannot agree with a writer that copies the channels straight.
+    /// </summary>
+    [Test]
+    public async Task Rgb888x_ShowsATransparentLightColorAsWhite()
+    {
+        var qr = QRCodeGenerator.Create("transparent", QREccLevel.M);
+        var options = new SymbolImageOptions { LightColor = default };
+        await AssertPixels(SymbolImageWriterPngTest.Grid.Of(qr), options, PixelLayout.Rgb888x,
+            (destination, l) => (SymbolImageWriter.TryWritePixels(qr, destination, l, out var w, out var h, options), w, h),
+            l => SymbolImageWriter.GetPixelBufferSize(qr, l, options));
+        await Assert.That(Expected(options.LightColor, PixelLayout.Rgb888x)).IsEquivalentTo(new byte[] { 255, 255, 255, 255 });
     }
 
     [Test]
@@ -177,9 +195,30 @@ public class SymbolImageWriterPixelsTest
         await Assert.That(SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Rgba8888, new SymbolImageOptions { ModulePixelSize = 125 })).IsEqualTo(2_139_062_500);
         var refused = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Rgba8888, new SymbolImageOptions { ModulePixelSize = 126 }));
         await Assert.That(refused.ParamName).IsEqualTo("options");
-        await Assert.That(() => SymbolImageWriter.TryWritePixels(qr, Span<byte>.Empty, PixelLayout.Rgba8888, out _, out _, new SymbolImageOptions { ModulePixelSize = 126 })).Throws<ArgumentOutOfRangeException>();
+        var written = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, Span<byte>.Empty, PixelLayout.Rgba8888, out _, out _, new SymbolImageOptions { ModulePixelSize = 126 }));
+        await Assert.That(written.ParamName).IsEqualTo("options");
         // One byte a pixel goes further.
         await Assert.That(SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, new SymbolImageOptions { ModulePixelSize = 250 })).IsEqualTo(185 * 250 * 185 * 250);
+    }
+
+    /// <summary>
+    /// At version 40 each side stays within an int up to 11,608,019 pixels a module, but from 8,208,110 four bytes a pixel pass a long and wrap.
+    /// The wrapped count cast to an int is positive at 8,300,000 and negative at 10,000,000, and both must still be refused.
+    /// </summary>
+    [Test]
+    [Arguments(8_300_000)]
+    [Arguments(10_000_000)]
+    public async Task BufferPastALong_Throws(int pixels)
+    {
+        var qr = QRCodeGenerator.Create("1", QREccLevel.L, new QRCodeGeneratorOptions { Version = 40 });
+        var options = new SymbolImageOptions { ModulePixelSize = pixels };
+        foreach (var layout in new[] { PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x })
+        {
+            var sized = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetPixelBufferSize(qr, layout, options));
+            await Assert.That(sized.ParamName).IsEqualTo("options").Because($"{layout}");
+            var written = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, Span<byte>.Empty, layout, out _, out _, options));
+            await Assert.That(written.ParamName).IsEqualTo("options").Because($"{layout}");
+        }
     }
 
     // ---- the reader ---------------------------------------------------------------------
@@ -203,7 +242,8 @@ public class SymbolImageWriterPixelsTest
         await Assert.That(reportedHeight).IsEqualTo(height);
         await Assert.That(buffer.AsSpan(width * height * bytesPerPixel).ToArray().All(b => b == 0xCD)).IsTrue();
 
-        var dark = Expected(options.DarkColor, layout);
+        // The dark colour is painted over the light one, as the SVG paints its path over its background.
+        var dark = Expected(SymbolImageWriterPngTest.Over(options.DarkColor, options.LightColor), layout);
         var light = Expected(options.LightColor, layout);
         var wrong = 0;
         for (var y = 0; y < height; y++)
@@ -223,19 +263,12 @@ public class SymbolImageWriterPixelsTest
     {
         PixelLayout.Rgba8888 => [c.R, c.G, c.B, c.A],
         PixelLayout.Bgra8888 => [c.B, c.G, c.R, c.A],
-        PixelLayout.Rgb888x => [c.R, c.G, c.B, 255],
+        PixelLayout.Rgb888x => [OverWhite(c.R, c.A), OverWhite(c.G, c.A), OverWhite(c.B, c.A), 255],
         _ => [Luminance(c)],
     };
 
-    private static byte Luminance(SymbolColor c)
-    {
-        int r = c.R, g = c.G, b = c.B;
-        if (c.A != 255)
-        {
-            r = (r * c.A + 255 * (255 - c.A)) / 255;
-            g = (g * c.A + 255 * (255 - c.A)) / 255;
-            b = (b * c.A + 255 * (255 - c.A)) / 255;
-        }
-        return (byte)((77 * r + 150 * g + 29 * b) >> 8);
-    }
+    /// <summary>A channel composited over white, which the layouts with no alpha hold.</summary>
+    private static byte OverWhite(byte channel, byte alpha) => (byte)((channel * alpha + 255 * (255 - alpha)) / 255);
+
+    private static byte Luminance(SymbolColor c) => (byte)((77 * OverWhite(c.R, c.A) + 150 * OverWhite(c.G, c.A) + 29 * OverWhite(c.B, c.A)) >> 8);
 }

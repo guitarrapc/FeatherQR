@@ -519,7 +519,7 @@ Additive. `SymbolImageWriter` in the `FeatherQR` package writes `QRCodeData`, `M
 var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
 File.WriteAllBytes("qrcode.png", SymbolImageWriter.GetPngBytes(qr));
 File.WriteAllText("qrcode.svg", SymbolImageWriter.GetSvgString(qr));
-Console.Write(SymbolImageWriter.GetText(qr));
+Console.Write(SymbolImageWriter.GetTerminalText(qr));
 ```
 
 - **The size is per module, not per image.** `SymbolImageOptions.ModulePixelSize`, 8 by default, is the side of a module, and the image is the symbol's modules, quiet zone included, times it. The builders' `size = 512` fits the symbol into a set size instead, so `QRCodeImageBuilder.GetPngBytes(qr)` and `SymbolImageWriter.GetPngBytes(qr)` give different images.

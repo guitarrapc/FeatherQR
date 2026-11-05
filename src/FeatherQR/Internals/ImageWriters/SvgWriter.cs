@@ -8,8 +8,7 @@ namespace FeatherQR.Internals.ImageWriters;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A stroke one module wide over a run is a move and a length, against a move and three lengths for a filled rectangle, so the path is about half the size.
-/// Browsers draw the two to the same pixels at every size of a pixel a module and over.
+/// A stroke one module wide over a run is a move and a length, against a move and three lengths for a filled rectangle, so the path is shorter and draws like filled runs.
 /// The default stroke width of 1 and the default fill, which paints nothing on a line, are not written.
 /// </para>
 /// <para>

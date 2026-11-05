@@ -3,8 +3,8 @@ using System.Buffers;
 namespace FeatherQR.Internals.ImageWriters;
 
 /// <summary>
-/// PNG for a module matrix, one bit a pixel: greyscale for opaque black on opaque white, otherwise a two-colour palette with the dark colour
-/// first and, when either colour has an alpha, the transparency of each.
+/// PNG for a module matrix, one bit a pixel: greyscale for opaque black on opaque white, otherwise a two-colour palette with the dark colour,
+/// painted over the light one, first. When the light colour has an alpha, the palette carries the transparency of each.
 /// </summary>
 /// <remarks>
 /// <para>

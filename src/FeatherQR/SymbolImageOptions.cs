@@ -47,7 +47,7 @@ public record struct SymbolImageOptions
     /// The colour of the dark modules. Defaults to opaque black.
     /// </summary>
     /// <remarks>
-    /// A fully transparent colour draws no dark modules.
+    /// It is painted over the light colour in every format, so an alpha below 255 blends the two and a fully transparent colour draws no dark modules.
     /// </remarks>
     public SymbolColor DarkColor
     {
@@ -59,7 +59,7 @@ public record struct SymbolImageOptions
     /// The colour of the light modules and the quiet zone. Defaults to opaque white.
     /// </summary>
     /// <remarks>
-    /// A fully transparent colour leaves the background out, so whatever is behind the image shows through.
+    /// A fully transparent colour leaves the background out, so whatever is behind the image shows through, or white in a pixel layout with no alpha.
     /// </remarks>
     public SymbolColor LightColor
     {

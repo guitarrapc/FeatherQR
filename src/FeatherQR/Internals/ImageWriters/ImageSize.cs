@@ -21,10 +21,11 @@ internal static class ImageSize
 
     /// <summary>
     /// Refuses an output longer than the longest array.
+    /// The length may be a lower bound, such as a pixel count, so the message does not quote it.
     /// </summary>
     public static void ThrowIfLongerThanAnArray(long length, in SymbolImageOptions options)
     {
         if (length > MaxArrayLength)
-            throw new ArgumentOutOfRangeException(nameof(options), $"A module of {options.ModulePixelSize} pixels makes an image of {length} bytes, longer than the {MaxArrayLength} an array can hold.");
+            throw new ArgumentOutOfRangeException(nameof(options), $"A module of {options.ModulePixelSize} pixels makes the image longer than the {MaxArrayLength} bytes an array can hold.");
     }
 }

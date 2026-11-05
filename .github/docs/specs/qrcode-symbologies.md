@@ -327,7 +327,7 @@ Since 2.0.0 the library ships as four NuGet packages built from three assemblies
 
 | Package | Assembly | Contents | Depends on |
 |---|---|---|---|
-| `FeatherQR` | `FeatherQR.dll` | Generators, decoders, data types, options, segmentation, `ModuleRect` geometry, the luminance kernels, the image writer (SVG, PNG, raw pixels and terminal text, [Image output](#image-output)) | Nothing on net8.0 and net10.0. `System.Memory` (netstandard2.0) and `System.Runtime.CompilerServices.Unsafe` (netstandard2.1) |
+| `FeatherQR` | `FeatherQR.dll` | Generators, decoders, data types, options, segmentation, `ModuleRect` geometry, the luminance kernels, the image writer (SVG, PNG, raw pixels and terminal text, [Image output](#image-output)) | Nothing on net10.0. `System.Memory` (netstandard2.0) and `System.Runtime.CompilerServices.Unsafe` (netstandard2.1) |
 | `FeatherQR.SkiaSharp` | `FeatherQR.SkiaSharp.dll` | `SymbolRenderer`, the `SKCanvas` extensions, the image builders, `IconData` and shapes, `SKBitmap` decoding as extension members on the core decoders | `FeatherQR`, `SkiaSharp` |
 | `SkiaSharp.QrCode` | none | An empty compatibility metapackage: the ID the library shipped under through 1.x keeps restoring | `FeatherQR.SkiaSharp` |
 | `FeatherQR.Gs1` (since 2026-10-12) | `FeatherQR.Gs1.dll` | The GS1 data layer ([qrcode-gs1-data.md](qrcode-gs1-data.md)): the AI table generated from the GS1 Barcode Syntax Dictionary and its code lists, the checks (`Gs1ElementString.TryValidate`), `(AI)` text and Digital Link URIs in both directions, the decode-side `TryRead`, and the `CreateGs1` and `CreateGs1DigitalLink` entry points on the Standard QR and rMQR generators (2026-10-13). It is a separate package so that the Apache-2.0 notice for the generated table (`THIRD-PARTY-NOTICES.md`, packed into this nupkg only) travels with the data and the core packages stay plain MIT | `FeatherQR` |
@@ -545,15 +545,15 @@ Since 2.0.0 the core writes the three symbologies as images with no other packag
 | Format | Calls, one of each per data type | Shape |
 |---|---|---|
 | SVG | `GetSvgString`, `WriteSvg(IBufferWriter<byte>)` | One `<path>` of strokes one module wide along the horizontal runs of dark modules, over a `<rect>` in the light colour |
-| PNG | `GetPngBytes`, `WritePng(IBufferWriter<byte>)` | 1-bit: greyscale for black on white, otherwise a two-colour palette, with `tRNS` when a colour has an alpha |
+| PNG | `GetPngBytes`, `WritePng(IBufferWriter<byte>)` | 1-bit: greyscale for black on white, otherwise a two-colour palette, with `tRNS` when the light colour has an alpha |
 | Pixel buffer | `GetPixelBufferSize`, `TryWritePixels(Span<byte>, PixelLayout, ...)` | `Gray8`, `Rgba8888`, `Bgra8888` or `Rgb888x`, rows packed, alpha not premultiplied |
-| Text for a terminal | `GetText(invert)` | Half blocks, two module rows a line, every line ended by `\n` |
+| Text for a terminal | `GetTerminalText(invert)` | Half blocks, two module rows a line, every line ended by `\n` |
 
 Every output follows these rules:
 
 - A module is a whole number of pixels, `SymbolImageOptions.ModulePixelSize`, 8 by default. Every module is then a sharp square and the PNG stays 1-bit. An image of a set size needs fractional modules or padding, and that stays the renderer's, so `QRCodeImageBuilder.GetPngBytes(data)` (Skia at 512 pixels) and `SymbolImageWriter.GetPngBytes(data)` (1-bit at 8 pixels a module) are different images.
 - The quiet zone is the symbol's own, chosen at generation. A second setting on the output would be a second place for the two to disagree.
-- There are two colours, dark and light, each a `SymbolColor` of four bytes, opaque unless an alpha is given. A fully transparent light colour leaves the SVG's background out and makes the PNG's light pixels transparent. Text has no colours, only `invert`.
+- There are two colours, dark and light, each a `SymbolColor` of four bytes, opaque unless an alpha is given. The dark colour is painted over the light one in every format, as the SVG draws its path over its background and the renderer its modules over theirs. Written on its own, a fully transparent dark colour gave a PNG with holes and an SVG with no symbol for the same options. A fully transparent light colour leaves the SVG's background out and makes the PNG's light pixels transparent. Text has no colours, only `invert`.
 - `SymbolImageOptions` has the generator options' shape: a settable `record struct` passed by `in`, whose `default` is 8 pixels a module, opaque black on opaque white, through stored offsets. The type-shape rules for settable structs cover it with them.
 - An image side past `int.MaxValue` pixels, or a buffer or file longer than the largest array, throws `ArgumentOutOfRangeException` on the options. Version 40 with the default quiet zone fits up to 125 pixels a module at four bytes a pixel.
 - The same symbol and options give the same bytes on every target framework. `NetStandardBuildParityTest` compares the netstandard builds' output with this host's, byte for byte.
@@ -584,15 +584,15 @@ On 20 symbols of each kind, before the shape was picked, at 8 pixels a module (m
 | Micro QR M4-L | 167 | 321 | 188 | 196 |
 | rMQR R17x139-M | 643 | 2,231 | 642 | 705 |
 
-Dynamic codes are 2 to 4 times smaller than fixed ones from 2 pixels a module up. The hash matcher was 4 to 7 times slower, needed a 32 KB window of the image and was no smaller at 8 pixels. Filter Up was larger than None in every combination. Stored without compression, version 40 at 8 pixels is 275,368 bytes.
+Dynamic codes are 2 to 4 times smaller than fixed ones from 2 pixels a module up. The hash matcher was 4 to 7 times slower, needed a 32 KB window of the image, and at 8 pixels was no smaller overall: at most 1.4 % smaller on two symbols and larger on the other three. Filter Up was larger than None in every combination. Stored without compression, version 40 at 8 pixels is 275,368 bytes.
 
 #### Pixel buffer
 
-`PixelLayout` was the image decoders' internal enum and is public since 2.0.0, in the `FeatherQR` namespace with its values numbered. `Gray8` holds each colour's luminance as the decoders compute it from an RGBA buffer, an alpha below 255 composited over white and then BT.601 weights, so a `Gray8` buffer equals the decoders' reading of the `Rgba8888` one and goes straight into `TryDecodeImage`. `Rgb888x`'s fourth byte is 255. A short span returns `false`, reports no size and writes nothing. The luminance conversion kernel stays internal.
+`PixelLayout` was the image decoders' internal enum and is public since 2.0.0, in the `FeatherQR` namespace with its values numbered. `Gray8` holds each colour's luminance as the decoders compute it from an RGBA buffer, an alpha below 255 composited over white and then BT.601 weights, so a `Gray8` buffer equals the decoders' reading of the `Rgba8888` one and goes straight into `TryDecodeImage`. `Rgb888x` has no alpha either, so it holds each colour composited over white like `Gray8`, and its fourth byte is 255. With the channels passed straight, `default(SymbolColor)` as the light colour turned the light modules black. A short span returns `false`, reports no size and writes nothing. The luminance conversion kernel stays internal.
 
 #### Text for a terminal
 
-Each character shows two modules, one above the other, as a space, U+2580, U+2584 or U+2588. A monospace cell is about twice as tall as wide, so the halves are close to square. `invert` fills the light modules instead, for a dark background. There are no colour escapes, since the terminal's colours belong to the caller. A symbol's row count is odd with any quiet zone, so the last line's lower half is always light. An iPhone read the plain and the inverted text from the desktop app's terminal, and Android looked right.
+Each character shows two modules, one above the other, as a space, U+2580, U+2584 or U+2588. A monospace cell is about twice as tall as wide, so the halves are close to square. `invert` fills the light modules instead, for a dark background. There are no colour escapes, since the terminal's colours belong to the caller. A symbol's row count is odd with any quiet zone, so the last line's lower half is always light. A Windows console on a Chinese, Japanese or Korean code page prints some of the half blocks as `?`, so the documentation tells a caller to set UTF-8 output. The call is `GetTerminalText` rather than `GetText`, since text elsewhere in the API is a symbol's content, as in `TryDecode(qr, out var text)`. An iPhone read the plain and the inverted text from the desktop app's terminal, and Android looked right.
 
 #### Left out
 
@@ -1092,7 +1092,7 @@ The library can change some of this and not the rest:
 
 - An SVG drawn into a canvas at a size other than its own `width` and `height` is a bitmap resampled. A render check that compares path forms has to rewrite `width` and `height` to the target size first, and the first check of the stroked form measured the resampling instead.
 - An outline trace writes a corner at nearly every module edge of a QR pattern, so it beats stroked runs only on the smallest symbol, and is 3 to 4 times slower from version 10 up.
-- The first PNG matcher spent most of its time at byte positions it refuses, with two prefix compares at nearly every byte of a first scanline. One compare of 4 or 8 bytes first, as long as the shortest run or copy taken, rules those positions out with no change to the output, and took version 40 at 8 pixels from about 730 to about 400 µs. Recording the counting pass's symbols for the writing pass then took it to about 255 µs, since matching a second time cost as much as recording.
+- The first PNG matcher spent most of its time at byte positions it refuses, with two prefix compares at nearly every byte of a first scanline. One compare of 4 or 8 bytes first, as long as the shortest run or copy taken, rules those positions out with no change to the output, and took version 40 at 8 pixels from about 730 to about 400 µs. Recording the counting pass's symbols for the writing pass then took it to about 255 µs in the probe, since matching a second time cost as much as recording.
 - With dynamic codes a literal of a 1-bit image costs about a bit, so a run shorter than 4 bytes or a copy shorter than 8 costs more than its literals. Those minimums took version 40 from 8,556 to 7,309 bytes.
 - The SIMD layout rule matches calls on a class named `Crc32` as the Arm intrinsic, so the PNG's CRC class is `PngCrc`.
 - The type-shape tests listed the settable structs as the three generator options, so the image options were refused until added to the list on purpose. The rules now name option structs.

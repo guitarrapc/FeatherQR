@@ -63,7 +63,7 @@ public static class SymbolImageWriter
     /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The number of bytes written.</returns>
     /// <remarks>
-    /// The bytes are those of <see cref="GetSvgString(QRCodeData, in SymbolImageOptions)"/>, and nothing is allocated beyond what the writer hands out.
+    /// The bytes are those of <see cref="GetSvgString(QRCodeData, in SymbolImageOptions)"/>, and once warm nothing is allocated beyond what the writer hands out.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> or <paramref name="writer"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels.</exception>
@@ -81,7 +81,7 @@ public static class SymbolImageWriter
     /// <param name="writer">Where to write the bytes.</param>
     /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <remarks>
-    /// The bytes are those of <see cref="GetSvgString(MicroQRCodeData, in SymbolImageOptions)"/>, and nothing is allocated beyond what the writer hands out.
+    /// The bytes are those of <see cref="GetSvgString(MicroQRCodeData, in SymbolImageOptions)"/>, and once warm nothing is allocated beyond what the writer hands out.
     /// </remarks>
     public static int WriteSvg(MicroQRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = default)
     {
@@ -97,7 +97,7 @@ public static class SymbolImageWriter
     /// <param name="writer">Where to write the bytes.</param>
     /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <remarks>
-    /// The bytes are those of <see cref="GetSvgString(RmQRCodeData, in SymbolImageOptions)"/>, and nothing is allocated beyond what the writer hands out.
+    /// The bytes are those of <see cref="GetSvgString(RmQRCodeData, in SymbolImageOptions)"/>, and once warm nothing is allocated beyond what the writer hands out.
     /// </remarks>
     public static int WriteSvg(RmQRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = default)
     {
@@ -117,7 +117,8 @@ public static class SymbolImageWriter
     /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The file.</returns>
     /// <remarks>
-    /// Black on white is greyscale. Any other pair is a two-colour palette, with the transparency of a colour whose alpha is below 255.
+    /// Black on white is greyscale. Any other pair is a two-colour palette, the dark colour painted over the light one as in the SVG.
+    /// The palette carries transparency when the light colour's alpha is below 255.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, or the file longer than the largest array.</exception>
@@ -156,7 +157,7 @@ public static class SymbolImageWriter
     /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The number of bytes written.</returns>
     /// <remarks>
-    /// The bytes are those of <see cref="GetPngBytes(QRCodeData, in SymbolImageOptions)"/>. The writer is asked for exactly their length, and nothing else is allocated.
+    /// The bytes are those of <see cref="GetPngBytes(QRCodeData, in SymbolImageOptions)"/>. The writer is asked for exactly their length, and once warm nothing else is allocated.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> or <paramref name="writer"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, or the file longer than the largest array.</exception>
@@ -174,7 +175,7 @@ public static class SymbolImageWriter
     /// <param name="writer">Where to write the bytes.</param>
     /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <remarks>
-    /// The bytes are those of <see cref="GetPngBytes(MicroQRCodeData, in SymbolImageOptions)"/>. The writer is asked for exactly their length, and nothing else is allocated.
+    /// The bytes are those of <see cref="GetPngBytes(MicroQRCodeData, in SymbolImageOptions)"/>. The writer is asked for exactly their length, and once warm nothing else is allocated.
     /// </remarks>
     public static int WritePng(MicroQRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = default)
     {
@@ -190,7 +191,7 @@ public static class SymbolImageWriter
     /// <param name="writer">Where to write the bytes.</param>
     /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <remarks>
-    /// The bytes are those of <see cref="GetPngBytes(RmQRCodeData, in SymbolImageOptions)"/>. The writer is asked for exactly their length, and nothing else is allocated.
+    /// The bytes are those of <see cref="GetPngBytes(RmQRCodeData, in SymbolImageOptions)"/>. The writer is asked for exactly their length, and once warm nothing else is allocated.
     /// </remarks>
     public static int WritePng(RmQRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = default)
     {
@@ -254,9 +255,9 @@ public static class SymbolImageWriter
     /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns><c>false</c> only when <paramref name="destination"/> is too short, in which case nothing is written.</returns>
     /// <remarks>
-    /// Alpha is not premultiplied, and <see cref="PixelLayout.Rgb888x"/>'s fourth byte is 255.
-    /// <see cref="PixelLayout.Gray8"/> holds each colour's luminance as the decoders compute it: an alpha below 255 composited over white,
-    /// then BT.601 weights. A Gray8 buffer is the luminance input the decoders' <c>TryDecodeImage</c> calls take.
+    /// Alpha is not premultiplied. <see cref="PixelLayout.Gray8"/> and <see cref="PixelLayout.Rgb888x"/> have no alpha, so they hold each colour
+    /// composited over white, and Rgb888x's fourth byte is 255. Gray8 then holds its luminance with BT.601 weights, as the decoders compute it,
+    /// so a Gray8 buffer is the luminance input the decoders' <c>TryDecodeImage</c> calls take.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the four, or the buffer would be longer than the largest array.</exception>
@@ -307,29 +308,31 @@ public static class SymbolImageWriter
     /// Each character shows two modules, one above the other: a space, U+2580 (upper half), U+2584 (lower half) or U+2588 (both).
     /// A monospace font's cell is about twice as tall as it is wide, so the halves are close to square. The text carries no colour
     /// escapes, and the quiet zone is the one the symbol was made with.
+    /// The console has to show those three characters. A Windows console on a Chinese, Japanese or Korean code page prints some of them
+    /// as <c>?</c>, so set <c>Console.OutputEncoding</c> to UTF-8 first.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    public static string GetText(QRCodeData data, bool invert = false)
+    public static string GetTerminalText(QRCodeData data, bool invert = false)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
         return HalfBlockText.Get(new StandardQrMatrixView(data), invert);
     }
 
-    /// <inheritdoc cref="GetText(QRCodeData, bool)"/>
+    /// <inheritdoc cref="GetTerminalText(QRCodeData, bool)"/>
     /// <param name="data">The Micro QR code.</param>
     /// <param name="invert"><c>false</c> draws the dark modules, for a terminal with a light background. <c>true</c> draws the light modules, for a dark background.</param>
-    public static string GetText(MicroQRCodeData data, bool invert = false)
+    public static string GetTerminalText(MicroQRCodeData data, bool invert = false)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
         return HalfBlockText.Get(new MicroQRMatrixView(data), invert);
     }
 
-    /// <inheritdoc cref="GetText(QRCodeData, bool)"/>
+    /// <inheritdoc cref="GetTerminalText(QRCodeData, bool)"/>
     /// <param name="data">The rMQR code.</param>
     /// <param name="invert"><c>false</c> draws the dark modules, for a terminal with a light background. <c>true</c> draws the light modules, for a dark background.</param>
-    public static string GetText(RmQRCodeData data, bool invert = false)
+    public static string GetTerminalText(RmQRCodeData data, bool invert = false)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));

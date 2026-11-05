@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 
 namespace FeatherQR.Internals.ImageWriters;
 
@@ -7,9 +8,11 @@ namespace FeatherQR.Internals.ImageWriters;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The colours go in straight: alpha is not premultiplied, and <see cref="PixelLayout.Rgb888x"/>'s fourth byte is 255.
-/// <see cref="PixelLayout.Gray8"/> holds each colour's luminance the way the decoders compute it from an RGBA buffer: an alpha below 255
-/// composited over white, then BT.601 weights of 77, 150 and 29 over 256. So a Gray8 buffer and the decoders' reading of the RGBA one agree.
+/// A dark pixel is the dark colour painted over the light one, as the SVG paints its path over its background.
+/// <see cref="PixelLayout.Rgba8888"/> and <see cref="PixelLayout.Bgra8888"/> carry each colour straight, alpha not premultiplied.
+/// <see cref="PixelLayout.Gray8"/> and <see cref="PixelLayout.Rgb888x"/> have no alpha, so they hold each colour composited over white,
+/// as the decoders read a transparent pixel, and Rgb888x's fourth byte is 255. Gray8 then weighs the channels 77, 150 and 29 over 256 (BT.601).
+/// So a Gray8 buffer equals the decoders' reading of the Rgba8888 and Rgb888x ones.
 /// </para>
 /// <para>
 /// The first pixel row of each module row is written from the runs of the stored module bits, and the module's other rows are copies of it.
@@ -23,7 +26,10 @@ internal static class PixelWriter
         var bytesPerPixel = BytesPerPixel(layout);
         ImageSize.ThrowIfTooLarge(in view, in options);
         long pixels = options.ModulePixelSize;
-        var length = view.Width * pixels * view.Height * pixels * bytesPerPixel;
+        // Each side fits an int, so the pixel count fits a long, but four bytes a pixel can wrap it.
+        var pixelCount = view.Width * pixels * view.Height * pixels;
+        ImageSize.ThrowIfLongerThanAnArray(pixelCount, in options);
+        var length = pixelCount * bytesPerPixel;
         ImageSize.ThrowIfLongerThanAnArray(length, in options);
         return (int)length;
     }
@@ -44,7 +50,7 @@ internal static class PixelWriter
         width = view.Width * pixels;
         height = view.Height * pixels;
         var rowBytes = width * bytesPerPixel;
-        var dark = Pixel(options.DarkColor, layout);
+        var dark = Pixel(options.DarkColor.Over(options.LightColor), layout);
         var light = Pixel(options.LightColor, layout);
         var quietZone = (view.Width - view.CoreWidth) / 2;
         var coreWidth = view.CoreWidth;
@@ -91,35 +97,43 @@ internal static class PixelWriter
         _ => throw new ArgumentOutOfRangeException(nameof(layout), $"Pixel layout {(int)layout} is not one of the four defined."),
     };
 
-    /// <summary>One pixel's bytes in their order in memory, the first in the low byte.</summary>
+    /// <summary>One pixel's bytes as they lie in memory, read as a native word. Gray8's one byte is the low byte.</summary>
     private static uint Pixel(SymbolColor color, PixelLayout layout) => layout switch
     {
-        PixelLayout.Gray8 => Luminance(color),
-        PixelLayout.Rgba8888 => (uint)(color.R | color.G << 8 | color.B << 16 | color.A << 24),
-        PixelLayout.Bgra8888 => (uint)(color.B | color.G << 8 | color.R << 16 | color.A << 24),
-        _ => (uint)(color.R | color.G << 8 | color.B << 16 | 255 << 24),
+        PixelLayout.Gray8 => Luminance(OverWhite(color)),
+        PixelLayout.Rgba8888 => InMemoryOrder(color.R, color.G, color.B, color.A),
+        PixelLayout.Bgra8888 => InMemoryOrder(color.B, color.G, color.R, color.A),
+        _ => Rgb888x(OverWhite(color)),
     };
 
-    private static byte Luminance(SymbolColor color)
+    private static uint Rgb888x(SymbolColor color) => InMemoryOrder(color.R, color.G, color.B, 255);
+
+    // The word is stored as a native uint, so a big-endian machine needs it reversed to keep the first byte first.
+    private static uint InMemoryOrder(byte first, byte second, byte third, byte fourth)
     {
-        int r = color.R, g = color.G, b = color.B, a = color.A;
-        if (a != 255)
-        {
-            r = (r * a + 255 * (255 - a)) / 255;
-            g = (g * a + 255 * (255 - a)) / 255;
-            b = (b * a + 255 * (255 - a)) / 255;
-        }
-        return (byte)((77 * r + 150 * g + 29 * b) >> 8);
+        var littleEndian = (uint)(first | second << 8 | third << 16 | fourth << 24);
+        return BitConverter.IsLittleEndian ? littleEndian : BinaryPrimitives.ReverseEndianness(littleEndian);
+    }
+
+    private static byte Luminance(SymbolColor color) => (byte)((77 * color.R + 150 * color.G + 29 * color.B) >> 8);
+
+    // A layout with no alpha shows the colour as it looks over white, so a transparent colour is white and not its bare channels.
+    private static SymbolColor OverWhite(SymbolColor color)
+    {
+        int a = color.A;
+        if (a == 255)
+            return color;
+        return new SymbolColor(
+            (byte)((color.R * a + 255 * (255 - a)) / 255),
+            (byte)((color.G * a + 255 * (255 - a)) / 255),
+            (byte)((color.B * a + 255 * (255 - a)) / 255));
     }
 
     private static void Fill(Span<byte> span, uint pixel, int bytesPerPixel)
     {
         if (bytesPerPixel == 1)
-        {
             span.Fill((byte)pixel);
-            return;
-        }
-        for (var i = 0; i < span.Length; i += 4)
-            BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(i), pixel);
+        else
+            MemoryMarshal.Cast<byte, uint>(span).Fill(pixel);
     }
 }

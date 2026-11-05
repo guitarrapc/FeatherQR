@@ -252,12 +252,12 @@ public class SymbolImageWriterSvgTest
     }
 
     /// <summary>
-    /// The width and height in pixels have to fit an <c>int</c>. The largest quiet zone takes the side past 20,000 modules, so the limit is in reach.
+    /// The width and height in pixels have to fit an <c>int</c>. The module size has no other bound, so any symbol reaches the limit.
     /// </summary>
     [Test]
     public async Task PixelSide_PastAnInt_Throws_AndUpToItIsWritten()
     {
-        var qr = QRCodeGenerator.Create("1", QREccLevel.L, new QRCodeGeneratorOptions { Version = 40, QuietZoneSize = 10_000 });
+        var qr = QRCodeGenerator.Create("1", QREccLevel.L, new QRCodeGeneratorOptions { Version = 40 });
         var largest = int.MaxValue / qr.Size;
 
         var root = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModulePixelSize = largest })).Root!;
@@ -265,7 +265,8 @@ public class SymbolImageWriterSvgTest
 
         var refused = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModulePixelSize = largest + 1 }));
         await Assert.That(refused.ParamName).IsEqualTo("options");
-        await Assert.That(() => SymbolImageWriter.WriteSvg(qr, new ArrayBufferWriter<byte>(), new SymbolImageOptions { ModulePixelSize = largest + 1 })).Throws<ArgumentOutOfRangeException>();
+        var written = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.WriteSvg(qr, new ArrayBufferWriter<byte>(), new SymbolImageOptions { ModulePixelSize = largest + 1 }));
+        await Assert.That(written.ParamName).IsEqualTo("options");
     }
 
     // ---- the reader ---------------------------------------------------------------------

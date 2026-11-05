@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.IO.Compression;
+using System.Reflection;
 using System.Text;
 using FeatherQR.Internals;
 using FeatherQR.Internals.ImageWriters;
@@ -114,17 +116,84 @@ public class SymbolImageWriterPngTest
         await AssertPng(png, Grid.Of(qr), 8, Black, clear);
     }
 
+    /// <summary>
+    /// The dark colour is painted over the light one, as the SVG paints its path over its background.
+    /// Half-transparent black over opaque white is opaque grey 127, so the file needs no transparency.
+    /// </summary>
     [Test]
-    public async Task PartlyTransparentDark_CarriesItsAlphaAlone()
+    public async Task PartlyTransparentDark_IsPaintedOverTheLightColor()
     {
         var shade = new SymbolColor(0, 0, 0, 128);
         var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         var png = SymbolImageWriter.GetPngBytes(micro, new SymbolImageOptions { DarkColor = shade });
         var chunks = Chunks(png);
 
-        await Assert.That(chunks.Select(c => c.Type)).IsEquivalentTo(new[] { "IHDR", "PLTE", "tRNS", "IDAT", "IEND" }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
-        await Assert.That(chunks[2].Data).IsEquivalentTo(new byte[] { 128 }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
-        await AssertPng(png, Grid.Of(micro), 8, shade, White);
+        await Assert.That(chunks.Select(c => c.Type)).IsEquivalentTo(new[] { "IHDR", "PLTE", "IDAT", "IEND" }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(chunks[1].Data).IsEquivalentTo(new byte[] { 127, 127, 127, 255, 255, 255 }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await AssertPng(png, Grid.Of(micro), 8, new SymbolColor(127, 127, 127), White);
+    }
+
+    /// <summary>A fully transparent dark colour paints nothing over the light one, so the image is the light colour alone, as the SVG is.</summary>
+    [Test]
+    public async Task TransparentDark_LeavesTheLightColorAlone()
+    {
+        var navy = new SymbolColor(0x1E, 0x3A, 0x8A);
+        var qr = QRCodeGenerator.Create("knockout", QREccLevel.M);
+        var png = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { DarkColor = new SymbolColor(0, 0, 0, 0), LightColor = navy });
+        var chunks = Chunks(png);
+
+        await Assert.That(chunks.Select(c => c.Type)).IsEquivalentTo(new[] { "IHDR", "PLTE", "IDAT", "IEND" }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await AssertPng(png, Grid.Of(qr), 8, navy, navy);
+    }
+
+    /// <summary>Over a translucent light colour the painted dark colour keeps an alpha, so both entries carry one.</summary>
+    [Test]
+    public async Task TranslucentDarkOverTranslucentLight_CarriesBothAlphas()
+    {
+        var dark = new SymbolColor(0x1E, 0x3A, 0x8A, 200);
+        var light = new SymbolColor(0xFF, 0xF8, 0xE7, 51);
+        var painted = Over(dark, light);
+        var qr = QRCodeGenerator.Create("translucent", QREccLevel.M);
+        var png = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { DarkColor = dark, LightColor = light });
+        var chunks = Chunks(png);
+
+        await Assert.That(chunks[2].Type).IsEqualTo("tRNS");
+        await Assert.That(chunks[2].Data).IsEquivalentTo(new byte[] { painted.A, 51 }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await AssertPng(png, Grid.Of(qr), 8, painted, light);
+    }
+
+    /// <summary>
+    /// A transparent dark colour over a translucent light one leaves the light colour, its alpha included.
+    /// Over a transparent light colour nothing is painted at all, the one case where the blend has no weight to divide by.
+    /// </summary>
+    [Test]
+    public async Task TransparentDark_OverATranslucentOrTransparentLight()
+    {
+        var clear = new SymbolColor(0, 0, 0, 0);
+        var qr = QRCodeGenerator.Create("translucent", QREccLevel.M);
+
+        var light = new SymbolColor(0xFF, 0xF8, 0xE7, 51);
+        var chunks = Chunks(SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { DarkColor = clear, LightColor = light }));
+        await Assert.That(chunks[1].Data).IsEquivalentTo(new byte[] { 0xFF, 0xF8, 0xE7, 0xFF, 0xF8, 0xE7 }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(chunks[2].Data).IsEquivalentTo(new byte[] { 51, 51 }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+
+        var none = new SymbolColor(255, 255, 255, 0);
+        var png = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { DarkColor = clear, LightColor = none });
+        await Assert.That(Chunks(png)[2].Data).IsEquivalentTo(new byte[] { 0, 0 }, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await AssertPng(png, Grid.Of(qr), 8, clear, none);
+    }
+
+    /// <summary>
+    /// Straight-alpha source over, written here from its definition: alpha a = at + ab (1 - at), and each channel (ct at + cb ab (1 - at)) / a,
+    /// each rounded half up. It is worked in integers scaled by 255², since floating point can land a value that is exactly halfway just below it.
+    /// </summary>
+    internal static SymbolColor Over(SymbolColor top, SymbolColor bottom)
+    {
+        long weightTop = top.A * 255L, weightBottom = bottom.A * (255L - top.A), alpha = weightTop + weightBottom;
+        if (alpha == 0)
+            return top;
+        byte Channel(byte t, byte b) => (byte)((2 * (t * weightTop + b * weightBottom) + alpha) / (2 * alpha));
+        return new SymbolColor(Channel(top.R, bottom.R), Channel(top.G, bottom.G), Channel(top.B, bottom.B), (byte)((2 * alpha + 255) / 510));
     }
 
     // ---- the deflate stream -------------------------------------------------------------
@@ -146,14 +215,31 @@ public class SymbolImageWriterPngTest
 
     /// <summary>
     /// The writing pass replays the symbols the counting pass recorded, up to 2^20 entries, and matches the image again past that.
-    /// Random modules at one pixel make almost every byte a literal, so 4,096 × 2,100 modules (about 1.07 million bytes) passes the record.
+    /// Random modules at one pixel make almost every byte a literal, so 4,096 × 2,100 modules (1,077,300 bytes) pass the record.
+    /// Both passes write the same bytes, so the encoder this thread keeps is read to tell which one ran, with a small image as the control.
     /// </summary>
     [Test]
     public async Task MoreSymbolsThanTheRecordHolds_AreMatchedAgain()
     {
+        var small = Grid.Random(64, 64, seed: 20);
+        PngWriter.GetBytes(new SyntheticView(small), new SymbolImageOptions { ModulePixelSize = 1 });
+        var smallReplayed = LastRecordWasComplete();
+
         var grid = Grid.Random(4096, 2100, seed: 20);
         var png = PngWriter.GetBytes(new SyntheticView(grid), new SymbolImageOptions { ModulePixelSize = 1 });
+        var replayed = LastRecordWasComplete();
+
+        await Assert.That(smallReplayed).IsTrue();
+        await Assert.That(replayed).IsFalse();
         await AssertPng(png, grid, 1, Black, White);
+    }
+
+    // Read before any await, since the encoder is kept per thread.
+    private static bool LastRecordWasComplete()
+    {
+        const BindingFlags Private = BindingFlags.NonPublic;
+        var encoder = typeof(PngEncoder).GetField("cached", Private | BindingFlags.Static)!.GetValue(null)!;
+        return (bool)typeof(PngEncoder).GetField("_recordComplete", Private | BindingFlags.Instance)!.GetValue(encoder)!;
     }
 
     /// <summary>
@@ -254,7 +340,46 @@ public class SymbolImageWriterPngTest
 
         var refused = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetPngBytes(qr, options));
         await Assert.That(refused.ParamName).IsEqualTo("options");
-        await Assert.That(() => SymbolImageWriter.WritePng(qr, new ArrayBufferWriter<byte>(), options)).Throws<ArgumentOutOfRangeException>();
+        var written = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.WritePng(qr, new ArrayBufferWriter<byte>(), options));
+        await Assert.That(written.ParamName).IsEqualTo("options");
+    }
+
+    /// <summary>
+    /// A match costs at least two bits for at most 258 bytes. Version 1 at 150,000 pixels a module has 2.37e12 bytes of scanlines,
+    /// which even at that rate is longer than an array, and counting its symbols to find out takes minutes.
+    /// So a refusal within seconds proves it came before the count.
+    /// </summary>
+    [Test]
+    public async Task FileLongerThanAnArray_IsRefusedBeforeItIsCounted()
+    {
+        var qr = QRCodeGenerator.Create("1", QREccLevel.L, new QRCodeGeneratorOptions { Version = 1 });
+        var options = new SymbolImageOptions { ModulePixelSize = 150_000 };
+
+        var clock = Stopwatch.StartNew();
+        var refused = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetPngBytes(qr, options));
+        var written = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.WritePng(qr, new ArrayBufferWriter<byte>(), options));
+        clock.Stop();
+
+        await Assert.That(refused.ParamName).IsEqualTo("options");
+        await Assert.That(written.ParamName).IsEqualTo("options");
+        await Assert.That(clock.Elapsed).IsLessThan(TimeSpan.FromSeconds(10));
+    }
+
+    /// <summary>
+    /// A side within 7 pixels of <see cref="int.MaxValue"/> passes the side check, and rounding it up to whole bytes adds 7.
+    /// Version 2 with the default quiet zone is 33 modules, and 33 × 65,075,262 is 2,147,483,646.
+    /// </summary>
+    [Test]
+    public async Task PixelSide_JustUnderAnInt_IsRefusedOnTheOptions()
+    {
+        var qr = QRCodeGenerator.Create("1", QREccLevel.L, new QRCodeGeneratorOptions { Version = 2 });
+        await Assert.That(qr.Size).IsEqualTo(33);
+        var options = new SymbolImageOptions { ModulePixelSize = 65_075_262 };
+
+        var refused = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetPngBytes(qr, options));
+        await Assert.That(refused.ParamName).IsEqualTo("options");
+        var written = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.WritePng(qr, new ArrayBufferWriter<byte>(), options));
+        await Assert.That(written.ParamName).IsEqualTo("options");
     }
 
     // ---- the reader ---------------------------------------------------------------------
@@ -321,7 +446,7 @@ public class SymbolImageWriterPngTest
         await Assert.That(inflated.Length).IsEqualTo(expected.LongLength);
         await Assert.That(inflated.ToArray().AsSpan().SequenceEqual(expected)).IsTrue().Because("the inflated scanlines are the module rows, filter 0, light padding");
 
-        // SkiaSharp reads the whole file; one pixel a module is compared, at its centre.
+        // SkiaSharp reads the whole file. One pixel a module is compared, at its centre.
         using var bitmap = SKBitmap.Decode(png, new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul));
         await Assert.That(bitmap).IsNotNull();
         var rgba = bitmap!.GetPixelSpan();

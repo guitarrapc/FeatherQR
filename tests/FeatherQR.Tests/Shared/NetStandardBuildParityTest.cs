@@ -937,14 +937,14 @@ public class NetStandardBuildParityTest
         var colorType = build.GetType("FeatherQR.SymbolColor", throwOnError: true)!;
         var getSvg = writer.GetMethod("GetSvgString", [dataType, optionsType.MakeByRefType()])!;
         var getPng = writer.GetMethod("GetPngBytes", [dataType, optionsType.MakeByRefType()])!;
-        var getText = writer.GetMethod("GetText", [dataType, typeof(bool)])!;
+        var getText = writer.GetMethod(nameof(SymbolImageWriter.GetTerminalText), [dataType, typeof(bool)])!;
         foreach (var invert in new[] { false, true })
         {
             var hostText = host switch
             {
-                QRCodeData qr => SymbolImageWriter.GetText(qr, invert),
-                MicroQRCodeData micro => SymbolImageWriter.GetText(micro, invert),
-                RmQRCodeData rm => SymbolImageWriter.GetText(rm, invert),
+                QRCodeData qr => SymbolImageWriter.GetTerminalText(qr, invert),
+                MicroQRCodeData micro => SymbolImageWriter.GetTerminalText(micro, invert),
+                RmQRCodeData rm => SymbolImageWriter.GetTerminalText(rm, invert),
                 _ => throw new ArgumentException(symbology),
             };
             await Assert.That((string)getText.Invoke(null, [loaded, invert])!).IsEqualTo(hostText);

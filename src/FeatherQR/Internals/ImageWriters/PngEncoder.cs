@@ -33,7 +33,7 @@ internal sealed class PngEncoder
     // A run-length coded code length: the code-length symbol in the low byte, its extra bits above.
     private readonly int[] _lengthRuns = new int[Deflate.LiteralLengthSymbols + Deflate.DistanceSymbols];
 
-    // The geometry of the current image.
+    // Set by Measure and read by Write, which must write the file Measure sized.
     private int _pixels;
     private int _quietZone;
     private int _coreWidth;
@@ -87,26 +87,29 @@ internal sealed class PngEncoder
 
     private bool Greyscale => _dark == new SymbolColor(0, 0, 0) && _light == new SymbolColor(255, 255, 255);
 
-    private int TransparencyLength => _light.A != 255 ? 2 : _dark.A != 255 ? 1 : 0;
+    // The dark colour is painted over the light one, so it can have an alpha only when the light colour has one.
+    private bool Transparent => _light.A != 255;
 
     /// <summary>Counts the image's symbols, builds the codes from them, and returns the length of the file.</summary>
     public int Measure<TView>(in TView view, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
         _pixels = options.ModulePixelSize;
-        _dark = options.DarkColor;
+        _dark = options.DarkColor.Over(options.LightColor);
         _light = options.LightColor;
         _quietZone = (view.Width - view.CoreWidth) / 2;
         _coreWidth = view.CoreWidth;
         _coreHeight = view.CoreHeight;
         _moduleRows = view.Height;
         _widthPixels = view.Width * _pixels;
-        _stride = (_widthPixels + 7) / 8 + 1;
+        // In a long, since a width within 7 of int.MaxValue passes the side check.
+        _stride = (int)((_widthPixels + 7L) / 8) + 1;
         _rowCopies = _stride <= Deflate.MaxDistance;
 
-        // A symbol covers at most 258 bytes and costs at least a bit, which bounds the output from below before anything is counted.
+        // A match covers at most 258 bytes and costs at least two bits, a length code and a distance code. A literal costs at least a bit for one byte.
+        // That bounds the output from below before anything is counted.
         var rawLength = (long)_stride * view.Height * _pixels;
-        ImageSize.ThrowIfLongerThanAnArray(rawLength / (Deflate.MaxMatch * 8), in options);
+        ImageSize.ThrowIfLongerThanAnArray(rawLength * 2 / (Deflate.MaxMatch * 8), in options);
 
         Array.Clear(_literalCounts, 0, _literalCounts.Length);
         Array.Clear(_distanceCounts, 0, _distanceCounts.Length);
@@ -157,7 +160,7 @@ internal sealed class PngEncoder
 
         var deflateLength = (bits + 7) / 8;
         // Signature, IHDR, PLTE and tRNS when used, IDAT with the zlib header and Adler-32, IEND.
-        var length = 8 + 25 + (Greyscale ? 0 : 12 + 6) + (TransparencyLength == 0 ? 0 : 12 + TransparencyLength) + 12 + 2 + deflateLength + 4 + 12;
+        var length = 8 + 25 + (Greyscale ? 0 : 12 + 6) + (Transparent ? 12 + 2 : 0) + 12 + 2 + deflateLength + 4 + 12;
         ImageSize.ThrowIfLongerThanAnArray(length, in options);
         _deflateLength = (int)deflateLength;
         return (int)length;
@@ -194,13 +197,11 @@ internal sealed class PngEncoder
             EndChunk(png, ref position, palette);
         }
 
-        var transparency = TransparencyLength;
-        if (transparency != 0)
+        if (Transparent)
         {
-            var alphas = BeginChunk(png, ref position, "tRNS"u8, transparency);
+            var alphas = BeginChunk(png, ref position, "tRNS"u8, 2);
             png[position++] = _dark.A;
-            if (transparency == 2)
-                png[position++] = _light.A;
+            png[position++] = _light.A;
             EndChunk(png, ref position, alphas);
         }
 
