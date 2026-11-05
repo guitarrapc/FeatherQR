@@ -203,23 +203,27 @@ var qrData = QRCodeGenerator.Create("https://example.com", QREccLevel.M, new QRC
 
 ## API Overview
 
-Start with an image builder for most applications. All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers.
+Start with an image builder for most applications. All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers. Every method that writes an image to a `Stream` has an `...Async` twin, and the decoders read an encoded image from a `Stream` asynchronously or not. See [Async and stream I/O](#async-and-stream-io).
 
-| Task | Standard QR | Micro QR | rMQR |
+`FeatherQR` covers plain images, no styling beyond dark and light modules.
+
+| Format | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
-| Write SVG, PNG, raw pixels, or terminal text with no other package | `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
-| Create styled PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
+| SVG, PNG (1-bit), raw pixels (`Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`), or terminal text | `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
+
+`FeatherQR.SkiaSharp` covers styled images, icons and additional formats beyond plain images.
+
+| Format | Standard QR | Micro QR | rMQR |
+| --- | --- | --- | --- |
+| Styled PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
 | Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
 | Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 | Decode every symbol of an image, whatever its symbology | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
 
-Every method that writes an image to a `Stream` has an `...Async` twin, and the decoders read an encoded image from a `Stream`, asynchronously or not. See [Async and stream I/O](#async-and-stream-io).
+### Image Writing (Simple)
 
-
-### Images without SkiaSharp
-
-`SymbolImageWriter` writes `QRCodeData`, `MicroQRCodeData`, and `RmQRCodeData` as SVG, PNG, raw pixels, or text for a terminal, with nothing but the `FeatherQR` package. Every module is a sharp square of `ModulePixelSize` pixels (8 by default), the quiet zone is the one the symbol was made with, and the same symbol gives the same bytes on every target framework.
+`SymbolImageWriter` writes `QRCodeData`, `MicroQRCodeData`, and `RmQRCodeData` as SVG, PNG, raw pixels, or text for a terminal, using only the `FeatherQR` package. Every module is a sharp square of `ModulePixelSize` pixels (8 by default), the quiet zone is the one the symbol was made with, and the same symbol gives the same bytes on every target framework.
 
 ```csharp
 using FeatherQR;
@@ -252,9 +256,9 @@ var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Bgra8
 SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, out var width, out var height);
 ```
 
-PNG output is 1-bit: greyscale for black on white, and a two-color palette otherwise. For module shapes, gradients, icons, JPEG, WebP, or an image of a set size in pixels, use an image builder.
+PNG output is 1-bit: greyscale for black on white, and a two-color palette otherwise. For module shapes, gradients, icons, JPEG, WebP, or an image of a set size in pixels, use an image builder. [Image output by package](#image-output-by-package) compares the two.
 
-### Image Builders (Recommended)
+### Image Builders
 
 Image builders render through SkiaSharp and provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Every symbology supports custom finder patterns, icons are Standard QR only. See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
 
