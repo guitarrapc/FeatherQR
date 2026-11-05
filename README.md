@@ -123,7 +123,7 @@ The playground runs the actual library compiled to WebAssembly (GitHub Pages, fu
 
 ### Simplest Example
 
-Single line QR code generation, You can output PNG with the core package alone, see [Images without SkiaSharp](#images-without-skiasharp).
+Single line QR code generation, You can output PNG with the core package alone, see [Image Writing (Simple)](#image-writing-simple).
 
 ```csharp
 using FeatherQR;
@@ -205,21 +205,23 @@ var qrData = QRCodeGenerator.Create("https://example.com", QREccLevel.M, new QRC
 
 Start with an image builder for most applications. All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers. Every method that writes an image to a `Stream` has an `...Async` twin, and the decoders read an encoded image from a `Stream` asynchronously or not. See [Async and stream I/O](#async-and-stream-io).
 
-`FeatherQR` covers plain images, no styling beyond dark and light modules.
+`FeatherQR` generates and decodes the symbols, and writes plain images, with no styling beyond dark and light modules.
 
-| Format | Standard QR | Micro QR | rMQR |
+| What | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
-| SVG, PNG (1-bit), raw pixels (`Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`), or terminal text | `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
-
-`FeatherQR.SkiaSharp` covers styled images, icons and additional formats beyond plain images.
-
-| Format | Standard QR | Micro QR | rMQR |
-| --- | --- | --- | --- |
-| Styled PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
+| Write SVG, PNG (1-bit), raw pixels (`Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`), or terminal text | `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
+| Decode a matrix or grayscale pixels | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
+| Decode every symbol of grayscale pixels, whatever its symbology | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
+
+`FeatherQR.SkiaSharp` adds styled images, icons and more formats, drawing on an `SKCanvas`, and decoding of `SKBitmap`s and image files.
+
+| What | Standard QR | Micro QR | rMQR |
+| --- | --- | --- | --- |
+| Create styled PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
 | Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
-| Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
-| Decode every symbol of an image, whatever its symbology | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
+| Decode an `SKBitmap` or an image file | `QRCodeImageDecoder` | `MicroQRCodeImageDecoder` | `RmQRCodeImageDecoder` |
+| Decode every symbol of an `SKBitmap` or an image file, whatever its symbology | `SymbolImageDecoder` | `SymbolImageDecoder` | `SymbolImageDecoder` |
 
 ### Image Writing (Simple)
 
@@ -230,6 +232,7 @@ using FeatherQR;
 
 var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
 
+// The writer keeps the quiet zone of the symbol it is writing.
 File.WriteAllText("qrcode.svg", SymbolImageWriter.GetSvgString(qr));
 File.WriteAllBytes("qrcode.png", SymbolImageWriter.GetPngBytes(qr));
 Console.Write(SymbolImageWriter.GetText(qr));                // dark modules drawn, for a light terminal
@@ -247,6 +250,10 @@ var options = new SymbolImageOptions
 };
 var svg = SymbolImageWriter.GetSvgString(qr, options);
 var png = SymbolImageWriter.GetPngBytes(qr, options);
+
+// Create a symbol with no quiet zone.
+var noMargin = new QRCodeData(qr.GetRawData(), quietZoneSize: 0);
+var svgNoMargin = SymbolImageWriter.GetSvgString(noMargin);
 ```
 
 `WriteSvg` and `WritePng` write into an `IBufferWriter<byte>` without allocating. `TryWritePixels` writes raw pixels into your buffer, as `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x`, with the rows packed. A `Gray8` buffer goes straight into the decoders' `TryDecodeImage`.
@@ -256,7 +263,7 @@ var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Bgra8
 SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, out var width, out var height);
 ```
 
-PNG output is 1-bit: greyscale for black on white, and a two-color palette otherwise. For module shapes, gradients, icons, JPEG, WebP, or an image of a set size in pixels, use an image builder. [Image output by package](#image-output-by-package) compares the two.
+PNG output is 1-bit: greyscale for black on white, and a two-color palette otherwise. For module shapes, gradients, icons, JPEG, WebP, or an image of a set size in pixels, use an image builder. [API Overview](#api-overview) lists what each package writes.
 
 ### Image Builders
 
