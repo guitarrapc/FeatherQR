@@ -161,7 +161,7 @@ SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, out int width
 | C2 | Formats | Decided 2026-11-05: SVG, PNG, text for a terminal and a raw pixel buffer. The rest are Out under Scope, each with its reason |
 | C3 | Where the calls live, and their names | Decided 2026-11-05: one static `SymbolImageWriter` with seven calls per data type, and no new members on the data types (Design, "Where the calls live"). The renderer's PNG (Skia at a target size) and this one (sharp 1-bit at a module size) differ, and the docs of both say so |
 | C4 | Options and the colour type | Decided 2026-11-05: `SymbolImageOptions` and `SymbolColor` as sketched under Design, "Options and colour". The options are a mutable `record struct` with the offset rule, as the generator options are. The colour is a positional `readonly record struct` of R, G, B and A, with A 255 unless given, since netstandard2.0 has no `System.Drawing.Color`. `SymbolColor` follows the naming rule for a type shared by the three symbologies |
-| C5 | Pixels per module: default and bounds | Decided 2026-11-05: 8 by default: version 1 is 232 pixels square and version 40 1,480. At least 1. No fixed largest: a call whose output would pass the largest array throws `ArgumentOutOfRangeException`. For version 40 with the default quiet zone at four bytes a pixel, that is past 125 pixels a module (125 gives 2,139,062,500 bytes, under the 2,147,483,591 an array holds). PNG and SVG reach their limits much later |
+| C5 | Pixels per module: default and bounds | Decided 2026-11-05: 8 by default: version 1 is 232 pixels square and version 40 1,480. At least 1. No fixed largest: a call whose output would pass the largest array throws `ArgumentOutOfRangeException`. For version 40 with the default quiet zone at four bytes a pixel, that is past 125 pixels a module (125 gives 2,139,062,500 bytes, under the 2,147,483,591 an array holds). Every output also refuses an image side past `int.MaxValue` pixels, which SVG meets first: its size does not grow with the module size, and the largest quiet zone of 10,000 modules brings the side within reach |
 | C6 | SVG path | Decided 2026-11-05: the smallest output that stays fast to write. Phase 0 picked strokes along each horizontal run (Design, SVG). They are 35 to 45 % smaller than filled runs at the same time, and smaller than an outline trace everywhere but version 1 (924 against 859 bytes), where the trace is slower and from version 10 up 3 to 4 times slower. Chromium 152 draws them pixel for pixel like filled runs at every size of 1 px a module and over, and Chrome and Safari on iPhone did the same on the maintainer's devices. `fill="none"` (12 bytes) changed no pixel, so it is not written |
 | C7 | PNG compression | Decided 2026-11-05: our own deflate, nothing from the runtime. The core takes no dependency beyond its own code, and the PNG writer, deflate included, is small enough to write. `DeflateStream` would also make the bytes the host's, since it calls the host's native library. Ours are the same on every target, and any SIMD path must write the same bytes as the scalar one. Stored blocks without compression are not an option: a version 40 symbol at 8 pixels a module is 275,368 bytes stored. Phase 0 picked filter None and matching on the first scanline of each module row only (Design, PNG). A general hash matcher was 4 to 7 times slower, needed a 32 KB window of the image, and was no smaller at 8 px. Dynamic Huffman codes make the output 2 to 4 times smaller than fixed codes from 2 px a module up, at 1.4 to 1.8 times the time, through a counting pass before the writing pass. That broke the one-pass rule and was clearly slower, so it went to the maintainer, who ruled for dynamic codes on 2026-11-05 |
 | C8 | Text | Decided 2026-11-05: half blocks, an `invert` parameter (`false` by default: dark modules filled, for a light background), the data's quiet zone, `\n`. No ANSI escapes and no full-block mode |
@@ -176,10 +176,10 @@ Each phase follows the test-first workflow, regenerates `PublicAPI.approved.txt`
 |---|---|---|---|
 | 0 | Premises | No change to `src`. In a probe, measure C6's three path forms and C7's encoder shapes for bytes and time, with `DeflateStream` as a size yardstick in the probe only. Check the stroked path in three browsers, read half-block text from a screen with an iPhone and an Android phone in light and dark themes, and confirm C5's bound | C6's form and C7's shape picked, and the browser and phone checks pass |
 | 1 | Options, colour and SVG | The option and colour types, the sizing rules and SVG for the three data types | Every version and level of the three symbologies parses back to its own matrix, and a browser shows one of each symbology that a phone reads |
-| 2 | PNG | The PNG writer for the three data types | An independent PNG decoder reads every case back to the matrix at several module sizes and colour pairs, and both readers decode it. The `IBufferWriter<byte>` path allocates nothing beyond its output |
+| 2 | PNG | The PNG writer for the three data types. It reads module rows from the packed matrix, and finding the SVG's runs with bit scans over those rows is measured here too | An independent PNG decoder reads every case back to the matrix at several module sizes and colour pairs, and both readers decode it. The `IBufferWriter<byte>` path allocates nothing beyond its output |
 | 3 | Pixel buffer | The pixel writer and the public `PixelLayout` | Every layout matches the matrix pixel for pixel. The span path allocates nothing |
 | 4 | Text | The text output | The tests pin the glyphs and inversion, and the phone check passes in both themes |
-| 5 | Docs and fold | README section on images without SkiaSharp, `docs/`, the API page, the scope rows in [qrcode-symbologies.md](../specs/qrcode-symbologies.md), then this plan folded into the specs and deleted | The approved API listing carries the calls |
+| 5 | Docs and fold | README section on images without SkiaSharp, `docs/`, the API page, the core package's description (it says rendering lives in `FeatherQR.SkiaSharp`), the scope rows in [qrcode-symbologies.md](../specs/qrcode-symbologies.md), then this plan folded into the specs and deleted | The approved API listing carries the calls |
 
 ## Progress log
 
@@ -253,3 +253,38 @@ Benchmarks: no change to `src`.
 Done. The maintainer ruled C7's last point for dynamic Huffman codes, so every decision from C1 to C10 is ruled. The exit holds: C6's form and C7's shape are picked, and the browser and phone checks passed. Phase 1 starts from the stroked-run SVG and the decided option, colour and writer shapes.
 
 Benchmarks: no change to `src`.
+
+### Phase 1, options, colour and SVG (2026-11-05)
+
+Done. `SymbolImageOptions`, `SymbolColor` and `SymbolImageWriter` with `GetSvgString` and `WriteSvg(IBufferWriter<byte>)` for the three data types, in the shapes C3 and C4 decided. The writer strokes the runs of `ModuleRunEnumerator`, the scan `GetModuleRectangles` and the renderer already share. The approved listing grows from 43 to 46 exported types and is the same on all three targets.
+
+The tests:
+
+- Every version and level of the three symbologies (160 Standard QR, 8 Micro QR, 64 rMQR), and quiet zones of 0, 1 and 25, read back to their own matrix through a path reader of the test's own.
+- The frame and the first two rows of a Micro QR M1 are pinned as text worked by hand.
+- Colours come out in short and long hex, a transparent colour leaves its element out, and the opacity of every alpha from 1 to 254 scales back to its byte.
+- `WriteSvg` appends the UTF-8 of the string and returns its length. Null arguments throw, and so does an image side past `int.MaxValue` pixels.
+- In Release, `WriteSvg` allocates nothing into a writer with room, and `GetSvgString` allocates the string alone.
+- The type-shape rules that named "the three generator options" now name the option structs and cover `SymbolImageOptions`, and the assignment test has its table.
+
+The full suite in Release: 31,307 passed, 401 skipped (the ARM64 tiers on an x64 machine), none failed.
+
+Chromium 152 drew one symbol of each symbology from the writer, and a navy one on a transparent ground, at 1, 2, 4 and 8 px a module, and the core's own image decoder read all 16 captures. The maintainer then read every symbol on the same page with a phone from a screen, so the exit holds and Phase 1 is complete.
+
+Benchmarks, from the new `SymbolSvgWrite`:
+
+| Case | Mean | Allocated |
+|---|---|---|
+| Standard QR v1-2, string | 1.10 µs | 1,912 B |
+| Standard QR v40, string | 76.1 µs | 95,949 B |
+| Standard QR v40, writer | 60.6 µs | 0 B |
+| Micro QR M4, string | 0.72 µs | 1,376 B |
+| rMQR R17x139, string | 5.04 µs | 8,256 B |
+
+The run scan alone, through `TryGetModuleRectangles`, took 29.5 µs of the 60.6 µs at version 40, so the scan and the text are about half each. No existing hot path changed.
+
+Lessons.
+
+- The type-shape tests listed the settable structs as "the three generator options", so a fourth was refused until it was added on purpose, which is what the list is for. The rules now speak of option structs.
+- A version 40 string is about 48,000 characters and lands on the large object heap. The writer form does not allocate it.
+- Two local traps, neither in CI: the listing tool's shell glob picked up a stale `net8.0` build and refused to write the listing, so the three targets were passed by name. Copies of the benchmark project under `output/` stopped the out-of-process benchmark toolchain, so the numbers above were taken in-process.

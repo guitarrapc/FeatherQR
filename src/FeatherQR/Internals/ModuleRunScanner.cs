@@ -4,7 +4,7 @@ namespace FeatherQR.Internals;
 
 /// <summary>
 /// Scans a symbol matrix into merged horizontal runs of dark modules.
-/// This is the single implementation behind both the public <c>GetModuleRectangles</c> family (finder skipping off) and the renderer's merged-run drawing path (finder skipping on when finder patterns are styled separately), so the geometry the public API reports is by construction the geometry the renderer draws.
+/// This is the single implementation behind the public <c>GetModuleRectangles</c> family and the SVG writer (finder skipping off), and the renderer's merged-run drawing path (finder skipping on when finder patterns are styled separately), so the geometry the public API reports is by construction the geometry the renderer draws and the SVG strokes.
 /// </summary>
 internal static class ModuleRunScanner
 {

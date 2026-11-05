@@ -3,8 +3,8 @@ using System.Reflection;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The three generator options can be written three ways, and the three agree: an object
-/// initializer, an assignment after construction, and <c>with</c>.
+/// The three generator options and the image options can be written three ways, and the
+/// three agree: an object initializer, an assignment after construction, and <c>with</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -128,6 +128,22 @@ public class GeneratorOptionsAssignmentTest
             (ref RmQRCodeGeneratorOptions o) => o.Fnc1 = Fnc1Mode.None, new() { Fnc1 = Fnc1Mode.None }, default(RmQRCodeGeneratorOptions) with { Fnc1 = Fnc1Mode.None }),
     ];
 
+    private static readonly SymbolColor Navy = new(0x1E, 0x3A, 0x8A);
+    private static readonly SymbolColor Clear = new(0, 0, 0, 0);
+
+    private static readonly OptionCase<SymbolImageOptions>[] ImageOptions =
+    [
+        new(nameof(SymbolImageOptions.ModulePixelSize),
+            (ref SymbolImageOptions o) => o.ModulePixelSize = 3, new() { ModulePixelSize = 3 }, default(SymbolImageOptions) with { ModulePixelSize = 3 },
+            (ref SymbolImageOptions o) => o.ModulePixelSize = 8, new() { ModulePixelSize = 8 }, default(SymbolImageOptions) with { ModulePixelSize = 8 }),
+        new(nameof(SymbolImageOptions.DarkColor),
+            (ref SymbolImageOptions o) => o.DarkColor = Navy, new() { DarkColor = Navy }, default(SymbolImageOptions) with { DarkColor = Navy },
+            (ref SymbolImageOptions o) => o.DarkColor = new SymbolColor(0, 0, 0), new() { DarkColor = new SymbolColor(0, 0, 0) }, default(SymbolImageOptions) with { DarkColor = new SymbolColor(0, 0, 0) }),
+        new(nameof(SymbolImageOptions.LightColor),
+            (ref SymbolImageOptions o) => o.LightColor = Clear, new() { LightColor = Clear }, default(SymbolImageOptions) with { LightColor = Clear },
+            (ref SymbolImageOptions o) => o.LightColor = new SymbolColor(255, 255, 255), new() { LightColor = new SymbolColor(255, 255, 255) }, default(SymbolImageOptions) with { LightColor = new SymbolColor(255, 255, 255) }),
+    ];
+
     [Test]
     public async Task StandardQr_EveryOption_IsWrittenAlikeByAssignmentInitializerAndWith()
         => await CheckEveryOption(StandardQrOptions, new QRCodeGeneratorOptions
@@ -166,6 +182,15 @@ public class GeneratorOptionsAssignmentTest
             Segmentation = RmQRSegmentation.Single,
             AllowKanji = true,
             Fnc1 = Fnc1Mode.SecondPosition(37),
+        });
+
+    [Test]
+    public async Task ImageOptions_EveryOption_IsWrittenAlikeByAssignmentInitializerAndWith()
+        => await CheckEveryOption(ImageOptions, new SymbolImageOptions
+        {
+            ModulePixelSize = 3,
+            DarkColor = Navy,
+            LightColor = Clear,
         });
 
     private static async Task CheckEveryOption<T>(OptionCase<T>[] cases, T everyOptionSet) where T : struct
@@ -308,6 +333,39 @@ public class GeneratorOptionsAssignmentTest
         await Assert.That(refused.Message).Contains($"Mask pattern must be 0-3, or null for automatic selection, but was {maskPattern}");
     }
 
+    // ---- ModulePixelSize is validated by every route ------------------------------------
+
+    [Test]
+    [Arguments(1)]
+    [Arguments(int.MaxValue)]
+    public async Task ModulePixelSize_FromOne_IsAcceptedByEveryRoute(int modulePixelSize)
+    {
+        // The setter has no upper bound: the largest size depends on the symbol, so the writer checks it.
+        var assigned = new SymbolImageOptions();
+        assigned.ModulePixelSize = modulePixelSize;
+
+        await Assert.That(assigned.ModulePixelSize).IsEqualTo(modulePixelSize);
+        await Assert.That(new SymbolImageOptions { ModulePixelSize = modulePixelSize }).IsEqualTo(assigned);
+        await Assert.That(default(SymbolImageOptions) with { ModulePixelSize = modulePixelSize }).IsEqualTo(assigned);
+    }
+
+    [Test]
+    [Arguments(int.MinValue)]
+    [Arguments(-1)]
+    [Arguments(0)]
+    public async Task ModulePixelSize_BelowOne_IsRefusedByEveryRoute(int modulePixelSize)
+    {
+        await Assert.That(() => new SymbolImageOptions { ModulePixelSize = modulePixelSize }).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => default(SymbolImageOptions) with { ModulePixelSize = modulePixelSize }).Throws<ArgumentOutOfRangeException>();
+
+        var assigned = new SymbolImageOptions { ModulePixelSize = 3 };
+        var refused = Assert.Throws<ArgumentOutOfRangeException>(() => { assigned.ModulePixelSize = modulePixelSize; });
+        // A refused assignment leaves the option as it was.
+        await Assert.That(assigned.ModulePixelSize).IsEqualTo(3);
+        await Assert.That(refused.ParamName).IsEqualTo(nameof(SymbolImageOptions.ModulePixelSize));
+        await Assert.That(refused.Message).Contains($"Module pixel size must be at least 1, but was {modulePixelSize}");
+    }
+
     // ---- QuietZoneSize keeps what it is given -------------------------------------------
 
     [Test]
@@ -356,7 +414,7 @@ public class GeneratorOptionsAssignmentTest
 
         // A copy taken from `Default` is the caller's own, so assigning to it leaves `Default`
         // as it was. That `Default` is a get-only property and not a field is the rule
-        // TypeShapeTest.GeneratorOptions_ExposeNoFieldAndDefaultIsAValue states. The quiet
+        // TypeShapeTest.OptionStructs_ExposeNoFieldAndDefaultIsAValue states. The quiet
         // zone is read as well as compared, for the reason above: 4, 2 and 2 are the defaults.
         var fromDefault = QRCodeGeneratorOptions.Default;
         fromDefault.QuietZoneSize = 0;
