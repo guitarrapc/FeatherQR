@@ -603,7 +603,7 @@ Each character shows two modules, one above the other, as a space, U+2580, U+258
 | JPEG, WebP, GIF, TIFF | Lossy, or no gain for two colours. `FeatherQR.SkiaSharp` writes JPEG and WebP |
 | ANSI colour in text | The terminal's colours belong to the caller, and `invert` covers dark themes |
 | Shapes, gradients, icons, captions, a set image size | `FeatherQR.SkiaSharp` draws them |
-| `Stream` and async forms | The core does no I/O. `stream.Write(GetPngBytes(...))` is one line |
+| `Stream` and async forms | The core does no I/O. `await stream.WriteAsync(GetPngBytes(...))` is one line, and a `PipeWriter` such as ASP.NET Core's `Response.BodyWriter` takes `WritePng` as it is |
 | A data URI or Base64 form | One BCL call on the bytes |
 
 #### Measured cost

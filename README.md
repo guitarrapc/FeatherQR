@@ -264,6 +264,27 @@ var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Bgra8
 SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, out var width, out var height);
 ```
 
+The writer does no I/O, so it has no async form. ASP.NET Core refuses synchronous writes to the response body, so return the bytes, or write into the response's PipeWriter and flush it asynchronously. At the default 8 pixels a module even a version 40 symbol takes well under a frame, so a UI app can call the writer on its thread and await only the file write.
+
+```csharp
+app.MapGet("/qr.png", (string text) =>
+    Results.File(SymbolImageWriter.GetPngBytes(QRCodeGenerator.Create(text, QREccLevel.M)), "image/png"));
+
+app.MapGet("/qr.svg", (string text) =>
+    Results.Text(SymbolImageWriter.GetSvgString(QRCodeGenerator.Create(text, QREccLevel.M)), "image/svg+xml"));
+
+// The PipeWriter takes WritePng as it is, with no copy. The token reaches only the flush
+app.MapGet("/qr-pipe.png", async (string text, HttpResponse response, CancellationToken cancellationToken) =>
+{
+    response.ContentType = "image/png";
+    SymbolImageWriter.WritePng(QRCodeGenerator.Create(text, QREccLevel.M), response.BodyWriter);
+    await response.BodyWriter.FlushAsync(cancellationToken);
+});
+
+// A UI app awaits only the file write
+await File.WriteAllBytesAsync("qrcode.png", SymbolImageWriter.GetPngBytes(qr), cancellationToken);
+```
+
 PNG output is 1-bit: greyscale for black on white, and a two-color palette otherwise. For module shapes, gradients, icons, JPEG, WebP, or an image of a set size in pixels, use an image builder. [API Overview](#api-overview) lists what each package writes.
 
 ### Image Builders
@@ -973,7 +994,7 @@ app.MapGet("/qr.svg", (string url) =>
 });
 ```
 
-To read an uploaded image, see [Async and stream I/O](#async-and-stream-io). Span-based APIs are supported for efficient memory usage, allowing you to work with slices of memory without additional allocations.
+For the core's `SymbolImageWriter`, return its bytes or write into the response's PipeWriter, see [Image Writing (Simple)](#image-writing-simple). To read an uploaded image, see [Async and stream I/O](#async-and-stream-io). Span-based APIs are supported for efficient memory usage, allowing you to work with slices of memory without additional allocations.
 
 ### Does it support Blazor WebAssembly?
 
