@@ -37,6 +37,7 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 | Document | Covers |
 |---|---|
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
+| [core-image-output-plan.md](plans/core-image-output-plan.md) | Image output from the core with no dependency, 2.0.0 Phase 6j: SVG, PNG, text for a terminal and a raw pixel buffer, the decisions to rule and the phases |
 
 The 2.0.0 core split plan (`FeatherQR` core, `FeatherQR.SkiaSharp` renderer, `SkiaSharp.QrCode` metapackage, repository rename) completed on 2026-09-06 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (package architecture, seam, graph, the "why three packages" record, scope decisions, lessons) and [DESIGN.md](DESIGN.md).
 
