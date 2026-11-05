@@ -9,9 +9,11 @@ namespace FeatherQR.SkiaSharp;
 /// <remarks>
 /// The same shape as <see cref="QRCodeImageBuilder"/>, with Micro QR versions and levels and the 2-module quiet zone the specification asks for.
 /// Icon overlays are not supported. Its one finder pattern can be styled with <see cref="SymbolImageBuilderBase{TSelf}.WithFinderPatternShape"/>.
+/// For a plain image with no SkiaSharp, <see cref="SymbolImageWriter"/> in the core writes SVG, PNG, raw pixels and terminal text at a whole number of pixels a module.
 /// </remarks>
 /// <seealso cref="MicroQRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
+/// <seealso cref="SymbolImageWriter"/>
 /// <seealso cref="QRCodeImageBuilder"/>
 public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCodeImageBuilder>
 {

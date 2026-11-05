@@ -11,9 +11,11 @@ namespace FeatherQR.SkiaSharp;
 /// The same shape as <see cref="QRCodeImageBuilder"/>, with rMQR versions, levels and fit strategies and the 2-module quiet zone the specification asks for.
 /// Sizing has three modes: <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize"/> gives the matrix at an exact scale, <see cref="SymbolImageBuilderBase{TSelf}.WithSize"/> fits it into an exact canvas without stretching, and <see cref="WithWidth"/> takes a width and lets the height follow the code aspect ratio.
 /// Icon overlays are not supported. Its one finder pattern can be styled with <see cref="SymbolImageBuilderBase{TSelf}.WithFinderPatternShape"/>.
+/// For a plain image with no SkiaSharp, <see cref="SymbolImageWriter"/> in the core writes SVG, PNG, raw pixels and terminal text at a whole number of pixels a module.
 /// </remarks>
 /// <seealso cref="RmQRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
+/// <seealso cref="SymbolImageWriter"/>
 public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
 {
     private const int DefaultWidth = 512;

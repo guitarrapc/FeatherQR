@@ -11,6 +11,7 @@ namespace FeatherQR;
 /// <remarks>
 /// The matrix is bit-packed and sized by version, from 11 × 11 at M1 to 17 × 17 at M4, plus the quiet zone.
 /// Serialization writes a "QRX" header carrying the symbology and dimensions, then the packed modules.
+/// <see cref="SymbolImageWriter"/> writes it as SVG, PNG, raw pixels or text for a terminal, with no other package.
 /// </remarks>
 public sealed class MicroQRCodeData
 {

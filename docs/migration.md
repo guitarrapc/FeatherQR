@@ -13,7 +13,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 ## 2.0.0
 
-The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-free core plus a SkiaSharp rendering package, so a project that only needs module matrices no longer carries the SkiaSharp native library. Encoding and decoding behavior is unchanged but for seven things: [a U+FEFF inside mixed-mode content keeps its Byte run](#a-ufeff-inside-the-content-keeps-its-byte-run), which changes what `Optimal` writes for content holding one, [Structured Append symbols decode](#structured-append-symbols-decode) where they used to fail with `UnsupportedContent`, [FNC1 symbols decode](#fnc1-symbols-decode) where Standard QR used to fail with `UnsupportedContent` and rMQR with `InvalidBitstream`, [a failed matrix decode reports no characters written](#a-failed-matrix-decode-reports-no-characters-written) where it used to count the text read before the failure, [Shift_JIS Byte segments decode](#shift_jis-byte-segments-decode) where they used to come back as their ISO-8859-1 reading or fail with `UnsupportedContent`, [Micro QR writes UTF-8](#micro-qr-writes-utf-8-where-its-iso-8859-1-bytes-would-read-as-another-text) for the few ISO-8859-1 texts its own decoder used to read as another text, and [a forced ISO-8859-1 over text it cannot hold throws](#a-forced-iso-8859-1-over-text-it-cannot-hold-throws) where Standard QR used to write it. Standard QR also [checks its arguments up front](#standard-qr-checks-its-arguments-up-front), so an undefined ECC level or ECI, or a quiet zone above 10,000 modules, now throws where it used to fail deep inside, write an unreadable symbol or overflow. Japanese text can be written in [Kanji mode on request](#kanji-mode-on-request); by default it is UTF-8, as in 1.x. Most of the work is in `using` lines and, if you want it, the package reference.
+The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-free core plus a SkiaSharp rendering package, so a project that only needs module matrices, or [plain images the core writes itself](#images-from-the-core-package), no longer carries the SkiaSharp native library. Encoding and decoding behavior is unchanged but for seven things: [a U+FEFF inside mixed-mode content keeps its Byte run](#a-ufeff-inside-the-content-keeps-its-byte-run), which changes what `Optimal` writes for content holding one, [Structured Append symbols decode](#structured-append-symbols-decode) where they used to fail with `UnsupportedContent`, [FNC1 symbols decode](#fnc1-symbols-decode) where Standard QR used to fail with `UnsupportedContent` and rMQR with `InvalidBitstream`, [a failed matrix decode reports no characters written](#a-failed-matrix-decode-reports-no-characters-written) where it used to count the text read before the failure, [Shift_JIS Byte segments decode](#shift_jis-byte-segments-decode) where they used to come back as their ISO-8859-1 reading or fail with `UnsupportedContent`, [Micro QR writes UTF-8](#micro-qr-writes-utf-8-where-its-iso-8859-1-bytes-would-read-as-another-text) for the few ISO-8859-1 texts its own decoder used to read as another text, and [a forced ISO-8859-1 over text it cannot hold throws](#a-forced-iso-8859-1-over-text-it-cannot-hold-throws) where Standard QR used to write it. Standard QR also [checks its arguments up front](#standard-qr-checks-its-arguments-up-front), so an undefined ECC level or ECI, or a quiet zone above 10,000 modules, now throws where it used to fail deep inside, write an unreadable symbol or overflow. Japanese text can be written in [Kanji mode on request](#kanji-mode-on-request); by default it is UTF-8, as in 1.x. Most of the work is in `using` lines and, if you want it, the package reference.
 
 ### Optimal segmentation is the default
 
@@ -40,12 +40,12 @@ Rendering is where most behavior changed. Four sections below are behavior chang
 
 | Package | Contents | Depends on |
 |---|---|---|
-| `FeatherQR` | Generators, decoders, data types, options, `GetModuleRectangles` | nothing on .NET 10+; `System.Memory` / `System.Runtime.CompilerServices.Unsafe` on .NET Standard |
+| `FeatherQR` | Generators, decoders, data types, options, `GetModuleRectangles`, `SymbolImageWriter` (SVG, PNG, raw pixels, terminal text) | nothing on .NET 10+; `System.Memory` / `System.Runtime.CompilerServices.Unsafe` on .NET Standard |
 | `FeatherQR.SkiaSharp` | Image builders, `SymbolRenderer`, `SKCanvas` extensions, `IconData` and shapes, `SKBitmap` decoding | `FeatherQR`, `SkiaSharp` |
 | `SkiaSharp.QrCode` | Nothing. A compatibility metapackage | `FeatherQR.SkiaSharp` |
 | `FeatherQR.Gs1` | New and optional. GS1 element strings (checks, `(AI)` text, GS1 Digital Link URIs, the read of a decoded symbol's text) and the GS1 entry points `Gs1QRCodeGenerator` and `Gs1RmQRCodeGenerator` | `FeatherQR` |
 
-An existing `<PackageReference Include="SkiaSharp.QrCode" />` keeps working: it now resolves `FeatherQR.SkiaSharp` and `FeatherQR` transitively. Switch the reference to `FeatherQR.SkiaSharp` when convenient, or to `FeatherQR` alone if you never render images. Nothing from 1.x moved into `FeatherQR.Gs1`, so add it only to build, check or read GS1 data. All four ship at the same version from the same release.
+An existing `<PackageReference Include="SkiaSharp.QrCode" />` keeps working: it now resolves `FeatherQR.SkiaSharp` and `FeatherQR` transitively. Switch the reference to `FeatherQR.SkiaSharp` when convenient, or to `FeatherQR` alone if you need no styled images: the core writes plain SVG, PNG, raw pixels and terminal text itself ([Images from the core package](#images-from-the-core-package)). Nothing from 1.x moved into `FeatherQR.Gs1`, so add it only to build, check or read GS1 data. All four ship at the same version from the same release.
 
 ### Target frameworks
 
@@ -510,6 +510,23 @@ var large = await QRCodeImageDecoder.DecodeAsync(stream, limits, cancellationTok
 Additive. `QRCodeDecoder.DecodeImageSymbols` reads every Standard QR code of a grayscale image, as an array or into a span you provide, and `QRCodeImageDecoder.DecodeSymbols` reads them from an `SKBitmap` or a stream, with `DecodeSymbolsAsync` beside it. Each symbol is returned once with its corners, and only the symbols that decode: one whose content cannot be given as text is left out, and so is one that lies inside a symbol already read. The span form returns how many symbols it wrote from the start of the span, and leaves the entries past them as they were, so a span used again still holds the symbols of the call before past that count. It stops once the span is full, and a full span does not say whether the image held more. `MicroQRCodeDecoder.DecodeImageSymbols` and `RmQRCodeDecoder.DecodeImageSymbols`, with `DecodeSymbols` and `DecodeSymbolsAsync` on `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`, do the same for Micro QR and rMQR.
 
 `SymbolDecoder.DecodeImageSymbols` reads the symbols of every symbology, Standard QR, Micro QR and rMQR, in one call, as an array or into a span, and `SymbolImageDecoder` reads them from an `SKBitmap` or a stream, with `DecodeSymbolsAsync`. Each result is a `SymbolDecodeResult`: its `Symbology`, `Text`, `Corners` and `Success`, and the symbology's own result in `StandardQR`, `MicroQR` or `RmQR`, the other two default.
+
+### Images from the core package
+
+Additive. `SymbolImageWriter` in the `FeatherQR` package writes `QRCodeData`, `MicroQRCodeData` and `RmQRCodeData` as SVG, PNG, raw pixels or text for a terminal, with no other package. A project that referenced `SkiaSharp.QrCode` only to save a plain black-on-white PNG or SVG can reference `FeatherQR` alone and drop the SkiaSharp native library.
+
+```csharp
+var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
+File.WriteAllBytes("qrcode.png", SymbolImageWriter.GetPngBytes(qr));
+File.WriteAllText("qrcode.svg", SymbolImageWriter.GetSvgString(qr));
+Console.Write(SymbolImageWriter.GetText(qr));
+```
+
+- **The size is per module, not per image.** `SymbolImageOptions.ModulePixelSize`, 8 by default, is the side of a module, and the image is the symbol's modules, quiet zone included, times it. The builders' `size = 512` fits the symbol into a set size instead, so `QRCodeImageBuilder.GetPngBytes(qr)` and `SymbolImageWriter.GetPngBytes(qr)` give different images.
+- **Plain output only.** Two colors, each a `SymbolColor` with an optional alpha, square modules and the symbol's own quiet zone. Module shapes, finder shapes, gradients, icons, JPEG and WebP stay with the image builders.
+- **PNG is 1-bit**: greyscale for black on white, a two-color palette otherwise. A version 40 symbol at 8 pixels a module is about 7 KB.
+- **Raw pixels** go into your buffer through `TryWritePixels`, as `Gray8`, `Rgba8888`, `Bgra8888` or `Rgb888x` (`PixelLayout`, now public). A `Gray8` buffer is what the decoders' `TryDecodeImage` reads.
+- **The output is the same bytes on every target framework**, so a test can pin it.
 
 ### A failed matrix decode reports no characters written
 

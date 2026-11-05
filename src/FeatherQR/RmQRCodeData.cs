@@ -11,6 +11,7 @@ namespace FeatherQR;
 /// <remarks>
 /// The matrix is bit-packed and rectangular, 7 to 17 modules high and 27 to 139 wide depending on version, plus the quiet zone.
 /// Serialization writes a "QRX" header carrying the symbology and dimensions, then the packed modules.
+/// <see cref="SymbolImageWriter"/> writes it as SVG, PNG, raw pixels or text for a terminal, with no other package.
 /// </remarks>
 public sealed class RmQRCodeData
 {

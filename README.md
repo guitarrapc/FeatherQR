@@ -98,15 +98,15 @@ There are 4 NuGet packages related to FeatherQR.
 
 | Package | What |
 |---|---|
-| [FeatherQR](https://www.nuget.org/packages/FeatherQR) | Generates and decodes module matrices with zero dependencies. Whole Standard QR, Micro QR, and rMQR support. |
+| [FeatherQR](https://www.nuget.org/packages/FeatherQR) | Generates and decodes module matrices, and writes SVG, PNG, raw pixels and terminal text, with zero dependencies. Whole Standard QR, Micro QR, and rMQR support. |
 | [FeatherQR.Gs1](https://www.nuget.org/packages/FeatherQR.Gs1) | Writing a GS1 QR Code, GS1 Digital Link URI support. Standard QR and rMQR only. |
-| [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | Renders and decodes images with SkiaSharp |
+| [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | Renders styled images (shapes, gradients, icons, JPEG and WebP) and decodes image files with SkiaSharp |
 | [SkiaSharp.QrCode](https://www.nuget.org/packages/SkiaSharp.QrCode) | Empty package that depends on `FeatherQR.SkiaSharp`, for upgrading existing projects |
 
 ```bash
 dotnet add package FeatherQR
 
-# If you need image rendering with SkiaSharp
+# If you need styled images or image file decoding with SkiaSharp
 dotnet add package FeatherQR.SkiaSharp
 
 # If you need GS1 support
@@ -123,7 +123,16 @@ The playground runs the actual library compiled to WebAssembly (GitHub Pages, fu
 
 ### Simplest Example
 
-Single line QR code generation:
+Single line QR code generation, You can output PNG with the core package alone, see [Images without SkiaSharp](#images-without-skiasharp).
+
+```csharp
+using FeatherQR;
+
+var qr = QRCodeGenerator.Create("Hello", QREccLevel.M);
+File.WriteAllBytes("qrcode.png", SymbolImageWriter.GetPngBytes(qr));
+```
+
+If you want to use SkiaSharp for styled images or more advanced features, use `FeatherQR.SkiaSharp`.
 
 ```csharp
 using FeatherQR.SkiaSharp;
@@ -198,7 +207,8 @@ Start with an image builder for most applications. All generators and decoders a
 
 | Task | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
-| Create PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
+| Write SVG, PNG, raw pixels, or terminal text with no other package | `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
+| Create styled PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
 | Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
 | Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
@@ -207,9 +217,46 @@ Start with an image builder for most applications. All generators and decoders a
 Every method that writes an image to a `Stream` has an `...Async` twin, and the decoders read an encoded image from a `Stream`, asynchronously or not. See [Async and stream I/O](#async-and-stream-io).
 
 
+### Images without SkiaSharp
+
+`SymbolImageWriter` writes `QRCodeData`, `MicroQRCodeData`, and `RmQRCodeData` as SVG, PNG, raw pixels, or text for a terminal, with nothing but the `FeatherQR` package. Every module is a sharp square of `ModulePixelSize` pixels (8 by default), the quiet zone is the one the symbol was made with, and the same symbol gives the same bytes on every target framework.
+
+```csharp
+using FeatherQR;
+
+var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
+
+File.WriteAllText("qrcode.svg", SymbolImageWriter.GetSvgString(qr));
+File.WriteAllBytes("qrcode.png", SymbolImageWriter.GetPngBytes(qr));
+Console.Write(SymbolImageWriter.GetText(qr));                // dark modules drawn, for a light terminal
+Console.Write(SymbolImageWriter.GetText(qr, invert: true));  // light modules drawn, for a dark terminal
+```
+
+Colors and the module size go in `SymbolImageOptions`. A color has an optional alpha, and a fully transparent light color leaves the background out.
+
+```csharp
+var options = new SymbolImageOptions
+{
+    ModulePixelSize = 10,
+    DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A),
+    LightColor = new SymbolColor(0, 0, 0, 0), // transparent background
+};
+var svg = SymbolImageWriter.GetSvgString(qr, options);
+var png = SymbolImageWriter.GetPngBytes(qr, options);
+```
+
+`WriteSvg` and `WritePng` write into an `IBufferWriter<byte>` without allocating. `TryWritePixels` writes raw pixels into your buffer, as `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x`, with the rows packed. A `Gray8` buffer goes straight into the decoders' `TryDecodeImage`.
+
+```csharp
+var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Bgra8888)];
+SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, out var width, out var height);
+```
+
+PNG output is 1-bit: greyscale for black on white, and a two-color palette otherwise. For module shapes, gradients, icons, JPEG, WebP, or an image of a set size in pixels, use an image builder.
+
 ### Image Builders (Recommended)
 
-Image builders provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Every symbology supports custom finder patterns, icons are Standard QR only. See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
+Image builders render through SkiaSharp and provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Every symbology supports custom finder patterns, icons are Standard QR only. See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
 
 ```csharp
 var pngBytes = QRCodeImageBuilder.GetPngBytes("content");
@@ -235,7 +282,7 @@ SymbolRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 
 ### Generators (Low-Level)
 
-Generators create module matrices, no rendering. Use them for custom output such as ASCII art or LED displays, or as input to `SymbolRenderer`.
+Generators create module matrices. Use `SymbolImageWriter` for SVG, PNG, raw pixels, or terminal text.
 
 ```csharp
 using FeatherQR;
@@ -943,10 +990,6 @@ FeatherQR writes/reads ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JI
 | Supported | Alphanumeric | ISO-8859-1 |
 | Supported | Byte | UTF-8 |
 | Supported (written with `AllowKanji`) | Kanji | Shift JIS (JIS X 0208) |
-
-### Does SVG output require SkiaSharp.Svg or other packages?
-
-No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional dependencies. Note that FeatherQR outputs SVG only, it does not read or render existing SVG files.
 
 ### Does it read QR codes from images?
 
