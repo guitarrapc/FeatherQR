@@ -77,6 +77,24 @@ public class SymbolImageWriterAllocationTest
         await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetPngBytes(qr)) / 4).IsEqualTo(oneArray);
     }
 
+    [Test]
+    public async Task TryWritePixels_AndItsSize_AllocateNothing()
+    {
+        var qr = QRCodeGenerator.Create("allocation", QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
+        var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
+        var rm = RmQRCodeGenerator.Create("allocation", RmQREccLevel.M);
+        var options = new SymbolImageOptions { ModulePixelSize = 3, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A, 200) };
+        var buffer = new byte[1 << 22];
+
+        foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x })
+        {
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, buffer, layout, out _, out _, options))).IsEqualTo(0);
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(micro, buffer, layout, out _, out _))).IsEqualTo(0);
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(rm, buffer, layout, out _, out _, options))).IsEqualTo(0);
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetPixelBufferSize(qr, layout, options))).IsEqualTo(0);
+        }
+    }
+
     /// <summary>A writer over one array that starts again at its front on <see cref="Rewind"/>.</summary>
     private sealed class RewindingWriter(int capacity) : IBufferWriter<byte>
     {

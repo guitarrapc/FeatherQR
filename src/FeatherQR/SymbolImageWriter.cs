@@ -5,7 +5,7 @@ using FeatherQR.Internals.ImageWriters;
 namespace FeatherQR;
 
 /// <summary>
-/// Writes Standard QR, Micro QR and rMQR symbols as SVG and PNG images, with no graphics library.
+/// Writes Standard QR, Micro QR and rMQR symbols as SVG and PNG images and as raw pixels, with no graphics library.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -195,5 +195,97 @@ public static class SymbolImageWriter
         if (writer is null)
             throw new ArgumentNullException(nameof(writer));
         return PngWriter.Write(new RmQRMatrixView(data), writer, in options);
+    }
+
+    /// <summary>
+    /// The length in bytes of the QR code's pixel buffer: its width times its height in pixels times the bytes of one pixel.
+    /// </summary>
+    /// <param name="data">The QR code.</param>
+    /// <param name="layout">The channel order and depth.</param>
+    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <returns>The length <see cref="TryWritePixels(QRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/> needs.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the four, or the buffer would be longer than the largest array.</exception>
+    public static int GetPixelBufferSize(QRCodeData data, PixelLayout layout, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return PixelWriter.BufferSize(new StandardQrMatrixView(data), layout, in options);
+    }
+
+    /// <inheritdoc cref="GetPixelBufferSize(QRCodeData, PixelLayout, in SymbolImageOptions)"/>
+    /// <param name="data">The Micro QR code.</param>
+    /// <param name="layout">The channel order and depth.</param>
+    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <returns>The length <see cref="TryWritePixels(MicroQRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/> needs.</returns>
+    public static int GetPixelBufferSize(MicroQRCodeData data, PixelLayout layout, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return PixelWriter.BufferSize(new MicroQRMatrixView(data), layout, in options);
+    }
+
+    /// <inheritdoc cref="GetPixelBufferSize(QRCodeData, PixelLayout, in SymbolImageOptions)"/>
+    /// <param name="data">The rMQR code.</param>
+    /// <param name="layout">The channel order and depth.</param>
+    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <returns>The length <see cref="TryWritePixels(RmQRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/> needs.</returns>
+    public static int GetPixelBufferSize(RmQRCodeData data, PixelLayout layout, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return PixelWriter.BufferSize(new RmQRMatrixView(data), layout, in options);
+    }
+
+    /// <summary>
+    /// Writes the QR code's pixels into the buffer you provide, rows packed with no padding between them.
+    /// </summary>
+    /// <param name="data">The QR code.</param>
+    /// <param name="destination">The buffer. Size it with <see cref="GetPixelBufferSize(QRCodeData, PixelLayout, in SymbolImageOptions)"/>. Bytes past the image are left as they were.</param>
+    /// <param name="layout">The channel order and depth.</param>
+    /// <param name="width">The image's width in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="height">The image's height in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <returns><c>false</c> only when <paramref name="destination"/> is too short, in which case nothing is written.</returns>
+    /// <remarks>
+    /// Alpha is not premultiplied, and <see cref="PixelLayout.Rgb888x"/>'s fourth byte is 255.
+    /// <see cref="PixelLayout.Gray8"/> holds each colour's luminance as the decoders compute it: an alpha below 255 composited over white,
+    /// then BT.601 weights. A Gray8 buffer is the luminance input the decoders' <c>TryDecodeImage</c> calls take.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the four, or the buffer would be longer than the largest array.</exception>
+    public static bool TryWritePixels(QRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return PixelWriter.TryWrite(new StandardQrMatrixView(data), destination, layout, out width, out height, in options);
+    }
+
+    /// <inheritdoc cref="TryWritePixels(QRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/>
+    /// <param name="data">The Micro QR code.</param>
+    /// <param name="destination">The buffer. Size it with <see cref="GetPixelBufferSize(MicroQRCodeData, PixelLayout, in SymbolImageOptions)"/>. Bytes past the image are left as they were.</param>
+    /// <param name="layout">The channel order and depth.</param>
+    /// <param name="width">The image's width in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="height">The image's height in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    public static bool TryWritePixels(MicroQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return PixelWriter.TryWrite(new MicroQRMatrixView(data), destination, layout, out width, out height, in options);
+    }
+
+    /// <inheritdoc cref="TryWritePixels(QRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/>
+    /// <param name="data">The rMQR code.</param>
+    /// <param name="destination">The buffer. Size it with <see cref="GetPixelBufferSize(RmQRCodeData, PixelLayout, in SymbolImageOptions)"/>. Bytes past the image are left as they were.</param>
+    /// <param name="layout">The channel order and depth.</param>
+    /// <param name="width">The image's width in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="height">The image's height in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    public static bool TryWritePixels(RmQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return PixelWriter.TryWrite(new RmQRMatrixView(data), destination, layout, out width, out height, in options);
     }
 }

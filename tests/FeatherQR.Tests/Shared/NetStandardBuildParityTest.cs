@@ -956,6 +956,51 @@ public class NetStandardBuildParityTest
             await Assert.That((string)getSvg.Invoke(null, [loaded, loadedOptions])!).IsEqualTo(hostSvg);
             await Assert.That(((byte[])getPng.Invoke(null, [loaded, loadedOptions])!).AsSpan().SequenceEqual(hostPng)).IsTrue()
                 .Because($"{targetFramework} {symbology}: the PNG bytes must be this host's");
+
+            // The pixel buffer's span call is reached through a bridge that wraps an array.
+            var layoutType = build.GetType("FeatherQR.PixelLayout", throwOnError: true)!;
+            var tryWrite = writer.GetMethod("TryWritePixels", [dataType, typeof(Span<byte>), layoutType, typeof(int).MakeByRefType(), typeof(int).MakeByRefType(), optionsType.MakeByRefType()])!;
+            var bridge = new DynamicMethod("TryWritePixels", typeof(bool), [typeof(object), typeof(byte[]), typeof(int), typeof(object)], typeof(NetStandardBuildParityTest).Module);
+            var il = bridge.GetILGenerator();
+            var width = il.DeclareLocal(typeof(int));
+            var height = il.DeclareLocal(typeof(int));
+            var options = il.DeclareLocal(optionsType);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Unbox_Any, optionsType);
+            il.Emit(OpCodes.Stloc, options);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, dataType);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Newobj, typeof(Span<byte>).GetConstructor([typeof(byte[])])!);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldloca, width);
+            il.Emit(OpCodes.Ldloca, height);
+            il.Emit(OpCodes.Ldloca, options);
+            il.Emit(OpCodes.Call, tryWrite);
+            il.Emit(OpCodes.Ret);
+            var loadedTryWrite = bridge.CreateDelegate<Func<object, byte[], int, object, bool>>();
+
+            foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x })
+            {
+                var hostPixels = new byte[host switch
+                {
+                    QRCodeData qr => SymbolImageWriter.GetPixelBufferSize(qr, layout, hostOptions),
+                    MicroQRCodeData micro => SymbolImageWriter.GetPixelBufferSize(micro, layout, hostOptions),
+                    RmQRCodeData rm => SymbolImageWriter.GetPixelBufferSize(rm, layout, hostOptions),
+                    _ => throw new ArgumentException(symbology),
+                }];
+                _ = host switch
+                {
+                    QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, hostPixels, layout, out _, out _, hostOptions),
+                    MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, hostPixels, layout, out _, out _, hostOptions),
+                    RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, hostPixels, layout, out _, out _, hostOptions),
+                    _ => throw new ArgumentException(symbology),
+                };
+                var loadedPixels = new byte[hostPixels.Length];
+                await Assert.That(loadedTryWrite(loaded, loadedPixels, (int)layout, loadedOptions)).IsTrue();
+                await Assert.That(loadedPixels.AsSpan().SequenceEqual(hostPixels)).IsTrue()
+                    .Because($"{targetFramework} {symbology} {layout}: the pixels must be this host's");
+            }
         }
     }
 

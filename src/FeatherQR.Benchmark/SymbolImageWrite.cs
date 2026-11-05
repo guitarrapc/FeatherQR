@@ -11,6 +11,7 @@ using System.Text;
 ///
 /// The string and array forms allocate their result. The writer forms write into a buffer reused across calls, so they allocate nothing.
 /// Large_Png_3px is a module size that straddles bytes, the case the PNG writer's matcher compresses least.
+/// The pixel cases write into one buffer kept across calls.
 /// </summary>
 public class SymbolImageWrite
 {
@@ -70,6 +71,18 @@ public class SymbolImageWrite
 
     [Benchmark]
     public byte[] RmQR_Png() => SymbolImageWriter.GetPngBytes(_rmqr);
+
+    // A buffer for the largest case: version 40 at 8 px, four bytes a pixel.
+    private readonly byte[] _pixels = new byte[1480 * 1480 * 4];
+
+    [Benchmark]
+    public bool Small_PixelsRgba() => SymbolImageWriter.TryWritePixels(_small, _pixels, PixelLayout.Rgba8888, out _, out _);
+
+    [Benchmark]
+    public bool Large_PixelsRgba() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _);
+
+    [Benchmark]
+    public bool Large_PixelsGray8() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Gray8, out _, out _);
 
     private static string BuildDeterministicText(int length)
     {

@@ -1,5 +1,5 @@
 // FeatherQR
-// 46 exported types
+// 47 exported types
 // net10.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR
@@ -170,6 +170,14 @@ namespace FeatherQR
         public int Width { get; init; }
         public int X { get; init; }
         public int Y { get; init; }
+    }
+
+    public enum PixelLayout : int
+    {
+        Gray8 = 0,
+        Rgba8888 = 1,
+        Bgra8888 = 2,
+        Rgb888x = 3,
     }
 
     public readonly struct QRCodeCalculatedSize : IEquatable<QRCodeCalculatedSize>
@@ -498,9 +506,15 @@ namespace FeatherQR
 
     public static class SymbolImageWriter
     {
+        public static bool TryWritePixels(MicroQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
+        public static bool TryWritePixels(QRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
+        public static bool TryWritePixels(RmQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
         public static byte[] GetPngBytes(MicroQRCodeData data, in SymbolImageOptions options = null);
         public static byte[] GetPngBytes(QRCodeData data, in SymbolImageOptions options = null);
         public static byte[] GetPngBytes(RmQRCodeData data, in SymbolImageOptions options = null);
+        public static int GetPixelBufferSize(MicroQRCodeData data, PixelLayout layout, in SymbolImageOptions options = null);
+        public static int GetPixelBufferSize(QRCodeData data, PixelLayout layout, in SymbolImageOptions options = null);
+        public static int GetPixelBufferSize(RmQRCodeData data, PixelLayout layout, in SymbolImageOptions options = null);
         public static int WritePng(MicroQRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = null);
         public static int WritePng(QRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = null);
         public static int WritePng(RmQRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = null);

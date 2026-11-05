@@ -135,10 +135,10 @@ byte[] png = SymbolImageWriter.GetPngBytes(qr, options);
 ### Pixel buffer
 
 - Written into the caller's span. A sizing call gives its length.
-- The layout is the internal `PixelLayout` made public (C9):
+- The layout is `PixelLayout`, the decoders' internal enum made public in the `FeatherQR` namespace with its values numbered (C9):
 
 ```csharp
-public enum PixelLayout { Gray8, Rgba8888, Bgra8888, Rgb888x }
+public enum PixelLayout { Gray8 = 0, Rgba8888 = 1, Bgra8888 = 2, Rgb888x = 3 }
 ```
 
 ```csharp
@@ -151,8 +151,8 @@ SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, out int width
 - Rows are packed: a row is the width times the bytes a pixel.
 - Alpha is straight, not premultiplied. With opaque colours the two are the same.
 - `Gray8` writes each colour's BT.601 luminance over white, as the decoders read transparent pixels. `Rgb888x` writes 255 in its padding byte, so with opaque colours it equals `Rgba8888`.
-- `TryWritePixels` returns `false` only when the span is short. A bad layout or module size throws.
-- The internal enum's doc remark names other libraries, and is rewritten when it goes public.
+- `TryWritePixels` returns `false` only when the span is short, and then reports a width and height of 0 and writes nothing. An undefined layout, a side past `int.MaxValue` pixels or a buffer past the largest array throws.
+- The first pixel row of a module row is written from the runs of the stored bits, and the module's other rows are copies of it.
 
 ## Decisions
 
@@ -327,3 +327,34 @@ Lessons.
 - Finding the SVG's runs with bit scans over the packed rows took the same time as the shared module-at-a-time enumerator, 66 against 64 to 70 µs into a writer at version 40: the text, not the scan, is the SVG's cost. The SVG keeps the shared enumerator, and with it the geometry `GetModuleRectangles` reports.
 - The SIMD layout rule matches calls on a class named `Crc32` as the Arm intrinsic, so the CRC class is `PngCrc`.
 - A quick probe with tiered compilation off timed the writers 2.5 to 3 times slower than the benchmark. With tiering on and a long warm-up it agreed.
+
+### Phase 3, the pixel buffer (2026-11-05)
+
+Done. `GetPixelBufferSize` and `TryWritePixels` for the three data types, and `PixelLayout` moved from the decoders' internals to the `FeatherQR` namespace with its four values numbered and its documentation free of library names. The decoders and the SkiaSharp adapter read the same enum, and the conversion kernel stays internal. The approved listing gains the enum and the six calls, and the two scope rows in [qrcode-symbologies.md](../specs/qrcode-symbologies.md) that called the enum internal now say it is public.
+
+The tests:
+
+- Every version and level of the three symbologies matches the matrix pixel for pixel: Standard QR at 2 px in RGBA, Micro QR at 8 px in all four layouts, and rMQR at 3 px in BGRA.
+- Every layout at 1, 3 and 8 px, with quiet zones of 0 and 4 and both colours below full alpha, matches each layout's byte order written out in the test.
+- The reported size, width and height are right, and bytes past the image stay as they were.
+- `Gray8` equals what the decoders' luminance kernel computes from the `Rgba8888` buffer for 64 random colour pairs, alphas included, and the three decoders read their symbol from it.
+- A short span returns `false`, reports no size and writes nothing. An undefined layout, a null symbol and a buffer past the largest array throw (version 40 in RGBA fits at 125 px, not at 126).
+- The netstandard2.0 and netstandard2.1 builds write this host's pixels byte for byte in all four layouts.
+- In Release, `TryWritePixels` and `GetPixelBufferSize` allocate nothing.
+
+The full suite in Release: 31,821 passed, 401 skipped, none failed.
+
+Benchmarks, from `SymbolImageWrite` (in-process), each into a buffer kept across calls:
+
+| Case | Mean | Allocated |
+|---|---|---|
+| Standard QR v1-2, 8 px, RGBA | 6.05 µs | 0 B |
+| Standard QR v40, 8 px, RGBA (8.8 MB) | 335 µs | 0 B |
+| Standard QR v40, 8 px, Gray8 (2.2 MB) | 136 µs | 0 B |
+
+No existing hot path changed.
+
+Lessons.
+
+- Moving the enum up to the `FeatherQR` namespace needed no change at any use: the code that named it sits in namespaces below `FeatherQR`, where the parent's types are in scope.
+- A pixel buffer is mostly copies: each module row's first pixel row is written from the runs of the stored bits and copied for the rest of the module's height, so the time grows with the buffer: 335 µs for 8.8 MB in RGBA, 136 µs for 2.2 MB in Gray8.
