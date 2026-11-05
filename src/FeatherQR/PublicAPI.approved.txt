@@ -524,6 +524,9 @@ namespace FeatherQR
         public static string GetSvgString(MicroQRCodeData data, in SymbolImageOptions options = null);
         public static string GetSvgString(QRCodeData data, in SymbolImageOptions options = null);
         public static string GetSvgString(RmQRCodeData data, in SymbolImageOptions options = null);
+        public static string GetText(MicroQRCodeData data, bool invert = false);
+        public static string GetText(QRCodeData data, bool invert = false);
+        public static string GetText(RmQRCodeData data, bool invert = false);
     }
 
     public enum Symbology : int

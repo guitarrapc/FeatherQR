@@ -5,7 +5,7 @@ using FeatherQR.Internals.ImageWriters;
 namespace FeatherQR;
 
 /// <summary>
-/// Writes Standard QR, Micro QR and rMQR symbols as SVG and PNG images and as raw pixels, with no graphics library.
+/// Writes Standard QR, Micro QR and rMQR symbols as SVG and PNG images, as raw pixels and as text for a terminal, with no graphics library.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,6 +18,8 @@ namespace FeatherQR;
 /// </remarks>
 public static class SymbolImageWriter
 {
+    // SVG
+
     /// <summary>
     /// Writes the QR code as an SVG document.
     /// </summary>
@@ -105,6 +107,8 @@ public static class SymbolImageWriter
             throw new ArgumentNullException(nameof(writer));
         return SvgWriter.Write(new RmQRMatrixView(data), writer, in options);
     }
+
+    // PNG
 
     /// <summary>
     /// Writes the QR code as a PNG file, one bit a pixel.
@@ -197,6 +201,8 @@ public static class SymbolImageWriter
         return PngWriter.Write(new RmQRMatrixView(data), writer, in options);
     }
 
+    // Pixel buffer
+
     /// <summary>
     /// The length in bytes of the QR code's pixel buffer: its width times its height in pixels times the bytes of one pixel.
     /// </summary>
@@ -287,5 +293,46 @@ public static class SymbolImageWriter
         if (data is null)
             throw new ArgumentNullException(nameof(data));
         return PixelWriter.TryWrite(new RmQRMatrixView(data), destination, layout, out width, out height, in options);
+    }
+
+    // Text output for terminal
+
+    /// <summary>
+    /// Writes the QR code as text for a terminal, two module rows a line in half blocks.
+    /// </summary>
+    /// <param name="data">The QR code.</param>
+    /// <param name="invert"><c>false</c> draws the dark modules, for a terminal with a light background. <c>true</c> draws the light modules, for a dark background.</param>
+    /// <returns>The text. Every line ends with <c>\n</c>.</returns>
+    /// <remarks>
+    /// Each character shows two modules, one above the other: a space, U+2580 (upper half), U+2584 (lower half) or U+2588 (both).
+    /// A monospace font's cell is about twice as tall as it is wide, so the halves are close to square. The text carries no colour
+    /// escapes, and the quiet zone is the one the symbol was made with.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    public static string GetText(QRCodeData data, bool invert = false)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return HalfBlockText.Get(new StandardQrMatrixView(data), invert);
+    }
+
+    /// <inheritdoc cref="GetText(QRCodeData, bool)"/>
+    /// <param name="data">The Micro QR code.</param>
+    /// <param name="invert"><c>false</c> draws the dark modules, for a terminal with a light background. <c>true</c> draws the light modules, for a dark background.</param>
+    public static string GetText(MicroQRCodeData data, bool invert = false)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return HalfBlockText.Get(new MicroQRMatrixView(data), invert);
+    }
+
+    /// <inheritdoc cref="GetText(QRCodeData, bool)"/>
+    /// <param name="data">The rMQR code.</param>
+    /// <param name="invert"><c>false</c> draws the dark modules, for a terminal with a light background. <c>true</c> draws the light modules, for a dark background.</param>
+    public static string GetText(RmQRCodeData data, bool invert = false)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return HalfBlockText.Get(new RmQRMatrixView(data), invert);
     }
 }

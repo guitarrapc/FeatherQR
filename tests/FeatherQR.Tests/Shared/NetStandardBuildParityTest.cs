@@ -937,6 +937,18 @@ public class NetStandardBuildParityTest
         var colorType = build.GetType("FeatherQR.SymbolColor", throwOnError: true)!;
         var getSvg = writer.GetMethod("GetSvgString", [dataType, optionsType.MakeByRefType()])!;
         var getPng = writer.GetMethod("GetPngBytes", [dataType, optionsType.MakeByRefType()])!;
+        var getText = writer.GetMethod("GetText", [dataType, typeof(bool)])!;
+        foreach (var invert in new[] { false, true })
+        {
+            var hostText = host switch
+            {
+                QRCodeData qr => SymbolImageWriter.GetText(qr, invert),
+                MicroQRCodeData micro => SymbolImageWriter.GetText(micro, invert),
+                RmQRCodeData rm => SymbolImageWriter.GetText(rm, invert),
+                _ => throw new ArgumentException(symbology),
+            };
+            await Assert.That((string)getText.Invoke(null, [loaded, invert])!).IsEqualTo(hostText);
+        }
 
         var styled = new SymbolImageOptions { ModulePixelSize = 3, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A, 200), LightColor = new SymbolColor(255, 255, 240, 0) };
         var loadedStyled = Activator.CreateInstance(optionsType)!;

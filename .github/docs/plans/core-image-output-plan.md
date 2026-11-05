@@ -129,7 +129,7 @@ byte[] png = SymbolImageWriter.GetPngBytes(qr, options);
 ### Text
 
 - Half blocks, two module rows per line: space, `▀`, `▄` and `█`. By default a dark module is a filled glyph, for a light background. Inverted, a light module is, for a dark background. The last line of an odd row count has a light lower half.
-- Lines end with `\n`.
+- Every line ends with `\n`, the last one included, and the text carries no colour escapes. A symbol's row count is odd with any quiet zone, so the last line's lower half is always light.
 - In Phase 0 an iPhone read it from the app's terminal, and Android looked right to the maintainer.
 
 ### Pixel buffer
@@ -358,3 +358,24 @@ Lessons.
 
 - Moving the enum up to the `FeatherQR` namespace needed no change at any use: the code that named it sits in namespaces below `FeatherQR`, where the parent's types are in scope.
 - A pixel buffer is mostly copies: each module row's first pixel row is written from the runs of the stored bits and copied for the rest of the module's height, so the time grows with the buffer: 335 µs for 8.8 MB in RGBA, 136 µs for 2.2 MB in Gray8.
+
+### Phase 4, text for a terminal (2026-11-05)
+
+Done. `GetText(data, invert)` for the three data types, in the shape C8 decided: half blocks, two module rows a line, the symbol's own quiet zone, every line ended by `\n`. The approved listing gains the three calls.
+
+The tests:
+
+- Every version and level of the three symbologies, plain and inverted, equals the half blocks built from the public indexer in the test.
+- The first two lines of a Micro QR M1 are pinned as glyphs worked by hand, plain and inverted.
+- The last line of an odd row count has a light lower half, every line is the symbol's width and ends with `\n`, and nothing but the four glyphs and `\n` appears.
+- The netstandard2.0 and netstandard2.1 builds write this host's text. In Release, `GetText` allocates the string alone.
+
+The text is the mapping phones read from the terminal in Phase 0, and the encoder has not changed since, so that check holds for this output.
+
+The full suite in Release: 32,058 passed, 401 skipped, none failed.
+
+Benchmarks, from `SymbolImageWrite` (in-process): Standard QR v1-2 1.00 µs (928 B, the string), version 40 49.8 µs (34,624 B, the string). No existing hot path changed.
+
+Lessons.
+
+- Every symbol has an odd number of rows with its quiet zone: the cores are odd and a quiet zone adds an even count. The last line always pairs a row with the light past the matrix, so that half is defined once, as light.

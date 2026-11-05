@@ -84,6 +84,12 @@ public class SymbolImageWrite
     [Benchmark]
     public bool Large_PixelsGray8() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Gray8, out _, out _);
 
+    [Benchmark]
+    public string Small_Text() => SymbolImageWriter.GetText(_small);
+
+    [Benchmark]
+    public string Large_Text() => SymbolImageWriter.GetText(_large);
+
     private static string BuildDeterministicText(int length)
     {
         var sb = new StringBuilder(length);
