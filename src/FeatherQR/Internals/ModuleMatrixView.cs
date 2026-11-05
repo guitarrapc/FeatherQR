@@ -22,6 +22,11 @@ internal interface IModuleMatrixView
     bool GetCoreModule(int coreRow, int coreCol);
 
     /// <summary>
+    /// The core modules packed MSB first, row after row with no padding between rows: module (r, c) is bit r × <see cref="CoreWidth"/> + c.
+    /// </summary>
+    ReadOnlySpan<byte> CoreBits { get; }
+
+    /// <summary>
     /// Whether the core module belongs to a finder pattern, which a renderer must draw as one
     /// continuous pattern rather than as styled modules: the finder is what a decoder scans for,
     /// by its 1:1:3:1:1 run of dark and light, and gaps between modules erase that run.
@@ -36,6 +41,7 @@ internal readonly struct StandardQrMatrixView(QRCodeData data) : IModuleMatrixVi
     public int CoreWidth => data.GetCoreSize();
     public int CoreHeight => data.GetCoreSize();
     public bool GetCoreModule(int coreRow, int coreCol) => data.GetCoreModule(coreRow, coreCol);
+    public ReadOnlySpan<byte> CoreBits => data.CoreBits;
     public bool IsFinderPattern(int coreRow, int coreCol) => data.IsFinderPattern(coreRow, coreCol);
 }
 
@@ -46,6 +52,7 @@ internal readonly struct MicroQRMatrixView(MicroQRCodeData data) : IModuleMatrix
     public int CoreWidth => data.GetCoreSize();
     public int CoreHeight => data.GetCoreSize();
     public bool GetCoreModule(int coreRow, int coreCol) => data.GetCoreModule(coreRow, coreCol);
+    public ReadOnlySpan<byte> CoreBits => data.CoreBits;
     // One finder, top-left, as in every Micro QR version.
     public bool IsFinderPattern(int coreRow, int coreCol) => coreRow < 7 && coreCol < 7;
 }
@@ -57,6 +64,7 @@ internal readonly struct RmQRMatrixView(RmQRCodeData data) : IModuleMatrixView
     public int CoreWidth => data.GetCoreWidth();
     public int CoreHeight => data.GetCoreHeight();
     public bool GetCoreModule(int coreRow, int coreCol) => data.GetCoreModule(coreRow, coreCol);
+    public ReadOnlySpan<byte> CoreBits => data.CoreBits;
     // One finder, top-left. The sub-finder and corner patterns are not reported: they are located
     // from the finder and the format information, not by the run ratio, so they survive styling.
     public bool IsFinderPattern(int coreRow, int coreCol) => coreRow < 7 && coreCol < 7;

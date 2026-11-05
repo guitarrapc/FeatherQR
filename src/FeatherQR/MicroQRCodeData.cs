@@ -343,6 +343,9 @@ public sealed class MicroQRCodeData
     /// <summary>Gets the core matrix side length (quiet zone excluded).</summary>
     internal int GetCoreSize() => _baseSize;
 
+    /// <summary>The core modules as stored: MSB first, row after row, a row as many bits as the core is wide.</summary>
+    internal ReadOnlySpan<byte> CoreBits => _bits;
+
     /// <summary>Reads a core module without quiet-zone translation (caller guarantees bounds).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool GetCoreModule(int coreRow, int coreCol)

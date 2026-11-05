@@ -903,6 +903,62 @@ public class NetStandardBuildParityTest
         return method.CreateDelegate<BytesDecode>();
     }
 
+    /// <summary>
+    /// Image output from each netstandard build is this host's byte for byte: the SVG text and the PNG file, deflate and checksums
+    /// included, with the default options and with colours, an alpha and a module size that straddles bytes.
+    /// </summary>
+    /// <remarks>
+    /// The symbol is restored inside the build from this host's serialized form, so both builds write the same matrix.
+    /// </remarks>
+    [Test]
+    [MethodDataSource(nameof(Cases))]
+    public async Task ImageOutput_MatchesThisHostsBuild(string targetFramework, string symbology)
+    {
+        var (build, _) = await LoadBuild(targetFramework);
+        const string text = "https://github.com/guitarrapc/FeatherQR";
+        object host = symbology switch
+        {
+            "QR" => QRCodeGenerator.Create(text, QREccLevel.M),
+            "MicroQR" => MicroQRCodeGenerator.Create("FeatherQR", MicroQREccLevel.L),
+            _ => RmQRCodeGenerator.Create(text, RmQREccLevel.M),
+        };
+        var (raw, quietZone) = host switch
+        {
+            QRCodeData qr => (qr.GetRawData(), 4),
+            MicroQRCodeData micro => (micro.GetRawData(), 2),
+            RmQRCodeData rm => (rm.GetRawData(), 2),
+            _ => throw new ArgumentException(symbology),
+        };
+        var dataType = build.GetType($"FeatherQR.{(symbology == "QR" ? "QRCode" : symbology + "Code")}Data", throwOnError: true)!;
+        var loaded = dataType.GetConstructor([typeof(byte[]), typeof(int)])!.Invoke([raw, quietZone]);
+
+        var writer = build.GetType("FeatherQR.SymbolImageWriter", throwOnError: true)!;
+        var optionsType = build.GetType("FeatherQR.SymbolImageOptions", throwOnError: true)!;
+        var colorType = build.GetType("FeatherQR.SymbolColor", throwOnError: true)!;
+        var getSvg = writer.GetMethod("GetSvgString", [dataType, optionsType.MakeByRefType()])!;
+        var getPng = writer.GetMethod("GetPngBytes", [dataType, optionsType.MakeByRefType()])!;
+
+        var styled = new SymbolImageOptions { ModulePixelSize = 3, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A, 200), LightColor = new SymbolColor(255, 255, 240, 0) };
+        var loadedStyled = Activator.CreateInstance(optionsType)!;
+        optionsType.GetProperty("ModulePixelSize")!.SetValue(loadedStyled, 3);
+        optionsType.GetProperty("DarkColor")!.SetValue(loadedStyled, Activator.CreateInstance(colorType, (byte)0x1E, (byte)0x3A, (byte)0x8A, (byte)200));
+        optionsType.GetProperty("LightColor")!.SetValue(loadedStyled, Activator.CreateInstance(colorType, (byte)255, (byte)255, (byte)240, (byte)0));
+
+        foreach (var (hostOptions, loadedOptions) in new[] { (SymbolImageOptions.Default, Activator.CreateInstance(optionsType)!), (styled, loadedStyled) })
+        {
+            var (hostSvg, hostPng) = host switch
+            {
+                QRCodeData qr => (SymbolImageWriter.GetSvgString(qr, hostOptions), SymbolImageWriter.GetPngBytes(qr, hostOptions)),
+                MicroQRCodeData micro => (SymbolImageWriter.GetSvgString(micro, hostOptions), SymbolImageWriter.GetPngBytes(micro, hostOptions)),
+                RmQRCodeData rm => (SymbolImageWriter.GetSvgString(rm, hostOptions), SymbolImageWriter.GetPngBytes(rm, hostOptions)),
+                _ => throw new ArgumentException(symbology),
+            };
+            await Assert.That((string)getSvg.Invoke(null, [loaded, loadedOptions])!).IsEqualTo(hostSvg);
+            await Assert.That(((byte[])getPng.Invoke(null, [loaded, loadedOptions])!).AsSpan().SequenceEqual(hostPng)).IsTrue()
+                .Because($"{targetFramework} {symbology}: the PNG bytes must be this host's");
+        }
+    }
+
     /// <summary>The core's build for <paramref name="targetFramework"/>, loaded once into a load context of its own. A stale build skips the case.</summary>
     private static async Task<(Assembly Build, string Path)> LoadBuild(string targetFramework)
     {

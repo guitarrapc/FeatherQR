@@ -25,7 +25,7 @@ internal static class SvgWriter
     public static string GetString<TView>(in TView view, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
-        ThrowIfTooLarge(in view, in options);
+        ImageSize.ThrowIfTooLarge(in view, in options);
         var rented = ArrayPool<byte>.Shared.Rent(MaxLength(in view));
         try
         {
@@ -41,7 +41,7 @@ internal static class SvgWriter
     public static int Write<TView>(in TView view, IBufferWriter<byte> writer, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
-        ThrowIfTooLarge(in view, in options);
+        ImageSize.ThrowIfTooLarge(in view, in options);
         // Written in full first, so the caller's writer is asked for the exact length and not for the bound.
         var rented = ArrayPool<byte>.Shared.Rent(MaxLength(in view));
         try
@@ -133,14 +133,6 @@ internal static class SvgWriter
 
         w.Raw("</svg>"u8);
         return w.Position;
-    }
-
-    private static void ThrowIfTooLarge<TView>(in TView view, in SymbolImageOptions options)
-        where TView : struct, IModuleMatrixView
-    {
-        long pixels = options.ModulePixelSize;
-        if (view.Width * pixels > int.MaxValue || view.Height * pixels > int.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(options), $"A module of {pixels} pixels makes the image {view.Width * pixels} × {view.Height * pixels} pixels, and a side can be at most {int.MaxValue}.");
     }
 
     /// <summary>

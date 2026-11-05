@@ -477,6 +477,9 @@ public sealed class QRCodeData
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal int GetCoreSize() => _baseSize;
 
+    /// <summary>The core modules as stored: MSB first, row after row, a row as many bits as the core is wide.</summary>
+    internal ReadOnlySpan<byte> CoreBits => _bits;
+
     /// <summary>
     /// Gets the module state at the specified core position (excluding quiet zone), skipping the quiet-zone coordinate translation of the public indexer.
     /// Caller must guarantee 0 &lt;= coreRow/coreCol &lt; core size.

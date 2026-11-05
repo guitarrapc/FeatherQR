@@ -118,12 +118,13 @@ byte[] png = SymbolImageWriter.GetPngBytes(qr, options);
 
 ### PNG
 
-- Black on white, both opaque: 1-bit greyscale. Any other pair: 1-bit indexed with a two-entry palette, plus `tRNS` when a colour's alpha is below 255.
+- Black on white, both opaque: 1-bit greyscale. Any other pair: 1-bit indexed with a two-entry palette, dark first, so the bits are the same in both modes (dark 0, light 1). `tRNS` follows when an alpha is below 255: the dark alpha alone when only the dark colour has one, both otherwise.
 - The chunks are `IHDR`, `PLTE` and `tRNS` when needed, `IDAT` and `IEND`. No colour profile or physical size.
 - The deflate is our own (C7), in one zlib stream and one deflate block, with row filter None.
 - Matches are searched only in the first scanline of each module row: byte runs at distance 1 (at least 4 bytes), and copies of the row above at the scanline's stride (at least 8). The other scanlines of the module row repeat it, so each is one copy at the stride, written without comparing. A copy runs on into the next row's matching prefix.
-- The writer holds three packed scanlines and allocates nothing beyond its output. Adler-32 of the repeated scanlines is computed in closed form.
-- The Huffman codes are dynamic (C7): a counting pass over the matrix, then the writing pass, with no token buffer between them.
+- A scanline longer than 32,768 bytes is past the reach of a copy, so an image that wide is searched for runs alone, scanline by scanline.
+- The writer holds three packed scanlines and allocates nothing beyond its output once warm. Adler-32 of the repeated scanlines is computed in closed form.
+- The Huffman codes are dynamic (C7). The counting pass records its symbols, a run of the same copy as one entry, and the writing pass replays them. Past 2^20 entries the writing pass matches the image again instead, which bounds the record at 8 MB. The exact length of the file is known before it is written.
 
 ### Text
 
@@ -288,3 +289,41 @@ Lessons.
 - The type-shape tests listed the settable structs as "the three generator options", so a fourth was refused until it was added on purpose, which is what the list is for. The rules now speak of option structs.
 - A version 40 string is about 48,000 characters and lands on the large object heap. The writer form does not allocate it.
 - Two local traps, neither in CI: the listing tool's shell glob picked up a stale `net8.0` build and refused to write the listing, so the three targets were passed by name. Copies of the benchmark project under `output/` stopped the out-of-process benchmark toolchain, so the numbers above were taken in-process.
+
+### Phase 2, PNG (2026-11-05)
+
+Done. `GetPngBytes` and `WritePng(IBufferWriter<byte>)` for the three data types, in the shape Phase 0 picked: 1-bit, filter None, one deflate block with dynamic Huffman codes, and matches searched in each module row's first scanline only. Scanlines are packed from the stored module bits, which the three matrix views now expose, with run lengths found a 64-bit window at a time. The approved listing gains the six calls.
+
+The tests:
+
+- Every version and level of the three symbologies at the default size, and module sizes 1, 2, 3, 5, 7, 9, 13 and 33 at quiet zones of 0, 1 and 4. Each file's chunk CRCs are checked with the test's own CRC, the inflated stream equals scanlines the test builds, and SkiaSharp's decode equals the matrix.
+- Greyscale for black on white, a palette with the dark colour first otherwise, and `tRNS` with both alphas or the dark one alone.
+- Scanlines of 32,768, 32,769 and 33,001 bytes, from a matrix the test builds, either side of a copy's reach.
+- An image with more symbols than the record holds, matched again by the writing pass. A fault planted in that path failed this test alone.
+- The core's decoder reads each symbology, and ZXing reads Standard QR at 1, 3 and 8 px.
+- The code-length builder gives complete codes within 15 and 7 bits, Huffman-optimal where the limit does not bind. Under Fibonacci counts it holds the limit, and no more frequent symbol gets a longer code.
+- The netstandard2.0 and netstandard2.1 builds write this host's SVG and PNG byte for byte.
+- Two files are pinned by SHA-256. In Release, `WritePng` allocates nothing into a writer with room, and `GetPngBytes` the array alone.
+
+The full suite in Release: 31,579 passed, 401 skipped, none failed.
+
+Benchmarks, from `SymbolImageWrite` (in-process, the first version against the shipped one):
+
+| Case | First version | Shipped | Allocated |
+|---|---|---|---|
+| Standard QR v1-2, 8 px | 7.87 µs | 5.35 µs | 224 B |
+| Standard QR v40, 8 px | 700 µs | 272 µs | 7,339 B |
+| Standard QR v40, 8 px, writer | 702 µs | 272 µs | 0 B |
+| Standard QR v40, 3 px | 323 µs | 211 µs | 7,409 B |
+| Micro QR M4, 8 px | 6.06 µs | 4.32 µs | 192 B |
+| rMQR R17x139, 8 px | 30.9 µs | 19.7 µs | 672 B |
+
+The SVG cases did not move (version 40 into a writer, 68.1 µs). No existing hot path changed.
+
+Lessons.
+
+- The first version spent most of its time at byte positions the matcher refuses: two prefix compares at nearly every byte of a first scanline. One compare of 4 or 8 bytes first, as long as the shortest run or copy taken, rules those positions out with no change to the output, and took version 40 from about 730 to about 400 µs in the probe.
+- Matching a second time cost about as much as recording the symbols does. The counting pass now records them and the writing pass replays them, and with literals appended without a look at the entry before, version 40 came to about 255 µs in the probe and version 1 from 8 to 5.5 µs.
+- Finding the SVG's runs with bit scans over the packed rows took the same time as the shared module-at-a-time enumerator, 66 against 64 to 70 µs into a writer at version 40: the text, not the scan, is the SVG's cost. The SVG keeps the shared enumerator, and with it the geometry `GetModuleRectangles` reports.
+- The SIMD layout rule matches calls on a class named `Crc32` as the Arm intrinsic, so the CRC class is `PngCrc`.
+- A quick probe with tiered compilation off timed the writers 2.5 to 3 times slower than the benchmark. With tiering on and a long warm-up it agreed.
