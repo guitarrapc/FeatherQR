@@ -108,7 +108,7 @@ internal static class ModuleBitPacker
         }
         if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) && count - i >= 16)
         {
-            // explicit byte-shuffle intrinsics (pshufb / tbl): the portable Vector128.Shuffle only lowers to them when the JIT sees a constant index operand at import, which the .NET 8 JIT does not for a hoisted local (it emits a per-lane software loop)
+            // explicit byte-shuffle intrinsics (pshufb / tbl): the portable Vector128.Shuffle adds a range check of the hoisted index to each step, and ShuffleNative becomes a call on a default NativeAOT publish
             var reverse = Vector128.Create((byte)7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8);
             for (; i + 16 <= count; i += 16)
             {

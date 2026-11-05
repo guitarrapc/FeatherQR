@@ -84,9 +84,8 @@ internal ref partial struct QRBinaryEncoder
             {
                 var values = (looked - Vector64<byte>.One).AsUInt16();
                 var pairs = AdvSimd.MultiplyAdd(values >> 8, values & Vector64.Create((ushort)0xFF), Vector64.Create((ushort)45)).AsUInt32();
-                // the last USRA on the 128-bit form, as the step of sixteen takes it: the .NET 8 reference bounds the 64-bit scalar form's shift to 1-8 (CA1857)
-                var quads = AdvSimd.ShiftRightLogicalAdd(pairs >> 16, pairs << 16, 5).AsUInt64().ToVector128Unsafe();
-                writer.WriteWide(AdvSimd.ShiftRightLogicalAdd(quads >> 32, quads << 32, 10).ToScalar(), 44);
+                var quads = AdvSimd.ShiftRightLogicalAdd(pairs >> 16, pairs << 16, 5).AsUInt64();
+                writer.WriteWide(AdvSimd.ShiftRightLogicalAddScalar(quads >> 32, quads << 32, 10).ToScalar(), 44);
                 i += 8;
             }
         }
