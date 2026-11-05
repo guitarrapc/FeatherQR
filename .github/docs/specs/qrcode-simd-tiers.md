@@ -21,7 +21,7 @@ Portable `Vector128` code in a default NativeAOT publish is limited to SSE2, bec
 
 ### How FeatherQR uses them
 
-FeatherQR ships net8.0, net10.0 and netstandard2.0/2.1 builds. It groups the .NET builds above into four build classes, and `SimdTiers.cs` states the tier each kernel takes in each class:
+FeatherQR ships net10.0 and netstandard2.0/2.1 builds. It groups the .NET builds above into four build classes, and `SimdTiers.cs` states the tier each kernel takes in each class:
 
 | Build class | Builds |
 |---|---|
@@ -30,8 +30,7 @@ FeatherQR ships net8.0, net10.0 and netstandard2.0/2.1 builds. It groups the .NE
 | ARM64 | JIT or NativeAOT |
 | WebAssembly | Interpreted or AOT |
 
-- The netstandard2.0/2.1 builds have no SIMD tiers: every kernel runs scalar. .NET Framework, and .NET 7 and earlier, load them.
-- GFNI tiers run only in the net10.0 build. .NET 8 has no GFNI API, so the net8.0 build, which apps on .NET 8 and 9 use, runs the next tier instead.
+- The netstandard2.0/2.1 builds have no SIMD tiers: every kernel runs scalar. .NET Framework, and .NET 9 and earlier, load them. A net8.0 build ran the tiers on .NET 8 and 9 until 2.0.0 dropped it, as both runtimes reached end of support.
 - Two builds are in none of the classes, and no CI run checks them: a JIT on an x64 CPU without AVX2, and NativeAOT with `x86-64-v2,avx`, which runs the `Avx2` tiers but not the `Vector256` ones.
 
 The tiers each build class always has, and those that depend on the CPU. A tier not listed for a class is never available there. Tiers joined by `+` come together: a CPU has both or neither.

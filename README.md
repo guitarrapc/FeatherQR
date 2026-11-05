@@ -61,10 +61,10 @@ FeatherQR is a modern, high-performance QR code library. It allocates memory onl
 - **Binary Data**: Bytes written and read as they are, with any ECI assignment
 - **Highly Customizable**: Gradients, icons, custom shapes, colors, and more
 - **Cross-Platform**: Windows, Linux, macOS, iOS, Android, WebAssembly
-- **Zero Dependencies**: The `FeatherQR` core package depends on nothing on .NET 8+ (BCL shims only on .NET Standard)
+- **Zero Dependencies**: The `FeatherQR` core package depends on nothing on .NET 10+ (BCL shims only on .NET Standard)
 - **No System.Drawing**: Avoids GDI+ issues and Windows dependencies
 - **NativeAOT Ready**: Full support for .NET Native AOT compilation
-- **Modern .NET**: .NET Standard 2.0, 2.1, .NET 8+
+- **Modern .NET**: .NET Standard 2.0, 2.1, .NET 10+
 
 ## Supported Symbologies
 
@@ -618,7 +618,7 @@ The calls pair up as below. Micro QR and rMQR write and read the same way, throu
 | Write to memory or a buffer writer | `ToByteArray()`, `ToSvgString()`, `SaveTo(IBufferWriter<byte>)`, `GetPngBytes(content)` and the other helpers | None, since there is no I/O to wait on |
 | Read from memory | `TryDecode(bitmap, out text)`, `TryDecodeImage(luminance, width, height, out text, out info)`, `DecodeSymbols(bitmap)`, `DecodeImageSymbols(luminance, width, height)` | None, since there is no I/O to wait on |
 
-With C# 14 the stream reads are reachable as `QRCodeDecoder.DecodeAsync(stream)`, as above. On older language versions, such as the C# 12 a net8.0 project uses by default, call them on `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`.
+With C# 14 the stream reads are reachable as `QRCodeDecoder.DecodeAsync(stream)`, as above. On older language versions, such as the C# 7.3 a .NET Framework project uses by default, call them on `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`.
 
 Sample usage of asynchronous stream I/O.
 

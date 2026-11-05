@@ -77,7 +77,7 @@ public class NetStandardBuildParityTest
     /// <summary>
     /// Which netstandard build keeps Standard QR's pooled quiet-zone path. netstandard2.0, which .NET Framework runs, keeps the pooled core
     /// copied into the cleared destination, since the move in place is slower on .NET Framework 4.8. netstandard2.1, which .NET 6
-    /// and 7 run, moves the core in place as .NET 8 and later do. The pooled path's row copy, <c>CopyIntoWindow</c>, is compiled only into a
+    /// to 9 run, moves the core in place as the net10.0 build does. The pooled path's row copy, <c>CopyIntoWindow</c>, is compiled only into a
     /// build that keeps the path, so its presence tells the two apart. <see cref="SpanCreate_DirtyDestination_MatchesThisHostsBuild"/>
     /// holds either path's output to this host's.
     /// </summary>
@@ -95,7 +95,7 @@ public class NetStandardBuildParityTest
     /// <summary>
     /// The netstandard builds read a Byte segment's UTF-8 with their own decoder, since their runtime's count of chars allocates in each call
     /// that meets a bad byte, and so does .NET Framework's decode, which replaces an encoded surrogate with two U+FFFD where the host
-    /// writes three. The text checks here load the builds on .NET 8 and 10, where a runtime decode straight into the destination, with no
+    /// writes three. The text checks here load the builds on .NET 10, where a runtime decode straight into the destination, with no
     /// count first, reads as the host's build and allocates nothing, so those checks would pass on it. What tells the two apart is the
     /// segment reader's call to the build's own decoder, no runtime encoding or decoder reached from the reader, and no runtime encoding,
     /// encoder or decoder kept beside them.

@@ -106,7 +106,7 @@ Console.Error.WriteLine();
 Console.Error.WriteLine("Run the same command without --check to accept the new surface, then review the diff.");
 return 1;
 
-// The last directory segment is the target framework: bin/Release/net8.0/X.dll.
+// The last directory segment is the target framework: bin/Release/net10.0/X.dll.
 static string FrameworkOf(string path) => Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(path))) ?? "?";
 
 // Types own their members, so a diff that groups by type reads the way a reviewer thinks:

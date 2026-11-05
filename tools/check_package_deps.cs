@@ -31,7 +31,6 @@ var expected = new Dictionary<string, Dictionary<string, string[]>>(StringCompar
     {
         [".NETStandard2.0"] = ["System.Memory"],
         [".NETStandard2.1"] = ["System.Runtime.CompilerServices.Unsafe"],
-        ["net8.0"] = [],
         ["net10.0"] = [],
     },
     // The rendering package depends on the core at the lockstep version and on SkiaSharp,
@@ -41,7 +40,6 @@ var expected = new Dictionary<string, Dictionary<string, string[]>>(StringCompar
     {
         [".NETStandard2.0"] = ["FeatherQR", "SkiaSharp"],
         [".NETStandard2.1"] = ["FeatherQR", "SkiaSharp"],
-        ["net8.0"] = ["FeatherQR", "SkiaSharp"],
         ["net10.0"] = ["FeatherQR", "SkiaSharp"],
     },
     // The GS1 data package depends on the core at the lockstep version and nothing else: it works on text,
@@ -51,7 +49,6 @@ var expected = new Dictionary<string, Dictionary<string, string[]>>(StringCompar
     {
         [".NETStandard2.0"] = ["FeatherQR"],
         [".NETStandard2.1"] = ["FeatherQR"],
-        ["net8.0"] = ["FeatherQR"],
         ["net10.0"] = ["FeatherQR"],
     },
     // The compatibility metapackage is a dependency and nothing else.
@@ -59,7 +56,6 @@ var expected = new Dictionary<string, Dictionary<string, string[]>>(StringCompar
     {
         [".NETStandard2.0"] = ["FeatherQR.SkiaSharp"],
         [".NETStandard2.1"] = ["FeatherQR.SkiaSharp"],
-        ["net8.0"] = ["FeatherQR.SkiaSharp"],
         ["net10.0"] = ["FeatherQR.SkiaSharp"],
     },
 };

@@ -318,7 +318,6 @@ internal ref partial struct QRBinaryEncoder
             WriteNumericSsse3(ref _writer, digits);
             return;
         }
-        // The NEON step's shortest run depends on the runtime: 40 digits on .NET 10, 160 on .NET 8 (NumericAdvSimdMinimum).
         if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported && digits.Length >= NumericAdvSimdMinimum)
         {
             WriteNumericAdvSimd(ref _writer, digits);
@@ -412,7 +411,6 @@ internal ref partial struct QRBinaryEncoder
             WriteAlphanumericSsse3(ref _writer, chars);
             return;
         }
-        // The NEON step's shortest run depends on the runtime: every run here on .NET 10, 32 characters on .NET 8 (AlphanumericAdvSimdMinimum).
         if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported && chars.Length >= AlphanumericAdvSimdMinimum)
         {
             WriteAlphanumericAdvSimd(ref _writer, chars);

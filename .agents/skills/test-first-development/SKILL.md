@@ -37,7 +37,7 @@ After the implementation passes targeted tests, run all tests to catch regressio
 dotnet test
 ```
 
-All tests must pass on both target frameworks (`net8.0` and `net10.0`) before proceeding.
+All tests must pass before proceeding.
 
 ### 4. Add Regression Tests
 
@@ -137,7 +137,7 @@ dotnet test --project tests/FeatherQR.Tests --treenode-filter /*/*/QRCodeDecoder
 dotnet test --project tests/FeatherQR.Tests --treenode-filter /*/*/EccBinaryEncoderKernelParityTest/*
 ```
 
-Tests run on both `net8.0` and `net10.0`; a SIMD-only code path may pass on one TFM and exercise a different kernel on the other.
+Tests run on `net10.0` only, so a call through the dispatch reaches the tier this machine's CPU takes. A lower tier is reached only by a parity test that calls it directly.
 
 ## Test Conventions
 
@@ -196,7 +196,7 @@ dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -
 
 Publish to a **clean output directory** each time; re-publishing into the same `-o` folder leaves stale fingerprinted assets and can break the build.
 
-Do not pass `-r browser-wasm` on the CLI, it propagates to the multi-targeted library and requires the `wasm-tools-net8` workload.
+Do not pass `-r browser-wasm` on the CLI. It propagates to the multi-targeted library, and the WebAssembly SDK defaults to it anyway.
 
 ## Test Design Guardrails
 

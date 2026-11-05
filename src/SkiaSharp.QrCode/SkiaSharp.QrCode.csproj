@@ -2,7 +2,7 @@
 
   <!-- Metapackage. SkiaSharp.QrCode ships no assembly since 2.0.0: it exists so that <PackageReference Include="SkiaSharp.QrCode" /> keeps restoring after the split, and resolves to FeatherQR.SkiaSharp -->
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net10.0</TargetFrameworks>
 
     <!-- NuGet -->
     <IsPackable>true</IsPackable>

@@ -32,7 +32,7 @@ using System.Text.Json;
 //
 // One target framework is enough. The conditional compilation in the library all sits on
 // internal types, so no exported type has a framework-conditional member and net10.0
-// represents netstandard2.0, netstandard2.1 and net8.0 as well.
+// represents netstandard2.0 and netstandard2.1 as well.
 
 var outputPath = GetOutputPath(args);
 var wantsHtml = args.Contains("--html");

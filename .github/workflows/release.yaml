@@ -71,9 +71,7 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           restore-wasm-workload: true
-          dotnet-version: |
-            10.0.x
-            8.0.x
+          dotnet-version: 10.0.x
       - name: Build
         run: dotnet build -c Release
       - name: Test
@@ -101,9 +99,7 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           restore-wasm-workload: true
-          dotnet-version: |
-            10.0.x
-            8.0.x
+          dotnet-version: 10.0.x
       # Build separately, so the documentation is trimmed before pack picks it up. Fails the release if it cannot.
       - run: dotnet build -c Release
       - name: Trim XML documentation to the public surface
@@ -158,7 +154,7 @@ jobs:
         run: dotnet run tools/public_api.cs -- --html --source-links -o src/FeatherQR.Playground/wwwroot/api/index.html
       # Version for the in-page badge (AssemblyInformationalVersion) comes from Directory.Build.props.
       # No -r browser-wasm: the WebAssembly SDK defaults to it, and passing it as a global
-      # property would force the multi-targeted library reference to need wasm-tools-net8.
+      # property would also reach the multi-targeted library reference.
       - name: Publish Playground (browser-wasm Release)
         run: |
           dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -o publish/

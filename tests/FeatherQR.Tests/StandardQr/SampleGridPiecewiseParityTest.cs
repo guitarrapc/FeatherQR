@@ -174,7 +174,6 @@ public class SampleGridPiecewiseParityTest
     /// range are the far edge of the image and NaN is 0 on every runtime, whatever its cast makes of them (the
     /// raw x64 conversion on net8.0 and the WebAssembly interpreter give INT_MIN for all of them). A raw vector
     /// conversion gives INT_MIN too, so which operand of the float minimum holds the limit decides where NaN lands.
-    /// Both target frameworks run this: a first port passed on net10.0 and failed on net8.0.
     /// </summary>
     [Test]
     [Arguments(float.NaN)]
