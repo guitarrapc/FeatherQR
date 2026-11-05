@@ -110,7 +110,8 @@ internal static partial class Gs1Linters
     }
 
     /// <summary>The first 97 primes: the weights of the check character pair, the rightmost data character taking 2.</summary>
-    // An array built once rather than a span property with a collection expression, which on .NET 8 reads from a fresh array on every access.
+    // An array rather than a span property: the netstandard builds compile that property to an array cached behind a null check, which
+    // the JIT calls instead of inlining, once for each character of Csumalpha's loop.
     private static readonly ushort[] Primes =
     [
         2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89,
