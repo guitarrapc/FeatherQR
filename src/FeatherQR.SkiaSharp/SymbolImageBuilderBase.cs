@@ -358,7 +358,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <remarks>
     /// Renders exactly as <see cref="SaveToSvg(Stream)"/>.
-    /// The document is written in the writer own segments, so a segmented writer such as a pipe never has to hold it contiguously.
+    /// The document is written in the writer's own segments, so a segmented writer such as a pipe never has to hold it contiguously.
     /// </remarks>
     /// <param name="writer">Where to write.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <c>null</c>.</exception>
