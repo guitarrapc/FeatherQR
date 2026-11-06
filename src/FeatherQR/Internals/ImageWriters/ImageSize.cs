@@ -1,7 +1,7 @@
 namespace FeatherQR.Internals.ImageWriters;
 
 /// <summary>
-/// The size limits of the SVG, PNG and pixel outputs, and the check on a span a caller's writer hands out.
+/// The size limits of the SVG, PNG and pixel outputs.
 /// </summary>
 internal static class ImageSize
 {
@@ -17,16 +17,6 @@ internal static class ImageSize
         long pixels = options.ModulePixelSize;
         if (view.Width * pixels > int.MaxValue || view.Height * pixels > int.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(options), $"A module of {pixels} pixels makes the image {view.Width * pixels} × {view.Height * pixels} pixels, and a side can be at most {int.MaxValue}.");
-    }
-
-    /// <summary>
-    /// Refuses a writer that hands out a span shorter than it was asked for, against the <see cref="System.Buffers.IBufferWriter{T}"/>
-    /// contract, before anything is written into it.
-    /// </summary>
-    public static void ThrowIfShort(int length, int asked)
-    {
-        if (length < asked)
-            throw new InvalidOperationException($"The writer handed out a span of {length} bytes where {asked} were asked for.");
     }
 
     /// <summary>

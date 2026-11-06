@@ -50,9 +50,7 @@ internal static class SvgWriter
         try
         {
             var length = Write(in view, in options, rented);
-            var span = writer.GetSpan(length);
-            ImageSize.ThrowIfShort(span.Length, length);
-            rented.AsSpan(0, length).CopyTo(span);
+            rented.AsSpan(0, length).CopyTo(BufferWriterSpan.Get(writer, length));
             writer.Advance(length);
             return length;
         }

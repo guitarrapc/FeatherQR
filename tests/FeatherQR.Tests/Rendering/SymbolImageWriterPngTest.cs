@@ -438,15 +438,6 @@ public class SymbolImageWriterPngTest
         await Assert.That(next).IsEquivalentTo(expected, TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
-    /// <summary>A writer that hands out a span one byte shorter than asked, against the contract.</summary>
-    internal sealed class ShortSpanWriter : IBufferWriter<byte>
-    {
-        public int Advanced { get; private set; }
-        public void Advance(int count) => Advanced += count;
-        public Memory<byte> GetMemory(int sizeHint = 0) => new byte[Math.Max(0, sizeHint - 1)];
-        public Span<byte> GetSpan(int sizeHint = 0) => new byte[Math.Max(0, sizeHint - 1)];
-    }
-
     /// <summary>An array writer that runs a callback the first time it is asked for a span.</summary>
     private sealed class CallbackWriter(Action callback) : IBufferWriter<byte>
     {

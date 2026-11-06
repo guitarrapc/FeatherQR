@@ -245,7 +245,7 @@ public class SymbolImageWriterSvgTest
     [Test]
     public async Task AWriterWithTooShortASpan_IsRefused()
     {
-        var writer = new SymbolImageWriterPngTest.ShortSpanWriter();
+        var writer = new ShortSpanWriter();
         await Assert.That(() => SymbolImageWriter.WriteSvg(QRCodeGenerator.Create("short", QREccLevel.M), writer)).Throws<InvalidOperationException>();
         await Assert.That(() => SymbolImageWriter.WriteSvg(MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L), writer)).Throws<InvalidOperationException>();
         await Assert.That(() => SymbolImageWriter.WriteSvg(RmQRCodeGenerator.Create("short", RmQREccLevel.M), writer)).Throws<InvalidOperationException>();

@@ -597,6 +597,10 @@ Use `EciMode.Utf8`, or `EciMode.Default` to let the library choose. Text ISO-885
 - **`new QRCodeData(int, int)`, `new MicroQRCodeData(MicroQRVersion, int)` and `new RmQRCodeData(RmQRVersion, int)` are no longer public.** They made an all-light matrix that nothing public could draw into. If you used one for its `Size`, a Standard QR symbol is `17 + 4 × version` modules a side plus twice the quiet zone, and `TryGetRequiredBufferSize` reports the size of a given content.
 - **The restore constructors throw `InvalidDataException` unless the format information is exactly a word a generator writes**: both copies the same word in Standard QR and rMQR, and a word that names the matrix's own version in Micro QR and rMQR. Bytes `GetRawData` wrote for a generated symbol always restore. Bytes of an empty matrix, or of one whose format modules were changed, no longer do.
 
+### `GetRawData` refuses a writer that breaks its contract
+
+**Run-time break, and only for a writer that never got the bytes.** `GetRawData(IBufferWriter<byte>)` on `QRCodeData`, `MicroQRCodeData` and `RmQRCodeData` throws `ArgumentNullException` for a null writer, where it threw `NullReferenceException`. A writer that hands out a span shorter than `GetRawDataSize()` gets `InvalidOperationException` before anything is written into the span. It used to get the header written and then an `ArgumentException`, or an `IndexOutOfRangeException` when the span was shorter than the header. Code that catches `ArgumentException` for a short span no longer catches it.
+
 ### `QRCodeImageBuilder` refuses `WithErrorCorrection` and `WithEciMode` on a ready-made code
 
 **Run-time break.** On a builder made from a `QRCodeData`, both now throw `InvalidOperationException`, as its other encoding setters and the Micro QR and rMQR builders already did. They used to be accepted and ignored, so a call that asked for level H drew whatever level the data held. Drop the call, or generate the data at the level you want. The level the data holds is `QRCodeData.EccLevel`.

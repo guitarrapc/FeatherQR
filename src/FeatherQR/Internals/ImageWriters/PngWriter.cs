@@ -49,9 +49,7 @@ internal static class PngWriter
         try
         {
             var length = encoder.Measure(in view, in options);
-            var span = writer.GetSpan(length);
-            ImageSize.ThrowIfShort(span.Length, length);
-            encoder.Write(in view, span.Slice(0, length));
+            encoder.Write(in view, BufferWriterSpan.Get(writer, length));
             writer.Advance(length);
             return length;
         }

@@ -285,12 +285,16 @@ public sealed class RmQRCodeData
     /// <summary>
     /// Serializes the rMQR code into a buffer writer, without allocating a byte array.
     /// </summary>
+    /// <param name="writer">Where to write the bytes.</param>
     /// <returns>The number of bytes written.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when <paramref name="writer"/> hands out a span shorter than <see cref="GetRawDataSize"/>, against the <see cref="IBufferWriter{T}"/> contract.</exception>
     public int GetRawData(IBufferWriter<byte> writer)
     {
+        if (writer is null)
+            throw new ArgumentNullException(nameof(writer));
         var totalSize = GetRawDataSize();
-        var buffer = writer.GetSpan(totalSize);
-        WriteRawData(buffer);
+        WriteRawData(BufferWriterSpan.Get(writer, totalSize));
         writer.Advance(totalSize);
         return totalSize;
     }
