@@ -10,7 +10,7 @@ using System.Text;
 ///   RmQR  : rMQR R17x139, the widest
 ///
 /// The string and array forms allocate their result. The writer forms write into a buffer reused across calls, so they allocate nothing.
-/// Large_Png_3px is a module size that straddles bytes, the case the PNG writer's matcher compresses least.
+/// Large_Png_3px and the 10px cases are module sizes that straddle bytes, where the PNG writer looks its matches up across the window.
 /// The pixel cases write into one buffer kept across calls.
 /// </summary>
 public class SymbolImageWrite
@@ -21,6 +21,7 @@ public class SymbolImageWrite
     private RmQRCodeData _rmqr = default!;
     private readonly ArrayBufferWriter<byte> _writer = new(1 << 20);
     private static readonly SymbolImageOptions ThreePixels = new() { ModulePixelSize = 3 };
+    private static readonly SymbolImageOptions TenPixels = new() { ModulePixelSize = 10 };
 
     [GlobalSetup]
     public void Setup()
@@ -65,6 +66,12 @@ public class SymbolImageWrite
 
     [Benchmark]
     public byte[] Large_Png_3px() => SymbolImageWriter.GetPngBytes(_large, ThreePixels);
+
+    [Benchmark]
+    public byte[] Large_Png_10px() => SymbolImageWriter.GetPngBytes(_large, TenPixels);
+
+    [Benchmark]
+    public byte[] Small_Png_10px() => SymbolImageWriter.GetPngBytes(_small, TenPixels);
 
     [Benchmark]
     public byte[] Micro_Png() => SymbolImageWriter.GetPngBytes(_micro);

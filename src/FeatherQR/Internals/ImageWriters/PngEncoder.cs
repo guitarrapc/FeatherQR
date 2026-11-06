@@ -22,6 +22,12 @@ internal sealed class PngEncoder
     private const int MinRowCopy = 8;
     // Each scanline's slot runs this far past it, so packing and matching read and write whole words up to its end.
     private const int Slack = 8;
+    // How many chained positions a lookup compares.
+    private const int LookupDepth = 8;
+    // A match longer than this leaves the positions it covers out of the lookup, since they repeat bytes that came before it.
+    private const int MaxInsertedMatch = 32;
+    // A lookup stops once the match in hand is this long, since going further along the chain rarely made the file smaller.
+    private const int GoodMatch = 16;
 
     private readonly long[] _literalCounts = new long[Deflate.LiteralLengthSymbols];
     private readonly long[] _distanceCounts = new long[Deflate.DistanceSymbols];
@@ -53,9 +59,23 @@ internal sealed class PngEncoder
     private SymbolColor _dark;
     private SymbolColor _light;
 
-    // The scanlines of module rows m - 1, m and m + 1, at slot m % 3, rented for each call.
+    // The first scanlines of module rows m - 1, m and m + 1, or of every module row a copy can reach and m + 1 when the lookup is on,
+    // at slot m % _slots, rented for each call.
     private byte[] _rows = [];
-    private readonly int[] _slotRow = new int[3];
+    private int _slots;
+    private int[] _slotRow = new int[3];
+
+    // The lookup: at module sizes other than 1, 2, 4 and 8 pixels, the positions of the first scanlines in reach, chained by a hash of
+    // the bytes there. A position is slot << _slotShift | offset, and an entry is a position + 1, with 0 for none. A position's link holds the module row it
+    // was chained for in its high half, which tells an entry whose slot has since taken a later row, and the next entry in its low half.
+    private bool _lookup;
+    private int _keyBytes;
+    private ulong _keyMask;
+    private int _hashBits;
+    private int _hashShift;
+    private int _slotShift;
+    private int[] _head = [];
+    private long[] _links = [];
 
     // For each module size up to 8, the light-1 bits of eight modules for each byte value of them (dark 1, MSB first). Shared by every
     // thread and made on first use, so a caller that changes the module size between calls does not rebuild one.
@@ -102,6 +122,13 @@ internal sealed class PngEncoder
             ArrayPool<ulong>.Shared.Return(encoder._runSymbols);
             encoder._runSymbols = [];
         }
+        if (encoder._links.Length != 0)
+        {
+            ArrayPool<int>.Shared.Return(encoder._head);
+            ArrayPool<long>.Shared.Return(encoder._links);
+            encoder._head = [];
+            encoder._links = [];
+        }
         cached = encoder;
     }
 
@@ -125,6 +152,15 @@ internal sealed class PngEncoder
         // In a long, since a width within 7 of int.MaxValue passes the side check.
         _stride = (int)((_widthPixels + 7L) / 8) + 1;
         _rowCopies = _stride <= Deflate.MaxDistance;
+        // At 1, 2, 4 and 8 pixels a literal byte is one module or a whole number of them, so literals are already cheap and the lookup's
+        // matches cost more than they save.
+        _lookup = _rowCopies && (_pixels > 8 || 8 % _pixels != 0);
+        // A key of about eight modules, from 4 to 8 bytes: a shorter key found matches that cost more than their literals, and a longer one
+        // missed matches.
+        _keyBytes = Math.Min(8, Math.Max(4, _pixels));
+        // From row m, the nearest byte of row m - j is at least (j - 1) × pixels × stride + 1 bytes back, so 32,767 / (pixels × stride) + 1
+        // rows back are in reach. They, row m and row m + 1, which a copy reads ahead into, each keep a slot.
+        _slots = !_rowCopies ? 1 :!_lookup ? 3 : (int)Math.Min(_moduleRows, (Deflate.MaxDistance - 1) / ((long)_pixels * _stride) + 3);
 
         // A match covers at most 258 bytes and costs at least two bits, a length code and a distance code. A literal costs at least a bit for one byte.
         // That bounds the output from below before anything is counted.
@@ -339,13 +375,34 @@ internal sealed class PngEncoder
 
     private void RentRows()
     {
-        var slots = _rowCopies ? 3 : 1;
-        var length = slots * (_stride + Slack);
+        var length = _slots * (_stride + Slack);
         if (_rows.Length < length)
         {
             if (_rows.Length != 0)
                 ArrayPool<byte>.Shared.Return(_rows);
             _rows = ArrayPool<byte>.Shared.Rent(length);
+        }
+        if (_slotRow.Length < _slots)
+            _slotRow = new int[_slots];
+        if (_lookup)
+        {
+            // A slot's positions are a power of two, so a position splits into its slot and offset by a shift and a mask.
+            _slotShift = CeilingLog2(_stride);
+            var positions = _slots << _slotShift;
+            // Two to four times as many chains as positions in reach, but no fewer than 2^8 and no more than 2^15.
+            _hashBits = Math.Min(15, Math.Max(8, CeilingLog2(_slots * _stride) + 1));
+            _hashShift = 64 - _hashBits;
+            _keyMask = ~0UL >> (64 - 8 * _keyBytes);
+            if (_links.Length < positions || _head.Length < 1 << _hashBits)
+            {
+                if (_links.Length != 0)
+                {
+                    ArrayPool<int>.Shared.Return(_head);
+                    ArrayPool<long>.Shared.Return(_links);
+                }
+                _head = ArrayPool<int>.Shared.Rent(1 << _hashBits);
+                _links = ArrayPool<long>.Shared.Rent(positions);
+            }
         }
         if (_rowCopies)
         {
@@ -365,7 +422,10 @@ internal sealed class PngEncoder
     private uint Tokenize<TView>(in TView view, ref DeflateBitWriter w, bool write)
         where TView : struct, IModuleMatrixView
     {
-        _slotRow[0] = _slotRow[1] = _slotRow[2] = -1;
+        _slotRow.AsSpan(0, _slots).Fill(-1);
+        // The chains are reached only through the heads, so clearing these leaves nothing of an earlier image or pass to find.
+        if (_lookup)
+            Array.Clear(_head, 0, 1 << _hashBits);
         var stride = _stride;
         var repeatLength = (long)(_pixels - 1) * stride;
         var adler = new Adler32();
@@ -400,18 +460,34 @@ internal sealed class PngEncoder
             var above = m > 0 ? Row(in view, m - 1) : default;
             // A quiet zone row is crossed by runs and copies of 258 bytes, so marking its every position would cost more than it saves.
             var quiet = (uint)(m - _quietZone) >= (uint)_coreHeight;
+            // A quiet zone row is light alone, so runs and copies cover it and the lookup neither keeps nor searches it.
+            var lookup = _lookup && !quiet;
             if (!quiet)
                 MarkStarts(row, above, m > 0);
             ref var rowStart = ref MemoryMarshal.GetReference(row);
             ref var aboveStart = ref MemoryMarshal.GetReference(above);
+            var slotBase = lookup ? m % _slots << _slotShift : 0;
+            var inserted = 0;
             var i = carry;
             while (i < stride)
             {
-                // Every position before the next mark is a literal.
+                // No run or copy of the scanline above starts before the next mark, so the positions before it are literals or the lookup's matches.
                 var next = quiet ? i : NextStart(i, stride);
                 if (next > i)
                 {
-                    if (write)
+                    if (lookup)
+                    {
+                        _recordedCount = count;
+                        i = LookupBeforeMark(ref w, write, row, m, slotBase, ref inserted, i, next);
+                        recorded = _recorded;
+                        count = _recordedCount;
+                        if (i >= stride)
+                            break;
+                        // A match that ran past the mark covers it, so the search goes on from the next mark after the match.
+                        if (i > next)
+                            continue;
+                    }
+                    else if (write)
                     {
                         for (; i < next; i++)
                             w.Put(_literalCodes[row[i]]);
@@ -476,9 +552,21 @@ internal sealed class PngEncoder
                     }
                 }
 
+                if (lookup && length < max && i + _keyBytes <= stride)
+                {
+                    Insert(row, m, slotBase, inserted, i);
+                    inserted = i;
+                    Find(row, m, i, max, Key(row, i), ref length, ref distance);
+                }
+
                 _recordedCount = count;
                 if (distance != 0)
                 {
+                    if (lookup && length > MaxInsertedMatch)
+                    {
+                        Insert(row, m, slotBase, inserted, i);
+                        inserted = i + length;
+                    }
                     Match(ref w, write, length, distance);
                     i += length;
                 }
@@ -490,6 +578,8 @@ internal sealed class PngEncoder
                 recorded = _recorded;
                 count = _recordedCount;
             }
+            if (lookup)
+                Insert(row, m, slotBase, inserted, stride);
 
             // The repeats, as copies of the scanline above, the last one running on into the next row's first scanline.
             _recordedCount = count;
@@ -746,6 +836,8 @@ internal sealed class PngEncoder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong LittleEndian(ulong value) => BitConverter.IsLittleEndian ? value : BinaryPrimitives.ReverseEndianness(value);
 
+    private static int CeilingLog2(int value) => 64 - PackedRuns.LeadingZeros((ulong)(value - 1));
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int TrailingZeros(ulong value)
     {
@@ -754,6 +846,153 @@ internal sealed class PngEncoder
 #else
         return value == 0 ? 64 : 63 - PackedRuns.LeadingZeros(value & (0 - value));
 #endif
+    }
+
+    // ---- the lookup ---------------------------------------------------------------------------
+    // Its methods are kept out of Tokenize, whose size already makes the JIT's inlining there differ from one process to the next.
+
+    /// <summary>
+    /// The positions from <paramref name="i"/> up to <paramref name="next"/>, where no run or copy of the scanline above starts, as literals
+    /// or the lookup's matches. Returns where the last symbol ends, which a match can put past <paramref name="next"/>.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private int LookupBeforeMark(ref DeflateBitWriter w, bool write, scoped ReadOnlySpan<byte> row, int m, int slotBase, ref int inserted, int i, int next)
+    {
+        var stride = _stride;
+        var lastKey = stride - _keyBytes;
+        while (i < next)
+        {
+            if (i > lastKey)
+            {
+                Literal(ref w, write, row[i]);
+                i++;
+                continue;
+            }
+            if (inserted < i)
+                Insert(row, m, slotBase, inserted, i);
+            var key = Key(row, i);
+            var length = 0;
+            var distance = 0;
+            Find(row, m, i, Math.Min(Deflate.MaxMatch, stride - i), key, ref length, ref distance);
+            // The position goes in now with the key in hand, unless a long match leaves the positions it covers out.
+            if (distance == 0 || length <= MaxInsertedMatch)
+            {
+                Chain(m, slotBase | i, key);
+                inserted = i + 1;
+            }
+            else
+            {
+                inserted = i + length;
+            }
+            if (distance == 0)
+            {
+                Literal(ref w, write, row[i]);
+                i++;
+            }
+            else
+            {
+                Match(ref w, write, length, distance);
+                i += length;
+            }
+        }
+        return i;
+    }
+
+    /// <summary>The chain for the <see cref="_keyBytes"/> bytes at <paramref name="k"/>, which the slot's slack lets a whole word read.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int Key(ReadOnlySpan<byte> row, int k)
+        => (int)(((LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref MemoryMarshal.GetReference(row), k))) & _keyMask) * HashMultiplier) >> _hashShift);
+
+    private const ulong HashMultiplier = 0x9E37_79B9_7F4A_7C15UL;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void Chain(int m, int position, int key)
+    {
+        _links[position] = (long)m << 32 | (uint)_head[key];
+        _head[key] = position + 1;
+    }
+
+    /// <summary>Chains the positions of row <paramref name="m"/> from <paramref name="from"/> up to <paramref name="to"/> that a whole key fits after.</summary>
+    /// <remarks>A position is below the slot's power of two and a key below the heads', so the tables are written unchecked.</remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void Insert(ReadOnlySpan<byte> row, int m, int slotBase, int from, int to)
+    {
+        var end = Math.Min(to, _stride - _keyBytes + 1);
+        if (from >= end)
+            return;
+        ref var bytes = ref MemoryMarshal.GetReference(row);
+        ref var head = ref MemoryMarshal.GetReference(_head.AsSpan());
+        ref var links = ref MemoryMarshal.GetReference(_links.AsSpan());
+        var keyMask = _keyMask;
+        var hashShift = _hashShift;
+        var entryRow = (long)m << 32;
+        for (var k = from; k < end; k++)
+        {
+            var key = (int)(((LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k))) & keyMask) * HashMultiplier) >> hashShift);
+            var position = slotBase | k;
+            Unsafe.Add(ref links, position) = entryRow | (uint)Unsafe.Add(ref head, key);
+            Unsafe.Add(ref head, key) = position + 1;
+        }
+    }
+
+    /// <summary>
+    /// Takes the longest match at <paramref name="i"/> among the chained positions with its key's hash, if it is longer than the match in
+    /// hand, or as long and nearer. A chain runs from the latest position back, and it ends at the first entry out of reach. An entry whose
+    /// slot has taken a later module row, or one that comes after the entry before it, was overwritten when its row went out of reach.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void Find(ReadOnlySpan<byte> row, int m, int i, int max, int key, ref int length, ref int distance)
+    {
+        var stride = _stride;
+        var slotShift = _slotShift;
+        var mask = (1 << slotShift) - 1;
+        var keyBytes = _keyBytes;
+        // From row m, row m - j's last scanline starts j × pixels × stride - (pixels - 1) × stride bytes back.
+        var span = (long)_pixels * stride;
+        var lastScanline = (long)(_pixels - 1) * stride;
+        ref var links = ref MemoryMarshal.GetReference(_links.AsSpan());
+        ref var slotRows = ref MemoryMarshal.GetReference(_slotRow.AsSpan());
+        ref var rows = ref MemoryMarshal.GetReference(_rows.AsSpan());
+        ref var here = ref Unsafe.Add(ref MemoryMarshal.GetReference(row), i);
+        var entry = _head[key];
+        var laterRow = m;
+        var laterOffset = i;
+        for (var step = 0; step < LookupDepth && entry != 0 && length < GoodMatch; step++)
+        {
+            var position = entry - 1;
+            var slot = position >> slotShift;
+            var k = position & mask;
+            var link = Unsafe.Add(ref links, position);
+            var entryRow = (int)(link >> 32);
+            if (entryRow != Unsafe.Add(ref slotRows, slot) || entryRow > laterRow || (entryRow == laterRow && k >= laterOffset))
+                break;
+            var back = entryRow == m ? i - k : (m - entryRow) * span - lastScanline + i - k;
+            if (back > Deflate.MaxDistance)
+                break;
+            laterRow = entryRow;
+            laterOffset = k;
+            entry = (int)link;
+
+            // Each entry is further back than the one before, so once past the match in hand's distance a candidate wins only by being
+            // longer. Every byte up to the length it needs must match, and the word that ends there rules most out in one compare.
+            var need = Math.Max(keyBytes, back < distance ? length : length + 1);
+            var reach = Math.Min(max, stride - k);
+            if (need > reach)
+                continue;
+            ref var there = ref Unsafe.Add(ref rows, slot * (stride + Slack) + k);
+            if (need >= 8
+                ? Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref here, need - 8)) != Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref there, need - 8))
+                : Unsafe.Add(ref here, need - 1) != Unsafe.Add(ref there, need - 1))
+            {
+                continue;
+            }
+            var found = Prefix(row.Slice(i, reach), _rows.AsSpan(slot * (stride + Slack) + k, reach));
+            if (found >= need)
+            {
+                length = found;
+                distance = (int)back;
+            }
+        }
     }
 
     // ---- symbols ------------------------------------------------------------------------------
@@ -921,11 +1160,11 @@ internal sealed class PngEncoder
 
     // ---- scanlines --------------------------------------------------------------------------
 
-    /// <summary>The first scanline of module row <paramref name="m"/>, packed on first use into its slot of the three.</summary>
+    /// <summary>The first scanline of module row <paramref name="m"/>, packed on first use into its slot.</summary>
     private ReadOnlySpan<byte> Row<TView>(in TView view, int m)
         where TView : struct, IModuleMatrixView
     {
-        var slot = _rowCopies ? m % 3 : 0;
+        var slot = m % _slots;
         var start = slot * (_stride + Slack);
         if (_slotRow[slot] != m)
         {

@@ -15,6 +15,12 @@ namespace FeatherQR.Internals.ImageWriters;
 /// A scanline past a copy's reach is searched for runs alone, and its symbols are written again for each repeat.
 /// </para>
 /// <para>
+/// At 1, 2, 4 and 8 pixels a module, each literal byte stands for one or more whole modules, and runs and copies of the scanline above
+/// are all the search looks for. At any other size a module takes more than one byte or shares a byte with its neighbours, so the search
+/// also looks each position up by a hash of its next four to eight bytes among the first scanlines in reach. That finds the same few
+/// modules again at the same bit phase, in an earlier row or further along this one.
+/// </para>
+/// <para>
 /// The symbols are counted before any is written, so the codes come from the image's own counts and the length of the file is known
 /// before a byte of it is written. The counting pass records the symbols and the writing pass replays them. An image past a copy's reach,
 /// or with more symbols than the record holds, is matched a second time instead. The output is written straight into its destination,

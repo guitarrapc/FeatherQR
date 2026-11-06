@@ -246,7 +246,7 @@ public class SymbolImageWriterPngTest
     /// </summary>
     [Test]
     [Arguments(1, "D87FD26E21C47ABC1BE1046A43F0BA4E48850C11F0FF6917C26ADFB781207A5E")]
-    [Arguments(3, "6E4DCF14C6E3D1743F3A2E8F5B332A82C9992E654C225E6A56F5DEC01C75D50A")]
+    [Arguments(3, "903D75520959B883BCE700866FC6BCD1293130607DEDE0C69909DBB1B56BA11F")]
     [Arguments(8, "642AE911C572D9E2B88C9119B1544CA41911A1D060704283BEEC44BB09D96FD5")]
     public async Task ScanlinesEndingAroundAWordOfStarts_DecodeToTheMatrix(int pixels, string pinned)
     {
@@ -282,6 +282,49 @@ public class SymbolImageWriterPngTest
         await AssertPng(png, grid, 1, Black, White);
     }
 
+    /// <summary>
+    /// The lookup keeps the first scanline of each module row a copy can reach, in slots a later row takes over once the row is out of
+    /// reach. Rows of 87,000 modules at 3 pixels, 3,000 at 10 and 2,000 at 16 reach only the row above, and the narrower rows at 3 and 5
+    /// pixels reach 96 and 11 rows back, so every image here reuses its slots. The images 87,000 and 1,000 modules wide also take matches
+    /// from less than a scanline short of 32,768 bytes back. A lookup that read a slot as the row it held before would not decode, and a
+    /// copy from past 32,768 bytes would fail to write. A valid but different choice would decode, so the files are pinned as well.
+    /// </summary>
+    [Test]
+    [Arguments(3, 87_000, 6, "5D4B1BB5FA2B34D4D7600332DBCB04D75E47EBE2A4EE66FECE204A15E4664614")]
+    [Arguments(10, 3_000, 10, "7AD100B8AC163EA299866FD4E8694B72621B218533283ACC05DD44DC6DD0E2A3")]
+    [Arguments(16, 2_000, 8, "2A655B7BB826B347D2967230757DADC4D42848BCD119C4E01389A9576ECE6357")]
+    [Arguments(3, 300, 120, "8D341F3FEB5473E460C624BB4FE25110369300C8616A1034A1856337DCA1C210")]
+    [Arguments(5, 1_000, 60, "31025D621AACF73AD102F5075C9E16753A005EEAD57CBB5B1598600914A83995")]
+    public async Task RowsAcrossTheLookupWindow_DecodeToTheMatrix(int pixels, int width, int height, string pinned)
+    {
+        var grid = Grid.Mixed(width, height, seed: width + pixels);
+        var png = PngWriter.GetBytes(new SyntheticView(grid), new SymbolImageOptions { ModulePixelSize = pixels });
+
+        await AssertPng(png, grid, pixels, Black, White);
+        await Assert.That(Sha256(png)).IsEqualTo(pinned);
+    }
+
+    /// <summary>
+    /// The lookup's tables stay with the encoder this thread keeps. A file written after another must be the one a new encoder writes,
+    /// so nothing of the image before may be found. The new encoder is the one a thread of its own takes.
+    /// </summary>
+    [Test]
+    public async Task AFileWrittenAfterAnother_IsTheOneANewEncoderWrites()
+    {
+        var options = new SymbolImageOptions { ModulePixelSize = 10 };
+        var before = QRCodeGenerator.Create(new string('7', 3000), QREccLevel.L, new QRCodeGeneratorOptions { Version = 40 });
+        var after = QRCodeGenerator.Create("https://github.com/guitarrapc/FeatherQR", QREccLevel.M, new QRCodeGeneratorOptions { Version = 10 });
+        byte[] fresh = [];
+        var thread = new Thread(() => fresh = SymbolImageWriter.GetPngBytes(after, options));
+        thread.Start();
+        thread.Join();
+
+        SymbolImageWriter.GetPngBytes(before, options);
+        var written = SymbolImageWriter.GetPngBytes(after, options);
+
+        await Assert.That(written).IsEquivalentTo(fresh, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
     private static bool LastRecordWasComplete()
         => (bool)typeof(PngEncoder).GetField("_recordComplete", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(CachedEncoder())!;
 
@@ -292,7 +335,8 @@ public class SymbolImageWriterPngTest
     /// <summary>
     /// The bytes of files the decode tests above read back, pinned so that a change to the encoder's output is a decision.
     /// Version 40 at 8 and 3 pixels and an rMQR at 10 pixels in a palette with alpha also take the long matches and each way of packing
-    /// a scanline up to 32 pixels. Change the hashes only with the encoder, after those tests pass.
+    /// a scanline up to 32 pixels. No test above writes that rMQR, so it is read back here. Change the hashes only with the encoder, after
+    /// those tests pass.
     /// </summary>
     [Test]
     public async Task Output_IsPinned()
@@ -307,8 +351,10 @@ public class SymbolImageWriterPngTest
         await Assert.That(Sha256(qr)).IsEqualTo("BCFE5FE5D20EFA5BA1261C9A975F899548E74269EDAA04986A485F884E0D5D2B");
         await Assert.That(Sha256(rm)).IsEqualTo("CF07EB71A69F9C864CCBF9DFAF7600E8D70FA3B7DD1074A69AF518F232E451A8");
         await Assert.That(Sha256(SymbolImageWriter.GetPngBytes(large))).IsEqualTo("4020F5A576A91B87DB3C011D4910F5BF756191F8A1B299767ABCD3CF06D976DA");
-        await Assert.That(Sha256(SymbolImageWriter.GetPngBytes(large, new SymbolImageOptions { ModulePixelSize = 3 }))).IsEqualTo("E426763E561D6E837C3A322C2A13DED5FDE84CAA98D80BC86FD92CA75DA9D0CA");
-        await Assert.That(Sha256(SymbolImageWriter.GetPngBytes(wide, tinted))).IsEqualTo("641747D02CF7BC8E44F491CB1D7E2450BF3490C5D245765E2CE817D8F63E66AA");
+        await Assert.That(Sha256(SymbolImageWriter.GetPngBytes(large, new SymbolImageOptions { ModulePixelSize = 3 }))).IsEqualTo("E1B74019556A55D758D95456A92440D18D11AAFFC54A126F5A549D04DFE01F43");
+        var tintedPng = SymbolImageWriter.GetPngBytes(wide, tinted);
+        await AssertPng(tintedPng, Grid.Of(wide), 10, Over(tinted.DarkColor, tinted.LightColor), tinted.LightColor);
+        await Assert.That(Sha256(tintedPng)).IsEqualTo("E81B85986E7BD403EE2C78BE1C1B01D9BD3C8C1566308F1A9618779B3F20D09C");
     }
 
     private static string Sha256(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
@@ -321,6 +367,26 @@ public class SymbolImageWriterPngTest
 
         // Stored, the 1,480 scanlines of 186 bytes would take 275,280 bytes.
         await Assert.That(png.Length).IsLessThan(12_000);
+    }
+
+    /// <summary>
+    /// At 1, 2, 4 and 8 pixels a literal byte is one module or a whole number of them, and runs and copies of the scanline above are all
+    /// the search looks for. At any other size it also looks each position up among the module rows in reach, where the same few modules
+    /// at the same bit phase nearly always are. Runs and copies alone stay over each bound, so a lookup that found nothing fails here.
+    /// </summary>
+    [Test]
+    [Arguments(3, 7_000)]
+    [Arguments(5, 8_500)]
+    [Arguments(10, 11_000)]
+    [Arguments(16, 12_800)]
+    public async Task SizesWithTheLookup_FindModulesAcrossTheWindow(int pixels, int bound)
+    {
+        var digits = string.Concat(Enumerable.Range(0, 7000).Select(i => (char)('0' + i * 7 % 10)));
+        var qr = QRCodeGenerator.Create(digits, QREccLevel.L, new QRCodeGeneratorOptions { Version = 40 });
+        var png = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { ModulePixelSize = pixels });
+
+        await AssertPng(png, Grid.Of(qr), pixels, Black, White);
+        await Assert.That(png.Length).IsLessThan(bound);
     }
 
     // ---- readers ------------------------------------------------------------------------
