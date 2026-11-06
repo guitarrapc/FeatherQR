@@ -57,9 +57,12 @@ internal sealed class PngEncoder
     private byte[] _rows = [];
     private readonly int[] _slotRow = new int[3];
 
-    // Eight modules' light-1 bits at _expansionPixels pixels a module, for each byte of the core (dark 1, MSB first).
-    private readonly ulong[] _expansion = new ulong[256];
-    private int _expansionPixels;
+    // For each module size up to 8, the light-1 bits of eight modules for each byte value of them (dark 1, MSB first). Shared by every
+    // thread and made on first use, so a caller that changes the module size between calls does not rebuild one.
+    private static readonly ulong[]?[] Expansions = new ulong[]?[9];
+
+    // The symbols of a scanline past a copy's reach, searched once for all its repeats.
+    private ulong[] _runSymbols = [];
 
     // Bit p of _starts marks a position of the scanline where a run or a copy may start. The others are the equal bytes they come from.
     private ulong[] _starts = [];
@@ -93,6 +96,11 @@ internal sealed class PngEncoder
         {
             ArrayPool<ulong>.Shared.Return(encoder._recorded);
             encoder._recorded = [];
+        }
+        if (encoder._runSymbols.Length != 0)
+        {
+            ArrayPool<ulong>.Shared.Return(encoder._runSymbols);
+            encoder._runSymbols = [];
         }
         cached = encoder;
     }
@@ -128,7 +136,8 @@ internal sealed class PngEncoder
         var nowhere = new DeflateBitWriter(default);
         RentRows();
         _recordedCount = 0;
-        _recordComplete = true;
+        // Scanlines past a copy's reach are not recorded, since the writing pass searches each module row once anyway.
+        _recordComplete = _rowCopies;
         _adler = Tokenize(in view, ref nowhere, write: false);
         _literalCounts[Deflate.EndOfBlock] = 1;
 
@@ -226,7 +235,7 @@ internal sealed class PngEncoder
         WriteBlockHeader(ref w);
         var adler = _adler;
         if (_recordComplete)
-            Replay(ref w);
+            Replay(ref w, _recorded.AsSpan(0, _recordedCount));
         else
             adler = Tokenize(in view, ref w, write: true);
         w.Put(_literalCodes[Deflate.EndOfBlock]);
@@ -361,7 +370,8 @@ internal sealed class PngEncoder
         var repeatLength = (long)(_pixels - 1) * stride;
         var adler = new Adler32();
         var carry = 0;
-        // The record's array and position are locals between the calls that read them from the fields.
+        // The record's array and position are locals, so the literal loop does not load and store the fields at every byte.
+        // They go back to the fields around the calls that read them there.
         var recorded = _recorded;
         var count = _recordedCount;
 
@@ -372,24 +382,33 @@ internal sealed class PngEncoder
 
             if (!_rowCopies)
             {
-                // The scanline above is out of a copy's reach, so every scanline is searched for runs alone.
-                _recordedCount = count;
-                for (var repeat = 0; repeat < _pixels; repeat++)
-                    TokenizeRuns(row, ref w, write);
-                recorded = _recorded;
-                count = _recordedCount;
+                // The scanline above is out of a copy's reach, so the matches are runs alone. The repeats are the same scanline, so it
+                // is searched once and its symbols go in once for each repeat.
+                var symbols = RunSymbols(row);
+                if (write)
+                {
+                    for (var repeat = 0; repeat < _pixels; repeat++)
+                        Replay(ref w, symbols);
+                }
+                else
+                {
+                    CountSymbols(symbols, _pixels);
+                }
                 continue;
             }
 
             var above = m > 0 ? Row(in view, m - 1) : default;
-            MarkStarts(row, above, m > 0);
+            // A quiet zone row is crossed by runs and copies of 258 bytes, so marking its every position would cost more than it saves.
+            var quiet = (uint)(m - _quietZone) >= (uint)_coreHeight;
+            if (!quiet)
+                MarkStarts(row, above, m > 0);
             ref var rowStart = ref MemoryMarshal.GetReference(row);
             ref var aboveStart = ref MemoryMarshal.GetReference(above);
             var i = carry;
             while (i < stride)
             {
                 // Every position before the next mark is a literal.
-                var next = NextStart(i, stride);
+                var next = quiet ? i : NextStart(i, stride);
                 if (next > i)
                 {
                     if (write)
@@ -399,7 +418,7 @@ internal sealed class PngEncoder
                     }
                     else if (count + (next - i) <= recorded.Length)
                     {
-                        // Unchecked: the record's room is checked just above, and a byte indexes inside the 286 counts.
+                        // The record's room is checked just above and a byte indexes inside the 286 counts, so neither needs a bounds check.
                         ref var counts = ref MemoryMarshal.GetReference(_literalCounts.AsSpan());
                         ref var entries = ref MemoryMarshal.GetReference(recorded.AsSpan());
                         for (; i < next; i++)
@@ -429,7 +448,7 @@ internal sealed class PngEncoder
                 if (i > 0)
                 {
                     if (MayRun(row, i))
-                        run = Prefix(ref Unsafe.Add(ref rowStart, i), ref Unsafe.Add(ref rowStart, i - 1), max);
+                        run = Prefix(row.Slice(i, max), row.Slice(i - 1, max));
                 }
                 else if (m > 0 && row[0] == above[stride - 1])
                 {
@@ -447,7 +466,7 @@ internal sealed class PngEncoder
 
                 if (m > 0 && MayCopy(row, above, i))
                 {
-                    long copy = Prefix(ref Unsafe.Add(ref rowStart, i), ref Unsafe.Add(ref aboveStart, i), max);
+                    long copy = Prefix(row.Slice(i, max), above.Slice(i, max));
                     if (copy == stride - i)
                         copy = Extend(in view, m, copy + repeatLength, row);
                     if (copy > length && copy >= Deflate.MinMatch && (copy >= MinRowCopy || i + copy > stride))
@@ -511,10 +530,14 @@ internal sealed class PngEncoder
         return (int)length + CommonPrefix(next.Slice(0, reach), row.Slice(0, reach));
     }
 
-    /// <summary>One scanline searched for runs alone, for images too wide for a copy of the scanline above.</summary>
-    private void TokenizeRuns(scoped ReadOnlySpan<byte> row, ref DeflateBitWriter w, bool write)
+    /// <summary>
+    /// One scanline searched for runs alone, for images too wide for a copy of the scanline above, as symbols in the record's form with
+    /// the same symbols in a row joined.
+    /// </summary>
+    private ReadOnlySpan<ulong> RunSymbols(ReadOnlySpan<byte> row)
     {
-        Literal(ref w, write, row[0]);
+        var count = 0;
+        AddRunSymbol(ref count, row[0]);
         var i = 1;
         while (i < row.Length)
         {
@@ -522,14 +545,51 @@ internal sealed class PngEncoder
             var run = MayRun(row, i) ? CommonPrefix(row.Slice(i, max), row.Slice(i - 1, max)) : 0;
             if (run >= Deflate.MinMatch && (run >= MinRun || run == row.Length - i))
             {
-                Match(ref w, write, run, 1);
+                // A run is a match one byte back, whose distance - 1 is 0.
+                AddRunSymbol(ref count, 0x8000_0000u | (uint)(run - Deflate.MinMatch) << 16);
                 i += run;
             }
             else
             {
-                Literal(ref w, write, row[i]);
+                AddRunSymbol(ref count, row[i]);
                 i++;
             }
+        }
+        return _runSymbols.AsSpan(0, count);
+    }
+
+    private void AddRunSymbol(ref int count, uint symbol)
+    {
+        if (count > 0 && (uint)(_runSymbols[count - 1] >> 32) == symbol)
+        {
+            _runSymbols[count - 1]++;
+            return;
+        }
+        if (count == _runSymbols.Length)
+        {
+            var grown = ArrayPool<ulong>.Shared.Rent(Math.Max(256, _runSymbols.Length * 2));
+            _runSymbols.AsSpan(0, count).CopyTo(grown);
+            if (_runSymbols.Length != 0)
+                ArrayPool<ulong>.Shared.Return(_runSymbols);
+            _runSymbols = grown;
+        }
+        _runSymbols[count++] = (ulong)symbol << 32 | 1;
+    }
+
+    /// <summary>Counts symbols that appear <paramref name="times"/> times over.</summary>
+    private void CountSymbols(ReadOnlySpan<ulong> symbols, long times)
+    {
+        foreach (var entry in symbols)
+        {
+            var symbol = (uint)(entry >> 32);
+            var repeats = (uint)entry * times;
+            if ((symbol & 0x8000_0000u) == 0)
+            {
+                _literalCounts[symbol] += repeats;
+                continue;
+            }
+            _literalCounts[257 + Deflate.LengthCode((int)(symbol >> 16 & 0xFF) + Deflate.MinMatch)] += repeats;
+            _distanceCounts[Deflate.DistanceCode((int)(symbol & 0xFFFF) + 1)] += repeats;
         }
     }
 
@@ -567,34 +627,39 @@ internal sealed class PngEncoder
     }
 
     /// <summary>
-    /// How many leading bytes from two places in the scanline slots match, at most <paramref name="max"/>, eight a step.
-    /// The last step reads up to seven bytes past <paramref name="max"/>, which the slots' slack holds.
+    /// How many leading bytes two spans of the scanline slots share. The first 32 are compared eight a step inline, where most matches
+    /// end, and a longer match goes on in <see cref="CommonPrefix"/>, which is faster over the 258 bytes of a quiet zone's.
+    /// The steps read up to seven bytes past the spans, which the slots' slack holds.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int Prefix(ref byte a, ref byte b, int max)
+    private static int Prefix(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
     {
-        var n = 0;
-        while (n < max)
+        ref var x0 = ref MemoryMarshal.GetReference(a);
+        ref var y0 = ref MemoryMarshal.GetReference(b);
+        var max = a.Length;
+        for (var n = 0; n < 32; n += 8)
         {
-            var x = LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref a, n))) ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b, n)));
+            if (n >= max)
+                return max;
+            var x = LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref x0, n))) ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref y0, n)));
             if (x != 0)
                 return Math.Min(max, n + (TrailingZeros(x) >> 3));
-            n += 8;
         }
-        return max;
+        return max <= 32 ? max : 32 + CommonPrefix(a.Slice(32), b.Slice(32));
     }
 
     // ---- where a run or a copy may start ------------------------------------------------------
 
     /// <summary>
-    /// Sets bit p of <see cref="_starts"/> where the search may take a run or a copy at p: four bytes from p equal to the four before them
-    /// (<see cref="MayRun"/>), or eight equal to the scanline above (<see cref="MayCopy"/>). Position 0 and the last seven, where those compare
-    /// fewer bytes, are always set, so the search decides them itself.
+    /// Sets bit p of <see cref="_starts"/> where the search may take a run or a copy at p. A run needs each of the four bytes from p equal to
+    /// the byte before it, as <see cref="MayRun"/> tests, and a copy the eight from p equal to the scanline above, as <see cref="MayCopy"/>
+    /// tests. Position 0, whose run is measured against the scanline above, and the last seven, where those tests compare fewer bytes, are
+    /// always set, so the search decides them itself.
     /// </summary>
     /// <remarks>
-    /// The equal bytes are found eight positions a compare. The bytes one back come from the word before, shifted, so both masks of a word
-    /// are built in a register. Bytes past the scanline are read from its slot's slack and are noise, but they reach only positions that are
-    /// always set or cleared.
+    /// The equal bytes are found eight positions a compare. The byte before a word's first comes from the word before, so both masks of a
+    /// word are built in a register. Bytes past the scanline are read from its slot's slack and are noise, but they reach only positions
+    /// that are always set or cleared.
     /// </remarks>
     private void MarkStarts(ReadOnlySpan<byte> row, ReadOnlySpan<byte> above, bool hasAbove)
     {
@@ -646,7 +711,7 @@ internal sealed class PngEncoder
         starts[words] = 0;
     }
 
-    /// <summary>Bit k set where byte k of <paramref name="x"/> is zero. Exact: no borrow crosses a byte.</summary>
+    /// <summary>Bit k set where byte k of <paramref name="x"/> is zero, exactly, since no carry crosses a byte.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong ZeroBytes(ulong x)
     {
@@ -764,20 +829,20 @@ internal sealed class PngEncoder
         return true;
     }
 
-    /// <summary>Writes the symbols the counting pass recorded.</summary>
+    /// <summary>Writes symbols in the record's form, from the counting pass's record or from <see cref="RunSymbols"/>.</summary>
     /// <remarks>
     /// The bit writer's state is carried in locals. Through the writer, every code would load and store it. The entries and the literal
-    /// codes are read unchecked, since the count is within the record and a literal is a byte.
+    /// codes are read unchecked, since the loop stays within the span and a literal is a byte.
     /// </remarks>
-    private void Replay(ref DeflateBitWriter w)
+    private void Replay(ref DeflateBitWriter w, scoped ReadOnlySpan<ulong> entries)
     {
         var destination = w.Destination;
         w.Save(out var position, out var held, out var count);
-        ref var recorded = ref MemoryMarshal.GetReference(_recorded.AsSpan());
+        ref var recorded = ref MemoryMarshal.GetReference(entries);
         ref var literals = ref MemoryMarshal.GetReference(_literalCodes.AsSpan());
         var literalCodes = _literalCodes;
         var distanceCodes = _distanceCodes;
-        for (var k = 0; k < _recordedCount; k++)
+        for (var k = 0; k < entries.Length; k++)
         {
             var item = Unsafe.Add(ref recorded, k);
             var symbol = (uint)(item >> 32);
@@ -805,7 +870,6 @@ internal sealed class PngEncoder
             var distance = (int)(symbol & 0xFFFF) + 1;
             var lengthCode = Deflate.LengthCode(length);
             var distanceCode = Deflate.DistanceCode(distance);
-            // A match's four fields: the length code and its extra bits, the distance code and its extra bits.
             var lengthEntry = literalCodes[257 + lengthCode];
             var distanceEntry = distanceCodes[distanceCode];
             uint lengthBits = lengthEntry & 0xFFFF, lengthExtra = (uint)(length - Deflate.LengthBase(lengthCode));
@@ -999,21 +1063,22 @@ internal sealed class PngEncoder
     }
 
     /// <summary>For each byte of eight modules (dark 1, MSB first), their light-1 bits at <paramref name="pixels"/> a module, the first module highest.</summary>
-    private ulong[] Expansion(int pixels)
+    private static ulong[] Expansion(int pixels) => Volatile.Read(ref Expansions[pixels]) ?? BuildExpansion(pixels);
+
+    private static ulong[] BuildExpansion(int pixels)
     {
-        if (_expansionPixels != pixels)
+        var table = new ulong[256];
+        var mask = ~0UL >> (64 - pixels);
+        for (var b = 0; b < 256; b++)
         {
-            var mask = ~0UL >> (64 - pixels);
-            for (var b = 0; b < 256; b++)
-            {
-                ulong bits = 0;
-                for (var j = 7; j >= 0; j--)
-                    bits = (bits << pixels) | (((b >> j) & 1) != 0 ? 0 : mask);
-                _expansion[b] = bits;
-            }
-            _expansionPixels = pixels;
+            ulong bits = 0;
+            for (var j = 7; j >= 0; j--)
+                bits = (bits << pixels) | (((b >> j) & 1) != 0 ? 0 : mask);
+            table[b] = bits;
         }
-        return _expansion;
+        // Two threads may both make it, and they make the same table, so either may be kept.
+        Volatile.Write(ref Expansions[pixels], table);
+        return table;
     }
 
     /// <summary>The scanline run by run, for modules wider than 32 pixels.</summary>

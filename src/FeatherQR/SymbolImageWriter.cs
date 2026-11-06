@@ -67,6 +67,7 @@ public static class SymbolImageWriter
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> or <paramref name="writer"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when <paramref name="writer"/> hands out a span shorter than the document, against the <see cref="IBufferWriter{T}"/> contract.</exception>
     public static int WriteSvg(QRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -161,6 +162,7 @@ public static class SymbolImageWriter
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> or <paramref name="writer"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, or the file longer than the largest array.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when <paramref name="writer"/> hands out a span shorter than the file, against the <see cref="IBufferWriter{T}"/> contract.</exception>
     public static int WritePng(QRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = default)
     {
         if (data is null)

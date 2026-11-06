@@ -125,7 +125,7 @@ internal ref struct DeflateBitWriter(Span<byte> destination)
     private ulong _bits;
     private int _count;
 
-    /// <summary>Adds the low <paramref name="count"/> bits of <paramref name="value"/>, at most 16.</summary>
+    /// <summary>Adds the <paramref name="count"/> bits of <paramref name="value"/>, at most 16. It is not masked, so it must fit in them.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Put(uint value, int count)
     {

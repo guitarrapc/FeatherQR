@@ -12,12 +12,13 @@ namespace FeatherQR.Internals.ImageWriters;
 /// Every module row repeats its first scanline once for each pixel of the module's height, so only the first scanline is searched,
 /// for runs of one byte and for copies of the scanline above, and each repeat is a copy of the scanline above, written without comparing.
 /// A copy that reaches the end of a module row runs on into the next row's first scanline while that matches.
+/// A scanline past a copy's reach is searched for runs alone, and its symbols are written again for each repeat.
 /// </para>
 /// <para>
 /// The symbols are counted before any is written, so the codes come from the image's own counts and the length of the file is known
-/// before a byte of it is written. The counting pass records the symbols and the writing pass replays them. An image with more symbols
-/// than the record holds is matched a second time instead. The output is written straight into its destination, the same bytes on
-/// every target framework. Scanlines are packed from the stored module bits, light 1 and dark 0, and padded with light.
+/// before a byte of it is written. The counting pass records the symbols and the writing pass replays them. An image past a copy's reach,
+/// or with more symbols than the record holds, is matched a second time instead. The output is written straight into its destination,
+/// the same bytes on every target framework. Scanlines are packed from the stored module bits, light 1 and dark 0, and padded with light.
 /// </para>
 /// </remarks>
 internal static class PngWriter
@@ -48,7 +49,9 @@ internal static class PngWriter
         try
         {
             var length = encoder.Measure(in view, in options);
-            encoder.Write(in view, writer.GetSpan(length).Slice(0, length));
+            var span = writer.GetSpan(length);
+            ImageSize.ThrowIfShort(span.Length, length);
+            encoder.Write(in view, span.Slice(0, length));
             writer.Advance(length);
             return length;
         }

@@ -50,9 +50,10 @@ public class SymbolImageWriterPngTest
     }
 
     /// <summary>
-    /// Sizes that fill a byte, split one, and straddle bytes, with quiet zones of 0 and 1 so the symbol's edge lands inside a byte too.
+    /// Sizes that fill a byte, split one, and straddle bytes, with quiet zones of 0, 1 and 4 so the symbol's edge lands inside a byte too.
     /// A scanline is packed eight modules at a time up to 8 pixels, a module at a time up to 32, and run by run past that, so 8 and 9,
-    /// 32 and 33 are each side of a change.
+    /// 32 and 33 are each side of a change. A quiet zone goes in 56 bits at a time on top of the bits still held, and at 15 and 31 pixels
+    /// a quiet zone of 4 modules takes more than one step.
     /// </summary>
     [Test]
     [Arguments(1)]
@@ -63,6 +64,8 @@ public class SymbolImageWriterPngTest
     [Arguments(8)]
     [Arguments(9)]
     [Arguments(13)]
+    [Arguments(15)]
+    [Arguments(31)]
     [Arguments(32)]
     [Arguments(33)]
     public async Task EveryModuleSize_DecodesToTheMatrix(int pixels)
@@ -205,22 +208,40 @@ public class SymbolImageWriterPngTest
     /// <summary>
     /// A copy reaches at most 32,768 bytes back, so a scanline longer than that cannot be copied from the one above.
     /// A core 32,767 modules wide at 8 px makes a scanline of exactly 32,768 bytes with its filter byte, the last that can be copied.
+    /// Past that a module row's scanline is searched once for all its repeats, which must give the symbols a search of each would, so the
+    /// files are pinned as well.
     /// </summary>
     [Test]
-    [Arguments(32_767)]
-    [Arguments(32_768)]
-    [Arguments(33_000)]
-    public async Task ScanlinesAroundTheCopyWindow_DecodeToTheMatrix(int coreWidth)
+    [Arguments(32_767, "5BE409DEBDE58F65BE920F63676C2D9D3D0467A7113940AC217E27EA2A1A8653")]
+    [Arguments(32_768, "6DECF859A08DE621558E89A73158008A6E8AB1F6AD01111929C453AEF5DBFC69")]
+    [Arguments(33_000, "A1B2CF6A60AF9623A08D1272868FB89AF8B5F208986C9E1C5B795733E45CA09D")]
+    public async Task ScanlinesAroundTheCopyWindow_DecodeToTheMatrix(int coreWidth, string pinned)
     {
         var grid = Grid.Random(coreWidth, 3, seed: coreWidth);
         var png = PngWriter.GetBytes(new SyntheticView(grid), SymbolImageOptions.Default);
         await AssertPng(png, grid, 8, Black, White);
+        await Assert.That(Sha256(png)).IsEqualTo(pinned);
+    }
+
+    /// <summary>
+    /// At 1,900 pixels a module, an rMQR R7x139 with no quiet zone has scanlines of 33,014 bytes, past a copy's reach, each repeated 1,900
+    /// times. Each pass searches a module row once and takes its symbols once for each repeat. The file is too large to read back here, so
+    /// it is pinned.
+    /// </summary>
+    [Test]
+    public async Task ManyRepeatsPastACopysReach_ArePinned()
+    {
+        var rm = RmQRCodeGenerator.Create("FeatherQR", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x139, QuietZoneSize = 0 });
+        var png = SymbolImageWriter.GetPngBytes(rm, new SymbolImageOptions { ModulePixelSize = 1_900 });
+
+        await Assert.That(Sha256(png)).IsEqualTo("4E96AFD05E1372F38836D8D6F07EEDC50352C31F921E6E99D6A203A4AD62B6EB");
     }
 
     /// <summary>
     /// The search marks where a run or a copy may start in 64-position words, and always searches the last seven positions in full.
     /// With no quiet zone, a scanline at 8 pixels is a byte a module and the filter byte, so these widths end it at each byte around the
-    /// first and second word's ends. Rows that repeat the row above and rows of long runs make copies and runs start near the end too.
+    /// first and second word's ends. At 1 and 3 pixels the same widths give scanlines of 8 to 53 bytes, all inside the first word.
+    /// Rows that repeat the row above and rows of long runs make copies and runs start near the end too.
     /// A position the marks miss changes which match is taken and the file still decodes, so the files are pinned as well.
     /// </summary>
     [Test]
@@ -261,13 +282,12 @@ public class SymbolImageWriterPngTest
         await AssertPng(png, grid, 1, Black, White);
     }
 
-    // Read before any await, since the encoder is kept per thread.
     private static bool LastRecordWasComplete()
-    {
-        const BindingFlags Private = BindingFlags.NonPublic;
-        var encoder = typeof(PngEncoder).GetField("cached", Private | BindingFlags.Static)!.GetValue(null)!;
-        return (bool)typeof(PngEncoder).GetField("_recordComplete", Private | BindingFlags.Instance)!.GetValue(encoder)!;
-    }
+        => (bool)typeof(PngEncoder).GetField("_recordComplete", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(CachedEncoder())!;
+
+    // Read before any await, since the encoder is kept per thread.
+    private static object? CachedEncoder()
+        => typeof(PngEncoder).GetField("cached", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
 
     /// <summary>
     /// The bytes of files the decode tests above read back, pinned so that a change to the encoder's output is a decision.
@@ -354,6 +374,101 @@ public class SymbolImageWriterPngTest
         await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo("prefix"u8.ToArray().Concat(expected).ToArray(), TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// A writer must hand out at least the span asked for. One that hands out less is refused with <see cref="InvalidOperationException"/>,
+    /// which tells it from an image too large, and nothing is advanced.
+    /// </summary>
+    [Test]
+    public async Task AWriterWithTooShortASpan_IsRefused()
+    {
+        var writer = new ShortSpanWriter();
+        await Assert.That(() => SymbolImageWriter.WritePng(QRCodeGenerator.Create("short", QREccLevel.M), writer)).Throws<InvalidOperationException>();
+        await Assert.That(() => SymbolImageWriter.WritePng(MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L), writer)).Throws<InvalidOperationException>();
+        await Assert.That(() => SymbolImageWriter.WritePng(RmQRCodeGenerator.Create("short", RmQREccLevel.M), writer)).Throws<InvalidOperationException>();
+        await Assert.That(writer.Advanced).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// The encoder is kept per thread, and a writer may write another image from inside <c>GetSpan</c>. The inner call must take an encoder
+    /// of its own, since it hands its record back to the pool as it ends. The expected files are written first, which leaves this thread an
+    /// encoder to take, so both calls would find that one if the inner call did not take another.
+    /// </summary>
+    [Test]
+    public async Task AWriterThatWritesAnotherImage_GetsBothRight()
+    {
+        var outer = QRCodeGenerator.Create("outer", QREccLevel.M);
+        var inner = QRCodeGenerator.Create(new string('7', 600), QREccLevel.L);
+        var expectedOuter = SymbolImageWriter.GetPngBytes(outer);
+        var expectedInner = SymbolImageWriter.GetPngBytes(inner);
+        byte[] innerPng = [];
+        var writer = new CallbackWriter(() => innerPng = SymbolImageWriter.GetPngBytes(inner));
+
+        var length = SymbolImageWriter.WritePng(outer, writer);
+
+        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(expectedOuter, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(length).IsEqualTo(writer.WrittenCount);
+        await Assert.That(innerPng).IsEquivalentTo(expectedInner, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+    /// <summary>
+    /// A writer that throws from <c>GetSpan</c> ends the call, and the encoder goes back to the thread and writes the next file as before.
+    /// Nothing is awaited until all three calls are done, so they run on this thread and find its one encoder.
+    /// </summary>
+    [Test]
+    public async Task AWriterThatThrows_LeavesTheNextFileRight()
+    {
+        var qr = QRCodeGenerator.Create("throws", QREccLevel.M);
+        var expected = SymbolImageWriter.GetPngBytes(qr);
+        var kept = CachedEncoder();
+        Exception? thrown = null;
+        try
+        {
+            SymbolImageWriter.WritePng(qr, new CallbackWriter(() => throw new IOException("full")));
+        }
+        catch (IOException e)
+        {
+            thrown = e;
+        }
+        var returned = CachedEncoder();
+        var next = SymbolImageWriter.GetPngBytes(qr);
+
+        await Assert.That(thrown).IsNotNull();
+        await Assert.That(kept).IsNotNull();
+        await Assert.That(returned).IsSameReferenceAs(kept);
+        await Assert.That(next).IsEquivalentTo(expected, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+    /// <summary>A writer that hands out a span one byte shorter than asked, against the contract.</summary>
+    internal sealed class ShortSpanWriter : IBufferWriter<byte>
+    {
+        public int Advanced { get; private set; }
+        public void Advance(int count) => Advanced += count;
+        public Memory<byte> GetMemory(int sizeHint = 0) => new byte[Math.Max(0, sizeHint - 1)];
+        public Span<byte> GetSpan(int sizeHint = 0) => new byte[Math.Max(0, sizeHint - 1)];
+    }
+
+    /// <summary>An array writer that runs a callback the first time it is asked for a span.</summary>
+    private sealed class CallbackWriter(Action callback) : IBufferWriter<byte>
+    {
+        private readonly ArrayBufferWriter<byte> _inner = new();
+        private bool _called;
+
+        public ReadOnlySpan<byte> WrittenSpan => _inner.WrittenSpan;
+        public int WrittenCount => _inner.WrittenCount;
+        public void Advance(int count) => _inner.Advance(count);
+        public Memory<byte> GetMemory(int sizeHint = 0) => _inner.GetMemory(sizeHint);
+
+        public Span<byte> GetSpan(int sizeHint = 0)
+        {
+            if (!_called)
+            {
+                _called = true;
+                callback();
+            }
+            return _inner.GetSpan(sizeHint);
+        }
+    }
+
     [Test]
     public async Task NullArguments_Throw()
     {
@@ -382,23 +497,38 @@ public class SymbolImageWriterPngTest
     }
 
     /// <summary>
-    /// A match costs at least two bits for at most 258 bytes. Version 1 at 150,000 pixels a module has 2.37e12 bytes of scanlines,
-    /// which even at that rate is longer than an array, and counting its symbols to find out takes minutes.
-    /// So a refusal within seconds proves it came before the count.
+    /// A match costs at least two bits for at most 258 bytes. Version 1 at 150,000 pixels a module has 2.37e12 bytes of scanlines, longer
+    /// than an array even at that rate, so it is refused before its symbols are counted. An rMQR R7x139 with no quiet zone at 134,000 pixels
+    /// has 2.18e12 bytes, which passes that bound, and is refused only once its count gives its length. Its scanlines are past a copy's
+    /// reach, so the count takes seconds only if each module row is searched once for all its repeats. <c>Measure</c> is called for it so
+    /// that a wrong count could not make the test write a file of 2 GB.
     /// </summary>
     [Test]
-    public async Task FileLongerThanAnArray_IsRefusedBeforeItIsCounted()
+    public async Task FilesLongerThanAnArray_AreRefusedWithinSeconds()
     {
         var qr = QRCodeGenerator.Create("1", QREccLevel.L, new QRCodeGeneratorOptions { Version = 1 });
         var options = new SymbolImageOptions { ModulePixelSize = 150_000 };
+        var rm = RmQRCodeGenerator.Create("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x139, QuietZoneSize = 0 });
+        var counted = new SymbolImageOptions { ModulePixelSize = 134_000 };
 
         var clock = Stopwatch.StartNew();
         var refused = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetPngBytes(qr, options));
         var written = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.WritePng(qr, new ArrayBufferWriter<byte>(), options));
+        var encoder = PngEncoder.Take();
+        ArgumentOutOfRangeException measured;
+        try
+        {
+            measured = Assert.Throws<ArgumentOutOfRangeException>(() => encoder.Measure(new RmQRMatrixView(rm), counted));
+        }
+        finally
+        {
+            PngEncoder.Return(encoder);
+        }
         clock.Stop();
 
         await Assert.That(refused.ParamName).IsEqualTo("options");
         await Assert.That(written.ParamName).IsEqualTo("options");
+        await Assert.That(measured.ParamName).IsEqualTo("options");
         await Assert.That(clock.Elapsed).IsLessThan(TimeSpan.FromSeconds(10));
     }
 

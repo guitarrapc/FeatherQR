@@ -238,6 +238,20 @@ public class SymbolImageWriterSvgTest
 
     // ---- arguments ----------------------------------------------------------------------
 
+    /// <summary>
+    /// A writer must hand out at least the span asked for. One that hands out less is refused with <see cref="InvalidOperationException"/>,
+    /// which tells it from an image too large, and nothing is advanced.
+    /// </summary>
+    [Test]
+    public async Task AWriterWithTooShortASpan_IsRefused()
+    {
+        var writer = new SymbolImageWriterPngTest.ShortSpanWriter();
+        await Assert.That(() => SymbolImageWriter.WriteSvg(QRCodeGenerator.Create("short", QREccLevel.M), writer)).Throws<InvalidOperationException>();
+        await Assert.That(() => SymbolImageWriter.WriteSvg(MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L), writer)).Throws<InvalidOperationException>();
+        await Assert.That(() => SymbolImageWriter.WriteSvg(RmQRCodeGenerator.Create("short", RmQREccLevel.M), writer)).Throws<InvalidOperationException>();
+        await Assert.That(writer.Advanced).IsEqualTo(0);
+    }
+
     [Test]
     public async Task NullArguments_Throw()
     {

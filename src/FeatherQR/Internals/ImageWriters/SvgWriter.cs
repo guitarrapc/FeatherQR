@@ -50,7 +50,9 @@ internal static class SvgWriter
         try
         {
             var length = Write(in view, in options, rented);
-            rented.AsSpan(0, length).CopyTo(writer.GetSpan(length));
+            var span = writer.GetSpan(length);
+            ImageSize.ThrowIfShort(span.Length, length);
+            rented.AsSpan(0, length).CopyTo(span);
             writer.Advance(length);
             return length;
         }
@@ -102,7 +104,7 @@ internal static class SvgWriter
         int coreWidth = view.CoreWidth, coreHeight = view.CoreHeight;
         // Both axes share one quiet zone.
         var quietZone = (width - coreWidth) / 2;
-        // The scan's state is plain locals. As an enumerator's fields it spilled to the stack on every run.
+        // The scan's state is plain locals of this loop rather than an enumerator's fields, so it stays in registers.
         // The word holds the row's next bits from the column on, and held says how many of them belong to the row.
         int row = 0, column = 0, held = 0;
         ulong word = 0;
@@ -225,7 +227,7 @@ internal static class SvgWriter
             Unsafe.Add(ref destination, at++) = (byte)'-';
             value = -value;
         }
-        // Values below 256 come from a table. Dividing by 10 a digit at a time was most of the path's cost.
+        // Values below 256 come from a table rather than a division by 10 a digit.
         if ((uint)value < (uint)DigitTable.Length)
         {
             var entry = DigitTable[value];
