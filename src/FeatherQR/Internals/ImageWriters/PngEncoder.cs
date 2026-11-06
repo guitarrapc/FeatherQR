@@ -1164,7 +1164,8 @@ internal sealed class PngEncoder
     private ReadOnlySpan<byte> Row<TView>(in TView view, int m)
         where TView : struct, IModuleMatrixView
     {
-        var slot = m % _slots;
+        // Without the lookup there are 3 slots or 1, and a constant 3 lets the JIT turn the remainder into a multiply.
+        var slot = _lookup ? m % _slots : _rowCopies ? m % 3 : 0;
         var start = slot * (_stride + Slack);
         if (_slotRow[slot] != m)
         {
