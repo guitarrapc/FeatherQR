@@ -2,6 +2,8 @@ using System.Buffers;
 using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
+using FeatherQR.Internals;
+using FeatherQR.Internals.ImageWriters;
 
 namespace FeatherQR.Tests;
 
@@ -267,6 +269,102 @@ public class SymbolImageWriterSvgTest
         await Assert.That(refused.ParamName).IsEqualTo("options");
         var written = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.WriteSvg(qr, new ArrayBufferWriter<byte>(), new SymbolImageOptions { ModulePixelSize = largest + 1 }));
         await Assert.That(written.ParamName).IsEqualTo("options");
+    }
+
+    // ---- the runs, a word of the packed rows at a time ----------------------------------
+
+    private static readonly (string Kind, Func<int, int, Random, bool> Dark)[] RowPatterns =
+    [
+        ("random", (r, c, rng) => rng.Next(2) == 0),
+        ("sparse", (r, c, rng) => rng.Next(7) == 0),
+        ("every module dark", (r, c, rng) => true),
+        ("no module dark", (r, c, rng) => false),
+        ("checkerboard", (r, c, rng) => ((r + c) & 1) == 0),
+        ("runs across a word", (r, c, rng) => c % 70 is >= 55 and < 75),
+        ("rows that end dark", (r, c, rng) => c >= r),
+    ];
+
+    /// <summary>
+    /// The writer reads the runs a 64-bit word of the packed rows at a time, and a word starts at any bit of a byte,
+    /// so the rows here are cut around a byte and a word, with runs that cross a word and rows that end dark.
+    /// Drawing the path proves it covers each dark module once. A stroke count equal to the scanner's run count then proves
+    /// each stroke is a whole run, as <c>GetModuleRectangles</c> reports them.
+    /// </summary>
+    [Test]
+    public async Task Strokes_AreTheScannersRuns_OnRowsCutAroundAWord()
+    {
+        foreach (var width in new[] { 1, 7, 8, 9, 57, 63, 64, 65, 120, 127, 128, 129, 191, 192, 193, 300 })
+        {
+            foreach (var (kind, dark) in RowPatterns)
+            {
+                var grid = Build(width, 6, dark, seed: width);
+                foreach (var quietZone in new[] { 0, 3 })
+                {
+                    var view = new PaddedView(grid, quietZone);
+                    var root = XDocument.Parse(SvgWriter.GetString(view, SymbolImageOptions.Default)).Root!;
+                    var runs = ModuleRunScanner.Count(view);
+                    var path = root.Elements(Svg + "path").SingleOrDefault();
+                    if (runs == 0)
+                    {
+                        await Assert.That(path).IsNull().Because($"{kind} {width}");
+                        continue;
+                    }
+                    await AssertDrawsTheMatrix(root.ToString(SaveOptions.DisableFormatting), view.Width, view.Height,
+                        (r, c) => (uint)(r - quietZone) < (uint)grid.Height && (uint)(c - quietZone) < (uint)grid.Width && grid[r - quietZone, c - quietZone]);
+                    await Assert.That(path!.Attribute("d")!.Value.Count(ch => ch == 'h')).IsEqualTo(runs).Because($"{kind} {width} with quiet zone {quietZone}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The largest quiet zone gives the first move five-digit coordinates.
+    /// Every later move is relative, so the rest of the path is the one written with no quiet zone.
+    /// </summary>
+    [Test]
+    public async Task LargestQuietZone_MovesOnlyTheFirstMove()
+    {
+        var grid = Build(177, 9, RowPatterns[0].Dark, seed: 177);
+        var near = Path(new PaddedView(grid, 0));
+        var far = Path(new PaddedView(grid, 10_000));
+
+        await Assert.That(far[..far.IndexOf('h')]).IsEqualTo(FirstMove(near, 10_000));
+        await Assert.That(far[far.IndexOf('h')..]).IsEqualTo(near[near.IndexOf('h')..]);
+
+        static string Path(PaddedView view) => XDocument.Parse(SvgWriter.GetString(view, SymbolImageOptions.Default)).Root!.Elements(Svg + "path").Single().Attribute("d")!.Value;
+
+        static string FirstMove(string d, int shift)
+        {
+            var numbers = d[1..d.IndexOf('h')].Split(' ');
+            var x = int.Parse(numbers[0], CultureInfo.InvariantCulture) + shift;
+            var y = double.Parse(numbers[1], CultureInfo.InvariantCulture) + shift;
+            return string.Create(CultureInfo.InvariantCulture, $"M{x} {y:0.0}");
+        }
+    }
+
+    private static SymbolImageWriterPngTest.Grid Build(int width, int height, Func<int, int, Random, bool> dark, int seed)
+    {
+        var rng = new Random(seed);
+        var cells = new bool[width * height];
+        for (var r = 0; r < height; r++)
+        {
+            for (var c = 0; c < width; c++)
+                cells[r * width + c] = dark(r, c, rng);
+        }
+        return new SymbolImageWriterPngTest.Grid(width, height, cells);
+    }
+
+    /// <summary>A grid as a symbol's core with a quiet zone, for sizes and patterns no symbol has.</summary>
+    private readonly struct PaddedView(SymbolImageWriterPngTest.Grid grid, int quietZone) : IModuleMatrixView
+    {
+        private readonly byte[] _bits = grid.PackedBits();
+        public int Width => grid.Width + 2 * quietZone;
+        public int Height => grid.Height + 2 * quietZone;
+        public int CoreWidth => grid.Width;
+        public int CoreHeight => grid.Height;
+        public ReadOnlySpan<byte> CoreBits => _bits;
+        public bool GetCoreModule(int coreRow, int coreCol) => grid[coreRow, coreCol];
+        public bool IsFinderPattern(int coreRow, int coreCol) => false;
     }
 
     // ---- the reader ---------------------------------------------------------------------

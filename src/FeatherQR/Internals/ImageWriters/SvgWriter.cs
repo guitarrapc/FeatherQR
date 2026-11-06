@@ -1,4 +1,7 @@
 using System.Buffers;
+using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace FeatherQR.Internals.ImageWriters;
@@ -13,7 +16,8 @@ namespace FeatherQR.Internals.ImageWriters;
 /// </para>
 /// <para>
 /// Coordinates are in modules. The first move carries the only half, to put the stroke on the row's centre line, and every later move is relative and whole.
-/// The runs come from <see cref="ModuleRunEnumerator{TView}"/>, so the strokes cover exactly what <c>GetModuleRectangles</c> reports.
+/// The runs are read from the packed rows a 64-bit word at a time, two leading-zero counts a run, where <see cref="ModuleRunEnumerator{TView}"/>
+/// reads a module a step. Tests hold the strokes to the runs <c>GetModuleRectangles</c> reports.
 /// </para>
 /// </remarks>
 internal static class SvgWriter
@@ -88,50 +92,174 @@ internal static class SvgWriter
         }
 
         var dark = options.DarkColor;
-        var runs = new ModuleRunEnumerator<TView>(view, skipFinderPatterns: false);
-        if (dark.A != 0 && runs.MoveNext())
+        if (dark.A == 0)
         {
-            // Both axes share one quiet zone.
-            var quietZone = (width - view.CoreWidth) / 2;
-            w.Raw("<path stroke=\""u8);
-            w.Color(dark);
-            w.Byte((byte)'"');
-            if (dark.A != 255)
-            {
-                w.Raw(" stroke-opacity=\""u8);
-                w.Opacity(dark.A);
-                w.Byte((byte)'"');
-            }
-
-            var x = runs.RunStart + quietZone;
-            var y = runs.RunRow + quietZone;
-            w.Raw(" d=\"M"u8);
-            w.Int(x);
-            w.Byte((byte)' ');
-            w.Int(y);
-            w.Raw(".5h"u8);
-            w.Int(runs.RunLength);
-            x += runs.RunLength;
-
-            while (runs.MoveNext())
-            {
-                var start = runs.RunStart + quietZone;
-                var row = runs.RunRow + quietZone;
-                // Rows only go down, so the second number is never negative and needs the space.
-                w.Byte((byte)'m');
-                w.Int(start - x);
-                w.Byte((byte)' ');
-                w.Int(row - y);
-                w.Byte((byte)'h');
-                w.Int(runs.RunLength);
-                x = start + runs.RunLength;
-                y = row;
-            }
-            w.Raw("\"/>"u8);
+            w.Raw("</svg>"u8);
+            return w.Position;
         }
 
-        w.Raw("</svg>"u8);
-        return w.Position;
+        var bits = view.CoreBits;
+        int coreWidth = view.CoreWidth, coreHeight = view.CoreHeight;
+        // Both axes share one quiet zone.
+        var quietZone = (width - coreWidth) / 2;
+        // The scan's state is plain locals. As an enumerator's fields it spilled to the stack on every run.
+        // The word holds the row's next bits from the column on, and held says how many of them belong to the row.
+        int row = 0, column = 0, held = 0;
+        ulong word = 0;
+        int at = 0, x = 0, y = 0;
+        var first = true;
+        // MaxLength leaves room past any document, so the path's writes skip bounds checks.
+        ref var d = ref MemoryMarshal.GetReference(destination);
+        while (row < coreHeight)
+        {
+            if (held == 0)
+            {
+                if (column >= coreWidth)
+                {
+                    row++;
+                    column = 0;
+                    continue;
+                }
+                var bit = (long)row * coreWidth + column;
+                held = Math.Min(64 - (int)(bit & 7), coreWidth - column);
+                word = PackedRuns.Window(bits, bit, held);
+            }
+            var lightModules = PackedRuns.LeadingZeros(word);
+            if (lightModules >= held)
+            {
+                column += held;
+                held = 0;
+                continue;
+            }
+            word <<= lightModules;
+            column += lightModules;
+            held -= lightModules;
+
+            var runStart = column;
+            while (true)
+            {
+                var darkModules = PackedRuns.LeadingZeros(~word);
+                if (darkModules < held)
+                {
+                    word <<= darkModules;
+                    held -= darkModules;
+                    column += darkModules;
+                    break;
+                }
+                // The run reaches the end of the word, and goes on if the next bits of the row start dark.
+                column += held;
+                held = 0;
+                if (column >= coreWidth)
+                    break;
+                var bit = (long)row * coreWidth + column;
+                held = Math.Min(64 - (int)(bit & 7), coreWidth - column);
+                word = PackedRuns.Window(bits, bit, held);
+                if ((long)word >= 0)
+                    break;
+            }
+
+            var runLength = column - runStart;
+            var start = runStart + quietZone;
+            var rowAt = row + quietZone;
+            if (first)
+            {
+                w.Raw("<path stroke=\""u8);
+                w.Color(dark);
+                w.Byte((byte)'"');
+                if (dark.A != 255)
+                {
+                    w.Raw(" stroke-opacity=\""u8);
+                    w.Opacity(dark.A);
+                    w.Byte((byte)'"');
+                }
+                w.Raw(" d=\"M"u8);
+                w.Int(start);
+                w.Byte((byte)' ');
+                w.Int(rowAt);
+                w.Raw(".5h"u8);
+                w.Int(runLength);
+                at = w.Position;
+                first = false;
+            }
+            else
+            {
+                Unsafe.Add(ref d, at++) = (byte)'m';
+                at = PutInt(ref d, at, start - x);
+                if (rowAt == y)
+                {
+                    // Most runs share the last one's row, so the step down of 0 goes with its space and "h" in one store.
+                    PutUInt32(ref d, at, 0x00_68_30_20u);
+                    at += 3;
+                }
+                else
+                {
+                    // Rows only go down, so the second number is never negative and needs the space.
+                    Unsafe.Add(ref d, at++) = (byte)' ';
+                    at = PutInt(ref d, at, rowAt - y);
+                    Unsafe.Add(ref d, at++) = (byte)'h';
+                }
+                at = PutInt(ref d, at, runLength);
+            }
+            x = start + runLength;
+            y = rowAt;
+        }
+
+        if (first)
+        {
+            w.Raw("</svg>"u8);
+            return w.Position;
+        }
+        "\"/></svg>"u8.CopyTo(destination.Slice(at));
+        return at + 9;
+    }
+
+    /// <summary>
+    /// A number of the path at <paramref name="at"/>, returning the position after it.
+    /// A store of 4 bytes writes up to 3 past the number, which the next write covers and MaxLength has room for.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int PutInt(ref byte destination, int at, int value)
+    {
+        if (value < 0)
+        {
+            Unsafe.Add(ref destination, at++) = (byte)'-';
+            value = -value;
+        }
+        // Values below 256 come from a table. Dividing by 10 a digit at a time was most of the path's cost.
+        if ((uint)value < (uint)DigitTable.Length)
+        {
+            var entry = DigitTable[value];
+            PutUInt32(ref destination, at, entry);
+            return at + (int)(entry >> 24);
+        }
+        var end = at + Digits(value);
+        for (var i = end - 1; i >= at; i--)
+        {
+            Unsafe.Add(ref destination, i) = (byte)('0' + value % 10);
+            value /= 10;
+        }
+        return end;
+    }
+
+    /// <summary>Four bytes in the order of their significance from the low byte up, on either byte order.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void PutUInt32(ref byte destination, int at, uint value)
+        => Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, at), BitConverter.IsLittleEndian ? value : BinaryPrimitives.ReverseEndianness(value));
+
+    /// <summary>Each value below 256 as its ASCII digits from the low byte up, and how many there are in the top byte.</summary>
+    private static readonly uint[] DigitTable = BuildDigitTable();
+
+    private static uint[] BuildDigitTable()
+    {
+        var table = new uint[256];
+        for (var value = 0; value < table.Length; value++)
+        {
+            uint ones = (uint)('0' + value % 10), tens = (uint)('0' + value / 10 % 10), hundreds = (uint)('0' + value / 100);
+            table[value] = value < 10 ? ones | 1u << 24
+                : value < 100 ? tens | ones << 8 | 2u << 24
+                : hundreds | tens << 8 | ones << 16 | 3u << 24;
+        }
+        return table;
     }
 
     /// <summary>

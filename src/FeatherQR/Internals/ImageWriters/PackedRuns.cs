@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
 #if NET5_0_OR_GREATER
 using System.Numerics;
 #endif
@@ -33,6 +34,18 @@ internal static class PackedRuns
         return max;
     }
 
+    /// <summary>
+    /// The bits from bit <paramref name="start"/> on, MSB first, with those past the first <paramref name="valid"/> cleared.
+    /// <paramref name="valid"/> is at most 64 less the bit's offset in its byte.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ulong Window(ReadOnlySpan<byte> bits, long start, int valid)
+    {
+        var word = Load(bits, (int)(start >> 3)) << (int)(start & 7);
+        // A shift by 64 is a shift by 0 in C#, so a full window keeps every bit.
+        return valid == 64 ? word : word & ~(ulong.MaxValue >> valid);
+    }
+
     /// <summary>Eight bytes from <paramref name="index"/> as a big-endian word, zeros past the end.</summary>
     private static ulong Load(ReadOnlySpan<byte> bits, int index)
     {
@@ -44,7 +57,8 @@ internal static class PackedRuns
         return word;
     }
 
-    private static int LeadingZeros(ulong value)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int LeadingZeros(ulong value)
     {
 #if NET5_0_OR_GREATER
         return BitOperations.LeadingZeroCount(value);
