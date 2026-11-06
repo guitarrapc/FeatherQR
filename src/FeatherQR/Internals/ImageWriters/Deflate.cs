@@ -49,8 +49,9 @@ internal static class Deflate
 
     /// <summary>
     /// The canonical code of each symbol from the code lengths, bit-reversed, since deflate writes a code from its first bit and the bit writer from the low end.
+    /// Each entry holds the code in its low 16 bits and the length above, so writing a symbol reads one entry.
     /// </summary>
-    public static void BuildCodes(ReadOnlySpan<byte> lengths, Span<ushort> codes)
+    public static void BuildCodes(ReadOnlySpan<byte> lengths, Span<uint> codes)
     {
         Span<int> next = stackalloc int[16];
         next.Clear();
@@ -68,11 +69,11 @@ internal static class Deflate
         for (var symbol = 0; symbol < lengths.Length; symbol++)
         {
             var length = lengths[symbol];
-            codes[symbol] = length == 0 ? (ushort)0 : Reverse(next[length]++, length);
+            codes[symbol] = length == 0 ? 0 : Reverse(next[length]++, length) | (uint)length << 16;
         }
     }
 
-    private static ushort Reverse(int code, int length)
+    private static uint Reverse(int code, int length)
     {
         var reversed = 0;
         for (var i = 0; i < length; i++)
@@ -80,7 +81,7 @@ internal static class Deflate
             reversed = (reversed << 1) | (code & 1);
             code >>= 1;
         }
-        return (ushort)reversed;
+        return (uint)reversed;
     }
 
     private static byte[] BuildLengthCodes()
@@ -137,6 +138,30 @@ internal ref struct DeflateBitWriter(Span<byte> destination)
             _bits >>= 32;
             _count -= 32;
         }
+    }
+
+    /// <summary>Adds an entry of a <see cref="Deflate.BuildCodes"/> table: the code in the low 16 bits, its length above.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Put(uint code) => Put(code & 0xFFFF, (int)(code >> 16));
+
+    public readonly Span<byte> Destination => _destination;
+
+    /// <summary>
+    /// The position of the next four bytes, the bits held and how many, for a loop that keeps them in locals. It writes four bytes from
+    /// the position whenever 32 bits are held, as <see cref="Put(uint, int)"/> does, and hands them back through <see cref="Resume"/>.
+    /// </summary>
+    public readonly void Save(out int position, out ulong bits, out int count)
+    {
+        position = _position;
+        bits = _bits;
+        count = _count;
+    }
+
+    public void Resume(int position, ulong bits, int count)
+    {
+        _position = position;
+        _bits = bits;
+        _count = count;
     }
 
     /// <summary>Writes the bits still held, the last byte padded with zeros, and returns the length written.</summary>

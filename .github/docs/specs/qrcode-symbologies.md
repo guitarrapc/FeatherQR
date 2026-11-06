@@ -573,6 +573,7 @@ One static class serves the three data types, and they get no members of their o
 - The deflate is the core's own. The core takes no dependency beyond its own code, and the runtime's `DeflateStream` calls the host's native library (zlib-ng 2.2.5 in .NET 10.0.14), so its bytes would be the host's.
 - The image data is one zlib stream of one deflate block with dynamic Huffman codes and row filter None. Matches are searched in each module row's first scanline only: runs of a byte of at least 4, and copies of the scanline above of at least 8. Each repeated scanline is a copy one scanline back, written without comparing, and a copy at the end of a module row runs on into the next one while it matches. A scanline longer than 32,768 bytes is past a copy's reach, so an image that wide is searched for runs alone.
 - The counting pass records its symbols and the writing pass replays them, up to 2^20 entries (8 MB), past which the image is matched again. The file's exact length is known before it is written, so it goes straight into its destination.
+- A scanline is packed from the core's bits eight modules a table entry up to 8 pixels a module, a module at a time up to 32, and run by run past that. Run by run, each run of one to three modules at 8 pixels cost a run length and a fill. Before a scanline is searched, bit masks mark where a run or a copy may start, eight positions a 64-bit compare, and the literals between the marks go in a plain loop. With those, the writing pass's bit writer in locals, a code and its length in one table entry, and the CRC eight bytes a step, version 40 at 8 pixels went from 313-318 to 130-135 µs, at 3 pixels from 197-202 to 65-67 µs, and version 1-2 from 5.72-5.77 to 4.72-4.89 µs, with the same bytes (2026-11-06, two alternating runs a side). On WebAssembly version 40 at 8 pixels went from 3,113-3,187 to 1,009-1,023 µs interpreted and from 618 to 226 µs AOT-compiled (the fastest of 11 processes a side), and both builds wrote the same 365 files in both modes (2026-11-06).
 
 On 20 symbols of each kind, before the shape was picked, at 8 pixels a module (mean bytes):
 
@@ -614,7 +615,7 @@ BenchmarkDotNet in-process on .NET 10, Ryzen 9 7950X3D, at 8 pixels a module (`S
 |---|---|---|---|
 | SVG string | 0.55 µs | 30.7 µs | the string, 95,851 B |
 | SVG into a writer | | 24.9 µs | none |
-| PNG array | 5.35 µs | 272 µs | the array, 7,339 B |
+| PNG array | 4.8 µs | 133 µs | the array, 7,339 B |
 | Pixels, RGBA | 6.05 µs | 335 µs (8.8 MB) | none |
 | Pixels, Gray8 | | 136 µs (2.2 MB) | none |
 | Text | 1.00 µs | 49.8 µs | the string, 34,624 B |
@@ -1093,6 +1094,8 @@ The library can change some of this and not the rest:
 - An SVG drawn into a canvas at a size other than its own `width` and `height` is a bitmap resampled. A render check that compares path forms has to rewrite `width` and `height` to the target size first, and the first check of the stroked form measured the resampling instead.
 - An outline trace writes a corner at nearly every module edge of a QR pattern, so it beats stroked runs only on the smallest symbol, and is 3 to 4 times slower from version 10 up.
 - The first PNG matcher spent most of its time at byte positions it refuses, with two prefix compares at nearly every byte of a first scanline. One compare of 4 or 8 bytes first, as long as the shortest run or copy taken, rules those positions out with no change to the output, and took version 40 at 8 pixels from about 730 to about 400 µs. Recording the counting pass's symbols for the writing pass then took it to about 255 µs in the probe, since matching a second time cost as much as recording.
+- The PNG's counting pass then spent more time packing scanlines than searching them. A probe at version 40 put the packing and the Adler-32 at 128 µs of the pass's 202 to 244. Marking where a match may start took the pass to 158 µs, and packing from a table to 88 µs (2026-11-06).
+- Dynamic PGO chose different inlining in each process for the PNG's counting loop, 14 KB of machine code, so the same code measured 8 to 62 % apart. Without PGO, as NativeAOT and WebAssembly AOT run, the loop was 1.7 to 1.9 times slower and kept its stack spills on the path of every byte. Each change to it was measured both ways, with three processes a side where PGO was on (2026-11-06).
 - With dynamic codes a literal of a 1-bit image costs about a bit, so a run shorter than 4 bytes or a copy shorter than 8 costs more than its literals. Those minimums took version 40 from 8,556 to 7,309 bytes.
 - The SIMD layout rule matches calls on a class named `Crc32` as the Arm intrinsic, so the PNG's CRC class is `PngCrc`.
 - The type-shape tests listed the settable structs as the three generator options, so the image options were refused until added to the list on purpose. The rules now name option structs.

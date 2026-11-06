@@ -51,6 +51,8 @@ public class SymbolImageWriterPngTest
 
     /// <summary>
     /// Sizes that fill a byte, split one, and straddle bytes, with quiet zones of 0 and 1 so the symbol's edge lands inside a byte too.
+    /// A scanline is packed eight modules at a time up to 8 pixels, a module at a time up to 32, and run by run past that, so 8 and 9,
+    /// 32 and 33 are each side of a change.
     /// </summary>
     [Test]
     [Arguments(1)]
@@ -58,8 +60,10 @@ public class SymbolImageWriterPngTest
     [Arguments(3)]
     [Arguments(5)]
     [Arguments(7)]
+    [Arguments(8)]
     [Arguments(9)]
     [Arguments(13)]
+    [Arguments(32)]
     [Arguments(33)]
     public async Task EveryModuleSize_DecodesToTheMatrix(int pixels)
     {
@@ -214,6 +218,29 @@ public class SymbolImageWriterPngTest
     }
 
     /// <summary>
+    /// The search marks where a run or a copy may start in 64-position words, and always searches the last seven positions in full.
+    /// With no quiet zone, a scanline at 8 pixels is a byte a module and the filter byte, so these widths end it at each byte around the
+    /// first and second word's ends. Rows that repeat the row above and rows of long runs make copies and runs start near the end too.
+    /// A position the marks miss changes which match is taken and the file still decodes, so the files are pinned as well.
+    /// </summary>
+    [Test]
+    [Arguments(1, "D87FD26E21C47ABC1BE1046A43F0BA4E48850C11F0FF6917C26ADFB781207A5E")]
+    [Arguments(3, "6E4DCF14C6E3D1743F3A2E8F5B332A82C9992E654C225E6A56F5DEC01C75D50A")]
+    [Arguments(8, "642AE911C572D9E2B88C9119B1544CA41911A1D060704283BEEC44BB09D96FD5")]
+    public async Task ScanlinesEndingAroundAWordOfStarts_DecodeToTheMatrix(int pixels, string pinned)
+    {
+        using var all = new MemoryStream();
+        foreach (var width in Enumerable.Range(52, 22).Concat(Enumerable.Range(116, 22)))
+        {
+            var grid = Grid.Mixed(width, 12, seed: width);
+            var png = PngWriter.GetBytes(new SyntheticView(grid), new SymbolImageOptions { ModulePixelSize = pixels });
+            await AssertPng(png, grid, pixels, Black, White);
+            all.Write(png);
+        }
+        await Assert.That(Sha256(all.ToArray())).IsEqualTo(pinned);
+    }
+
+    /// <summary>
     /// The writing pass replays the symbols the counting pass recorded, up to 2^20 entries, and matches the image again past that.
     /// Random modules at one pixel make almost every byte a literal, so 4,096 × 2,100 modules (1,077,300 bytes) pass the record.
     /// Both passes write the same bytes, so the encoder this thread keeps is read to tell which one ran, with a small image as the control.
@@ -243,18 +270,28 @@ public class SymbolImageWriterPngTest
     }
 
     /// <summary>
-    /// The bytes of two files the decode tests above read back, pinned so that a change to the encoder's output is a decision.
-    /// Change the hashes only with the encoder, after those tests pass.
+    /// The bytes of files the decode tests above read back, pinned so that a change to the encoder's output is a decision.
+    /// Version 40 at 8 and 3 pixels and an rMQR at 10 pixels in a palette with alpha also take the long matches and each way of packing
+    /// a scanline up to 32 pixels. Change the hashes only with the encoder, after those tests pass.
     /// </summary>
     [Test]
     public async Task Output_IsPinned()
     {
         var qr = SymbolImageWriter.GetPngBytes(QRCodeGenerator.Create("1", QREccLevel.M, new QRCodeGeneratorOptions { Version = 1 }));
         var rm = SymbolImageWriter.GetPngBytes(RmQRCodeGenerator.Create("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 }));
+        var digits = string.Concat(Enumerable.Range(0, 7000).Select(i => (char)('0' + i * 7 % 10)));
+        var large = QRCodeGenerator.Create(digits, QREccLevel.L, new QRCodeGeneratorOptions { Version = 40 });
+        var wide = RmQRCodeGenerator.Create("FeatherQR", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
+        var tinted = new SymbolImageOptions { ModulePixelSize = 10, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A, 200), LightColor = new SymbolColor(255, 255, 255, 51) };
 
-        await Assert.That(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(qr))).IsEqualTo("BCFE5FE5D20EFA5BA1261C9A975F899548E74269EDAA04986A485F884E0D5D2B");
-        await Assert.That(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(rm))).IsEqualTo("CF07EB71A69F9C864CCBF9DFAF7600E8D70FA3B7DD1074A69AF518F232E451A8");
+        await Assert.That(Sha256(qr)).IsEqualTo("BCFE5FE5D20EFA5BA1261C9A975F899548E74269EDAA04986A485F884E0D5D2B");
+        await Assert.That(Sha256(rm)).IsEqualTo("CF07EB71A69F9C864CCBF9DFAF7600E8D70FA3B7DD1074A69AF518F232E451A8");
+        await Assert.That(Sha256(SymbolImageWriter.GetPngBytes(large))).IsEqualTo("4020F5A576A91B87DB3C011D4910F5BF756191F8A1B299767ABCD3CF06D976DA");
+        await Assert.That(Sha256(SymbolImageWriter.GetPngBytes(large, new SymbolImageOptions { ModulePixelSize = 3 }))).IsEqualTo("E426763E561D6E837C3A322C2A13DED5FDE84CAA98D80BC86FD92CA75DA9D0CA");
+        await Assert.That(Sha256(SymbolImageWriter.GetPngBytes(wide, tinted))).IsEqualTo("641747D02CF7BC8E44F491CB1D7E2450BF3490C5D245765E2CE817D8F63E66AA");
     }
+
+    private static string Sha256(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
 
     [Test]
     public async Task Version40_AtTheDefaultSize_IsCompressed()
@@ -485,6 +522,28 @@ public class SymbolImageWriterPngTest
         public static Grid Of(QRCodeData d) => From(d.Size, d.Size, (r, c) => d[r, c]);
         public static Grid Of(MicroQRCodeData d) => From(d.Size, d.Size, (r, c) => d[r, c]);
         public static Grid Of(RmQRCodeData d) => From(d.Width, d.Height, (r, c) => d[r, c]);
+
+        /// <summary>Rows that repeat the row above, rows of runs from one to a dozen modules, and random rows, a third each.</summary>
+        public static Grid Mixed(int width, int height, int seed)
+        {
+            var rng = new Random(seed);
+            var cells = new bool[width * height];
+            for (var r = 0; r < height; r++)
+            {
+                var kind = r == 0 ? 2 : rng.Next(3);
+                var run = 1 + rng.Next(12);
+                for (var c = 0; c < width; c++)
+                {
+                    cells[r * width + c] = kind switch
+                    {
+                        0 => cells[(r - 1) * width + c],
+                        1 => c / run % 2 == 0,
+                        _ => rng.Next(2) == 1,
+                    };
+                }
+            }
+            return new Grid(width, height, cells);
+        }
 
         public static Grid Random(int width, int height, int seed)
         {

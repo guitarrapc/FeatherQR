@@ -1,8 +1,9 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
-#if !NET7_0_OR_GREATER
 using System.Runtime.InteropServices;
+#if NET5_0_OR_GREATER
+using System.Numerics;
 #endif
 
 namespace FeatherQR.Internals.ImageWriters;
@@ -19,6 +20,8 @@ internal sealed class PngEncoder
     // Runs and copies shorter than these cost more than their literals: on a 1-bit image a literal is one of few byte values and its code is short.
     private const int MinRun = 4;
     private const int MinRowCopy = 8;
+    // Each scanline's slot runs this far past it, so packing and matching read and write whole words up to its end.
+    private const int Slack = 8;
 
     private readonly long[] _literalCounts = new long[Deflate.LiteralLengthSymbols];
     private readonly long[] _distanceCounts = new long[Deflate.DistanceSymbols];
@@ -26,9 +29,9 @@ internal sealed class PngEncoder
     private readonly byte[] _literalLengths = new byte[Deflate.LiteralLengthSymbols];
     private readonly byte[] _distanceLengths = new byte[Deflate.DistanceSymbols];
     private readonly byte[] _codeLengthLengths = new byte[Deflate.CodeLengthSymbols];
-    private readonly ushort[] _literalCodes = new ushort[Deflate.LiteralLengthSymbols];
-    private readonly ushort[] _distanceCodes = new ushort[Deflate.DistanceSymbols];
-    private readonly ushort[] _codeLengthCodes = new ushort[Deflate.CodeLengthSymbols];
+    private readonly uint[] _literalCodes = new uint[Deflate.LiteralLengthSymbols];
+    private readonly uint[] _distanceCodes = new uint[Deflate.DistanceSymbols];
+    private readonly uint[] _codeLengthCodes = new uint[Deflate.CodeLengthSymbols];
     private readonly byte[] _lengths = new byte[Deflate.LiteralLengthSymbols + Deflate.DistanceSymbols];
     // A run-length coded code length: the code-length symbol in the low byte, its extra bits above.
     private readonly int[] _lengthRuns = new int[Deflate.LiteralLengthSymbols + Deflate.DistanceSymbols];
@@ -53,6 +56,15 @@ internal sealed class PngEncoder
     // The scanlines of module rows m - 1, m and m + 1, at slot m % 3, rented for each call.
     private byte[] _rows = [];
     private readonly int[] _slotRow = new int[3];
+
+    // Eight modules' light-1 bits at _expansionPixels pixels a module, for each byte of the core (dark 1, MSB first).
+    private readonly ulong[] _expansion = new ulong[256];
+    private int _expansionPixels;
+
+    // Bit p of _starts marks a position of the scanline where a run or a copy may start. The others are the equal bytes they come from.
+    private ulong[] _starts = [];
+    private ulong[] _equalBefore = [];
+    private ulong[] _equalAbove = [];
 
     // The counting pass's symbols, each with how many times it repeats in a row, so the writing pass replays them instead of matching
     // again. A literal is its byte. A match is 1 << 31, then length - 3 from bit 16 and distance - 1 below. A file with more entries than
@@ -217,7 +229,7 @@ internal sealed class PngEncoder
             Replay(ref w);
         else
             adler = Tokenize(in view, ref w, write: true);
-        w.Put(_literalCodes[Deflate.EndOfBlock], _literalLengths[Deflate.EndOfBlock]);
+        w.Put(_literalCodes[Deflate.EndOfBlock]);
         if (w.Flush() != _deflateLength)
             throw new InvalidOperationException("The PNG's writing pass diverged from its counting pass; this is a bug in PngEncoder.");
         position += _deflateLength;
@@ -259,7 +271,7 @@ internal sealed class PngEncoder
         {
             var symbol = _lengthRuns[k] & 0xFF;
             var extra = (uint)(_lengthRuns[k] >> 8);
-            w.Put(_codeLengthCodes[symbol], _codeLengthLengths[symbol]);
+            w.Put(_codeLengthCodes[symbol]);
             if (symbol == 16)
                 w.Put(extra, 2);
             else if (symbol == 17)
@@ -319,11 +331,22 @@ internal sealed class PngEncoder
     private void RentRows()
     {
         var slots = _rowCopies ? 3 : 1;
-        if (_rows.Length < slots * _stride)
+        var length = slots * (_stride + Slack);
+        if (_rows.Length < length)
         {
             if (_rows.Length != 0)
                 ArrayPool<byte>.Shared.Return(_rows);
-            _rows = ArrayPool<byte>.Shared.Rent(slots * _stride);
+            _rows = ArrayPool<byte>.Shared.Rent(length);
+        }
+        if (_rowCopies)
+        {
+            var words = (_stride + 63) >> 6;
+            if (_starts.Length <= words)
+            {
+                _starts = new ulong[words + 1];
+                _equalBefore = new ulong[words + 1];
+                _equalAbove = new ulong[words + 1];
+            }
         }
     }
 
@@ -338,6 +361,9 @@ internal sealed class PngEncoder
         var repeatLength = (long)(_pixels - 1) * stride;
         var adler = new Adler32();
         var carry = 0;
+        // The record's array and position are locals between the calls that read them from the fields.
+        var recorded = _recorded;
+        var count = _recordedCount;
 
         for (var m = 0; m < _moduleRows; m++)
         {
@@ -347,15 +373,55 @@ internal sealed class PngEncoder
             if (!_rowCopies)
             {
                 // The scanline above is out of a copy's reach, so every scanline is searched for runs alone.
+                _recordedCount = count;
                 for (var repeat = 0; repeat < _pixels; repeat++)
                     TokenizeRuns(row, ref w, write);
+                recorded = _recorded;
+                count = _recordedCount;
                 continue;
             }
 
             var above = m > 0 ? Row(in view, m - 1) : default;
+            MarkStarts(row, above, m > 0);
+            ref var rowStart = ref MemoryMarshal.GetReference(row);
+            ref var aboveStart = ref MemoryMarshal.GetReference(above);
             var i = carry;
             while (i < stride)
             {
+                // Every position before the next mark is a literal.
+                var next = NextStart(i, stride);
+                if (next > i)
+                {
+                    if (write)
+                    {
+                        for (; i < next; i++)
+                            w.Put(_literalCodes[row[i]]);
+                    }
+                    else if (count + (next - i) <= recorded.Length)
+                    {
+                        // Unchecked: the record's room is checked just above, and a byte indexes inside the 286 counts.
+                        ref var counts = ref MemoryMarshal.GetReference(_literalCounts.AsSpan());
+                        ref var entries = ref MemoryMarshal.GetReference(recorded.AsSpan());
+                        for (; i < next; i++)
+                        {
+                            var value = Unsafe.Add(ref rowStart, i);
+                            Unsafe.Add(ref counts, value)++;
+                            // Literals rarely repeat in a row, so they are appended without looking at the entry before.
+                            Unsafe.Add(ref entries, count++) = (ulong)value << 32 | 1;
+                        }
+                    }
+                    else
+                    {
+                        _recordedCount = count;
+                        for (; i < next; i++)
+                            Literal(ref w, write, row[i]);
+                        recorded = _recorded;
+                        count = _recordedCount;
+                    }
+                    if (i >= stride)
+                        break;
+                }
+
                 var max = Math.Min(Deflate.MaxMatch, stride - i);
 
                 // A run repeats the byte before it, which is the scanline above's last byte at the start.
@@ -363,7 +429,7 @@ internal sealed class PngEncoder
                 if (i > 0)
                 {
                     if (MayRun(row, i))
-                        run = CommonPrefix(row.Slice(i, max), row.Slice(i - 1, max));
+                        run = Prefix(ref Unsafe.Add(ref rowStart, i), ref Unsafe.Add(ref rowStart, i - 1), max);
                 }
                 else if (m > 0 && row[0] == above[stride - 1])
                 {
@@ -381,7 +447,7 @@ internal sealed class PngEncoder
 
                 if (m > 0 && MayCopy(row, above, i))
                 {
-                    long copy = CommonPrefix(row.Slice(i, max), above.Slice(i, max));
+                    long copy = Prefix(ref Unsafe.Add(ref rowStart, i), ref Unsafe.Add(ref aboveStart, i), max);
                     if (copy == stride - i)
                         copy = Extend(in view, m, copy + repeatLength, row);
                     if (copy > length && copy >= Deflate.MinMatch && (copy >= MinRowCopy || i + copy > stride))
@@ -391,6 +457,7 @@ internal sealed class PngEncoder
                     }
                 }
 
+                _recordedCount = count;
                 if (distance != 0)
                 {
                     Match(ref w, write, length, distance);
@@ -401,9 +468,12 @@ internal sealed class PngEncoder
                     Literal(ref w, write, row[i]);
                     i++;
                 }
+                recorded = _recorded;
+                count = _recordedCount;
             }
 
             // The repeats, as copies of the scanline above, the last one running on into the next row's first scanline.
+            _recordedCount = count;
             long offset = i - stride;
             while (offset < repeatLength)
             {
@@ -417,8 +487,11 @@ internal sealed class PngEncoder
                 Match(ref w, write, length, stride);
                 offset += length;
             }
+            recorded = _recorded;
+            count = _recordedCount;
             carry = (int)(offset - repeatLength);
         }
+        _recordedCount = count;
         return adler.Value;
     }
 
@@ -493,12 +566,139 @@ internal sealed class PngEncoder
 #endif
     }
 
+    /// <summary>
+    /// How many leading bytes from two places in the scanline slots match, at most <paramref name="max"/>, eight a step.
+    /// The last step reads up to seven bytes past <paramref name="max"/>, which the slots' slack holds.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int Prefix(ref byte a, ref byte b, int max)
+    {
+        var n = 0;
+        while (n < max)
+        {
+            var x = LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref a, n))) ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b, n)));
+            if (x != 0)
+                return Math.Min(max, n + (TrailingZeros(x) >> 3));
+            n += 8;
+        }
+        return max;
+    }
+
+    // ---- where a run or a copy may start ------------------------------------------------------
+
+    /// <summary>
+    /// Sets bit p of <see cref="_starts"/> where the search may take a run or a copy at p: four bytes from p equal to the four before them
+    /// (<see cref="MayRun"/>), or eight equal to the scanline above (<see cref="MayCopy"/>). Position 0 and the last seven, where those compare
+    /// fewer bytes, are always set, so the search decides them itself.
+    /// </summary>
+    /// <remarks>
+    /// The equal bytes are found eight positions a compare. The bytes one back come from the word before, shifted, so both masks of a word
+    /// are built in a register. Bytes past the scanline are read from its slot's slack and are noise, but they reach only positions that are
+    /// always set or cleared.
+    /// </remarks>
+    private void MarkStarts(ReadOnlySpan<byte> row, ReadOnlySpan<byte> above, bool hasAbove)
+    {
+        var stride = row.Length;
+        var words = (stride + 63) >> 6;
+        var before = _equalBefore.AsSpan(0, words + 1);
+        var equal = _equalAbove.AsSpan(0, words + 1);
+        var starts = _starts.AsSpan(0, words + 1);
+        ref var r = ref MemoryMarshal.GetReference(row);
+        ref var a = ref MemoryMarshal.GetReference(above);
+        ulong previous = 0;
+        for (var k = 0; k < words; k++)
+        {
+            ulong backBits = 0, aboveBits = 0;
+            for (var j = 0; j < 64; j += 8)
+            {
+                var q = (k << 6) + j;
+                if (q >= stride)
+                    break;
+                var current = LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref r, q)));
+                var back = (current << 8) | (previous >> 56);
+                previous = current;
+                backBits |= ZeroBytes(current ^ back) << j;
+                if (hasAbove)
+                    aboveBits |= ZeroBytes(current ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref a, q)))) << j;
+            }
+            before[k] = backBits;
+            equal[k] = aboveBits;
+        }
+        before[words] = 0;
+        equal[words] = 0;
+
+        // A run needs an equal byte at p, p + 1, p + 2 and p + 3, a copy eight from p.
+        AndShifted(before, 1);
+        AndShifted(before, 2);
+        if (hasAbove)
+        {
+            AndShifted(equal, 1);
+            AndShifted(equal, 2);
+            AndShifted(equal, 4);
+        }
+        for (var k = 0; k < words; k++)
+            starts[k] = before[k] | equal[k];
+        starts[0] |= 1;
+        for (var p = Math.Max(0, stride - 7); p < stride; p++)
+            starts[p >> 6] |= 1UL << (p & 63);
+        if ((stride & 63) != 0)
+            starts[words - 1] &= ~0UL >> (64 - (stride & 63));
+        starts[words] = 0;
+    }
+
+    /// <summary>Bit k set where byte k of <paramref name="x"/> is zero. Exact: no borrow crosses a byte.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong ZeroBytes(ulong x)
+    {
+        var y = ~(((x & 0x7F7F7F7F7F7F7F7FUL) + 0x7F7F7F7F7F7F7F7FUL) | x | 0x7F7F7F7F7F7F7F7FUL);
+        // Byte k's top bit to bit k.
+        return ((y >> 7) * 0x0102040810204080UL) >> 56;
+    }
+
+    /// <summary>Bit p becomes bit p and bit p + s, for s from 1 to 63, across words. The last word stays zero.</summary>
+    private static void AndShifted(Span<ulong> bits, int s)
+    {
+        for (var k = 0; k + 1 < bits.Length; k++)
+            bits[k] &= (bits[k] >> s) | (bits[k + 1] << (64 - s));
+    }
+
+    /// <summary>The first marked position from <paramref name="i"/>, or the scanline's end.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int NextStart(int i, int stride)
+    {
+        var starts = _starts;
+        var k = i >> 6;
+        var word = starts[k] & (~0UL << (i & 63));
+        while (word == 0)
+        {
+            if (++k >= starts.Length)
+                return stride;
+            word = starts[k];
+        }
+        return Math.Min(stride, (k << 6) + TrailingZeros(word));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong LittleEndian(ulong value) => BitConverter.IsLittleEndian ? value : BinaryPrimitives.ReverseEndianness(value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int TrailingZeros(ulong value)
+    {
+#if NET5_0_OR_GREATER
+        return BitOperations.TrailingZeroCount(value);
+#else
+        return value == 0 ? 64 : 63 - PackedRuns.LeadingZeros(value & (0 - value));
+#endif
+    }
+
+    // ---- symbols ------------------------------------------------------------------------------
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Literal(ref DeflateBitWriter w, bool write, byte value)
     {
         if (write)
         {
-            w.Put(_literalCodes[value], _literalLengths[value]);
+            w.Put(_literalCodes[value]);
             return;
         }
         _literalCounts[value]++;
@@ -524,15 +724,9 @@ internal sealed class PngEncoder
             Record(0x8000_0000u | (uint)(length - Deflate.MinMatch) << 16 | (uint)(distance - 1));
             return;
         }
-        WriteMatch(ref w, length, distance, lengthCode, distanceCode);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void WriteMatch(ref DeflateBitWriter w, int length, int distance, int lengthCode, int distanceCode)
-    {
-        w.Put(_literalCodes[257 + lengthCode], _literalLengths[257 + lengthCode]);
+        w.Put(_literalCodes[257 + lengthCode]);
         w.Put((uint)(length - Deflate.LengthBase(lengthCode)), Deflate.LengthExtraBits[lengthCode]);
-        w.Put(_distanceCodes[distanceCode], _distanceLengths[distanceCode]);
+        w.Put(_distanceCodes[distanceCode]);
         w.Put((uint)(distance - Deflate.DistanceBase(distanceCode)), Deflate.DistanceExtraBits[distanceCode]);
     }
 
@@ -571,27 +765,94 @@ internal sealed class PngEncoder
     }
 
     /// <summary>Writes the symbols the counting pass recorded.</summary>
+    /// <remarks>
+    /// The bit writer's state is carried in locals. Through the writer, every code would load and store it. The entries and the literal
+    /// codes are read unchecked, since the count is within the record and a literal is a byte.
+    /// </remarks>
     private void Replay(ref DeflateBitWriter w)
     {
+        var destination = w.Destination;
+        w.Save(out var position, out var held, out var count);
+        ref var recorded = ref MemoryMarshal.GetReference(_recorded.AsSpan());
+        ref var literals = ref MemoryMarshal.GetReference(_literalCodes.AsSpan());
+        var literalCodes = _literalCodes;
+        var distanceCodes = _distanceCodes;
         for (var k = 0; k < _recordedCount; k++)
         {
-            var symbol = (uint)(_recorded[k] >> 32);
-            var times = (uint)_recorded[k];
+            var item = Unsafe.Add(ref recorded, k);
+            var symbol = (uint)(item >> 32);
+            var times = (uint)item;
             if ((symbol & 0x8000_0000u) == 0)
             {
-                var code = _literalCodes[symbol];
-                var bits = _literalLengths[symbol];
+                var entry = Unsafe.Add(ref literals, (int)symbol);
+                var code = entry & 0xFFFF;
+                var bits = (int)(entry >> 16);
                 for (var t = 0u; t < times; t++)
-                    w.Put(code, bits);
+                {
+                    held |= (ulong)code << count;
+                    count += bits;
+                    if (count >= 32)
+                    {
+                        BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(position), (uint)held);
+                        position += 4;
+                        held >>= 32;
+                        count -= 32;
+                    }
+                }
                 continue;
             }
             var length = (int)(symbol >> 16 & 0xFF) + Deflate.MinMatch;
             var distance = (int)(symbol & 0xFFFF) + 1;
             var lengthCode = Deflate.LengthCode(length);
             var distanceCode = Deflate.DistanceCode(distance);
+            // A match's four fields: the length code and its extra bits, the distance code and its extra bits.
+            var lengthEntry = literalCodes[257 + lengthCode];
+            var distanceEntry = distanceCodes[distanceCode];
+            uint lengthBits = lengthEntry & 0xFFFF, lengthExtra = (uint)(length - Deflate.LengthBase(lengthCode));
+            uint distanceBits = distanceEntry & 0xFFFF, distanceExtra = (uint)(distance - Deflate.DistanceBase(distanceCode));
+            int lengthSize = (int)(lengthEntry >> 16), lengthExtraSize = Deflate.LengthExtraBits[lengthCode];
+            int distanceSize = (int)(distanceEntry >> 16), distanceExtraSize = Deflate.DistanceExtraBits[distanceCode];
             for (var t = 0u; t < times; t++)
-                WriteMatch(ref w, length, distance, lengthCode, distanceCode);
+            {
+                held |= (ulong)lengthBits << count;
+                count += lengthSize;
+                if (count >= 32)
+                {
+                    BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(position), (uint)held);
+                    position += 4;
+                    held >>= 32;
+                    count -= 32;
+                }
+                held |= (ulong)lengthExtra << count;
+                count += lengthExtraSize;
+                if (count >= 32)
+                {
+                    BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(position), (uint)held);
+                    position += 4;
+                    held >>= 32;
+                    count -= 32;
+                }
+                held |= (ulong)distanceBits << count;
+                count += distanceSize;
+                if (count >= 32)
+                {
+                    BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(position), (uint)held);
+                    position += 4;
+                    held >>= 32;
+                    count -= 32;
+                }
+                held |= (ulong)distanceExtra << count;
+                count += distanceExtraSize;
+                if (count >= 32)
+                {
+                    BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(position), (uint)held);
+                    position += 4;
+                    held >>= 32;
+                    count -= 32;
+                }
+            }
         }
+        w.Resume(position, held, count);
     }
 
     // ---- scanlines --------------------------------------------------------------------------
@@ -601,28 +862,165 @@ internal sealed class PngEncoder
         where TView : struct, IModuleMatrixView
     {
         var slot = _rowCopies ? m % 3 : 0;
-        var row = _rows.AsSpan(slot * _stride, _stride);
+        var start = slot * (_stride + Slack);
         if (_slotRow[slot] != m)
         {
-            PackScanline(in view, m, row);
+            PackScanline(in view, m, _rows.AsSpan(start, _stride + Slack));
             _slotRow[slot] = m;
         }
-        return row;
+        return _rows.AsSpan(start, _stride);
     }
 
-    /// <summary>Filter byte 0, then a bit a pixel, light 1 and dark 0, MSB first, padded with light.</summary>
-    private void PackScanline<TView>(in TView view, int m, Span<byte> row)
+    /// <summary>
+    /// Filter byte 0, then a bit a pixel, light 1 and dark 0, MSB first, padded with light, into a slot <see cref="Slack"/> bytes longer
+    /// than the scanline.
+    /// </summary>
+    /// <remarks>
+    /// Up to 8 pixels a module, a table turns eight modules into their bits at once, and up to 32 each module goes in alone. Run by run, the
+    /// runs of one to three modules each cost a run length and a fill. The bits gather in a word that is stored eight bytes at a time, which
+    /// writes into the slack. Past 32 pixels the runs are long and the packing goes run by run.
+    /// </remarks>
+    private void PackScanline<TView>(in TView view, int m, Span<byte> slot)
         where TView : struct, IModuleMatrixView
     {
-        row[0] = 0;
-        var bits = new ScanlineBits(row.Slice(1));
+        var stride = _stride;
+        slot[0] = 0;
         var coreRow = m - _quietZone;
         if ((uint)coreRow >= (uint)_coreHeight)
         {
-            row.Slice(1).Fill(0xFF);
+            slot.Slice(1, stride - 1).Fill(0xFF);
+            return;
+        }
+        var pixels = _pixels;
+        if (pixels > 32)
+        {
+            PackRuns(in view, coreRow, slot.Slice(0, stride));
             return;
         }
 
+        var line = slot.Slice(1);
+        var position = 0;
+        ulong held = 0;
+        var count = 0;
+        var quietZone = (long)_quietZone * pixels;
+        for (var light = quietZone; light > 0; light -= 56)
+        {
+            var k = (int)Math.Min(light, 56);
+            held = (held << k) | (~0UL >> (64 - k));
+            count += k;
+            BinaryPrimitives.WriteUInt64BigEndian(line.Slice(position), held << (64 - count));
+            position += count >> 3;
+            count &= 7;
+        }
+
+        var core = view.CoreBits;
+        var start = (long)coreRow * _coreWidth;
+        var coreWidth = _coreWidth;
+        var column = 0;
+        if (pixels <= 8)
+        {
+            var table = Expansion(pixels);
+            // Four modules a step, at most 32 bits, so the held bits never pass 39.
+            var half = 4 * pixels;
+            var halfMask = ~0UL >> (64 - half);
+            for (; column + 8 <= coreWidth; column += 8)
+            {
+                var bits = table[(int)(PackedRuns.Window(core, start + column, 8) >> 56)];
+                held = (held << half) | (bits >> half);
+                count += half;
+                BinaryPrimitives.WriteUInt64BigEndian(line.Slice(position), held << (64 - count));
+                position += count >> 3;
+                count &= 7;
+                held = (held << half) | (bits & halfMask);
+                count += half;
+                BinaryPrimitives.WriteUInt64BigEndian(line.Slice(position), held << (64 - count));
+                position += count >> 3;
+                count &= 7;
+            }
+            var rest = coreWidth - column;
+            if (rest > 0)
+            {
+                // Only the first modules of the byte are this row's, and their bits are the top of the entry.
+                var bits = table[(int)(PackedRuns.Window(core, start + column, rest) >> 56)] >> ((8 - rest) * pixels);
+                var k = rest * pixels;
+                if (k > 32)
+                {
+                    held = (held << (k - 32)) | (bits >> 32);
+                    count += k - 32;
+                    BinaryPrimitives.WriteUInt64BigEndian(line.Slice(position), held << (64 - count));
+                    position += count >> 3;
+                    count &= 7;
+                    bits &= 0xFFFF_FFFF;
+                    k = 32;
+                }
+                held = (held << k) | bits;
+                count += k;
+                BinaryPrimitives.WriteUInt64BigEndian(line.Slice(position), held << (64 - count));
+                position += count >> 3;
+                count &= 7;
+            }
+        }
+        else
+        {
+            var mask = ~0UL >> (64 - pixels);
+            while (column < coreWidth)
+            {
+                var take = Math.Min(8, coreWidth - column);
+                var word = PackedRuns.Window(core, start + column, take);
+                for (var j = 0; j < take; j++)
+                {
+                    // Dark is 1 in the core and 0 in the scanline.
+                    held = (held << pixels) | ((long)word < 0 ? 0 : mask);
+                    word <<= 1;
+                    count += pixels;
+                    BinaryPrimitives.WriteUInt64BigEndian(line.Slice(position), held << (64 - count));
+                    position += count >> 3;
+                    count &= 7;
+                }
+                column += take;
+            }
+        }
+
+        for (var light = quietZone; light > 0; light -= 56)
+        {
+            var k = (int)Math.Min(light, 56);
+            held = (held << k) | (~0UL >> (64 - k));
+            count += k;
+            BinaryPrimitives.WriteUInt64BigEndian(line.Slice(position), held << (64 - count));
+            position += count >> 3;
+            count &= 7;
+        }
+        if (count != 0)
+        {
+            // Padded with light to the byte.
+            held = (held << (8 - count)) | (~0UL >> (56 + count));
+            BinaryPrimitives.WriteUInt64BigEndian(line.Slice(position), held << 56);
+        }
+    }
+
+    /// <summary>For each byte of eight modules (dark 1, MSB first), their light-1 bits at <paramref name="pixels"/> a module, the first module highest.</summary>
+    private ulong[] Expansion(int pixels)
+    {
+        if (_expansionPixels != pixels)
+        {
+            var mask = ~0UL >> (64 - pixels);
+            for (var b = 0; b < 256; b++)
+            {
+                ulong bits = 0;
+                for (var j = 7; j >= 0; j--)
+                    bits = (bits << pixels) | (((b >> j) & 1) != 0 ? 0 : mask);
+                _expansion[b] = bits;
+            }
+            _expansionPixels = pixels;
+        }
+        return _expansion;
+    }
+
+    /// <summary>The scanline run by run, for modules wider than 32 pixels.</summary>
+    private void PackRuns<TView>(in TView view, int coreRow, Span<byte> row)
+        where TView : struct, IModuleMatrixView
+    {
+        var bits = new ScanlineBits(row.Slice(1));
         var pixels = _pixels;
         bits.Add(light: true, (long)_quietZone * pixels);
         var core = view.CoreBits;
