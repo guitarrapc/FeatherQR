@@ -1,9 +1,13 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET5_0_OR_GREATER
 using System.Numerics;
+#endif
+#if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics;
 #endif
 
 namespace FeatherQR.Internals.ImageWriters;
@@ -12,7 +16,7 @@ namespace FeatherQR.Internals.ImageWriters;
 /// The state of one PNG: the image's geometry, the symbol counts and codes, and the three scanlines the matcher reads.
 /// One instance a thread is kept, so a call allocates nothing beyond its output once warm.
 /// </summary>
-internal sealed class PngEncoder
+internal sealed partial class PngEncoder
 {
     [ThreadStatic]
     private static PngEncoder? cached;
@@ -20,8 +24,10 @@ internal sealed class PngEncoder
     // Runs and copies shorter than these cost more than their literals: on a 1-bit image a literal is one of few byte values and its code is short.
     private const int MinRun = 4;
     private const int MinRowCopy = 8;
-    // Each scanline's slot runs this far past it, so packing and matching read and write whole words up to its end.
-    private const int Slack = 8;
+    // A scanline's slot starts SlotLead before it, where the vector marks read the byte before position 0, and runs Slack past it, so
+    // packing and matching read and write whole words, and the marks whole vectors of up to 32 bytes, up to its end.
+    internal const int SlotLead = 1;
+    internal const int Slack = 32;
     // How many chained positions a lookup compares.
     private const int LookupDepth = 8;
     // A match longer than this leaves the positions it covers out of the lookup, since they repeat bytes that came before it.
@@ -375,7 +381,7 @@ internal sealed class PngEncoder
 
     private void RentRows()
     {
-        var length = _slots * (_stride + Slack);
+        var length = _slots * SlotLength;
         if (_rows.Length < length)
         {
             if (_rows.Length != 0)
@@ -741,25 +747,50 @@ internal sealed class PngEncoder
     // ---- where a run or a copy may start ------------------------------------------------------
 
     /// <summary>
-    /// Sets bit p of <see cref="_starts"/> where the search may take a run or a copy at p. A run needs each of the four bytes from p equal to
-    /// the byte before it, as <see cref="MayRun"/> tests, and a copy the eight from p equal to the scanline above, as <see cref="MayCopy"/>
-    /// tests. Position 0, whose run is measured against the scanline above, and the last seven, where those tests compare fewer bytes, are
-    /// always set, so the search decides them itself.
+    /// Sets bit p of <see cref="_starts"/> where the search may take a run or a copy at p of <paramref name="row"/>, a scanline
+    /// <see cref="Row"/> returned. A run needs each of the four bytes from p equal to the byte before it, as <see cref="MayRun"/> tests,
+    /// and a copy the eight from p equal to the scanline above, as <see cref="MayCopy"/> tests. Position 0, whose run is measured against
+    /// the scanline above, and the last seven, where those tests compare fewer bytes, are always set, so the search decides them itself.
+    /// </summary>
+    private void MarkStarts(ReadOnlySpan<byte> row, ReadOnlySpan<byte> aboveRow, bool hasAbove)
+    {
+        var words = (_stride + 63) >> 6;
+        var slot = SlotOf(row);
+        var above = hasAbove ? SlotOf(aboveRow) : default;
+        var before = _equalBefore.AsSpan(0, words + 1);
+        var equal = _equalAbove.AsSpan(0, words + 1);
+        var starts = _starts.AsSpan(0, words + 1);
+#if NET8_0_OR_GREATER
+        if (Vector256.IsHardwareAccelerated)
+        {
+            MarkStartsVector256(slot, above, _stride, hasAbove, before, equal, starts);
+            return;
+        }
+        if (Vector128.IsHardwareAccelerated)
+        {
+            MarkStartsVector128(slot, above, _stride, hasAbove, before, equal, starts);
+            return;
+        }
+#endif
+        MarkStartsScalar(slot, above, _stride, hasAbove, before, equal, starts);
+    }
+
+    /// <summary>
+    /// Scalar tier of <see cref="MarkStarts"/>: the start bits of the scanline in <paramref name="slot"/>, <paramref name="stride"/> bytes
+    /// from <see cref="SlotLead"/> with <see cref="Slack"/> after them, against the scanline above in <paramref name="aboveSlot"/> when
+    /// <paramref name="hasAbove"/>. The spans of words hold one word more than the positions need.
     /// </summary>
     /// <remarks>
     /// The equal bytes are found eight positions a compare. The byte before a word's first comes from the word before, so both masks of a
     /// word are built in a register. Bytes past the scanline are read from its slot's slack and are noise, but they reach only positions
     /// that are always set or cleared.
     /// </remarks>
-    private void MarkStarts(ReadOnlySpan<byte> row, ReadOnlySpan<byte> above, bool hasAbove)
+    internal static void MarkStartsScalar(ReadOnlySpan<byte> slot, ReadOnlySpan<byte> aboveSlot, int stride, bool hasAbove, Span<ulong> before, Span<ulong> equal, Span<ulong> starts)
     {
-        var stride = row.Length;
         var words = (stride + 63) >> 6;
-        var before = _equalBefore.AsSpan(0, words + 1);
-        var equal = _equalAbove.AsSpan(0, words + 1);
-        var starts = _starts.AsSpan(0, words + 1);
-        ref var r = ref MemoryMarshal.GetReference(row);
-        ref var a = ref MemoryMarshal.GetReference(above);
+        AssertSlots(slot, aboveSlot, stride, hasAbove, before, equal, starts);
+        ref var r = ref Unsafe.Add(ref MemoryMarshal.GetReference(slot), SlotLead);
+        ref var a = ref Unsafe.Add(ref MemoryMarshal.GetReference(aboveSlot), SlotLead);
         ulong previous = 0;
         for (var k = 0; k < words; k++)
         {
@@ -779,10 +810,27 @@ internal sealed class PngEncoder
             before[k] = backBits;
             equal[k] = aboveBits;
         }
+        FinishStarts(before, equal, starts, stride, hasAbove);
+    }
+
+    [Conditional("DEBUG")]
+    private static void AssertSlots(ReadOnlySpan<byte> slot, ReadOnlySpan<byte> aboveSlot, int stride, bool hasAbove, Span<ulong> before, Span<ulong> equal, Span<ulong> starts)
+    {
+        var words = (stride + 63) >> 6;
+        Debug.Assert(slot.Length >= SlotLead + stride + Slack && (!hasAbove || aboveSlot.Length >= SlotLead + stride + Slack), "a slot holds its lead, the scanline and its slack");
+        Debug.Assert(before.Length > words && equal.Length > words && starts.Length > words, "the word spans hold one word past the positions");
+    }
+
+    /// <summary>
+    /// The start words from either tier's equal-byte masks. A run needs an equal byte at p, p + 1, p + 2 and p + 3, a copy eight from p.
+    /// Position 0 and the last seven are set, and the bits past the scanline cleared, so the noise the masks hold there goes no further.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void FinishStarts(Span<ulong> before, Span<ulong> equal, Span<ulong> starts, int stride, bool hasAbove)
+    {
+        var words = (stride + 63) >> 6;
         before[words] = 0;
         equal[words] = 0;
-
-        // A run needs an equal byte at p, p + 1, p + 2 and p + 3, a copy eight from p.
         AndShifted(before, 1);
         AndShifted(before, 2);
         if (hasAbove)
@@ -944,6 +992,7 @@ internal sealed class PngEncoder
     private void Find(ReadOnlySpan<byte> row, int m, int i, int max, int key, ref int length, ref int distance)
     {
         var stride = _stride;
+        var slotLength = SlotLength;
         var slotShift = _slotShift;
         var mask = (1 << slotShift) - 1;
         var keyBytes = _keyBytes;
@@ -979,14 +1028,14 @@ internal sealed class PngEncoder
             var reach = Math.Min(max, stride - k);
             if (need > reach)
                 continue;
-            ref var there = ref Unsafe.Add(ref rows, slot * (stride + Slack) + k);
+            ref var there = ref Unsafe.Add(ref rows, slot * slotLength + SlotLead + k);
             if (need >= 8
                 ? Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref here, need - 8)) != Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref there, need - 8))
                 : Unsafe.Add(ref here, need - 1) != Unsafe.Add(ref there, need - 1))
             {
                 continue;
             }
-            var found = Prefix(row.Slice(i, reach), _rows.AsSpan(slot * (stride + Slack) + k, reach));
+            var found = Prefix(row.Slice(i, reach), _rows.AsSpan(slot * slotLength + SlotLead + k, reach));
             if (found >= need)
             {
                 length = found;
@@ -1166,13 +1215,37 @@ internal sealed class PngEncoder
     {
         // Without the lookup there are 3 slots or 1, and a constant 3 lets the JIT turn the remainder into a multiply.
         var slot = _lookup ? m % _slots : _rowCopies ? m % 3 : 0;
-        var start = slot * (_stride + Slack);
+        var start = slot * SlotLength + SlotLead;
         if (_slotRow[slot] != m)
         {
             PackScanline(in view, m, _rows.AsSpan(start, _stride + Slack));
             _slotRow[slot] = m;
         }
         return _rows.AsSpan(start, _stride);
+    }
+
+    /// <summary>
+    /// The slot around a scanline <see cref="Row"/> returned: the lead before it and the slack after it. Read back from the scanline, since
+    /// its slot number and a bounds check cost a small symbol's PNG more than the 128-bit marks save it.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private ReadOnlySpan<byte> SlotOf(ReadOnlySpan<byte> row)
+    {
+        Debug.Assert(row.Length == _stride, "a scanline Row returned");
+#if NETSTANDARD2_0
+        // No span is made from a reference there, so the slot is found by the scanline's offset in the rented rows.
+        var offset = (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_rows.AsSpan()), ref MemoryMarshal.GetReference(row));
+        return _rows.AsSpan(offset - SlotLead, SlotLength);
+#else
+        return MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Subtract(ref MemoryMarshal.GetReference(row), SlotLead), SlotLength);
+#endif
+    }
+
+    // Inlined, with SlotOf and the 128-bit tier, so that the interpreter pays one call a row for the marks, as it did before the tier.
+    private int SlotLength
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => SlotLead + _stride + Slack;
     }
 
     /// <summary>

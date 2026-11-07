@@ -210,6 +210,8 @@ internal static class SimdTiers
         new("FinderRowEdges", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // PerspectiveGridSampler.Sample: a square grid through one projective transform (Standard QR's four-point, parallelogram and frame grids, Micro QR's perspective search). The 128-bit tier also takes grids too small for the 256-bit one, and converts coordinates with SSE2 on x64 and PackedSimd on WebAssembly (VectorCast).
         new("PerspectiveGridSampler", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // PngEncoder.MarkStarts: the PNG writer's match-start marks, each byte of a scanline compared with the one before it and with the scanline above, 32 positions a compare on 256-bit vectors and 16 on 128-bit ones, each compare's sign bits gathered into the word.
+        new("PngStartMarks", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
 
         // ---- Standard QR ----
 
@@ -296,6 +298,7 @@ internal static class SimdTiers
         new("FinderRowMask",           [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("FinderRowEdges",          [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("PerspectiveGridSampler",  [Sse2],          [Vector256],          [Vector128],          [PackedSimd]),
+        new("PngStartMarks",           [Vector128],     [Vector256],          [Vector128],          [Vector128]),
 
         // ---- Standard QR ----
         // WebAssembly stays scalar: the expand is too small a share of an encode there

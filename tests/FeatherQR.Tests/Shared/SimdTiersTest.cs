@@ -39,6 +39,7 @@ public class SimdTiersTest
         ["FinderRowMask"] = ["ImageDecoders/FinderPatternFinder.cs", "ImageDecoders/FinderPatternFinder.Simd.cs"],
         ["FinderRowEdges"] = ["ImageDecoders/FinderPatternFinder.RowEdges.cs", "ImageDecoders/FinderPatternFinder.RowEdges.Simd.cs"],
         ["PerspectiveGridSampler"] = ["ImageDecoders/PerspectiveGridSampler.cs", "ImageDecoders/VectorCast.Simd.cs"],
+        ["PngStartMarks"] = ["ImageWriters/PngEncoder.cs", "ImageWriters/PngEncoder.Vector128.cs", "ImageWriters/PngEncoder.Vector256.cs"],
         ["ModulePlacerExpandBits"] = ["StandardQR/ModulePlacer.ExpandBits.cs"],
         ["ModulePlacerMaskCode"] = ["StandardQR/ModulePlacer.Masking.cs", "StandardQR/ModulePlacer.Masking.Simd.cs"],
         ["QRAlphanumericWriter"] = ["StandardQR/QRBinaryEncoder.cs#WriteAlphanumericData"],

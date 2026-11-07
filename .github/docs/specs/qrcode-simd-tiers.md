@@ -88,6 +88,7 @@ For each kernel, its tiers in the order its dispatch tries them, and the tier th
 | `FinderRowMask` | `Vector256`, `AdvSimd`, `Vector128` | `Vector128` | `Vector256` | `AdvSimd` | `Vector128` |
 | `FinderRowEdges` | `Vector256`, `AdvSimd`, `Vector128` | `Vector128` | `Vector256` | `AdvSimd` | `Vector128` |
 | `PerspectiveGridSampler` | `Vector256`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Vector256` | `Vector128` | `PackedSimd` |
+| `PngStartMarks` | `Vector256`, `Vector128` | `Vector128` | `Vector256` | `Vector128` | `Vector128` |
 | `ModulePlacerExpandBits` | `AdvSimd`, `Avx2`, `Ssse3` | `Ssse3` | `Avx2` | `AdvSimd` | `Scalar` |
 | `ModulePlacerMaskCode` | `Avx2`, `AdvSimd`, `Ssse3`, `PackedSimd`, `Vector128` | `Ssse3` | `Avx2` | `AdvSimd` | `PackedSimd` |
 | `QRAlphanumericWriter` | `Sse41`, `AdvSimd`, `PackedSimd` | `Sse41` | `Sse41` | `AdvSimd` | `PackedSimd` |

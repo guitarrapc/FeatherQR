@@ -3,6 +3,7 @@ using System.Runtime.Intrinsics.Wasm;
 using FeatherQR;
 using FeatherQR.Internals;
 using FeatherQR.Internals.ImageDecoders;
+using FeatherQR.Internals.ImageWriters;
 using FeatherQR.Internals.MicroQR;
 using FeatherQR.Internals.RmQR;
 using FeatherQR.Internals.StandardQR;
@@ -53,6 +54,7 @@ internal static class SimdParity
         failures += Report("EccBinaryEncoder.PackedSimdKernel", EccEncoderMismatches);
         failures += Report("RmQRMatrixDecoder pair planes, 128-bit", ExtractMismatches);
         failures += Report("RmQRBinaryEncoder value writers", ValueWriterMismatches);
+        failures += Report("PngEncoder.MarkStarts", StartMarksMismatches);
         return failures == 0 ? 0 : 1;
     }
 
@@ -517,6 +519,70 @@ internal static class SimdParity
     private delegate void Halving(ReadOnlySpan<byte> source, int width, int height, Span<byte> destination);
 
     /// <summary>Each vector tier of the halving against the scalar tier, out of place and in place, over widths that end in every tail length and an image the search halves.</summary>
+    /// <summary>
+    /// The PNG's match-start marks in each vector form against the scalar form: the same start words over random scanlines, runs of one
+    /// byte and copies of the scanline above with a few bytes changed, in slots whose lead and slack hold other noise for each form.
+    /// </summary>
+    private static List<string> StartMarksMismatches()
+    {
+        var mismatches = new List<string>();
+        var random = new Random(20261107);
+        var tiers = new List<(string Name, StartMarker Tier)> { ("Vector128", PngEncoder.MarkStartsVector128) };
+        if (Vector256.IsHardwareAccelerated)
+            tiers.Add(("Vector256", PngEncoder.MarkStartsVector256));
+        foreach (var stride in new[] { 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129, 186, 255, 257, 1000, 4097, 32768 })
+        {
+            for (var trial = 0; trial < 6; trial++)
+            {
+                var above = new byte[stride];
+                var row = new byte[stride];
+                random.NextBytes(above);
+                switch (trial % 3)
+                {
+                    case 0:
+                        random.NextBytes(row);
+                        break;
+                    case 1:
+                        for (var i = 0; i < stride;)
+                        {
+                            var value = random.Next(2) == 0 ? (byte)0x00 : (byte)0xFF;
+                            var length = Math.Min(stride - i, 1 + random.Next(40));
+                            row.AsSpan(i, length).Fill(value);
+                            i += length;
+                        }
+                        break;
+                    default:
+                        above.CopyTo(row, 0);
+                        for (var k = random.Next(6); k > 0; k--)
+                            row[random.Next(stride)] ^= 0xFF;
+                        break;
+                }
+                var hasAbove = trial >= 3;
+                var words = (stride + 63) >> 6;
+                var expected = new ulong[words + 1];
+                PngEncoder.MarkStartsScalar(StartMarkSlot(random, row), StartMarkSlot(random, above), stride, hasAbove, new ulong[words + 1], new ulong[words + 1], expected);
+                foreach (var (name, tier) in tiers)
+                {
+                    var actual = new ulong[words + 1];
+                    tier(StartMarkSlot(random, row), StartMarkSlot(random, above), stride, hasAbove, new ulong[words + 1], new ulong[words + 1], actual);
+                    if (!actual.AsSpan().SequenceEqual(expected))
+                        mismatches.Add($"{name} stride {stride} trial {trial}");
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    private delegate void StartMarker(ReadOnlySpan<byte> slot, ReadOnlySpan<byte> aboveSlot, int stride, bool hasAbove, Span<ulong> before, Span<ulong> equal, Span<ulong> starts);
+
+    private static byte[] StartMarkSlot(Random random, byte[] row)
+    {
+        var slot = new byte[PngEncoder.SlotLead + row.Length + PngEncoder.Slack];
+        random.NextBytes(slot);
+        row.CopyTo(slot, PngEncoder.SlotLead);
+        return slot;
+    }
+
     private static List<string> HalverMismatches()
     {
         var mismatches = new List<string>();

@@ -37,6 +37,7 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 | Document | Covers |
 |---|---|
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
+| [png-start-marks-vector-tier-plan.md](plans/png-start-marks-vector-tier-plan.md) | A portable 128-bit tier, and a gated 256-bit one, for the PNG writer's match-start masks: the marks' share measured first on each build, the tier under the 128-bit round's rules, the timing shapes for the PNG and SVG writers in the report projects |
 
 The 2.0.0 core split plan (`FeatherQR` core, `FeatherQR.SkiaSharp` renderer, `SkiaSharp.QrCode` metapackage, repository rename) completed on 2026-09-06 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (package architecture, seam, graph, the "why three packages" record, scope decisions, lessons) and [DESIGN.md](DESIGN.md).
 
