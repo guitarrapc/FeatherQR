@@ -127,6 +127,37 @@ public class SymbolImageBuilderStyleTest
         await Assert.That(rm).IsEquivalentTo(rmShapes, CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// The core's rounded finder patterns are the builders' shape. At 40 pixels a module no pixel of the finder box is clearly dark in one
+    /// package and clearly light in the other. The two anti-alias their edges apart, so only pixels past a quarter from either end count,
+    /// and inner squares rounded by a share of their own sides instead give such pixels at the inner corners.
+    /// </summary>
+    [Test]
+    [Arguments(FinderPatternStyle.RoundedSquare, 20)]
+    [Arguments(FinderPatternStyle.RoundedSquare, 30)]
+    [Arguments(FinderPatternStyle.RoundedSquareCircle, 30)]
+    public async Task RoundedFinders_AreTheBuildersShape(FinderPatternStyle style, int cornerRadiusPercent)
+    {
+        const int pixels = 40;
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M);
+        var options = new SymbolImageOptions { ModulePixelSize = pixels, FinderPatternStyle = style, CornerRadiusPercent = cornerRadiusPercent };
+        var core = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, options)];
+        SymbolImageWriter.TryWritePixels(qr, core, PixelLayout.Gray8, out var width, out var height, options);
+        using var skia = new QRCodeImageBuilder(qr).WithModulePixelSize(pixels).WithFinderPatternStyle(style, cornerRadiusPercent).ToBitmap();
+        await Assert.That((skia.Width, skia.Height)).IsEqualTo((width, height));
+
+        var origin = (qr.Size - (17 + 4 * qr.Version)) / 2 * pixels;
+        var differing = 0;
+        for (var y = origin; y < origin + 7 * pixels; y++)
+            for (var x = origin; x < origin + 7 * pixels; x++)
+            {
+                int a = core[y * width + x], b = skia.GetPixel(x, y).Red;
+                if ((a < 64 && b > 192) || (a > 192 && b < 64))
+                    differing++;
+            }
+        await Assert.That(differing).IsEqualTo(0);
+    }
+
     [Test]
     public async Task OutOfRangeArguments_Throw_NamingTheArgument()
     {

@@ -169,8 +169,8 @@ public record struct SymbolImageOptions
     /// The corner radius of a rounded square as a percentage of its side, 0 to 100. Defaults to 30.
     /// </summary>
     /// <remarks>
-    /// It rounds <see cref="ModuleStyle.RoundedSquare"/> modules and the squares of the rounded finder pattern styles, each by this share of its own side.
-    /// From 50 up a square is a circle, since its corners meet.
+    /// It rounds <see cref="ModuleStyle.RoundedSquare"/> modules, and the outer square of the rounded finder pattern styles, by this share of their side.
+    /// The inner squares of a finder pattern take fixed shares of the outer radius, as the image builders draw them. From 50 up a square is a circle, since its corners meet.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is outside 0 to 100.</exception>
     public int CornerRadiusPercent

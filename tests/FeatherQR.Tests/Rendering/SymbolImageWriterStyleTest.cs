@@ -400,8 +400,16 @@ public class SymbolImageWriterStyleTest
         var runs = paths.Single(p => p.Attribute("fill-rule") is null);
         await Assert.That(PathModules(runs.Attribute("d")!.Value, quietZone)).IsEquivalentTo(DarkModules(qr, finder: false), CollectionOrdering.Any);
         await Assert.That(paths.Count(p => p.Attribute("fill-rule")?.Value == "evenodd")).IsEqualTo(3).Because("one even-odd path a finder pattern");
-        // The outer square's corner radius: 20 percent of its 7 modules.
-        await Assert.That(paths.First(p => p.Attribute("fill-rule") is not null).Attribute("d")!.Value).Contains("a1.4 1.4 0 0 1 1.4 1.4");
+        // The outer square's corner radius is 20 percent of its 7 modules, and the inner two take 0.8 and 0.6 of it, as the image builders draw them.
+        var finder = paths.First(p => p.Attribute("fill-rule") is not null).Attribute("d")!.Value;
+        await Assert.That(finder).Contains("a1.4 1.4 0 0 1 1.4 1.4");
+        await Assert.That(finder).Contains("a1.12 1.12 0 0 1 1.12 1.12");
+        await Assert.That(finder).Contains("a0.84 0.84 0 0 1 0.84 0.84");
+
+        // Around a circle the ring's inner square takes 0.7 of the outer radius.
+        var circleCentre = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, options with { FinderPatternStyle = FinderPatternStyle.RoundedSquareCircle })).Root!.Element(Svg + "g")!
+            .Elements(Svg + "path").First(p => p.Attribute("fill-rule") is not null).Attribute("d")!.Value;
+        await Assert.That(circleCentre).Contains("a0.98 0.98 0 0 1 0.98 0.98");
     }
 
     /// <summary>

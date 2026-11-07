@@ -182,7 +182,7 @@ internal static partial class SvgWriter
 
     /// <summary>
     /// A finder pattern at <paramref name="left"/>, <paramref name="top"/> in modules: nested circles as a stroked ring and a disc, or nested
-    /// rounded squares as one even-odd path, each square rounded by the corner radius of its own side, around a square or a disc.
+    /// rounded squares as one even-odd path around a square or a disc, the inner squares rounded by shares of the outer radius as the image builders draw them.
     /// </summary>
     private static void WriteFinder(ref AsciiWriter w, int left, int top, in SymbolImageOptions options, SymbolColor dark)
     {
@@ -209,16 +209,18 @@ internal static partial class SvgWriter
                 WriteCentreCircle(ref w, centreX, centreY);
                 break;
             case FinderPatternStyle.RoundedSquare:
+                // The outer radius is the given share of 7 modules, 70 thousandths a percent, and the inner squares take 0.8 and 0.6 of it.
                 w.Raw("<path fill-rule=\"evenodd\" d=\""u8);
                 WriteRoundedSquare(ref w, left * 1000L, top * 1000L, 7000, 70 * radius);
-                WriteRoundedSquare(ref w, left * 1000L + 1000, top * 1000L + 1000, 5000, 50 * radius);
-                WriteRoundedSquare(ref w, left * 1000L + 2000, top * 1000L + 2000, 3000, 30 * radius);
+                WriteRoundedSquare(ref w, left * 1000L + 1000, top * 1000L + 1000, 5000, 56 * radius);
+                WriteRoundedSquare(ref w, left * 1000L + 2000, top * 1000L + 2000, 3000, 42 * radius);
                 w.Raw("\"/>"u8);
                 break;
             default:
+                // Around a circle the ring's inner square takes 0.7 of the outer radius.
                 w.Raw("<path fill-rule=\"evenodd\" d=\""u8);
                 WriteRoundedSquare(ref w, left * 1000L, top * 1000L, 7000, 70 * radius);
-                WriteRoundedSquare(ref w, left * 1000L + 1000, top * 1000L + 1000, 5000, 50 * radius);
+                WriteRoundedSquare(ref w, left * 1000L + 1000, top * 1000L + 1000, 5000, 49 * radius);
                 w.Raw("\"/>"u8);
                 WriteCentreCircle(ref w, centreX, centreY);
                 break;

@@ -66,16 +66,15 @@ internal static class Stamp
         return s;
     }
 
-    // The three regions of a finder pattern in its box: nested ellipses, nested rounded squares each rounded by the corner radius of its
-    // own side, or rounded squares around an ellipse.
+    // The three regions of a finder pattern in its box: nested ellipses, nested rounded squares, or rounded squares around an ellipse.
     private static int FinderRegions(int width, int height, in SymbolImageOptions options, out Region outer, out Region hole, out Region centre)
     {
         const int s = SamplesPerSide;
         long w = 4L * s * width, h = 4L * s * height;
         long moduleWidth = w / 7, moduleHeight = h / 7;
-        var side = Math.Min(w, h);
-        var module = Math.Min(moduleWidth, moduleHeight);
-        var radius = options.CornerRadiusPercent;
+        // The inner squares take fixed shares of the outer radius rather than a share of their own sides, as the image builders draw
+        // them, so one style looks the same from both packages.
+        var outerRadius = Math.Min(w, h) * options.CornerRadiusPercent / 100;
         switch (options.FinderPatternStyle)
         {
             case FinderPatternStyle.Circle:
@@ -84,13 +83,13 @@ internal static class Stamp
                 centre = Region.Ellipse(2 * moduleWidth, 2 * moduleHeight, w - 2 * moduleWidth, h - 2 * moduleHeight);
                 break;
             case FinderPatternStyle.RoundedSquare:
-                outer = Region.RoundedRect(0, 0, w, h, side * radius / 100);
-                hole = Region.RoundedRect(moduleWidth, moduleHeight, w - moduleWidth, h - moduleHeight, (side - 2 * module) * radius / 100);
-                centre = Region.RoundedRect(2 * moduleWidth, 2 * moduleHeight, w - 2 * moduleWidth, h - 2 * moduleHeight, (side - 4 * module) * radius / 100);
+                outer = Region.RoundedRect(0, 0, w, h, outerRadius);
+                hole = Region.RoundedRect(moduleWidth, moduleHeight, w - moduleWidth, h - moduleHeight, outerRadius * 8 / 10);
+                centre = Region.RoundedRect(2 * moduleWidth, 2 * moduleHeight, w - 2 * moduleWidth, h - 2 * moduleHeight, outerRadius * 6 / 10);
                 break;
             default:
-                outer = Region.RoundedRect(0, 0, w, h, side * radius / 100);
-                hole = Region.RoundedRect(moduleWidth, moduleHeight, w - moduleWidth, h - moduleHeight, (side - 2 * module) * radius / 100);
+                outer = Region.RoundedRect(0, 0, w, h, outerRadius);
+                hole = Region.RoundedRect(moduleWidth, moduleHeight, w - moduleWidth, h - moduleHeight, outerRadius * 7 / 10);
                 centre = Region.Ellipse(2 * moduleWidth, 2 * moduleHeight, w - 2 * moduleWidth, h - 2 * moduleHeight);
                 break;
         }
