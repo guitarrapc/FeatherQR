@@ -522,11 +522,24 @@ File.WriteAllText("qrcode.svg", SymbolImageWriter.GetSvgString(qr));
 Console.Write(SymbolImageWriter.GetTerminalText(qr));
 ```
 
-- **The size is per module, not per image.** `SymbolImageOptions.ModulePixelSize`, 8 by default, is the side of a module, and the image is the symbol's modules, quiet zone included, times it. The builders' `size = 512` fits the symbol into a set size instead, so `QRCodeImageBuilder.GetPngBytes(qr)` and `SymbolImageWriter.GetPngBytes(qr)` give different images.
-- **Plain output only.** Two colors, each a `SymbolColor` with an optional alpha, square modules and the symbol's own quiet zone. Module shapes, finder shapes, gradients, icons, JPEG and WebP stay with the image builders.
-- **PNG is 1-bit**: greyscale for black on white, a two-color palette otherwise. A version 40 symbol at 8 pixels a module is about 7 KB.
+- **The size is per module, or the image's.** `SymbolImageOptions.ModulePixelSize`, 8 by default, is the side of a module, and the image is the symbol's modules, quiet zone included, times it. With `Width` and `Height` set the symbol fills that canvas as the builders' `WithSize` does, pixel for pixel, so `SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { Width = 512, Height = 512 })` is the image `QRCodeImageBuilder.GetPngBytes(qr)` writes. `SymbolImageWriter.GetPngBytes(qr)` with no size is the symbol at 8 pixels a module, a different image.
+- **Two colors and simple shapes.** Two colors, each a `SymbolColor` with an optional alpha, the symbol's own quiet zone, and modules and finder patterns as squares, circles or rounded squares (`ModuleStyle`, `ModuleScalePercent`, `FinderPatternStyle`, `CornerRadiusPercent`). `IconSizeModules` leaves an icon area at the centre of a Standard QR code, `GetIconRectangle` locates it in pixels, and the SVG embeds `IconImage` over it. Gradients, an icon drawn into the raster, JPEG and WebP stay with the image builders.
+- **PNG is 1-bit**, or 4-bit with a style: greyscale for black on white, a palette otherwise. A version 40 symbol at 8 pixels a module is about 7 KB, and about 70 KB with circle modules at 92 percent and circle finder patterns.
 - **Raw pixels** go into your buffer through `TryWritePixels`, as `Gray8`, `Rgba8888`, `Bgra8888` or `Rgb888x` (`PixelLayout`, now public). A `Gray8` buffer is what the decoders' `TryDecodeImage` reads.
 - **The output is the same bytes on every target framework**, so a test can pin it.
+
+### Luminance from any pixels
+
+Additive. `LuminanceConverter.Convert` in the `FeatherQR` package turns pixels from any source, a browser canvas, a camera frame or an operating system's image API, into the luminance the decoders' `TryDecodeImage` reads: `Gray8`, `Rgba8888`, `Bgra8888` or `Rgb888x` in, with the row stride and whether alpha is premultiplied, and width × height bytes out, ITU-R BT.601 with a transparent pixel composited against white first. It is the conversion `FeatherQR.SkiaSharp` makes for an `SKBitmap`, so a project without SkiaSharp decodes its own pixels to the same bytes.
+
+```csharp
+var luminance = new byte[width * height];
+LuminanceConverter.Convert(rgba, width, height, rowBytes, PixelLayout.Rgba8888, premultipliedAlpha: false, luminance);
+if (QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info))
+{
+    Console.WriteLine(text);
+}
+```
 
 ### A failed matrix decode reports no characters written
 

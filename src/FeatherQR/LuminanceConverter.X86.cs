@@ -4,26 +4,18 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
-namespace FeatherQR.Internals.ImageDecoders;
+namespace FeatherQR;
 
-/// <summary>
-/// AVX2 luminance conversion: 32 pixels per iteration, bit-identical to the per-pixel loop in LuminanceConverter.cs.
-/// </summary>
-/// <remarks>
-/// The BT.601 weights sum to 256 and every channel is a byte, so the exact weighted sum never exceeds 255 · 256 = 65,280 and fits in 16 bits unsigned.
-/// That is what makes this vector form exact rather than approximate.
-/// <para>
-/// <c>pmaddubsw</c> multiplies adjacent byte pairs into signed 16-bit lanes, so it saturates above a pair weight of 128. The weights sum to 256, so a split into two pairs of exactly 128 exists: cut green as 51 + 99 and shuffle each pixel into the byte quad <c>[R, G, G, B]</c> against weights <c>[77, 51, 99, 29]</c>.
-/// Each partial peaks at 255 · 128 = 32,640 and cannot saturate. <c>pmaddwd</c> with ones then adds the pair back to 77R + 150G + 29B exactly.
-/// </para>
-/// <para>
-/// Alpha is handled without leaving the vector path in the two shapes that occur in practice.
-/// Straight alpha: fully transparent pixels composite to white, and white is exactly luminance 255, so the pixel is replaced by 0xFFFFFFFF before the shuffle. A partial alpha falls back to the scalar formula for the rest of the row.
-/// Premultiplied: the composite adds 255 − a to every channel, which (because the weights sum to 256) is exactly 256 · (255 − a) on the sum, so it collapses to adding 255 − a to the luminance. That is exact for every alpha, so that path never falls back.
-/// See LuminanceConverterParityTest for the equivalence proof by test.
-/// </para>
-/// </remarks>
-internal static partial class LuminanceConverter
+// AVX2 luminance conversion: 32 pixels per iteration, bit-identical to the per-pixel loop in LuminanceConverter.cs.
+// The BT.601 weights sum to 256 and every channel is a byte, so the exact weighted sum never exceeds 255 · 256 = 65,280 and fits in 16 bits unsigned.
+// That is what makes this vector form exact rather than approximate.
+// <c>pmaddubsw</c> multiplies adjacent byte pairs into signed 16-bit lanes, so it saturates above a pair weight of 128. The weights sum to 256, so a split into two pairs of exactly 128 exists: cut green as 51 + 99 and shuffle each pixel into the byte quad <c>[R, G, G, B]</c> against weights <c>[77, 51, 99, 29]</c>.
+// Each partial peaks at 255 · 128 = 32,640 and cannot saturate. <c>pmaddwd</c> with ones then adds the pair back to 77R + 150G + 29B exactly.
+// Alpha is handled without leaving the vector path in the two shapes that occur in practice.
+// Straight alpha: fully transparent pixels composite to white, and white is exactly luminance 255, so the pixel is replaced by 0xFFFFFFFF before the shuffle. A partial alpha falls back to the scalar formula for the rest of the row.
+// Premultiplied: the composite adds 255 − a to every channel, which (because the weights sum to 256) is exactly 256 · (255 − a) on the sum, so it collapses to adding 255 − a to the luminance. That is exact for every alpha, so that path never falls back.
+// See LuminanceConverterParityTest for the equivalence proof by test.
+public static partial class LuminanceConverter
 {
     /// <summary>Pixels per iteration of the main loop.</summary>
     private const int BlockPixels = 32;

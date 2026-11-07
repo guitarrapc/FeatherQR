@@ -1,5 +1,4 @@
 using TUnit.Assertions.Enums;
-using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Tests;
 

@@ -210,11 +210,12 @@ Start with an image builder for most applications. All generators and decoders a
 | What | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
-| Write SVG, PNG (1-bit), raw pixels (`Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`), or terminal text | `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
+| Write SVG, PNG (1-bit, or 4-bit with a style), raw pixels (`Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`), or terminal text, at a set size, with module and finder pattern styles, and with an icon area | `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
 | Decode a matrix or grayscale pixels | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 | Decode every symbol of grayscale pixels, whatever its symbology | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
+| Convert pixels (`Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`) to the grayscale the decoders read | `LuminanceConverter` | `LuminanceConverter` | `LuminanceConverter` |
 
-`FeatherQR.SkiaSharp` adds styled images, icons and more formats, drawing on an `SKCanvas`, and decoding of `SKBitmap`s and image files.
+`FeatherQR.SkiaSharp` adds gradients, icons drawn into the image, JPEG and WebP, drawing on an `SKCanvas`, and decoding of `SKBitmap`s and image files.
 
 | What | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
@@ -225,7 +226,7 @@ Start with an image builder for most applications. All generators and decoders a
 
 ### Image Writing (Simple)
 
-`SymbolImageWriter` writes `QRCodeData`, `MicroQRCodeData`, and `RmQRCodeData` as SVG, PNG, raw pixels, or text for a terminal, using only the `FeatherQR` package. Every module is a sharp square of `ModulePixelSize` pixels (8 by default), the quiet zone is the one the symbol was made with, and the same symbol gives the same bytes on every target framework. See [samples/ConsoleAppCore](samples/ConsoleAppCore) for examples.
+`SymbolImageWriter` writes `QRCodeData`, `MicroQRCodeData`, and `RmQRCodeData` as SVG, PNG, raw pixels, or text for a terminal, using only the `FeatherQR` package. Every module is a sharp square of `ModulePixelSize` pixels (8 by default), or the symbol fills a `Width` and `Height` you set, the quiet zone is the one the symbol was made with, and the same symbol gives the same bytes on every target framework. See [samples/ConsoleAppCore](samples/ConsoleAppCore) for examples.
 
 ```csharp
 using FeatherQR;
@@ -257,6 +258,39 @@ var noMargin = new QRCodeData(qr.GetRawData(), quietZoneSize: 0);
 var svgNoMargin = SymbolImageWriter.GetSvgString(noMargin);
 ```
 
+An image of a set size fills the canvas as the image builders' `WithSize` does: one scale, the symbol centered, every module still whole pixels (so the PNG stays 1-bit, and neighbouring modules can differ by one pixel), and the light color around the symbol where the aspect differs. `ModulePixelSize` does not apply then, and a side left at 0 follows the symbol's aspect.
+
+```csharp
+// 512 × 512, pixel for pixel the image QRCodeImageBuilder.GetPngBytes(qr) writes, with no SkiaSharp.
+var png512 = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { Width = 512, Height = 512 });
+// 300 pixels wide, and as tall as the symbol's aspect makes it.
+var svg300 = SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { Width = 300 });
+```
+
+`ModuleStyle` draws each dark module as a circle or a rounded square, `ModuleScalePercent` shrinks it inside its cell, and `FinderPatternStyle` draws the finder patterns as circles or rounded squares. The finder patterns never take the module style, since a reader finds them by their shape. A style gives the PNG and the pixels soft edges, sixteen levels between the two colors, so the PNG is 4-bit.
+
+```csharp
+var styled = new SymbolImageOptions
+{
+    ModuleStyle = ModuleStyle.Circle,
+    ModuleScalePercent = 90,
+    FinderPatternStyle = FinderPatternStyle.RoundedSquareCircle,
+};
+var svgStyled = SymbolImageWriter.GetSvgString(qr, styled);
+var pngStyled = SymbolImageWriter.GetPngBytes(qr, styled);
+```
+
+`IconSizeModules` leaves a centered square of modules, with `IconBorderModules` of light around it, free for an icon on a Standard QR code, and `GetIconRectangle` says where the icon lands in pixels, for you to draw it there. The SVG embeds `IconImage` over it as a data URI. The symbol relies on its error correction, so use `QREccLevel.H`. The writer refuses an icon that with its border takes more than `MaxCoreOccupancyPercent` of the core's side (the symbol without its quiet zone), or that reaches a finder pattern.
+
+```csharp
+var qrH = QRCodeGenerator.Create("https://github.com/guitarrapc/FeatherQR", QREccLevel.H);  // version 5: 7 modules and a border fit under the 30 percent cap
+var withIcon = new SymbolImageOptions { IconSizeModules = 7, IconImage = File.ReadAllBytes("logo.png") };
+var svgWithLogo = SymbolImageWriter.GetSvgString(qrH, withIcon);                       // the logo embedded
+var buffer = new byte[SymbolImageWriter.GetPixelBufferSize(qrH, PixelLayout.Rgba8888, withIcon)];
+SymbolImageWriter.TryWritePixels(qrH, buffer, PixelLayout.Rgba8888, out var w, out var h, withIcon);
+var (x, y, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(qrH, withIcon); // draw the logo here
+```
+
 `WriteSvg` and `WritePng` write into an `IBufferWriter<byte>` without allocating once warm. `TryWritePixels` writes raw pixels into your buffer, as `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x`, with the rows packed. A `Gray8` buffer goes straight into the decoders' `TryDecodeImage`.
 
 ```csharp
@@ -285,7 +319,7 @@ app.MapGet("/qr-pipe.png", async (string text, HttpResponse response, Cancellati
 await File.WriteAllBytesAsync("qrcode.png", SymbolImageWriter.GetPngBytes(qr), cancellationToken);
 ```
 
-PNG output is 1-bit: greyscale for black on white, and a two-color palette otherwise. For module shapes, gradients, icons, JPEG, WebP, or an image of a set size in pixels, use an image builder. [API Overview](#api-overview) lists what each package writes.
+PNG output is 1-bit, or 4-bit with a style: greyscale for black on white, and a palette otherwise. For gradients, an icon drawn into the PNG, JPEG, or WebP, use an image builder. [API Overview](#api-overview) lists what each package writes.
 
 ### Image Builders
 
@@ -615,15 +649,17 @@ if (QRCodeDecoder.TryDecode(bitmap, out text, out var info))
     Console.WriteLine($"top-left at ({corners.TopLeft.X}, {corners.TopLeft.Y})");
 }
 ```
-To decode from any other image source, convert the pixels to 8-bit luminance yourself, compositing transparent pixels against white, and call `TryDecodeImage(luminance, width, height, ...)` on the decoder.
+To decode from any other image source, a browser canvas, a camera frame or an operating system's image API, convert the pixels with `LuminanceConverter.Convert` and call `TryDecodeImage(luminance, width, height, ...)` on the decoder. The pixels go in as `Gray8`, `Rgba8888`, `Bgra8888` or `Rgb888x` with their row stride, and the luminance comes out as width × height bytes: ITU-R BT.601 weights, with a transparent pixel composited against white first, since the quiet zone is white by definition. Luminance you already have goes straight into `TryDecodeImage`.
 
 ```csharp
 using FeatherQR;
 
-// Example of decoding from a raw luminance array
-byte[] luminance = ...; // 8-bit grayscale pixels
-int width = ...;
-int height = ...;
+// Pixels from any source, here RGBA with rows of rowBytes bytes
+byte[] rgba = ...;
+int width = ..., height = ..., rowBytes = ...;
+
+var luminance = new byte[width * height];
+LuminanceConverter.Convert(rgba, width, height, rowBytes, PixelLayout.Rgba8888, premultipliedAlpha: false, luminance);
 if (QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info))
 {
     Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");

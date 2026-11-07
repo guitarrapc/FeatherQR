@@ -5,24 +5,18 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Wasm;
 using System.Runtime.Intrinsics.X86;
 
-namespace FeatherQR.Internals.ImageDecoders;
+namespace FeatherQR;
 
-/// <summary>
-/// 128-bit luminance conversion for the targets with neither the AVX2 nor the ARM64 dot-product tier: 16 pixels per iteration,
-/// bit-identical to the per-pixel loop in LuminanceConverter.cs.
-/// </summary>
-/// <remarks>
-/// A pixel is one 32-bit lane. Its first and third channel go to the two 16-bit halves of the lane and green to the low half of another,
-/// so the weighted sum is one 16-bit dot product, [c0, c2] · [77, 29] (BGRA swaps the weights), plus 150 · g in a plain 16-bit multiply.
-/// The dot product is SSE2's pmaddwd and WebAssembly's i32x4.dot_i16x8_s, and a multiply and a fold of the two halves elsewhere.
-/// Every product fits 16 bits (150 · 255 = 38,250) and the sum is at most 65,280, the exactness argument of the other tiers.
-/// <para>
-/// The alpha handling is the ARM64 tier's: rows converted optimistically while the pixels are ANDed into an accumulator, a row with alpha
-/// classified block by block (opaque, all 0 or 255, or partial), the exact composite 255 − ceil((255 − c)·a / 255) in 16-bit lanes, and
-/// premultiplied alpha as 256 · (255 − a) added to the sum, which the final narrowing wraps as the scalar byte cast does.
-/// </para>
-/// </remarks>
-internal static partial class LuminanceConverter
+// 128-bit luminance conversion for the targets with neither the AVX2 nor the ARM64 dot-product tier: 16 pixels per iteration,
+// bit-identical to the per-pixel loop in LuminanceConverter.cs.
+// A pixel is one 32-bit lane. Its first and third channel go to the two 16-bit halves of the lane and green to the low half of another,
+// so the weighted sum is one 16-bit dot product, [c0, c2] · [77, 29] (BGRA swaps the weights), plus 150 · g in a plain 16-bit multiply.
+// The dot product is SSE2's pmaddwd and WebAssembly's i32x4.dot_i16x8_s, and a multiply and a fold of the two halves elsewhere.
+// Every product fits 16 bits (150 · 255 = 38,250) and the sum is at most 65,280, the exactness argument of the other tiers.
+// The alpha handling is the ARM64 tier's: rows converted optimistically while the pixels are ANDed into an accumulator, a row with alpha
+// classified block by block (opaque, all 0 or 255, or partial), the exact composite 255 − ceil((255 − c)·a / 255) in 16-bit lanes, and
+// premultiplied alpha as 256 · (255 − a) added to the sum, which the final narrowing wraps as the scalar byte cast does.
+public static partial class LuminanceConverter
 {
     /// <summary>Pixels per iteration of the 128-bit loops (four 128-bit loads).</summary>
     private const int Vector128BlockPixels = 16;

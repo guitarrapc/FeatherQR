@@ -48,7 +48,20 @@ internal sealed partial class PngEncoder
     // A run-length coded code length: the code-length symbol in the low byte, its extra bits above.
     private readonly int[] _lengthRuns = new int[Deflate.LiteralLengthSymbols + Deflate.DistanceSymbols];
 
+    // The depth of a styled image's levels. The packer writes two pixels a byte, so this is 4 and not a setting.
+    internal const int StyledBitDepth = 4;
+
     // Set by Measure and read by Write, which must write the file Measure sized.
+    private ImageLayout _layout;
+    private IconArea _icon;
+    private bool _styled;
+    private int _bitDepth;
+    private int _levels;
+    private StyledRaster? _raster;
+    private byte[] _levelRow = [];
+    private SymbolColor _darkGiven;
+    // The pixels a module is when every module is the same whole number of them with nothing around the symbol, which the packing's
+    // tables and fast paths assume, and 0 otherwise.
     private int _pixels;
     private int _quietZone;
     private int _coreWidth;
@@ -70,6 +83,10 @@ internal sealed partial class PngEncoder
     private byte[] _rows = [];
     private int _slots;
     private int[] _slotRow = new int[3];
+    // Where the pixel row after a slot's row starts, which the lookup's distance to that row's last scanline needs.
+    private int[] _slotEnd = new int[3];
+    // Where the row being encoded starts, for the lookup's distances.
+    private int _rowStart;
 
     // The lookup: at module sizes other than 1, 2, 4 and 8 pixels, the positions of the first scanlines in reach, chained by a hash of
     // the bytes there. A position is slot << _slotShift | offset, and an entry is a position + 1, with 0 for none. A position's link holds the module row it
@@ -135,8 +152,25 @@ internal sealed partial class PngEncoder
             encoder._head = [];
             encoder._links = [];
         }
+        if (encoder._levelRow.Length != 0)
+        {
+            ArrayPool<byte>.Shared.Return(encoder._levelRow);
+            encoder._levelRow = [];
+        }
+        if (encoder._raster is not null)
+        {
+            StyledRaster.Return(encoder._raster);
+            encoder._raster = null;
+        }
         cached = encoder;
     }
+
+    // At a uniform module size the rows are that size apart, so the layout is not asked a row.
+    private int RowHeight(int m) => _styled ? 1 : _pixels != 0 ? _pixels : _layout.GroupHeight(m);
+
+    private bool RowIsLight(int m) => _styled ? _raster!.IsLightRow(m) : (uint)((_pixels != 0 ? m : _layout.GroupRow(m)) - _quietZone) >= (uint)_coreHeight;
+
+    private int RowStartPixel(int m) => _styled ? m : _pixels != 0 ? m * _pixels : _layout.GroupStart(m);
 
     private bool Greyscale => _dark == new SymbolColor(0, 0, 0) && _light == new SymbolColor(255, 255, 255);
 
@@ -147,31 +181,69 @@ internal sealed partial class PngEncoder
     public int Measure<TView>(in TView view, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
-        _pixels = options.ModulePixelSize;
+        _layout = ImageLayout.Create(in view, in options);
+        _icon = IconArea.Get(in view, in options);
+        _styled = options.IsStyled;
+        _pixels = _layout.Uniform ? (int)_layout.Numerator : 0;
+        _darkGiven = options.DarkColor;
         _dark = options.DarkColor.Over(options.LightColor);
         _light = options.LightColor;
         _quietZone = (view.Width - view.CoreWidth) / 2;
         _coreWidth = view.CoreWidth;
         _coreHeight = view.CoreHeight;
-        _moduleRows = view.Height;
-        _widthPixels = view.Width * _pixels;
-        // In a long, since a width within 7 of int.MaxValue passes the side check.
-        _stride = (int)((_widthPixels + 7L) / 8) + 1;
-        _rowCopies = _stride <= Deflate.MaxDistance;
-        // At 1, 2, 4 and 8 pixels a literal byte is one module or a whole number of them, so literals are already cheap and the lookup's
-        // matches cost more than they save.
-        _lookup = _rowCopies && (_pixels > 8 || 8 % _pixels != 0);
-        // A key of about eight modules, from 4 to 8 bytes: a shorter key found matches that cost more than their literals, and a longer one
-        // missed matches.
-        _keyBytes = Math.Min(8, Math.Max(4, _pixels));
-        // From row m, the nearest byte of row m - j is at least (j - 1) × pixels × stride + 1 bytes back, so 32,767 / (pixels × stride) + 1
-        // rows back are in reach. They, row m and row m + 1, which a copy reads ahead into, each keep a slot.
-        _slots = !_rowCopies ? 1 :!_lookup ? 3 : (int)Math.Min(_moduleRows, (Deflate.MaxDistance - 1) / ((long)_pixels * _stride) + 3);
+        _widthPixels = _layout.Width;
+        var longestModule = (int)Math.Min(int.MaxValue, (_layout.Numerator + _layout.Denominator - 1) / _layout.Denominator);
+        var shortestModule = Math.Max(1L, _layout.Numerator / _layout.Denominator);
+        if (_styled)
+        {
+            _bitDepth = StyledBitDepth;
+            _levels = 1 << _bitDepth;
+            // Every pixel row is its own scanline, since a shape's rows are not all alike, and a row equal to the one above is still found as a copy of it.
+            _moduleRows = _layout.Height;
+            _stride = (int)(((long)_widthPixels * _bitDepth + 7) / 8) + 1;
+            longestModule = (int)Math.Min(int.MaxValue, ((long)longestModule * _bitDepth + 7) / 8);
+            shortestModule = 1;
+        }
+        else
+        {
+            _bitDepth = 1;
+            _levels = 2;
+            _moduleRows = _layout.Groups;
+            // In a long, since a width within 7 of int.MaxValue passes the side check.
+            _stride = (int)((_widthPixels + 7L) / 8) + 1;
+        }
 
         // A match covers at most 258 bytes and costs at least two bits, a length code and a distance code. A literal costs at least a bit for one byte.
-        // That bounds the output from below before anything is counted.
-        var rawLength = (long)_stride * view.Height * _pixels;
-        ImageSize.ThrowIfLongerThanAnArray(rawLength * 2 / (Deflate.MaxMatch * 8), in options);
+        // That bounds the output from below before anything is counted or any stamp is made.
+        var rawLength = (long)_stride * _layout.Height;
+        ImageSize.ThrowIfLongerThanAnArray(rawLength * 2 / (Deflate.MaxMatch * 8), _layout.Width, _layout.Height);
+
+        if (_styled)
+        {
+            _raster ??= StyledRaster.Take();
+            _raster.Prepare(in view, in _layout, in options, in _icon, _levels);
+            if (_levelRow.Length < _widthPixels)
+            {
+                if (_levelRow.Length != 0)
+                    ArrayPool<byte>.Shared.Return(_levelRow);
+                _levelRow = ArrayPool<byte>.Shared.Rent(_widthPixels);
+            }
+        }
+        _rowCopies = _stride <= Deflate.MaxDistance;
+        // At 1, 2, 4 and 8 pixels a literal byte is one module or a whole number of them, so literals are already cheap and the lookup's
+        // matches cost more than they save. A set size that comes to whole pixels keeps that rule even where a pad shifts the modules
+        // across bytes, since the lookup bought little there. At a set size that is not whole pixels the modules straddle bytes too, and a
+        // styled image's levels repeat along a shape's edge rather than a module's.
+        var wholePixels = !_styled && _layout.Denominator == 1 ? (int)_layout.Numerator : 0;
+        _lookup = _rowCopies && (wholePixels == 0 || wholePixels > 8 || 8 % wholePixels != 0);
+        // A key of about eight modules, from 4 to 8 bytes: a shorter key found matches that cost more than their literals, and a longer one
+        // missed matches. A styled image's levels repeat along a shape's edge rather than a module's, and the longest key gave it the
+        // smaller file.
+        _keyBytes = _styled ? 8 : Math.Min(8, Math.Max(4, longestModule));
+        // From row m, the nearest byte of row m - j is at least (j - 1) × pixels × stride + 1 bytes back, so 32,767 / (pixels × stride) + 1
+        // rows back are in reach, counted at the fewest pixels a row can have. They, row m and row m + 1, which a copy reads ahead into,
+        // each keep a slot.
+        _slots = !_rowCopies ? 1 : !_lookup ? 3 : (int)Math.Min(_moduleRows, (Deflate.MaxDistance - 1) / (shortestModule * _stride) + 3);
 
         Array.Clear(_literalCounts, 0, _literalCounts.Length);
         Array.Clear(_distanceCounts, 0, _distanceCounts.Length);
@@ -223,8 +295,8 @@ internal sealed partial class PngEncoder
 
         var deflateLength = (bits + 7) / 8;
         // Signature, IHDR, PLTE and tRNS when used, IDAT with the zlib header and Adler-32, IEND.
-        var length = 8 + 25 + (Greyscale ? 0 : 12 + 6) + (Transparent ? 12 + 2 : 0) + 12 + 2 + deflateLength + 4 + 12;
-        ImageSize.ThrowIfLongerThanAnArray(length, in options);
+        var length = 8 + 25 + (Greyscale ? 0 : 12 + 3 * _levels) + (Transparent ? 12 + _levels : 0) + 12 + 2 + deflateLength + 4 + 12;
+        ImageSize.ThrowIfLongerThanAnArray(length, _layout.Width, _layout.Height);
         _deflateLength = (int)deflateLength;
         return (int)length;
     }
@@ -239,8 +311,8 @@ internal sealed partial class PngEncoder
 
         var header = BeginChunk(png, ref position, "IHDR"u8, 13);
         BinaryPrimitives.WriteInt32BigEndian(png.Slice(position), _widthPixels);
-        BinaryPrimitives.WriteInt32BigEndian(png.Slice(position + 4), _moduleRows * _pixels);
-        png[position + 8] = 1;
+        BinaryPrimitives.WriteInt32BigEndian(png.Slice(position + 4), _layout.Height);
+        png[position + 8] = (byte)_bitDepth;
         png[position + 9] = (byte)(Greyscale ? 0 : 3);
         png[position + 10] = 0;
         png[position + 11] = 0;
@@ -248,23 +320,25 @@ internal sealed partial class PngEncoder
         position += 13;
         EndChunk(png, ref position, header);
 
+        // One bit a pixel is the dark colour then the light one. A styled image's levels run from the light colour up to the dark one.
         if (!Greyscale)
         {
-            var palette = BeginChunk(png, ref position, "PLTE"u8, 6);
-            png[position++] = _dark.R;
-            png[position++] = _dark.G;
-            png[position++] = _dark.B;
-            png[position++] = _light.R;
-            png[position++] = _light.G;
-            png[position++] = _light.B;
+            var palette = BeginChunk(png, ref position, "PLTE"u8, 3 * _levels);
+            for (var k = 0; k < _levels; k++)
+            {
+                var color = PaletteColor(k);
+                png[position++] = color.R;
+                png[position++] = color.G;
+                png[position++] = color.B;
+            }
             EndChunk(png, ref position, palette);
         }
 
         if (Transparent)
         {
-            var alphas = BeginChunk(png, ref position, "tRNS"u8, 2);
-            png[position++] = _dark.A;
-            png[position++] = _light.A;
+            var alphas = BeginChunk(png, ref position, "tRNS"u8, _levels);
+            for (var k = 0; k < _levels; k++)
+                png[position++] = PaletteColor(k).A;
             EndChunk(png, ref position, alphas);
         }
 
@@ -291,6 +365,10 @@ internal sealed partial class PngEncoder
         var end = BeginChunk(png, ref position, "IEND"u8, 0);
         EndChunk(png, ref position, end);
     }
+
+    private SymbolColor PaletteColor(int index) => _styled
+        ? StyledRaster.LevelColor(_darkGiven, _light, index, _levels)
+        : index == 0 ? _dark : _light;
 
     private static int BeginChunk(Span<byte> png, ref int position, ReadOnlySpan<byte> type, int length)
     {
@@ -389,7 +467,10 @@ internal sealed partial class PngEncoder
             _rows = ArrayPool<byte>.Shared.Rent(length);
         }
         if (_slotRow.Length < _slots)
+        {
             _slotRow = new int[_slots];
+            _slotEnd = new int[_slots];
+        }
         if (_lookup)
         {
             // A slot's positions are a power of two, so a position splits into its slot and offset by a shift and a mask.
@@ -433,7 +514,6 @@ internal sealed partial class PngEncoder
         if (_lookup)
             Array.Clear(_head, 0, 1 << _hashBits);
         var stride = _stride;
-        var repeatLength = (long)(_pixels - 1) * stride;
         var adler = new Adler32();
         var carry = 0;
         // The record's array and position are locals, so the literal loop does not load and store the fields at every byte.
@@ -444,7 +524,10 @@ internal sealed partial class PngEncoder
         for (var m = 0; m < _moduleRows; m++)
         {
             var row = Row(in view, m);
-            adler.AddRepeated(row, _pixels);
+            _rowStart = RowStartPixel(m);
+            var rowHeight = RowHeight(m);
+            var repeatLength = (long)(rowHeight - 1) * stride;
+            adler.AddRepeated(row, rowHeight);
 
             if (!_rowCopies)
             {
@@ -453,19 +536,19 @@ internal sealed partial class PngEncoder
                 var symbols = RunSymbols(row);
                 if (write)
                 {
-                    for (var repeat = 0; repeat < _pixels; repeat++)
+                    for (var repeat = 0; repeat < rowHeight; repeat++)
                         Replay(ref w, symbols);
                 }
                 else
                 {
-                    CountSymbols(symbols, _pixels);
+                    CountSymbols(symbols, rowHeight);
                 }
                 continue;
             }
 
             var above = m > 0 ? Row(in view, m - 1) : default;
             // A quiet zone row is crossed by runs and copies of 258 bytes, so marking its every position would cost more than it saves.
-            var quiet = (uint)(m - _quietZone) >= (uint)_coreHeight;
+            var quiet = RowIsLight(m);
             // A quiet zone row is light alone, so runs and copies cover it and the lookup neither keeps nor searches it.
             var lookup = _lookup && !quiet;
             if (!quiet)
@@ -996,13 +1079,12 @@ internal sealed partial class PngEncoder
         var slotShift = _slotShift;
         var mask = (1 << slotShift) - 1;
         var keyBytes = _keyBytes;
-        // From row m, row m - j's last scanline starts j × pixels × stride - (pixels - 1) × stride bytes back.
-        var span = (long)_pixels * stride;
-        var lastScanline = (long)(_pixels - 1) * stride;
         ref var links = ref MemoryMarshal.GetReference(_links.AsSpan());
         ref var slotRows = ref MemoryMarshal.GetReference(_slotRow.AsSpan());
+        ref var slotEnds = ref MemoryMarshal.GetReference(_slotEnd.AsSpan());
         ref var rows = ref MemoryMarshal.GetReference(_rows.AsSpan());
         ref var here = ref Unsafe.Add(ref MemoryMarshal.GetReference(row), i);
+        var start = _rowStart;
         var entry = _head[key];
         var laterRow = m;
         var laterOffset = i;
@@ -1015,7 +1097,8 @@ internal sealed partial class PngEncoder
             var entryRow = (int)(link >> 32);
             if (entryRow != Unsafe.Add(ref slotRows, slot) || entryRow > laterRow || (entryRow == laterRow && k >= laterOffset))
                 break;
-            var back = entryRow == m ? i - k : (m - entryRow) * span - lastScanline + i - k;
+            // An earlier row's last scanline is the one just above where the row after it starts, which its slot holds.
+            var back = entryRow == m ? i - k : ((long)start - Unsafe.Add(ref slotEnds, slot) + 1) * stride + i - k;
             if (back > Deflate.MaxDistance)
                 break;
             laterRow = entryRow;
@@ -1220,6 +1303,7 @@ internal sealed partial class PngEncoder
         {
             PackScanline(in view, m, _rows.AsSpan(start, _stride + Slack));
             _slotRow[slot] = m;
+            _slotEnd[slot] = RowStartPixel(m + 1);
         }
         return _rows.AsSpan(start, _stride);
     }
@@ -1255,23 +1339,36 @@ internal sealed partial class PngEncoder
     /// <remarks>
     /// Up to 8 pixels a module, a table turns eight modules into their bits at once, and up to 32 each module goes in alone. Run by run, the
     /// runs of one to three modules each cost a run length and a fill. The bits gather in a word that is stored eight bytes at a time, which
-    /// writes into the slack. Past 32 pixels the runs are long and the packing goes run by run.
+    /// writes into the slack. Past 32 pixels the runs are long and the packing goes run by run, with a run's pixels from where its modules
+    /// start, as it does at a set size unless that comes to whole pixels with no pad.
     /// </remarks>
     private void PackScanline<TView>(in TView view, int m, Span<byte> slot)
         where TView : struct, IModuleMatrixView
     {
         var stride = _stride;
         slot[0] = 0;
-        var coreRow = m - _quietZone;
+        if (_styled)
+        {
+            PackStyled(in view, m, slot.Slice(0, stride));
+            return;
+        }
+        var coreRow = _layout.GroupRow(m) - _quietZone;
         if ((uint)coreRow >= (uint)_coreHeight)
         {
             slot.Slice(1, stride - 1).Fill(0xFF);
             return;
         }
         var pixels = _pixels;
+        if (pixels == 0)
+        {
+            PackFitted(in view, coreRow, slot.Slice(0, stride));
+            ClearIconArea(slot.Slice(1, stride - 1), coreRow);
+            return;
+        }
         if (pixels > 32)
         {
             PackRuns(in view, coreRow, slot.Slice(0, stride));
+            ClearIconArea(slot.Slice(1, stride - 1), coreRow);
             return;
         }
 
@@ -1373,6 +1470,15 @@ internal sealed partial class PngEncoder
             held = (held << (8 - count)) | (~0UL >> (56 + count));
             BinaryPrimitives.WriteUInt64BigEndian(line.Slice(position), held << 56);
         }
+        ClearIconArea(line, coreRow);
+    }
+
+    /// <summary>The icon area's pixels of a packed scanline set to light, when the row crosses it.</summary>
+    private void ClearIconArea(Span<byte> line, int coreRow)
+    {
+        if (!_icon.CoversRow(coreRow))
+            return;
+        IconArea.SetLightBits(line, _layout.ColumnStart(_quietZone + _icon.Column), _layout.ColumnStart(_quietZone + _icon.Column + _icon.Size));
     }
 
     /// <summary>For each byte of eight modules (dark 1, MSB first), their light-1 bits at <paramref name="pixels"/> a module, the first module highest.</summary>
@@ -1414,6 +1520,69 @@ internal sealed partial class PngEncoder
         }
         bits.Add(light: true, (long)_quietZone * pixels);
         bits.PadWithLight();
+    }
+
+    /// <summary>The scanline at a set size, run by run: each run over the pixels the layout gives its modules, and light from the canvas's edge to the symbol and back.</summary>
+    private void PackFitted<TView>(in TView view, int coreRow, Span<byte> row)
+        where TView : struct, IModuleMatrixView
+    {
+        var bits = new ScanlineBits(row.Slice(1));
+        var layout = _layout;
+        var quietZone = _quietZone;
+        var at = layout.ColumnStart(quietZone);
+        bits.Add(light: true, at);
+        var core = view.CoreBits;
+        var start = (long)coreRow * _coreWidth;
+        var column = 0;
+        var dark = false;
+        while (column < _coreWidth)
+        {
+            var length = PackedRuns.Length(core, start + column, _coreWidth - column, dark);
+            column += length;
+            var end = layout.ColumnStart(quietZone + column);
+            bits.Add(!dark, end - at);
+            at = end;
+            dark = !dark;
+        }
+        bits.Add(light: true, layout.Width - at);
+        bits.PadWithLight();
+    }
+
+    /// <summary>
+    /// Pixel row <paramref name="y"/> of a styled image: its levels, two to a byte at four bits each, the first pixel in the high bits.
+    /// Greyscale counts the other way, from black, so a level is turned over, and the last byte is padded with light.
+    /// </summary>
+    private void PackStyled<TView>(in TView view, int y, Span<byte> row)
+        where TView : struct, IModuleMatrixView
+    {
+        var line = row.Slice(1);
+        var greyscale = Greyscale;
+        if (_raster!.IsLightRow(y))
+        {
+            line.Fill(greyscale ? (byte)0xFF : (byte)0);
+            return;
+        }
+        var width = _widthPixels;
+        var levels = _levelRow.AsSpan(0, width);
+        _raster.ComposeRow(in view, y, levels);
+        var top = _levels - 1;
+        var i = 0;
+        var at = 0;
+        for (; at + 1 < width; at += 2)
+        {
+            int high = levels[at], low = levels[at + 1];
+            if (greyscale)
+            {
+                high = top - high;
+                low = top - low;
+            }
+            line[i++] = (byte)(high << 4 | low);
+        }
+        if (at < width)
+        {
+            var high = greyscale ? top - levels[at] : levels[at];
+            line[i] = (byte)(high << 4 | (greyscale ? 0xF : 0));
+        }
     }
 
     /// <summary>Bits into a scanline from the high end of each byte, a run of one colour at a time.</summary>

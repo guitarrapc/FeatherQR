@@ -4,7 +4,7 @@ using System.Text;
 /// <summary>
 /// SVG and PNG from the core with no graphics library (SymbolImageWriter), the symbol made in setup so only the writer is measured.
 ///
-///   Small : Standard QR version 1-2, where the per-call work dominates
+///   Small : Standard QR version 1, where the per-call work dominates
 ///   Large : Standard QR version 40, about 31k modules, where the scan of the matrix dominates
 ///   Micro : Micro QR M4
 ///   RmQR  : rMQR R17x139, the widest
@@ -22,6 +22,10 @@ public class SymbolImageWrite
     private readonly ArrayBufferWriter<byte> _writer = new(1 << 20);
     private static readonly SymbolImageOptions ThreePixels = new() { ModulePixelSize = 3 };
     private static readonly SymbolImageOptions TenPixels = new() { ModulePixelSize = 10 };
+    // The builders' default canvas, where version 40's modules are two and three pixels and version 1's seventeen and eighteen.
+    private static readonly SymbolImageOptions Fit512 = new() { Width = 512, Height = 512 };
+    // Circle modules with circle finder patterns, where the PNG is 4-bit and every pixel row is searched.
+    private static readonly SymbolImageOptions Styled = new() { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle };
 
     [GlobalSetup]
     public void Setup()
@@ -74,6 +78,21 @@ public class SymbolImageWrite
     public byte[] Small_Png_10px() => SymbolImageWriter.GetPngBytes(_small, TenPixels);
 
     [Benchmark]
+    public byte[] Large_Png_512() => SymbolImageWriter.GetPngBytes(_large, Fit512);
+
+    [Benchmark]
+    public byte[] Small_Png_512() => SymbolImageWriter.GetPngBytes(_small, Fit512);
+
+    [Benchmark]
+    public byte[] Large_Png_Styled() => SymbolImageWriter.GetPngBytes(_large, Styled);
+
+    [Benchmark]
+    public byte[] Small_Png_Styled() => SymbolImageWriter.GetPngBytes(_small, Styled);
+
+    [Benchmark]
+    public string Large_Svg_Styled() => SymbolImageWriter.GetSvgString(_large, Styled);
+
+    [Benchmark]
     public byte[] Micro_Png() => SymbolImageWriter.GetPngBytes(_micro);
 
     [Benchmark]
@@ -90,6 +109,12 @@ public class SymbolImageWrite
 
     [Benchmark]
     public bool Large_PixelsGray8() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Gray8, out _, out _);
+
+    [Benchmark]
+    public bool Large_PixelsRgba_512() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Fit512);
+
+    [Benchmark]
+    public bool Large_PixelsRgba_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Styled);
 
     [Benchmark]
     public string Small_Text() => SymbolImageWriter.GetTerminalText(_small);

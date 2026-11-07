@@ -32,6 +32,15 @@ internal interface IModuleMatrixView
     /// by its 1:1:3:1:1 run of dark and light, and gaps between modules erase that run.
     /// </summary>
     bool IsFinderPattern(int coreRow, int coreCol);
+
+    /// <summary>How many finder patterns the symbol has: three on Standard QR, one on Micro QR and rMQR.</summary>
+    int FinderPatternCount { get; }
+
+    /// <summary>The core row and column of a finder pattern's top-left module, each pattern seven modules square.</summary>
+    void GetFinderPatternOrigin(int index, out int coreRow, out int coreCol);
+
+    /// <summary>Whether an icon area can be left at the centre, which Standard QR's error correction and square core allow.</summary>
+    bool SupportsIcon { get; }
 }
 
 internal readonly struct StandardQrMatrixView(QRCodeData data) : IModuleMatrixView
@@ -43,6 +52,16 @@ internal readonly struct StandardQrMatrixView(QRCodeData data) : IModuleMatrixVi
     public bool GetCoreModule(int coreRow, int coreCol) => data.GetCoreModule(coreRow, coreCol);
     public ReadOnlySpan<byte> CoreBits => data.CoreBits;
     public bool IsFinderPattern(int coreRow, int coreCol) => data.IsFinderPattern(coreRow, coreCol);
+    public int FinderPatternCount => 3;
+    public bool SupportsIcon => true;
+
+    // Top-left, top-right, bottom-left.
+    public void GetFinderPatternOrigin(int index, out int coreRow, out int coreCol)
+    {
+        var far = data.GetCoreSize() - 7;
+        coreRow = index == 2 ? far : 0;
+        coreCol = index == 1 ? far : 0;
+    }
 }
 
 internal readonly struct MicroQRMatrixView(MicroQRCodeData data) : IModuleMatrixView
@@ -55,6 +74,14 @@ internal readonly struct MicroQRMatrixView(MicroQRCodeData data) : IModuleMatrix
     public ReadOnlySpan<byte> CoreBits => data.CoreBits;
     // One finder, top-left, as in every Micro QR version.
     public bool IsFinderPattern(int coreRow, int coreCol) => coreRow < 7 && coreCol < 7;
+    public int FinderPatternCount => 1;
+    public bool SupportsIcon => false;
+
+    public void GetFinderPatternOrigin(int index, out int coreRow, out int coreCol)
+    {
+        coreRow = 0;
+        coreCol = 0;
+    }
 }
 
 internal readonly struct RmQRMatrixView(RmQRCodeData data) : IModuleMatrixView
@@ -68,4 +95,12 @@ internal readonly struct RmQRMatrixView(RmQRCodeData data) : IModuleMatrixView
     // One finder, top-left. The sub-finder and corner patterns are not reported: they are located
     // from the finder and the format information, not by the run ratio, so they survive styling.
     public bool IsFinderPattern(int coreRow, int coreCol) => coreRow < 7 && coreCol < 7;
+    public int FinderPatternCount => 1;
+    public bool SupportsIcon => false;
+
+    public void GetFinderPatternOrigin(int index, out int coreRow, out int coreCol)
+    {
+        coreRow = 0;
+        coreCol = 0;
+    }
 }

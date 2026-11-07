@@ -955,8 +955,28 @@ public class NetStandardBuildParityTest
         optionsType.GetProperty("ModulePixelSize")!.SetValue(loadedStyled, 3);
         optionsType.GetProperty("DarkColor")!.SetValue(loadedStyled, Activator.CreateInstance(colorType, (byte)0x1E, (byte)0x3A, (byte)0x8A, (byte)200));
         optionsType.GetProperty("LightColor")!.SetValue(loadedStyled, Activator.CreateInstance(colorType, (byte)255, (byte)255, (byte)240, (byte)0));
+        // A set size, where a module is a fractional number of pixels and the light around the symbol is the canvas's.
+        var fitted = new SymbolImageOptions { Width = 300, Height = 200, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A), LightColor = new SymbolColor(255, 255, 240, 128) };
+        var loadedFitted = Activator.CreateInstance(optionsType)!;
+        optionsType.GetProperty("Width")!.SetValue(loadedFitted, 300);
+        optionsType.GetProperty("Height")!.SetValue(loadedFitted, 200);
+        optionsType.GetProperty("DarkColor")!.SetValue(loadedFitted, Activator.CreateInstance(colorType, (byte)0x1E, (byte)0x3A, (byte)0x8A, (byte)255));
+        optionsType.GetProperty("LightColor")!.SetValue(loadedFitted, Activator.CreateInstance(colorType, (byte)255, (byte)255, (byte)240, (byte)128));
+        // Shaped modules and finder patterns, whose levels come from sampling the shapes in whole numbers.
+        var shaped = new SymbolImageOptions { ModulePixelSize = 9, ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 90, FinderPatternStyle = FinderPatternStyle.RoundedSquareCircle, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A), LightColor = new SymbolColor(255, 255, 240, 200) };
+        if (symbology == "QR")
+            shaped.IconSizeModules = 5;
+        var loadedShaped = Activator.CreateInstance(optionsType)!;
+        optionsType.GetProperty("ModulePixelSize")!.SetValue(loadedShaped, 9);
+        if (symbology == "QR")
+            optionsType.GetProperty("IconSizeModules")!.SetValue(loadedShaped, 5);
+        optionsType.GetProperty("ModuleStyle")!.SetValue(loadedShaped, Enum.ToObject(build.GetType("FeatherQR.ModuleStyle", throwOnError: true)!, (int)ModuleStyle.Circle));
+        optionsType.GetProperty("ModuleScalePercent")!.SetValue(loadedShaped, 90);
+        optionsType.GetProperty("FinderPatternStyle")!.SetValue(loadedShaped, Enum.ToObject(build.GetType("FeatherQR.FinderPatternStyle", throwOnError: true)!, (int)FinderPatternStyle.RoundedSquareCircle));
+        optionsType.GetProperty("DarkColor")!.SetValue(loadedShaped, Activator.CreateInstance(colorType, (byte)0x1E, (byte)0x3A, (byte)0x8A, (byte)255));
+        optionsType.GetProperty("LightColor")!.SetValue(loadedShaped, Activator.CreateInstance(colorType, (byte)255, (byte)255, (byte)240, (byte)200));
 
-        foreach (var (hostOptions, loadedOptions) in new[] { (SymbolImageOptions.Default, Activator.CreateInstance(optionsType)!), (styled, loadedStyled) })
+        foreach (var (hostOptions, loadedOptions) in new[] { (SymbolImageOptions.Default, Activator.CreateInstance(optionsType)!), (styled, loadedStyled), (fitted, loadedFitted), (shaped, loadedShaped) })
         {
             var (hostSvg, hostPng) = host switch
             {

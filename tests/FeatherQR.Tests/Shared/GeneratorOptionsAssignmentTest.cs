@@ -130,6 +130,8 @@ public class GeneratorOptionsAssignmentTest
 
     private static readonly SymbolColor Navy = new(0x1E, 0x3A, 0x8A);
     private static readonly SymbolColor Clear = new(0, 0, 0, 0);
+    // Declared before the cases that read it, since static fields initialize in order.
+    private static readonly byte[] IconBytes = [1, 2, 3];
 
     private static readonly OptionCase<SymbolImageOptions>[] ImageOptions =
     [
@@ -142,6 +144,39 @@ public class GeneratorOptionsAssignmentTest
         new(nameof(SymbolImageOptions.LightColor),
             (ref SymbolImageOptions o) => o.LightColor = Clear, new() { LightColor = Clear }, default(SymbolImageOptions) with { LightColor = Clear },
             (ref SymbolImageOptions o) => o.LightColor = new SymbolColor(255, 255, 255), new() { LightColor = new SymbolColor(255, 255, 255) }, default(SymbolImageOptions) with { LightColor = new SymbolColor(255, 255, 255) }),
+        new(nameof(SymbolImageOptions.Width),
+            (ref SymbolImageOptions o) => o.Width = 512, new() { Width = 512 }, default(SymbolImageOptions) with { Width = 512 },
+            (ref SymbolImageOptions o) => o.Width = 0, new() { Width = 0 }, default(SymbolImageOptions) with { Width = 0 }),
+        new(nameof(SymbolImageOptions.Height),
+            (ref SymbolImageOptions o) => o.Height = 256, new() { Height = 256 }, default(SymbolImageOptions) with { Height = 256 },
+            (ref SymbolImageOptions o) => o.Height = 0, new() { Height = 0 }, default(SymbolImageOptions) with { Height = 0 }),
+        new(nameof(SymbolImageOptions.ModuleStyle),
+            (ref SymbolImageOptions o) => o.ModuleStyle = ModuleStyle.Circle, new() { ModuleStyle = ModuleStyle.Circle }, default(SymbolImageOptions) with { ModuleStyle = ModuleStyle.Circle },
+            (ref SymbolImageOptions o) => o.ModuleStyle = ModuleStyle.Square, new() { ModuleStyle = ModuleStyle.Square }, default(SymbolImageOptions) with { ModuleStyle = ModuleStyle.Square }),
+        new(nameof(SymbolImageOptions.ModuleScalePercent),
+            (ref SymbolImageOptions o) => o.ModuleScalePercent = 80, new() { ModuleScalePercent = 80 }, default(SymbolImageOptions) with { ModuleScalePercent = 80 },
+            (ref SymbolImageOptions o) => o.ModuleScalePercent = 100, new() { ModuleScalePercent = 100 }, default(SymbolImageOptions) with { ModuleScalePercent = 100 }),
+        new(nameof(SymbolImageOptions.FinderPatternStyle),
+            (ref SymbolImageOptions o) => o.FinderPatternStyle = FinderPatternStyle.Circle, new() { FinderPatternStyle = FinderPatternStyle.Circle }, default(SymbolImageOptions) with { FinderPatternStyle = FinderPatternStyle.Circle },
+            (ref SymbolImageOptions o) => o.FinderPatternStyle = FinderPatternStyle.Square, new() { FinderPatternStyle = FinderPatternStyle.Square }, default(SymbolImageOptions) with { FinderPatternStyle = FinderPatternStyle.Square }),
+        new(nameof(SymbolImageOptions.CornerRadiusPercent),
+            (ref SymbolImageOptions o) => o.CornerRadiusPercent = 50, new() { CornerRadiusPercent = 50 }, default(SymbolImageOptions) with { CornerRadiusPercent = 50 },
+            (ref SymbolImageOptions o) => o.CornerRadiusPercent = 30, new() { CornerRadiusPercent = 30 }, default(SymbolImageOptions) with { CornerRadiusPercent = 30 }),
+        new(nameof(SymbolImageOptions.IconSizeModules),
+            (ref SymbolImageOptions o) => o.IconSizeModules = 7, new() { IconSizeModules = 7 }, default(SymbolImageOptions) with { IconSizeModules = 7 },
+            (ref SymbolImageOptions o) => o.IconSizeModules = 0, new() { IconSizeModules = 0 }, default(SymbolImageOptions) with { IconSizeModules = 0 }),
+        new(nameof(SymbolImageOptions.IconBorderModules),
+            (ref SymbolImageOptions o) => o.IconBorderModules = 2, new() { IconBorderModules = 2 }, default(SymbolImageOptions) with { IconBorderModules = 2 },
+            (ref SymbolImageOptions o) => o.IconBorderModules = 1, new() { IconBorderModules = 1 }, default(SymbolImageOptions) with { IconBorderModules = 1 }),
+        new(nameof(SymbolImageOptions.MaxCoreOccupancyPercent),
+            (ref SymbolImageOptions o) => o.MaxCoreOccupancyPercent = 50, new() { MaxCoreOccupancyPercent = 50 }, default(SymbolImageOptions) with { MaxCoreOccupancyPercent = 50 },
+            (ref SymbolImageOptions o) => o.MaxCoreOccupancyPercent = 30, new() { MaxCoreOccupancyPercent = 30 }, default(SymbolImageOptions) with { MaxCoreOccupancyPercent = 30 }),
+        new(nameof(SymbolImageOptions.IconImage),
+            (ref SymbolImageOptions o) => o.IconImage = IconBytes, new() { IconImage = IconBytes }, default(SymbolImageOptions) with { IconImage = IconBytes },
+            (ref SymbolImageOptions o) => o.IconImage = default, new() { IconImage = default }, default(SymbolImageOptions) with { IconImage = default }),
+        new(nameof(SymbolImageOptions.IconMediaType),
+            (ref SymbolImageOptions o) => o.IconMediaType = "image/svg+xml", new() { IconMediaType = "image/svg+xml" }, default(SymbolImageOptions) with { IconMediaType = "image/svg+xml" },
+            (ref SymbolImageOptions o) => o.IconMediaType = null, new() { IconMediaType = null }, default(SymbolImageOptions) with { IconMediaType = null }),
     ];
 
     [Test]
@@ -191,6 +226,17 @@ public class GeneratorOptionsAssignmentTest
             ModulePixelSize = 3,
             DarkColor = Navy,
             LightColor = Clear,
+            Width = 512,
+            Height = 256,
+            ModuleStyle = ModuleStyle.Circle,
+            ModuleScalePercent = 80,
+            FinderPatternStyle = FinderPatternStyle.Circle,
+            CornerRadiusPercent = 50,
+            IconSizeModules = 7,
+            IconBorderModules = 2,
+            MaxCoreOccupancyPercent = 50,
+            IconImage = IconBytes,
+            IconMediaType = "image/svg+xml",
         });
 
     private static async Task CheckEveryOption<T>(OptionCase<T>[] cases, T everyOptionSet) where T : struct

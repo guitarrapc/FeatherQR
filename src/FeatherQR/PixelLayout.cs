@@ -5,7 +5,7 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// These are the layouts phone cameras, graphics libraries and GPU textures commonly hand over or take.
-/// A buffer's rows follow one another with no padding between them.
+/// A buffer <see cref="SymbolImageWriter"/> writes has its rows one after another with no padding. A buffer <see cref="LuminanceConverter"/> reads may have a stride wider than its rows.
 /// </remarks>
 public enum PixelLayout
 {

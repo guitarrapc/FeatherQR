@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Xml.Linq;
 using SkiaSharp;
 using FeatherQR.SkiaSharp;
+using Style = FeatherQR.Tests.StyledSymbolCases.Style;
 
 namespace FeatherQR.Tests;
 
@@ -11,16 +12,10 @@ namespace FeatherQR.Tests;
 /// <remarks>
 /// Finder patterns must be drawn separately from styled data modules: gaps can disrupt
 /// the dark/light runs used for detection. These cases guard that separation by decoding the render.
+/// The styles come from <see cref="StyledSymbolCases"/>, which the core's <see cref="StyledSymbolImageWriterDecodabilityTest"/> reads too.
 /// </remarks>
 public class StyledSymbolDecodabilityTest
 {
-    public enum Style
-    {
-        Rectangle,
-        Circle,
-        RoundedRectangle,
-    }
-
     private static ModuleShape ShapeOf(Style style) => style switch
     {
         Style.Circle => CircleModuleShape.Default,
@@ -28,15 +23,8 @@ public class StyledSymbolDecodabilityTest
         _ => RectangleModuleShape.Default,
     };
 
-    // 98% exercises a small gap as well as the wider gaps below.
     [Test]
-    [Arguments(Style.Rectangle, 100)]
-    [Arguments(Style.Rectangle, 98)]
-    [Arguments(Style.Rectangle, 92)]
-    [Arguments(Style.Rectangle, 75)]
-    [Arguments(Style.Circle, 100)]
-    [Arguments(Style.Circle, 92)]
-    [Arguments(Style.RoundedRectangle, 92)]
+    [MethodDataSource(typeof(StyledSymbolCases), nameof(StyledSymbolCases.ModuleStyles))]
     public async Task StandardQR_Styled_StillDecodes(Style style, int sizePercent)
     {
         using var bitmap = new QRCodeImageBuilder("https://github.com/guitarrapc/FeatherQR")
@@ -53,13 +41,7 @@ public class StyledSymbolDecodabilityTest
     }
 
     [Test]
-    [Arguments(Style.Rectangle, 100)]
-    [Arguments(Style.Rectangle, 98)]
-    [Arguments(Style.Rectangle, 92)]
-    [Arguments(Style.Rectangle, 75)]
-    [Arguments(Style.Circle, 100)]
-    [Arguments(Style.Circle, 92)]
-    [Arguments(Style.RoundedRectangle, 92)]
+    [MethodDataSource(typeof(StyledSymbolCases), nameof(StyledSymbolCases.ModuleStyles))]
     public async Task MicroQR_Styled_StillDecodes(Style style, int sizePercent)
     {
         using var bitmap = new MicroQRCodeImageBuilder("https://githu")
@@ -76,13 +58,7 @@ public class StyledSymbolDecodabilityTest
     }
 
     [Test]
-    [Arguments(Style.Rectangle, 100)]
-    [Arguments(Style.Rectangle, 98)]
-    [Arguments(Style.Rectangle, 92)]
-    [Arguments(Style.Rectangle, 75)]
-    [Arguments(Style.Circle, 100)]
-    [Arguments(Style.Circle, 92)]
-    [Arguments(Style.RoundedRectangle, 92)]
+    [MethodDataSource(typeof(StyledSymbolCases), nameof(StyledSymbolCases.ModuleStyles))]
     public async Task RmQR_Styled_StillDecodes(Style style, int sizePercent)
     {
         using var bitmap = new RmQRCodeImageBuilder("https://githu")
@@ -106,10 +82,7 @@ public class StyledSymbolDecodabilityTest
     /// to one appearance.
     /// </summary>
     [Test]
-    [Arguments("rectangle")]
-    [Arguments("circle")]
-    [Arguments("rounded")]
-    [Arguments("roundedCircle")]
+    [MethodDataSource(typeof(StyledSymbolCases), nameof(StyledSymbolCases.FinderStyles))]
     public async Task StandardQR_DecorativeFinder_StillDecodes(string finder)
     {
         var shape = FinderShapeOf(finder);
@@ -175,10 +148,7 @@ public class StyledSymbolDecodabilityTest
     /// A finder on a non-square grid is <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
     /// </summary>
     [Test]
-    [Arguments("rectangle")]
-    [Arguments("circle")]
-    [Arguments("rounded")]
-    [Arguments("roundedCircle")]
+    [MethodDataSource(typeof(StyledSymbolCases), nameof(StyledSymbolCases.FinderStyles))]
     public async Task StandardQR_DecorativeFinderOnWideCanvas_StaysInsideItsBox(string finder)
     {
         var shape = FinderShapeOf(finder);
@@ -688,10 +658,7 @@ public class StyledSymbolDecodabilityTest
     /// antialiasing and delegates here, draws a grey line across the ring.
     /// </remarks>
     [Test]
-    [Arguments("rectangle")]
-    [Arguments("circle")]
-    [Arguments("rounded")]
-    [Arguments("roundedCircle")]
+    [MethodDataSource(typeof(StyledSymbolCases), nameof(StyledSymbolCases.FinderStyles))]
     public async Task DecorativeFinder_DrawnWithAnAntialiasedPaint_RestoresItAndDrawsNoSeam(string finder)
     {
         var rect = SKRect.Create(10.3f, 10.3f, 100.5f, 100.5f);
@@ -797,10 +764,7 @@ public class StyledSymbolDecodabilityTest
     /// direct call can ask of them, is <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
     /// </summary>
     [Test]
-    [Arguments("rectangle")]
-    [Arguments("circle")]
-    [Arguments("rounded")]
-    [Arguments("roundedCircle")]
+    [MethodDataSource(typeof(StyledSymbolCases), nameof(StyledSymbolCases.FinderStyles))]
     public async Task StandardQR_DecorativeFinderOnWideCanvas_StillDecodes(string finder)
     {
         var data = QRCodeGenerator.Create("HELLO FEATHERQR 12345", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });

@@ -1,5 +1,3 @@
-using FeatherQR.Internals.ImageDecoders;
-
 namespace FeatherQR.Tests;
 
 /// <summary>

@@ -1,5 +1,4 @@
 using System.Runtime.Intrinsics;
-using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Tests;
 
