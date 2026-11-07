@@ -2,55 +2,55 @@ using System.Buffers;
 using FeatherQR.SkiaSharp.Internals;
 using SkiaSharp;
 using FeatherQR.Internals.ImageDecoders;
-using FeatherQR.Internals.StandardQR;
+using FeatherQR.Internals.MicroQR;
 
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Decodes QR codes from SkiaSharp bitmaps, and from encoded images read from a stream.
-/// Extends <see cref="QRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>QRCodeDecoder.TryDecode(bitmap, ...)</c> and <c>QRCodeDecoder.DecodeAsync(stream)</c>. On older language versions call them on this class.
+/// Adds overloads to <see cref="MicroQRCodeDecoder"/> that decode Micro QR codes from SkiaSharp bitmaps, and from encoded images read from a stream.
+/// With C# 14 call them on <see cref="MicroQRCodeDecoder"/>, as <c>MicroQRCodeDecoder.TryDecode(bitmap, ...)</c> and <c>MicroQRCodeDecoder.DecodeAsync(stream)</c>. On C# 13 and older call them on this class.
 /// </summary>
-public static class QRCodeImageDecoder
+public static class MicroQRCodeDecoderExtensions
 {
-    extension(QRCodeDecoder)
+    extension(MicroQRCodeDecoder)
     {
         /// <summary>
-        /// Finds and decodes a QR code in a bitmap.
+        /// Finds and decodes a Micro QR code in a bitmap.
         /// </summary>
         /// <remarks>
-        /// Reads screenshots, rendered QR codes, scans and camera photographs, at any rotation, mirrored, inverted, tilted, or under a shading gradient or a soft-edged shadow.
-        /// Photographs with glare, damage, blur, a curved surface, a steep tilt or strong lens distortion read less reliably.
+        /// Reads screenshots, rendered Micro QR codes, scans and camera photographs, at any rotation, mirrored, inverted, scaled, mildly tilted, or under a shading gradient or a soft-edged shadow (M1 only when the shading is mild).
+        /// A symbol tilted more than mildly is often not read.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-        /// <returns><c>true</c> when a QR code was found and decoded.</returns>
+        /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
         public static bool TryDecode(SKBitmap bitmap, out string text)
             => TryDecode(bitmap, out text, out _);
 
         /// <summary>
-        /// Finds and decodes a QR code in a bitmap, and reports what it found.
+        /// Finds and decodes a Micro QR code in a bitmap, and reports what it found.
         /// </summary>
         /// <remarks>
-        /// Reads screenshots, rendered QR codes, scans and camera photographs, at any rotation, mirrored, inverted, tilted, or under a shading gradient or a soft-edged shadow.
-        /// Photographs with glare, damage, blur, a curved surface, a steep tilt or strong lens distortion read less reliably.
+        /// See <see cref="TryDecode(SKBitmap, out string)"/> for the supported image envelope.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-        /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners), the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>) and the FNC1 mode when it carries one (<see cref="QRCodeDecodeInfo.Fnc1"/>).</param>
-        /// <returns><c>true</c> when a QR code was found and decoded.</returns>
+        /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners).</param>
+        /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
-        public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info)
+        public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info)
         {
             if (bitmap is null)
                 throw new ArgumentNullException(nameof(bitmap));
 
             var width = bitmap.Width;
             var height = bitmap.Height;
-            if (width < 21 || height < 21 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
+            // M1 is 11 modules per side
+            if (width < 11 || height < 11 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
             {
                 text = string.Empty;
-                info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+                info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
                 return false;
             }
 
@@ -59,7 +59,7 @@ public static class QRCodeImageDecoder
             {
                 var luminance = rented.AsSpan(0, pixelCount);
                 BitmapLuminanceConverter.Convert(bitmap, luminance);
-                return QRCodeDecoder.TryDecodeImage(luminance, width, height, out text, out info);
+                return MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out text, out info);
             }
             finally
             {
@@ -68,27 +68,28 @@ public static class QRCodeImageDecoder
         }
 
         /// <summary>
-        /// Finds a QR code in a bitmap and decodes its bytes, as they are in the symbol, with no charset applied.
+        /// Finds a Micro QR code in a bitmap and decodes its bytes, as they are in the symbol, with no charset applied.
         /// </summary>
         /// <remarks>
-        /// The bitmap is searched as <see cref="TryDecode(SKBitmap, out string, out QRCodeDecodeInfo)"/> searches it, and the bytes are read as <see cref="QRCodeDecoder.TryDecodeBytes(QRCodeData, out byte[], out QRCodeDecodeInfo)"/> reads them.
+        /// The bitmap is searched as <see cref="TryDecode(SKBitmap, out string, out MicroQRCodeDecodeInfo)"/> searches it, and the bytes are read as <see cref="MicroQRCodeDecoder.TryDecodeBytes(MicroQRCodeData, out byte[], out MicroQRCodeDecodeInfo)"/> reads them.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="bytes">The decoded bytes, or an empty array when decoding fails.</param>
-        /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(SKBitmap, out string, out QRCodeDecodeInfo)"/> reports.</param>
-        /// <returns><c>true</c> when a QR code was found and decoded.</returns>
+        /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(SKBitmap, out string, out MicroQRCodeDecodeInfo)"/> reports.</param>
+        /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
-        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out QRCodeDecodeInfo info)
+        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out MicroQRCodeDecodeInfo info)
         {
             if (bitmap is null)
                 throw new ArgumentNullException(nameof(bitmap));
 
             var width = bitmap.Width;
             var height = bitmap.Height;
-            if (width < 21 || height < 21 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
+            // M1 is 11 modules per side
+            if (width < 11 || height < 11 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
             {
                 bytes = [];
-                info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+                info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
                 return false;
             }
 
@@ -97,7 +98,7 @@ public static class QRCodeImageDecoder
             {
                 var luminance = rented.AsSpan(0, pixelCount);
                 BitmapLuminanceConverter.Convert(bitmap, luminance);
-                return QRCodeDecoder.TryDecodeImageBytes(luminance, width, height, out bytes, out info);
+                return MicroQRCodeDecoder.TryDecodeImageBytes(luminance, width, height, out bytes, out info);
             }
             finally
             {
@@ -105,33 +106,33 @@ public static class QRCodeImageDecoder
             }
         }
         /// <summary>
-        /// Reads an image from a stream asynchronously, and finds and decodes a QR code in it.
+        /// Reads an image from a stream asynchronously, and finds and decodes a Micro QR code in it.
         /// </summary>
         /// <remarks>
         /// <para>
         /// The stream is read to its end through its asynchronous reads alone, so the call reads a stream that refuses synchronous reads, such as a server's request body.
         /// A <see cref="MemoryStream"/> whose buffer is exposed is read in place instead, with no call to its reads.
-        /// The image is then decoded as <see cref="SKBitmap.Decode(Stream)"/> decodes it, with no EXIF orientation applied, and read as <see cref="TryDecode(SKBitmap, out string, out QRCodeDecodeInfo)"/> reads that bitmap.
+        /// The image is then decoded as <see cref="SKBitmap.Decode(Stream)"/> decodes it, with no EXIF orientation applied, and read as <see cref="TryDecode(SKBitmap, out string, out MicroQRCodeDecodeInfo)"/> reads that bitmap.
         /// Called on a thread with a synchronization context, such as a UI thread, or under a task scheduler of the caller's own, the call decodes on the thread pool, so the caller can await it where it is.
         /// There it decodes a copy of an exposed <see cref="MemoryStream"/>'s buffer, so the buffer may be reused once the call returns.
         /// </para>
         /// <para>
         /// The read takes the limits of <see cref="ImageStreamReadLimits.Default"/>: a stream of more than 64 MiB, or an image whose header declares more than 16,777,216 pixels (4,096 × 4,096), is refused before any pixel is allocated.
-        /// Other limits are given with <see cref="DecodeAsync(Stream, ImageStreamReadLimits, CancellationToken)"/>, and a larger image can also be decoded into an <see cref="SKBitmap"/> and read with <see cref="TryDecode(SKBitmap, out string, out QRCodeDecodeInfo)"/>.
+        /// Other limits are given with <see cref="DecodeAsync(Stream, ImageStreamReadLimits, CancellationToken)"/>, and a larger image can also be decoded into an <see cref="SKBitmap"/> and read with <see cref="TryDecode(SKBitmap, out string, out MicroQRCodeDecodeInfo)"/>.
         /// </para>
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
         /// <param name="cancellationToken">Stops the call before the decode and during the reads.</param>
-        /// <returns>The result in every case. On a failure <see cref="QRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="QRCodeDecodeInfo.Status"/> says why.</returns>
+        /// <returns>The result in every case. On a failure <see cref="MicroQRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="MicroQRCodeDecodeInfo.Status"/> says why.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
         /// <exception cref="InvalidDataException">Faults the task when the stream holds no image that can be decoded, or one past the limits.</exception>
         /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
-        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = default)
+        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = default)
             => DecodeAsync(image, ImageStreamReadLimits.Default, cancellationToken);
 
         /// <summary>
-        /// Reads an image from a stream asynchronously under the limits given, and finds and decodes a QR code in it.
+        /// Reads an image from a stream asynchronously under the limits given, and finds and decodes a Micro QR code in it.
         /// </summary>
         /// <remarks>
         /// Reads as <see cref="DecodeAsync(Stream, CancellationToken)"/> does, with <paramref name="limits"/> in place of the default ones.
@@ -139,19 +140,19 @@ public static class QRCodeImageDecoder
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
         /// <param name="limits">The most bytes the read takes from the stream, and the most pixels the image's header may declare. <c>null</c> for <see cref="ImageStreamReadLimits.Default"/>.</param>
         /// <param name="cancellationToken">Stops the call before the decode and during the reads.</param>
-        /// <returns>The result in every case. On a failure <see cref="QRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="QRCodeDecodeInfo.Status"/> says why.</returns>
+        /// <returns>The result in every case. On a failure <see cref="MicroQRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="MicroQRCodeDecodeInfo.Status"/> says why.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
         /// <exception cref="InvalidDataException">Faults the task when the stream holds no image that can be decoded, or one past the limits.</exception>
         /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
-        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = default)
+        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = default)
         {
             EncodedImage.ThrowIfUnreadable(image);
             return EncodedImage.ReadAsync(image, limits ?? ImageStreamReadLimits.Default, ReadOne, cancellationToken);
         }
 
         /// <summary>
-        /// Reads an image from a stream, and finds and decodes a QR code in it.
+        /// Reads an image from a stream, and finds and decodes a Micro QR code in it.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -159,41 +160,41 @@ public static class QRCodeImageDecoder
         /// </para>
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
-        /// <returns>The result in every case. On a failure <see cref="QRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="QRCodeDecodeInfo.Status"/> says why.</returns>
+        /// <returns>The result in every case. On a failure <see cref="MicroQRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="MicroQRCodeDecodeInfo.Status"/> says why.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
         /// <exception cref="InvalidDataException">Thrown when the stream holds no image that can be decoded, or one past the limits.</exception>
-        public static QRCodeDecodeResult Decode(Stream image)
+        public static MicroQRCodeDecodeResult Decode(Stream image)
             => Decode(image, ImageStreamReadLimits.Default);
 
         /// <summary>
-        /// Reads an image from a stream under the limits given, and finds and decodes a QR code in it.
+        /// Reads an image from a stream under the limits given, and finds and decodes a Micro QR code in it.
         /// </summary>
         /// <remarks>
         /// Reads as <see cref="Decode(Stream)"/> does, with <paramref name="limits"/> in place of the default ones.
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
         /// <param name="limits">The most bytes the read takes from the stream, and the most pixels the image's header may declare. <c>null</c> for <see cref="ImageStreamReadLimits.Default"/>.</param>
-        /// <returns>The result in every case. On a failure <see cref="QRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="QRCodeDecodeInfo.Status"/> says why.</returns>
+        /// <returns>The result in every case. On a failure <see cref="MicroQRCodeDecodeResult.Success"/> is <c>false</c> and <see cref="MicroQRCodeDecodeInfo.Status"/> says why.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
         /// <exception cref="InvalidDataException">Thrown when the stream holds no image that can be decoded, or one past the limits.</exception>
-        public static QRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits)
+        public static MicroQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits)
         {
             EncodedImage.ThrowIfUnreadable(image);
             return EncodedImage.Read(image, limits ?? ImageStreamReadLimits.Default, ReadOne);
         }
 
         /// <summary>
-        /// Finds and decodes every QR code in a bitmap.
+        /// Finds and decodes every Micro QR code in a bitmap.
         /// </summary>
         /// <remarks>
-        /// Reads the bitmap's luminance as <see cref="QRCodeDecoder.DecodeImageSymbols(ReadOnlySpan{byte}, int, int)"/> reads it: each symbol that decodes, once, in the order found.
+        /// Reads the bitmap's luminance as <see cref="MicroQRCodeDecoder.DecodeImageSymbols(ReadOnlySpan{byte}, int, int)"/> reads it: each symbol that decodes, once, in the order found.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <returns>The symbols read, an empty array when there is none.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
-        public static QRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap)
+        public static MicroQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap)
         {
             if (bitmap is null)
                 throw new ArgumentNullException(nameof(bitmap));
@@ -202,44 +203,44 @@ public static class QRCodeImageDecoder
         }
 
         /// <summary>
-        /// Reads an image from a stream asynchronously, and finds and decodes every QR code in it.
+        /// Reads an image from a stream asynchronously, and finds and decodes every Micro QR code in it.
         /// </summary>
         /// <remarks>
         /// Reads the stream as <see cref="DecodeAsync(Stream, CancellationToken)"/> does, under the same limits, and the bitmap as <see cref="DecodeSymbols(SKBitmap)"/> does. Other limits are given with <see cref="DecodeSymbolsAsync(Stream, ImageStreamReadLimits, CancellationToken)"/>.
-        /// The token is also checked before each symbol the search tries, never inside one symbol's read.
+        /// The token is also checked before each finder candidate the search tries, never inside one candidate's read.
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
-        /// <param name="cancellationToken">Stops the call before the decode, during the reads, and between the symbols the search tries.</param>
+        /// <param name="cancellationToken">Stops the call before the decode, during the reads, and between the candidates the search tries.</param>
         /// <returns>The symbols read, an empty array when there is none.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
         /// <exception cref="InvalidDataException">Faults the task when the stream holds no image that can be decoded, or one past the limits.</exception>
         /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
-        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = default)
+        public static Task<MicroQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = default)
             => DecodeSymbolsAsync(image, ImageStreamReadLimits.Default, cancellationToken);
 
         /// <summary>
-        /// Reads an image from a stream asynchronously under the limits given, and finds and decodes every QR code in it.
+        /// Reads an image from a stream asynchronously under the limits given, and finds and decodes every Micro QR code in it.
         /// </summary>
         /// <remarks>
         /// Reads as <see cref="DecodeSymbolsAsync(Stream, CancellationToken)"/> does, with <paramref name="limits"/> in place of the default ones.
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
         /// <param name="limits">The most bytes the read takes from the stream, and the most pixels the image's header may declare. <c>null</c> for <see cref="ImageStreamReadLimits.Default"/>.</param>
-        /// <param name="cancellationToken">Stops the call before the decode, during the reads, and between the symbols the search tries.</param>
+        /// <param name="cancellationToken">Stops the call before the decode, during the reads, and between the candidates the search tries.</param>
         /// <returns>The symbols read, an empty array when there is none.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
         /// <exception cref="InvalidDataException">Faults the task when the stream holds no image that can be decoded, or one past the limits.</exception>
         /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
-        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = default)
+        public static Task<MicroQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = default)
         {
             EncodedImage.ThrowIfUnreadable(image);
             return EncodedImage.ReadAsync(image, limits ?? ImageStreamReadLimits.Default, DecodeEverySymbol, cancellationToken);
         }
 
         /// <summary>
-        /// Reads an image from a stream, and finds and decodes every QR code in it.
+        /// Reads an image from a stream, and finds and decodes every Micro QR code in it.
         /// </summary>
         /// <remarks>
         /// The synchronous twin of <see cref="DecodeSymbolsAsync(Stream, CancellationToken)"/>, reading the stream as <see cref="Decode(Stream)"/> does. Other limits are given with <see cref="DecodeSymbols(Stream, ImageStreamReadLimits)"/>.
@@ -249,11 +250,11 @@ public static class QRCodeImageDecoder
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
         /// <exception cref="InvalidDataException">Thrown when the stream holds no image that can be decoded, or one past the limits.</exception>
-        public static QRCodeDecodeResult[] DecodeSymbols(Stream image)
+        public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image)
             => DecodeSymbols(image, ImageStreamReadLimits.Default);
 
         /// <summary>
-        /// Reads an image from a stream under the limits given, and finds and decodes every QR code in it.
+        /// Reads an image from a stream under the limits given, and finds and decodes every Micro QR code in it.
         /// </summary>
         /// <remarks>
         /// Reads as <see cref="DecodeSymbols(Stream)"/> does, with <paramref name="limits"/> in place of the default ones.
@@ -264,25 +265,26 @@ public static class QRCodeImageDecoder
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is <c>null</c>.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="image"/> is not readable.</exception>
         /// <exception cref="InvalidDataException">Thrown when the stream holds no image that can be decoded, or one past the limits.</exception>
-        public static QRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits)
+        public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits)
         {
             EncodedImage.ThrowIfUnreadable(image);
             return EncodedImage.Read(image, limits ?? ImageStreamReadLimits.Default, DecodeEverySymbol);
         }
     }
 
-    private static QRCodeDecodeResult ReadOne(SKBitmap bitmap, CancellationToken _)
+    private static MicroQRCodeDecodeResult ReadOne(SKBitmap bitmap, CancellationToken _)
     {
-        QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
-        return new QRCodeDecodeResult(text, info);
+        MicroQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+        return new MicroQRCodeDecodeResult(text, info);
     }
 
-    /// <summary>Every QR code in a bitmap, the token checked between the symbols the search tries.</summary>
-    internal static QRCodeDecodeResult[] DecodeEverySymbol(SKBitmap bitmap, CancellationToken cancellationToken)
+    /// <summary>Every Micro QR code in a bitmap, the token checked between the candidates the search tries.</summary>
+    internal static MicroQRCodeDecodeResult[] DecodeEverySymbol(SKBitmap bitmap, CancellationToken cancellationToken)
     {
         var width = bitmap.Width;
         var height = bitmap.Height;
-        if (width < 21 || height < 21 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
+        // M1 is 11 modules per side
+        if (width < 11 || height < 11 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
             return [];
 
         var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
@@ -290,7 +292,7 @@ public static class QRCodeImageDecoder
         {
             var luminance = rented.AsSpan(0, pixelCount);
             BitmapLuminanceConverter.Convert(bitmap, luminance);
-            return QRImageDecoder.DecodeSymbols(luminance, width, height, cancellationToken);
+            return MicroQRImageDecoder.DecodeSymbols(luminance, width, height, cancellationToken);
         }
         finally
         {

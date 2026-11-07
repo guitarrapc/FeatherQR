@@ -6,7 +6,7 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The bytes calls of <see cref="RmQRCodeDecoder"/> and <see cref="RmQRCodeImageDecoder"/>, and the ECI assignment both outputs report.
+/// The bytes calls of <see cref="RmQRCodeDecoder"/> and <see cref="RmQRCodeDecoderExtensions"/>, and the ECI assignment both outputs report.
 /// </summary>
 public class RmQRCodeDecoderBytesTest
 {
@@ -118,7 +118,7 @@ public class RmQRCodeDecoderBytesTest
     public async Task NullData_Throws_AsTheTextCallDoes()
     {
         await Assert.That(() => RmQRCodeDecoder.TryDecodeBytes((RmQRCodeData)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
-        await Assert.That(() => RmQRCodeImageDecoder.TryDecodeBytes((global::SkiaSharp.SKBitmap)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => RmQRCodeDecoderExtensions.TryDecodeBytes((global::SkiaSharp.SKBitmap)null!, out _, out _)).ThrowsExactly<ArgumentNullException>();
     }
 
     [Test]
@@ -145,7 +145,7 @@ public class RmQRCodeDecoderBytesTest
         await Assert.That(destination.AsSpan(0, written).ToArray()).IsEquivalentTo(binaryPayload, CollectionOrdering.Matching);
 
         using var bitmap = PayloadSymbols.Bitmap(modules, width, height);
-        await Assert.That(RmQRCodeImageDecoder.TryDecodeBytes(bitmap, out bytes, out info)).IsTrue();
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecodeBytes(bitmap, out bytes, out info)).IsTrue();
         await Assert.That(bytes).IsEquivalentTo(binaryPayload, CollectionOrdering.Matching);
         await Assert.That(info.EciAssignment).IsEqualTo(899);
     }

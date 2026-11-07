@@ -31,7 +31,7 @@ public class SymbolCornersTest
         var matrix = SKMatrix.CreateTranslation(Margin, Margin);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: false);
     }
 
@@ -46,17 +46,17 @@ public class SymbolCornersTest
 
         using var qr = RenderQr("CORNERS", version: 1);
         using var qrScene = Compose(qr, matrix);
-        await Assert.That(QRCodeImageDecoder.TryDecode(qrScene, out _, out var qrInfo)).IsTrue();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(qrScene, out _, out var qrInfo)).IsTrue();
         await AssertCorners(qrInfo.Corners, Expected(matrix, qr), 0.1f, mirrored: false);
 
         using var micro = RenderMicro("MICRO CORNERS", MicroQRVersion.M4);
         using var microScene = Compose(micro, matrix);
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(microScene, out _, out var microInfo)).IsTrue();
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(microScene, out _, out var microInfo)).IsTrue();
         await AssertCorners(microInfo.Corners, Expected(matrix, micro), 0.1f, mirrored: false);
 
         using var rm = RenderRm("RMQR CORNERS", RmQRVersion.R11x59);
         using var rmScene = Compose(rm, matrix);
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(rmScene, out _, out var rmInfo)).IsTrue();
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(rmScene, out _, out var rmInfo)).IsTrue();
         await AssertNear(rmInfo.Corners.TopLeft, Expected(matrix, rm).TopLeft, 0.15f, "TopLeft");
     }
 
@@ -75,7 +75,7 @@ public class SymbolCornersTest
         var matrix = Rotation(flat, degrees);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: false);
     }
 
@@ -98,7 +98,7 @@ public class SymbolCornersTest
         var matrix = Keystone(flat, tilt).PreConcat(MirrorInPlace(flat));
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: true);
     }
 
@@ -123,7 +123,7 @@ public class SymbolCornersTest
         var matrix = Keystone(flat, tilt);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: false);
     }
 
@@ -144,7 +144,7 @@ public class SymbolCornersTest
         var matrix = Rotation(flat, degrees);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), 5f, mirrored: false);
     }
 
@@ -168,7 +168,7 @@ public class SymbolCornersTest
         var matrix = Keystone(flat, tilt);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         var expected = Expected(matrix, flat);
         await AssertCorners(info.Corners, expected, PixelsPerModule * 1.5f, mirrored: false);
 
@@ -196,7 +196,7 @@ public class SymbolCornersTest
         var matrix = Keystone(flat, tilt);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: false);
     }
 
@@ -211,7 +211,7 @@ public class SymbolCornersTest
         var matrix = SKMatrix.CreateTranslation(Margin, Margin);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: false);
     }
 
@@ -234,7 +234,7 @@ public class SymbolCornersTest
         var matrix = Rotation(flat, degrees);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule * toleranceModules, mirrored: false);
     }
 
@@ -253,7 +253,7 @@ public class SymbolCornersTest
         var matrix = Rotation(flat, degrees).PreConcat(MirrorInPlace(flat));
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule * toleranceModules, mirrored: true);
     }
 
@@ -274,7 +274,7 @@ public class SymbolCornersTest
         var matrix = mirrored ? Keystone(flat, tilt).PreConcat(MirrorInPlace(flat)) : Keystone(flat, tilt);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule * toleranceModules, mirrored);
     }
 
@@ -289,7 +289,7 @@ public class SymbolCornersTest
         var matrix = SKMatrix.CreateTranslation(Margin, Margin);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: false);
     }
 
@@ -303,7 +303,7 @@ public class SymbolCornersTest
         var matrix = Rotation(flat, degrees);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: false);
     }
 
@@ -314,7 +314,7 @@ public class SymbolCornersTest
         var matrix = Mirror(flat);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: true);
     }
 
@@ -341,7 +341,7 @@ public class SymbolCornersTest
         var matrix = Keystone(flat, tilt);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule * toleranceModules, mirrored: false);
     }
 
@@ -379,9 +379,9 @@ public class SymbolCornersTest
             canvas.Clear(SKColors.White);
         }
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(blank, out _, out var qr)).IsFalse();
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(blank, out _, out var micro)).IsFalse();
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(blank, out _, out var rm)).IsFalse();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(blank, out _, out var qr)).IsFalse();
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(blank, out _, out var micro)).IsFalse();
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(blank, out _, out var rm)).IsFalse();
 
         await Assert.That(qr.Corners.IsEmpty).IsTrue();
         await Assert.That(micro.Corners.IsEmpty).IsTrue();
@@ -426,17 +426,17 @@ public class SymbolCornersTest
         // Damage: a block of data modules painted over, well away from every function
         // pattern (for rMQR that means clear of the finder-side format columns 8-10).
         Damage(qrScene, moduleX: 10, moduleY: 10, modules: 12);
-        await Assert.That(QRCodeImageDecoder.TryDecode(qrScene, out _, out var qrDamaged)).IsFalse();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(qrScene, out _, out var qrDamaged)).IsFalse();
         await Assert.That(qrDamaged.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
         await Assert.That(qrDamaged.Corners.IsEmpty).IsTrue();
 
         Damage(microScene, moduleX: 9, moduleY: 9, modules: 7);
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(microScene, out _, out var microDamaged)).IsFalse();
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(microScene, out _, out var microDamaged)).IsFalse();
         await Assert.That(microDamaged.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
         await Assert.That(microDamaged.Corners.IsEmpty).IsTrue();
 
         Damage(rmScene, moduleX: 30, moduleY: 2, modules: 7);
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(rmScene, out _, out var rmDamaged)).IsFalse();
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(rmScene, out _, out var rmDamaged)).IsFalse();
         await Assert.That(rmDamaged.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
         await Assert.That(rmDamaged.Corners.IsEmpty).IsTrue();
     }
@@ -452,7 +452,7 @@ public class SymbolCornersTest
         var matrix = Rotation(flat, 30);
         using var scene = Compose(flat, matrix);
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var fromBitmap)).IsTrue();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(scene, out _, out var fromBitmap)).IsTrue();
 
         var luminance = Luminance(scene);
         await Assert.That(QRCodeDecoder.TryDecodeImage(luminance, scene.Width, scene.Height, out _, out var fromLuminance)).IsTrue();

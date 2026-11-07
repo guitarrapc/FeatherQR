@@ -1,3 +1,4 @@
+// Images with FeatherQR.SkiaSharp package. PNG, JPEG, WebP, SKBitmap, SKImage, with styling and colors.
 using SkiaSharp;
 using FeatherQR;
 using FeatherQR.SkiaSharp;
@@ -31,7 +32,6 @@ var iconInstaPath = Path.Combine(outputDir, "instarich-logo.png");
 
 var content = "https://github.com/guitarrapc/FeatherQR/blob/main/README.md";
 
-// prepare
 Directory.CreateDirectory(outputDir);
 
 // Static method (Simplest)

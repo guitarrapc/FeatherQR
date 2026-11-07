@@ -6,10 +6,10 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Decodes the symbols of every symbology, Standard QR, Micro QR and rMQR, from SkiaSharp bitmaps, and from encoded images read from a stream.
-/// Extends <see cref="SymbolDecoder"/>, so with C# 14 the overloads are also reachable as <c>SymbolDecoder.DecodeSymbols(bitmap)</c> and <c>SymbolDecoder.DecodeSymbolsAsync(stream)</c>. On older language versions call them on this class.
+/// Adds overloads to <see cref="SymbolDecoder"/> that decode the symbols of every symbology, Standard QR, Micro QR and rMQR, from SkiaSharp bitmaps, and from encoded images read from a stream.
+/// With C# 14 call them on <see cref="SymbolDecoder"/>, as <c>SymbolDecoder.DecodeSymbols(bitmap)</c> and <c>SymbolDecoder.DecodeSymbolsAsync(stream)</c>. On C# 13 and older call them on this class.
 /// </summary>
-public static class SymbolImageDecoder
+public static class SymbolDecoderExtensions
 {
     extension(SymbolDecoder)
     {
@@ -34,7 +34,7 @@ public static class SymbolImageDecoder
         /// Reads an image from a stream asynchronously, and finds and decodes every symbol of any symbology in it.
         /// </summary>
         /// <remarks>
-        /// Reads the stream as <see cref="QRCodeImageDecoder.DecodeSymbolsAsync(Stream, CancellationToken)"/> does, under the same limits, and the bitmap as <see cref="DecodeSymbols(SKBitmap)"/> does. Other limits are given with <see cref="DecodeSymbolsAsync(Stream, ImageStreamReadLimits, CancellationToken)"/>.
+        /// Reads the stream as <see cref="QRCodeDecoderExtensions.DecodeSymbolsAsync(Stream, CancellationToken)"/> does, under the same limits, and the bitmap as <see cref="DecodeSymbols(SKBitmap)"/> does. Other limits are given with <see cref="DecodeSymbolsAsync(Stream, ImageStreamReadLimits, CancellationToken)"/>.
         /// The token is also checked before each symbol the search tries, never inside one symbol's read, so a cancel stops the search at its next try.
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
@@ -71,7 +71,7 @@ public static class SymbolImageDecoder
         /// Reads an image from a stream, and finds and decodes every symbol of any symbology in it.
         /// </summary>
         /// <remarks>
-        /// The synchronous twin of <see cref="DecodeSymbolsAsync(Stream, CancellationToken)"/>, reading the stream as <see cref="QRCodeImageDecoder.Decode(Stream)"/> does. Other limits are given with <see cref="DecodeSymbols(Stream, ImageStreamReadLimits)"/>.
+        /// The synchronous twin of <see cref="DecodeSymbolsAsync(Stream, CancellationToken)"/>, reading the stream as <see cref="QRCodeDecoderExtensions.Decode(Stream)"/> does. Other limits are given with <see cref="DecodeSymbols(Stream, ImageStreamReadLimits)"/>.
         /// </remarks>
         /// <param name="image">The encoded image, read from its position to its end. Left open afterwards.</param>
         /// <returns>The symbols read, an empty array when there is none.</returns>

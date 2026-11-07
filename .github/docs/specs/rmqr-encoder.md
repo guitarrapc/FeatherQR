@@ -123,7 +123,7 @@ int GetMaxDecodedLength(RmQRVersion version);
 public readonly record struct RmQRCodeDecodeInfo { DecodeStatus Status; RmQRVersion Version; RmQREccLevel EccLevel; int ErrorsCorrected; }   // no MaskPattern: rMQR has one mask
 ```
 
-The `SKBitmap` overloads are not in this list: `RmQRCodeDecoder` lives in the dependency-free core. Bitmap decoding is `RmQRCodeImageDecoder` in the rendering package, callable as `RmQRCodeDecoder.TryDecode(bitmap, …)` only through C# 14 extension members.
+The `SKBitmap` overloads are not in this list: `RmQRCodeDecoder` lives in the dependency-free core. Bitmap decoding is `RmQRCodeDecoderExtensions` in the rendering package, callable as `RmQRCodeDecoder.TryDecode(bitmap, …)` only through C# 14 extension members.
 
 Rendering:
 

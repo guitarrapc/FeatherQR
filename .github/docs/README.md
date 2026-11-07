@@ -37,6 +37,8 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 | Document | Covers |
 |---|---|
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
+| [core-image-output-gaps-plan.md](plans/core-image-output-gaps-plan.md) | What the core's image output still cannot do that the rendering package can, and the plan for each: an image of a set size, pixel input to the decoders, module and finder pattern shapes, an icon area, and a PNG reader as a decision |
+| [png-start-marks-vector-tier-plan.md](plans/png-start-marks-vector-tier-plan.md) | A portable 128-bit tier, and a gated 256-bit one, for the PNG writer's match-start masks: the marks' share measured first on each build, the tier under the 128-bit round's rules, the timing shapes for the PNG and SVG writers in the report projects |
 
 The 2.0.0 core split plan (`FeatherQR` core, `FeatherQR.SkiaSharp` renderer, `SkiaSharp.QrCode` metapackage, repository rename) completed on 2026-09-06 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (package architecture, seam, graph, the "why three packages" record, scope decisions, lessons) and [DESIGN.md](DESIGN.md).
 
@@ -147,3 +149,10 @@ The binary payload and ECI plan (bytes in and out for the three symbologies, one
 - The three spec maps (the ECI header and the bytes rows), the README ("Binary data", the data types' level and mask, the encodings answer), `docs/migration.md`, the approved API listings, the API page and the Playground (bytes input from hex or a file, and a hex view of decoded bytes with the assignment).
 
 It left out per-phase narration, the per-test case lists and counts, the suite totals, and the probes the renders, the interop runs and the benchmarks were taken with. Its planted faults were run by hand and are not kept as a mutants file.
+
+The core image output plan (SVG, PNG, a raw pixel buffer and text for a terminal from the core package with no dependency, for the three symbologies: the four formats, the SVG path form and the PNG deflate shape measured in probes, the browser and phone checks, then the four writers and the docs) completed on 2026-11-05 and was folded into:
+
+- [qrcode-symbologies.md](specs/qrcode-symbologies.md): the Image output section under What (the calls and their shape, the rules every output shares, why one static class, each format's decisions with the measurements behind them, what was left out and why, the measured cost), the core's row in Package architecture, the scope rows "Image output in the core with no dependency" and "PNG at module sizes that straddle bytes", the `PixelLayout` rows of the package seam and the luminance conversion scope row, and lessons.
+- The README ("Image Writing (Simple)", the overview, installation, Quick Start, API Overview, and the FAQ answer on SVG output, which was removed), `docs/migration.md` ("Images from the core package" and the packages table), the core package's description, the data types' and the image builders' documentation, the approved API listing and the API page.
+
+It left out per-phase narration, the per-test case lists and suite totals, the probes the path forms, the deflate shapes and the timings were taken with, and the render check pages.

@@ -6,12 +6,12 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The <c>SKBitmap</c> decode overloads live in the rendering package as C# 14 extension
 /// members on the core decoders. A C# 14 consumer writes <c>QRCodeDecoder.TryDecode(bitmap, ...)</c>.
-/// A C# 12 or 13 consumer (net8.0's default) can only name the enclosing class,
-/// <c>QRCodeImageDecoder.TryDecode(bitmap, ...)</c>, which is the documented spelling.
+/// A consumer on C# 13 or older can only name the enclosing class,
+/// <c>QRCodeDecoderExtensions.TryDecode(bitmap, ...)</c>.
 /// Both forms, both overloads, all three symbologies, plus the argument contract that
 /// moved with them.
 /// </summary>
-public class ImageDecoderCallFormTest
+public class DecoderExtensionsCallFormTest
 {
     private const string QrContent = "extension member call forms";
     private const string MicroContent = "MICRO 42";
@@ -28,8 +28,8 @@ public class ImageDecoderCallFormTest
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var a)).IsTrue();
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var b, out var bInfo)).IsTrue();
-        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out var c)).IsTrue();
-        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out var d, out var dInfo)).IsTrue();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(bitmap, out var c)).IsTrue();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(bitmap, out var d, out var dInfo)).IsTrue();
 
         await Assert.That(a).IsEqualTo(QrContent);
         await Assert.That(b).IsEqualTo(QrContent);
@@ -46,8 +46,8 @@ public class ImageDecoderCallFormTest
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(bitmap, out var a)).IsTrue();
         await Assert.That(MicroQRCodeDecoder.TryDecode(bitmap, out var b, out var bInfo)).IsTrue();
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(bitmap, out var c)).IsTrue();
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(bitmap, out var d, out var dInfo)).IsTrue();
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(bitmap, out var c)).IsTrue();
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(bitmap, out var d, out var dInfo)).IsTrue();
 
         await Assert.That(a).IsEqualTo(MicroContent);
         await Assert.That(b).IsEqualTo(MicroContent);
@@ -64,8 +64,8 @@ public class ImageDecoderCallFormTest
 
         await Assert.That(RmQRCodeDecoder.TryDecode(bitmap, out var a)).IsTrue();
         await Assert.That(RmQRCodeDecoder.TryDecode(bitmap, out var b, out var bInfo)).IsTrue();
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(bitmap, out var c)).IsTrue();
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(bitmap, out var d, out var dInfo)).IsTrue();
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(bitmap, out var c)).IsTrue();
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(bitmap, out var d, out var dInfo)).IsTrue();
 
         await Assert.That(a).IsEqualTo(RmContent);
         await Assert.That(b).IsEqualTo(RmContent);
@@ -81,7 +81,7 @@ public class ImageDecoderCallFormTest
     {
         using var micro = RenderMicro();
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(micro, out var text, out var info)).IsFalse();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(micro, out var text, out var info)).IsFalse();
         await Assert.That(text).IsEmpty();
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
@@ -90,11 +90,11 @@ public class ImageDecoderCallFormTest
     public async Task NullBitmap_Throws_InBothForms()
     {
         await Assert.That(() => QRCodeDecoder.TryDecode((SKBitmap)null!, out _)).Throws<ArgumentNullException>();
-        await Assert.That(() => QRCodeImageDecoder.TryDecode((SKBitmap)null!, out _, out _)).Throws<ArgumentNullException>();
+        await Assert.That(() => QRCodeDecoderExtensions.TryDecode((SKBitmap)null!, out _, out _)).Throws<ArgumentNullException>();
         await Assert.That(() => MicroQRCodeDecoder.TryDecode((SKBitmap)null!, out _)).Throws<ArgumentNullException>();
-        await Assert.That(() => MicroQRCodeImageDecoder.TryDecode((SKBitmap)null!, out _, out _)).Throws<ArgumentNullException>();
+        await Assert.That(() => MicroQRCodeDecoderExtensions.TryDecode((SKBitmap)null!, out _, out _)).Throws<ArgumentNullException>();
         await Assert.That(() => RmQRCodeDecoder.TryDecode((SKBitmap)null!, out _)).Throws<ArgumentNullException>();
-        await Assert.That(() => RmQRCodeImageDecoder.TryDecode((SKBitmap)null!, out _, out _)).Throws<ArgumentNullException>();
+        await Assert.That(() => RmQRCodeDecoderExtensions.TryDecode((SKBitmap)null!, out _, out _)).Throws<ArgumentNullException>();
     }
 
     /// <summary>Below the smallest symbol, nothing is scanned or rented, and the answer is a plain false.</summary>
@@ -103,11 +103,11 @@ public class ImageDecoderCallFormTest
     {
         using var tiny = new SKBitmap(6, 6);
 
-        await Assert.That(QRCodeImageDecoder.TryDecode(tiny, out _, out var qr)).IsFalse();
+        await Assert.That(QRCodeDecoderExtensions.TryDecode(tiny, out _, out var qr)).IsFalse();
         await Assert.That(qr.Status).IsEqualTo(DecodeStatus.NotDetected);
-        await Assert.That(MicroQRCodeImageDecoder.TryDecode(tiny, out _, out var micro)).IsFalse();
+        await Assert.That(MicroQRCodeDecoderExtensions.TryDecode(tiny, out _, out var micro)).IsFalse();
         await Assert.That(micro.Status).IsEqualTo(DecodeStatus.NotDetected);
-        await Assert.That(RmQRCodeImageDecoder.TryDecode(tiny, out _, out var rm)).IsFalse();
+        await Assert.That(RmQRCodeDecoderExtensions.TryDecode(tiny, out _, out var rm)).IsFalse();
         await Assert.That(rm.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 }

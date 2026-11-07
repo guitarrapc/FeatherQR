@@ -24,8 +24,8 @@ public class TypeShapeTest
     // Func<Type> rather than Type: TUnit asks for a factory when a data source yields a
     // reference type, so each case builds its own value and cannot share state with another.
     //
-    // The settings objects whose members are init-only. The three generator options have set
-    // accessors and no constructor (GeneratorOptionStructs below).
+    // The settings objects whose members are init-only. The option structs have set
+    // accessors and no constructor (OptionStructs below).
     public static IEnumerable<Func<Type>> InitOnlySettingsObjects()
     {
         yield return () => typeof(IconData);
@@ -43,7 +43,7 @@ public class TypeShapeTest
 
     /// <summary>
     /// Every property with a public <c>init</c> accessor, on every exported type but the
-    /// three generator options, is also a parameter of one public constructor, and no
+    /// option structs, is also a parameter of one public constructor, and no
     /// exported type has a protected <c>init</c> accessor. A consumer whose compiler predates
     /// C# 9 cannot assign an <c>init</c> accessor, so a constructor parameter is the only
     /// route to it there.
@@ -54,12 +54,12 @@ public class TypeShapeTest
     /// The sweep states it for the next type too.
     /// </para>
     /// <para>
-    /// The generator options are left out by name. The constructor this rule would make
+    /// The option structs are left out by name. The constructor this rule would make
     /// them carry has to list every option, so an option added in a later release would
     /// change its signature under every compiled caller.
-    /// <see cref="GeneratorOptions_EveryOptionHasAPlainSetter"/> refuses an <c>init</c>
+    /// <see cref="OptionStructs_EveryOptionHasAPlainSetter"/> refuses an <c>init</c>
     /// accessor on one of them, and
-    /// <see cref="GeneratorOptions_HaveNoConstructorOrFactoryThatListsTheOptions"/> the
+    /// <see cref="OptionStructs_HaveNoConstructorOrFactoryThatListsTheOptions"/> the
     /// constructor this rule would ask for.
     /// </para>
     /// <para>
@@ -81,7 +81,7 @@ public class TypeShapeTest
         await Assert.That(protectedInit).IsEmpty()
             .Because("a class deriving below C# 9 cannot assign a protected init accessor");
 
-        foreach (var type in ExportedTypes().Where(t => !GeneratorOptionStructTypes.Contains(t) && InitOnlyProperties(t).Length > 0))
+        foreach (var type in ExportedTypes().Where(t => !OptionStructTypes.Contains(t) && InitOnlyProperties(t).Length > 0))
         {
             swept.Add(type);
 
@@ -122,8 +122,8 @@ public class TypeShapeTest
     /// default its colours or express them as a property at all (they are read back as a
     /// <see cref="ReadOnlySpan{T}"/>). Reachability, the rule that actually protects the
     /// pre-C#-9 audience, is swept over both assemblies above and covers those two. The
-    /// generator options are not listed: they have <c>set</c> accessors and, by
-    /// <see cref="GeneratorOptions_HaveNoConstructorOrFactoryThatListsTheOptions"/>, no constructor.
+    /// option structs are not listed: they have <c>set</c> accessors and, by
+    /// <see cref="OptionStructs_HaveNoConstructorOrFactoryThatListsTheOptions"/>, no constructor.
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(InitOnlySettingsObjects))]
@@ -154,7 +154,7 @@ public class TypeShapeTest
     /// and the initializer keeps.
     /// </summary>
     /// <remarks>
-    /// The three generator options have no constructor to compare.
+    /// The option structs have no constructor to compare.
     /// <see cref="GeneratorOptionsAssignmentTest"/> compares the routes they have.
     /// </remarks>
     [Test]
@@ -614,19 +614,21 @@ public class TypeShapeTest
 
     private const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
-    // The three generator options. Every rule about them below reads this list, and
-    // GeneratorOptions_AreTheOnlyStructsACallerAssignsTo holds it against what the two
-    // assemblies export, so a struct added to it on purpose meets every one of those rules.
-    private static readonly Type[] GeneratorOptionStructTypes =
+    // The option structs: the three generator options and the image options. Every rule about
+    // them below reads this list, and OptionStructs_AreTheOnlyStructsACallerAssignsTo holds it
+    // against what the two assemblies export, so a struct added to it on purpose meets every
+    // one of those rules.
+    private static readonly Type[] OptionStructTypes =
     [
         typeof(MicroQRCodeGeneratorOptions),
         typeof(QRCodeGeneratorOptions),
         typeof(RmQRCodeGeneratorOptions),
+        typeof(SymbolImageOptions),
     ];
 
     // Func<Type>, for the reason on InitOnlySettingsObjects.
-    public static IEnumerable<Func<Type>> GeneratorOptionStructs()
-        => GeneratorOptionStructTypes.Select(type => (Func<Type>)(() => type));
+    public static IEnumerable<Func<Type>> OptionStructs()
+        => OptionStructTypes.Select(type => (Func<Type>)(() => type));
 
     private static bool IsReadOnly(IEnumerable<CustomAttributeData> attributes)
         => attributes.Any(a => a.AttributeType.Name == "IsReadOnlyAttribute");
@@ -652,16 +654,16 @@ public class TypeShapeTest
         .ToArray();
 
     /// <summary>
-    /// The three generator options are the only exported structs that are not
+    /// The option structs are the only exported structs that are not
     /// <c>readonly</c>, so they are the only structs a caller may assign to member by member.
     /// </summary>
     /// <remarks>
     /// Each variable of a struct type holds its own value, and the library keeps no options
     /// after a call, so a setter changes the caller's own variable and nothing else, and an
     /// object initializer over <c>set</c> accessors compiles at C# 7.3, where <c>init</c>
-    /// needs C# 9. That is why these three are settable. It is a decision made for them and
-    /// not a default: a new struct that is not <c>readonly</c> fails here. A fourth set of
-    /// generator options is added to <c>GeneratorOptionStructTypes</c> on purpose, and the
+    /// needs C# 9. That is why these are settable. It is a decision made for them and
+    /// not a default: a new struct that is not <c>readonly</c> fails here. A new set of
+    /// options is added to <c>OptionStructTypes</c> on purpose, and the
     /// rules of this class that read that list then apply to it.
     /// <see cref="GeneratorOptionsAssignmentTest"/> does not read the list, so it needs a
     /// table for the new struct. A struct that has to change for another reason, an
@@ -670,20 +672,20 @@ public class TypeShapeTest
     /// today.
     /// </remarks>
     [Test]
-    public async Task GeneratorOptions_AreTheOnlyStructsACallerAssignsTo()
+    public async Task OptionStructs_AreTheOnlyStructsACallerAssignsTo()
     {
         var notReadOnly = FullNames(SettableStructs());
-        var listed = FullNames(GeneratorOptionStructTypes);
+        var listed = FullNames(OptionStructTypes);
 
         // Two differences and not one comparison, so that a failure names the type.
         await Assert.That(notReadOnly.Except(listed)).IsEmpty()
-            .Because("the exported structs that are not readonly are the ones listed in GeneratorOptionStructTypes");
+            .Because("the exported structs that are not readonly are the ones listed in OptionStructTypes");
         await Assert.That(listed.Except(notReadOnly)).IsEmpty()
-            .Because("GeneratorOptionStructTypes lists exported structs that are not readonly, and nothing else");
+            .Because("OptionStructTypes lists exported structs that are not readonly, and nothing else");
     }
 
     /// <summary>
-    /// No exported type but the three generator options has a property whose <c>set</c>
+    /// No exported type but the option structs has a property whose <c>set</c>
     /// accessor is public or protected.
     /// </summary>
     /// <remarks>
@@ -691,27 +693,27 @@ public class TypeShapeTest
     /// which is why <see cref="IconData"/> is not one. A <c>readonly</c> struct
     /// with a setter that writes into something its copies share would be assignable too.
     /// Neither is a struct that is not <c>readonly</c>, so
-    /// <see cref="GeneratorOptions_AreTheOnlyStructsACallerAssignsTo"/> does not see them,
+    /// <see cref="OptionStructs_AreTheOnlyStructsACallerAssignsTo"/> does not see them,
     /// and this sweep does. A protected accessor counts, because a class deriving from one
     /// of the extension points can call it. An <c>init</c> accessor does not:
     /// <see cref="EveryInitOnlyProperty_IsAlsoAConstructorParameter"/> reads the public and
     /// the protected ones.
     /// </remarks>
     [Test]
-    public async Task GeneratorOptions_AreTheOnlyTypesWithAPlainSetter()
+    public async Task OptionStructs_AreTheOnlyTypesWithAPlainSetter()
     {
         const BindingFlags declared = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
         var withAPlainSetter = FullNames(ExportedTypes()
             .Where(t => t.GetProperties(declared).Any(p => p.SetMethod is { } setter
                 && (setter.IsPublic || setter.IsFamily || setter.IsFamilyOrAssembly)
                 && !IsInitOnly(setter))));
-        var listed = FullNames(GeneratorOptionStructTypes);
+        var listed = FullNames(OptionStructTypes);
 
         // Two differences and not one comparison, so that a failure names the type.
         await Assert.That(withAPlainSetter.Except(listed)).IsEmpty()
-            .Because("a public or protected set accessor is a decision made for the generator options, and for no other type");
+            .Because("a public or protected set accessor is a decision made for the option structs, and for no other type");
         await Assert.That(listed.Except(withAPlainSetter)).IsEmpty()
-            .Because("each of the generator options has a set accessor a caller can use");
+            .Because("each of the option structs has a set accessor a caller can use");
     }
 
     /// <summary>
@@ -719,7 +721,7 @@ public class TypeShapeTest
     /// </summary>
     /// <remarks>
     /// Moving the member between a field and a property later breaks compiled callers, so it keeps one shape.
-    /// The generator options are structs, whose <c>Default</c> is a property for a reason of their own.
+    /// The option structs are structs, and their <c>Default</c> is a property for a reason of their own.
     /// </remarks>
     [Test]
     public async Task ClassDefault_IsAStaticReadOnlyField()
@@ -741,8 +743,8 @@ public class TypeShapeTest
     /// </summary>
     /// <remarks>
     /// A public or protected field that is neither a constant nor <c>readonly</c> is assigned
-    /// like a plain setter, and <see cref="GeneratorOptions_AreTheOnlyTypesWithAPlainSetter"/>
-    /// reads properties only. No type is excepted, the generator options included: a field
+    /// like a plain setter, and <see cref="OptionStructs_AreTheOnlyTypesWithAPlainSetter"/>
+    /// reads properties only. No type is excepted, the option structs included: a field
     /// cannot become a property later without breaking compiled callers.
     /// </remarks>
     [Test]
@@ -762,7 +764,7 @@ public class TypeShapeTest
     }
 
     /// <summary>
-    /// Every option of the three generator options has a plain setter, not an <c>init</c>
+    /// Every option of the option structs has a plain setter, not an <c>init</c>
     /// accessor.
     /// </summary>
     /// <remarks>
@@ -773,8 +775,8 @@ public class TypeShapeTest
     /// option is a property with a setter: one that only computes a value has none to check.
     /// </remarks>
     [Test]
-    [MethodDataSource(nameof(GeneratorOptionStructs))]
-    public async Task GeneratorOptions_EveryOptionHasAPlainSetter(Type type)
+    [MethodDataSource(nameof(OptionStructs))]
+    public async Task OptionStructs_EveryOptionHasAPlainSetter(Type type)
     {
         var options = type.GetProperties(Declared).Where(p => p.SetMethod is not null).ToArray();
         await Assert.That(options).IsNotEmpty().Because($"{type.Name} has options, so a sweep that finds none is broken");
@@ -790,16 +792,16 @@ public class TypeShapeTest
     }
 
     /// <summary>
-    /// Every option of the three generator options has a public getter.
+    /// Every option of the option structs has a public getter.
     /// </summary>
     /// <remarks>
     /// The tests see the library's internals, so a getter made <c>internal</c> would still
     /// compile in every test that reads it. An option is a property with a setter, as in
-    /// <see cref="GeneratorOptions_EveryOptionHasAPlainSetter"/>.
+    /// <see cref="OptionStructs_EveryOptionHasAPlainSetter"/>.
     /// </remarks>
     [Test]
-    [MethodDataSource(nameof(GeneratorOptionStructs))]
-    public async Task GeneratorOptions_EveryOptionHasAPublicGetter(Type type)
+    [MethodDataSource(nameof(OptionStructs))]
+    public async Task OptionStructs_EveryOptionHasAPublicGetter(Type type)
     {
         var options = type.GetProperties(Declared).Where(p => p.SetMethod is not null).ToArray();
         await Assert.That(options).IsNotEmpty().Because($"{type.Name} has options, so a sweep that finds none is broken");
@@ -812,7 +814,7 @@ public class TypeShapeTest
     }
 
     /// <summary>
-    /// Each of the three generator options implements <see cref="IEquatable{T}"/> of itself,
+    /// Each of the option structs implements <see cref="IEquatable{T}"/> of itself,
     /// declares a <c>ToString</c> that names every option, and has <c>==</c>, which
     /// <c>record</c> gives a struct.
     /// </summary>
@@ -821,8 +823,8 @@ public class TypeShapeTest
     /// hold the <c>record</c> on the three declarations.
     /// </remarks>
     [Test]
-    [MethodDataSource(nameof(GeneratorOptionStructs))]
-    public async Task GeneratorOptions_CompareAndPrintByValue(Type type)
+    [MethodDataSource(nameof(OptionStructs))]
+    public async Task OptionStructs_CompareAndPrintByValue(Type type)
     {
         await Assert.That(typeof(IEquatable<>).MakeGenericType(type).IsAssignableFrom(type)).IsTrue()
             .Because($"{type.Name} must implement IEquatable<{type.Name}>");
@@ -841,7 +843,7 @@ public class TypeShapeTest
     }
 
     /// <summary>
-    /// The three generator options have no public constructor with parameters, and no public
+    /// The option structs have no public constructor with parameters, and no public
     /// static method with parameters that returns the struct.
     /// </summary>
     /// <remarks>
@@ -855,8 +857,8 @@ public class TypeShapeTest
     /// an <c>out</c> parameter, or one declared on another type.
     /// </remarks>
     [Test]
-    [MethodDataSource(nameof(GeneratorOptionStructs))]
-    public async Task GeneratorOptions_HaveNoConstructorOrFactoryThatListsTheOptions(Type type)
+    [MethodDataSource(nameof(OptionStructs))]
+    public async Task OptionStructs_HaveNoConstructorOrFactoryThatListsTheOptions(Type type)
     {
         await Assert.That(type.GetConstructors().Where(c => c.GetParameters().Length > 0)).IsEmpty()
             .Because($"{type.Name} is configured through its setters, and a constructor would have to change with every new option");
@@ -869,7 +871,7 @@ public class TypeShapeTest
     }
 
     /// <summary>
-    /// On each of the three generator options, <c>Default</c> is a public static property
+    /// On each of the option structs, <c>Default</c> is a public static property
     /// with no setter that returns the struct, no field but a constant is public or static,
     /// and no static property has a setter.
     /// </summary>
@@ -885,8 +887,8 @@ public class TypeShapeTest
     /// rule reads the struct's own members: it does not see a value kept in another type.
     /// </remarks>
     [Test]
-    [MethodDataSource(nameof(GeneratorOptionStructs))]
-    public async Task GeneratorOptions_ExposeNoFieldAndDefaultIsAValue(Type type)
+    [MethodDataSource(nameof(OptionStructs))]
+    public async Task OptionStructs_ExposeNoFieldAndDefaultIsAValue(Type type)
     {
         const BindingFlags declared = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
@@ -911,11 +913,11 @@ public class TypeShapeTest
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The generators take their options by <c>in</c>. The compiler copies a struct before
+    /// The generators and the image writer take their options by <c>in</c>. The compiler copies a struct before
     /// it calls a member that is not <c>readonly</c> through such a reference, so one getter
     /// without the modifier costs a copy in every method that reads it, and takes
     /// <c>readonly</c> off the generated <c>ToString</c> and <c>PrintMembers</c> with it.
-    /// A <c>readonly struct</c> cannot make that mistake, which is what these three gave up
+    /// A <c>readonly struct</c> cannot make that mistake, which is what these structs gave up
     /// to be settable.
     /// </para>
     /// <para>
@@ -925,7 +927,7 @@ public class TypeShapeTest
     /// struct can call such a member through <c>in</c>, and the write then lands on a copy.
     /// The analyzer in turn reports a setter that could be <c>readonly</c>, which this rule
     /// leaves alone. This rule also holds for a build that did not run the analyzer, and for
-    /// both assemblies: <see cref="GeneratorOptions_AreTheOnlyStructsACallerAssignsTo"/>
+    /// both assemblies: <see cref="OptionStructs_AreTheOnlyStructsACallerAssignsTo"/>
     /// says which structs the sweep finds.
     /// </para>
     /// </remarks>

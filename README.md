@@ -52,7 +52,7 @@ See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these 
 
 ## Overview
 
-FeatherQR is a modern, high-performance QR code library. It allocates memory only for the actual QR code data, with zero additional allocations during processing, and renders through SkiaSharp when you want images.
+FeatherQR is a modern, high-performance QR code library. It allocates memory only for the actual QR code data, with zero additional allocations during processing. It writes plain SVG, PNG, raw pixels and terminal text itself, and renders styled images through SkiaSharp.
 
 - **Simple API**: One-liner QR code generation with sensible defaults
 - **High Performance**: Optimal speed and minimum memory allocation
@@ -98,15 +98,15 @@ There are 4 NuGet packages related to FeatherQR.
 
 | Package | What |
 |---|---|
-| [FeatherQR](https://www.nuget.org/packages/FeatherQR) | Generates and decodes module matrices with zero dependencies. Whole Standard QR, Micro QR, and rMQR support. |
+| [FeatherQR](https://www.nuget.org/packages/FeatherQR) | Generates and decodes module matrices, and writes SVG, PNG, raw pixels and terminal text, with zero dependencies. Whole Standard QR, Micro QR, and rMQR support. |
 | [FeatherQR.Gs1](https://www.nuget.org/packages/FeatherQR.Gs1) | Writing a GS1 QR Code, GS1 Digital Link URI support. Standard QR and rMQR only. |
-| [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | Renders and decodes images with SkiaSharp |
+| [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | Renders styled images (shapes, gradients, icons, JPEG and WebP) and decodes image files with SkiaSharp |
 | [SkiaSharp.QrCode](https://www.nuget.org/packages/SkiaSharp.QrCode) | Empty package that depends on `FeatherQR.SkiaSharp`, for upgrading existing projects |
 
 ```bash
 dotnet add package FeatherQR
 
-# If you need image rendering with SkiaSharp
+# If you need styled images or image file decoding with SkiaSharp
 dotnet add package FeatherQR.SkiaSharp
 
 # If you need GS1 support
@@ -123,7 +123,16 @@ The playground runs the actual library compiled to WebAssembly (GitHub Pages, fu
 
 ### Simplest Example
 
-Single line QR code generation:
+Single line QR code generation, You can output PNG with the core package alone, see [Image Writing (Simple)](#image-writing-simple).
+
+```csharp
+using FeatherQR;
+
+var qr = QRCodeGenerator.Create("Hello", QREccLevel.M);
+File.WriteAllBytes("qrcode.png", SymbolImageWriter.GetPngBytes(qr));
+```
+
+If you want to use SkiaSharp for styled images or more advanced features, use `FeatherQR.SkiaSharp`.
 
 ```csharp
 using FeatherQR.SkiaSharp;
@@ -194,22 +203,93 @@ var qrData = QRCodeGenerator.Create("https://example.com", QREccLevel.M, new QRC
 
 ## API Overview
 
-Start with an image builder for most applications. All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers.
+Start with an image builder for most applications. All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers. Every method that writes an image to a `Stream` has an `...Async` twin, and the decoders read an encoded image from a `Stream` asynchronously or not. See [Async and stream I/O](#async-and-stream-io).
 
-| Task | Standard QR | Micro QR | rMQR |
+`FeatherQR` generates and decodes the symbols, and writes plain images, with no styling beyond dark and light modules.
+
+| What | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
-| Create PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
+| Write SVG, PNG (1-bit), raw pixels (`Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`), or terminal text | `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
+| Decode a matrix or grayscale pixels | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
+| Decode every symbol of grayscale pixels, whatever its symbology | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
+
+`FeatherQR.SkiaSharp` adds styled images, icons and more formats, drawing on an `SKCanvas`, and decoding of `SKBitmap`s and image files.
+
+| What | Standard QR | Micro QR | rMQR |
+| --- | --- | --- | --- |
+| Create styled PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
 | Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
-| Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
-| Decode every symbol of an image, whatever its symbology | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
+| Decode an `SKBitmap` or an image file | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
+| Decode every symbol of an `SKBitmap` or an image file, whatever its symbology | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
 
-Every method that writes an image to a `Stream` has an `...Async` twin, and the decoders read an encoded image from a `Stream`, asynchronously or not. See [Async and stream I/O](#async-and-stream-io).
+### Image Writing (Simple)
 
+`SymbolImageWriter` writes `QRCodeData`, `MicroQRCodeData`, and `RmQRCodeData` as SVG, PNG, raw pixels, or text for a terminal, using only the `FeatherQR` package. Every module is a sharp square of `ModulePixelSize` pixels (8 by default), the quiet zone is the one the symbol was made with, and the same symbol gives the same bytes on every target framework. See [samples/ConsoleAppCore](samples/ConsoleAppCore) for examples.
 
-### Image Builders (Recommended)
+```csharp
+using FeatherQR;
 
-Image builders provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Every symbology supports custom finder patterns, icons are Standard QR only. See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
+var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
+
+// The writer keeps the quiet zone of the symbol it is writing.
+File.WriteAllText("qrcode.svg", SymbolImageWriter.GetSvgString(qr));
+File.WriteAllBytes("qrcode.png", SymbolImageWriter.GetPngBytes(qr));
+Console.OutputEncoding = System.Text.Encoding.UTF8;                  // a CJK code page prints some half blocks as ?
+Console.Write(SymbolImageWriter.GetTerminalText(qr));                // dark modules drawn, for a light terminal
+Console.Write(SymbolImageWriter.GetTerminalText(qr, invert: true));  // light modules drawn, for a dark terminal
+```
+
+Colors and the module size go in `SymbolImageOptions`. A color has an optional alpha. The dark color is painted over the light one, and a fully transparent light color leaves the background out.
+
+```csharp
+var options = new SymbolImageOptions
+{
+    ModulePixelSize = 10,
+    DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A),
+    LightColor = new SymbolColor(0, 0, 0, 0), // transparent background
+};
+var svg = SymbolImageWriter.GetSvgString(qr, options);
+var png = SymbolImageWriter.GetPngBytes(qr, options);
+
+// Create a symbol with no quiet zone.
+var noMargin = new QRCodeData(qr.GetRawData(), quietZoneSize: 0);
+var svgNoMargin = SymbolImageWriter.GetSvgString(noMargin);
+```
+
+`WriteSvg` and `WritePng` write into an `IBufferWriter<byte>` without allocating once warm. `TryWritePixels` writes raw pixels into your buffer, as `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x`, with the rows packed. A `Gray8` buffer goes straight into the decoders' `TryDecodeImage`.
+
+```csharp
+var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Bgra8888)];
+SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, out var width, out var height);
+```
+
+The writer does no I/O, so it has no async form. ASP.NET Core refuses synchronous writes to the response body, so return the bytes, or write into the response's PipeWriter and flush it asynchronously. At the default 8 pixels a module even a version 40 symbol takes well under a frame, so a UI app can call the writer on its thread and await only the file write.
+
+```csharp
+app.MapGet("/qr.png", (string text) =>
+    Results.File(SymbolImageWriter.GetPngBytes(QRCodeGenerator.Create(text, QREccLevel.M)), "image/png"));
+
+app.MapGet("/qr.svg", (string text) =>
+    Results.Text(SymbolImageWriter.GetSvgString(QRCodeGenerator.Create(text, QREccLevel.M)), "image/svg+xml"));
+
+// The PipeWriter takes WritePng as it is, with no copy. The token reaches only the flush
+app.MapGet("/qr-pipe.png", async (string text, HttpResponse response, CancellationToken cancellationToken) =>
+{
+    response.ContentType = "image/png";
+    SymbolImageWriter.WritePng(QRCodeGenerator.Create(text, QREccLevel.M), response.BodyWriter);
+    await response.BodyWriter.FlushAsync(cancellationToken);
+});
+
+// A UI app awaits only the file write
+await File.WriteAllBytesAsync("qrcode.png", SymbolImageWriter.GetPngBytes(qr), cancellationToken);
+```
+
+PNG output is 1-bit: greyscale for black on white, and a two-color palette otherwise. For module shapes, gradients, icons, JPEG, WebP, or an image of a set size in pixels, use an image builder. [API Overview](#api-overview) lists what each package writes.
+
+### Image Builders
+
+Image builders render through SkiaSharp and provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Every symbology supports custom finder patterns, icons are Standard QR only. See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
 
 ```csharp
 var pngBytes = QRCodeImageBuilder.GetPngBytes("content");
@@ -235,7 +315,7 @@ SymbolRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 
 ### Generators (Low-Level)
 
-Generators create module matrices, no rendering. Use them for custom output such as ASCII art or LED displays, or as input to `SymbolRenderer`.
+Generators create module matrices. Use `SymbolImageWriter` for SVG, PNG, raw pixels, or terminal text.
 
 ```csharp
 using FeatherQR;
@@ -516,7 +596,7 @@ if (QRCodeDecoder.TryDecode(qrData, out var text))
 }
 ```
 
-`FeatherQR.SkiaSharp` adds decoding from an `SKBitmap`.
+`FeatherQR.SkiaSharp` adds overloads to the decoders that read an `SKBitmap`. They are C# 14 extension members, so on C# 13 and older call them on `QRCodeDecoderExtensions`, `MicroQRCodeDecoderExtensions`, `RmQRCodeDecoderExtensions` and `SymbolDecoderExtensions` instead.
 
 ```csharp
 using SkiaSharp;
@@ -525,7 +605,7 @@ using FeatherQR.SkiaSharp;
 
 // Decode from an SKBitmap
 using var bitmap = SKBitmap.Decode("qr.png");
-if (QRCodeImageDecoder.TryDecode(bitmap, out text, out var info))
+if (QRCodeDecoder.TryDecode(bitmap, out text, out var info))
 {
     Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
 
@@ -560,17 +640,17 @@ using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 using var sheet = SKBitmap.Decode("sheet.jpg");
-foreach (var result in QRCodeImageDecoder.DecodeSymbols(sheet))
+foreach (var result in QRCodeDecoder.DecodeSymbols(sheet))
 {
     var corner = result.Info.Corners.TopLeft;
     Console.WriteLine($"{result.Text} at ({corner.X}, {corner.Y})");
 }
 ```
 
-To read the codes of every symbology at once, such as an rMQR code beside a QR code on one label, call `DecodeSymbols` on `SymbolImageDecoder` with an `SKBitmap` or a stream, or `SymbolDecoder.DecodeImageSymbols` on luminance. Each result says which symbology it is in `Symbology`, gives its `Text` and `Corners`, and holds that symbology's own result in `StandardQR`, `MicroQR` or `RmQR`, the other two left default. The Standard QR codes are read first, and then every other finder of the image is searched for a Micro QR or an rMQR symbol, so this takes longer than the read for one symbology, the longest on an image whose finders read as nothing, such as a photograph of a QR code that does not read. When you know the symbology of your images, call its decoder.
+To read the codes of every symbology at once, such as an rMQR code beside a QR code on one label, call `SymbolDecoder.DecodeSymbols` with an `SKBitmap` or a stream, or `SymbolDecoder.DecodeImageSymbols` on luminance. Each result says which symbology it is in `Symbology`, gives its `Text` and `Corners`, and holds that symbology's own result in `StandardQR`, `MicroQR` or `RmQR`, the other two left default. The Standard QR codes are read first, and then every other finder of the image is searched for a Micro QR or an rMQR symbol, so this takes longer than the read for one symbology, the longest on an image whose finders read as nothing, such as a photograph of a QR code that does not read. When you know the symbology of your images, call its decoder.
 
 ```csharp
-foreach (var symbol in SymbolImageDecoder.DecodeSymbols(sheet))
+foreach (var symbol in SymbolDecoder.DecodeSymbols(sheet))
 {
     Console.WriteLine($"{symbol.Symbology}: {symbol.Text}");
 }
@@ -595,7 +675,7 @@ if (QRCodeDecoder.TryDecodeBytes(qrData, out var bytes, out var info))
 
 - `eciAssignment` writes an ECI header that names the encoding of the bytes, from 0 to 999999, such as 899 for binary data or 20 for Shift JIS. Without it no header is written, which is what a binary payload usually carries.
 - `RmQRCodeGenerator` has the same overloads, and `MicroQRCodeGenerator` has them without `eciAssignment`, since Micro QR has no ECI. `CreateStructuredAppend` splits bytes across a set, and the parts read as bytes and joined in index order are the original bytes.
-- `TryDecodeBytes` on a data type or a module matrix, `TryDecodeImageBytes` on luminance, and `TryDecodeBytes` on an `SKBitmap` (`QRCodeImageDecoder` and its Micro QR and rMQR twins) return Byte segments as written, digits and letters as ASCII, and Kanji as Shift JIS pairs. `info.EciAssignment` is the ECI the bytes are declared under, or `null`.
+- `TryDecodeBytes` on a data type or a module matrix, `TryDecodeImageBytes` on luminance, and `TryDecodeBytes` on an `SKBitmap` with `FeatherQR.SkiaSharp` return Byte segments as written, digits and letters as ASCII, and Kanji as Shift JIS pairs. `info.EciAssignment` is the ECI the bytes are declared under, or `null`.
 - The text calls report `EciAssignment` too, also when they fail with `UnsupportedContent` because the symbol declares an encoding FeatherQR does not read as text. Read the symbol's bytes then and convert them with the `Encoding` you need.
 - The options that only text uses, `EciMode`, `Utf8Bom`, `AllowKanji` and `Fnc1`, throw with bytes.
 
@@ -604,9 +684,7 @@ if (QRCodeDecoder.TryDecodeBytes(qrData, out var bytes, out var info))
 
 ### Async and stream I/O
 
-Every method that writes an image to a `Stream` has an `...Async` twin, `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder. The decoders read an encoded image, a PNG, JPEG or WebP among others, from a `Stream`: `DecodeAsync` on the three and `DecodeSymbolsAsync` for every code of an image, and `Decode` and `DecodeSymbols` where the thread may wait.
-
-The calls pair up as below. Micro QR and rMQR write and read the same way, through their own builders and `MicroQRCodeDecoder` and `RmQRCodeDecoder`.
+Every method that writes an image to a `Stream` has an `...Async` twin, `SaveToAsync` and `SaveToSvgAsync` on the builders, and `SavePngAsync` and `SaveSvgAsync` on each builder.
 
 | What | Synchronous | Asynchronous |
 |---|---|---|
@@ -617,8 +695,6 @@ The calls pair up as below. Micro QR and rMQR write and read the same way, throu
 | Read a stream under limits of your own | `Decode(stream, limits)`, `DecodeSymbols(stream, limits)` | `DecodeAsync(stream, limits, ct)`, `DecodeSymbolsAsync(stream, limits, ct)` |
 | Write to memory or a buffer writer | `ToByteArray()`, `ToSvgString()`, `SaveTo(IBufferWriter<byte>)`, `GetPngBytes(content)` and the other helpers | None, since there is no I/O to wait on |
 | Read from memory | `TryDecode(bitmap, out text)`, `TryDecodeImage(luminance, width, height, out text, out info)`, `DecodeSymbols(bitmap)`, `DecodeImageSymbols(luminance, width, height)` | None, since there is no I/O to wait on |
-
-With C# 14 the stream reads are reachable as `QRCodeDecoder.DecodeAsync(stream)`, as above. On older language versions, such as the C# 7.3 a .NET Framework project uses by default, call them on `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`.
 
 Sample usage of asynchronous stream I/O.
 
@@ -918,7 +994,7 @@ app.MapGet("/qr.svg", (string url) =>
 });
 ```
 
-To read an uploaded image, see [Async and stream I/O](#async-and-stream-io). Span-based APIs are supported for efficient memory usage, allowing you to work with slices of memory without additional allocations.
+For the core's `SymbolImageWriter`, return its bytes or write into the response's PipeWriter, see [Image Writing (Simple)](#image-writing-simple). To read an uploaded image, see [Async and stream I/O](#async-and-stream-io). Span-based APIs are supported for efficient memory usage, allowing you to work with slices of memory without additional allocations.
 
 ### Does it support Blazor WebAssembly?
 
@@ -943,10 +1019,6 @@ FeatherQR writes/reads ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JI
 | Supported | Alphanumeric | ISO-8859-1 |
 | Supported | Byte | UTF-8 |
 | Supported (written with `AllowKanji`) | Kanji | Shift JIS (JIS X 0208) |
-
-### Does SVG output require SkiaSharp.Svg or other packages?
-
-No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional dependencies. Note that FeatherQR outputs SVG only, it does not read or render existing SVG files.
 
 ### Does it read QR codes from images?
 

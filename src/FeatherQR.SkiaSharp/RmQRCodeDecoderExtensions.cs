@@ -7,10 +7,10 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Decodes rMQR Codes from SkiaSharp bitmaps, and from encoded images read from a stream.
-/// Extends <see cref="RmQRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>RmQRCodeDecoder.TryDecode(bitmap, ...)</c> and <c>RmQRCodeDecoder.DecodeAsync(stream)</c>. On older language versions call them on this class.
+/// Adds overloads to <see cref="RmQRCodeDecoder"/> that decode rMQR Codes from SkiaSharp bitmaps, and from encoded images read from a stream.
+/// With C# 14 call them on <see cref="RmQRCodeDecoder"/>, as <c>RmQRCodeDecoder.TryDecode(bitmap, ...)</c> and <c>RmQRCodeDecoder.DecodeAsync(stream)</c>. On C# 13 and older call them on this class.
 /// </summary>
-public static class RmQRCodeImageDecoder
+public static class RmQRCodeDecoderExtensions
 {
     extension(RmQRCodeDecoder)
     {

@@ -1059,9 +1059,9 @@ public class SymbolRendererAreaFitTest
 
     private static bool TryDecode(string symbology, SKBitmap bitmap) => symbology switch
     {
-        "qr" => QRCodeImageDecoder.TryDecode(bitmap, out var text) && text == Content,
-        "microqr" => MicroQRCodeImageDecoder.TryDecode(bitmap, out var text, out _) && text == Content,
-        "rmqr" => RmQRCodeImageDecoder.TryDecode(bitmap, out var text, out _) && text == Content,
+        "qr" => QRCodeDecoderExtensions.TryDecode(bitmap, out var text) && text == Content,
+        "microqr" => MicroQRCodeDecoderExtensions.TryDecode(bitmap, out var text, out _) && text == Content,
+        "rmqr" => RmQRCodeDecoderExtensions.TryDecode(bitmap, out var text, out _) && text == Content,
         _ => throw new ArgumentOutOfRangeException(nameof(symbology)),
     };
 

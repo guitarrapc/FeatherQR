@@ -33,6 +33,11 @@ internal static partial class TierTiming
     public static bool TryRun(string[] args, out int exitCode)
     {
         exitCode = 0;
+        if (Array.IndexOf(args, "--writer-digest") >= 0)
+        {
+            WriterDigest();
+            return true;
+        }
         if (Array.IndexOf(args, "--time") < 0)
             return false;
 
@@ -382,6 +387,7 @@ internal static partial class TierTiming
         .. Enum.GetValues<RmQRVersion>().SelectMany(v => new Shape[] { new($"probe/rmqr-extract-{v}", () => RmQRExtract(v, scalar: false)), new($"probe/rmqr-extract-{v}-scalar", () => RmQRExtract(v, scalar: true)) }),
         .. EncodeStageShapes(),
         .. WriterShapes(),
+        .. ImageWriterShapes(),
     ];
 
     private static QRCodeData Large() => QRCodeGenerator.Create(DeterministicText(2900), QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(40) });

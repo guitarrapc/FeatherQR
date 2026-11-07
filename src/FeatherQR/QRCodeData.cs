@@ -11,6 +11,7 @@ namespace FeatherQR;
 /// <remarks>
 /// The matrix is bit-packed and sized by version, from 21 × 21 at version 1 to 177 × 177 at version 40, plus the quiet zone.
 /// Serialization writes a "QRR" header, the size, then the packed modules.
+/// <see cref="SymbolImageWriter"/> writes it as SVG, PNG, raw pixels or text for a terminal, with no other package.
 /// </remarks>
 public sealed class QRCodeData
 {
@@ -358,14 +359,17 @@ public sealed class QRCodeData
     /// </summary>
     /// <param name="writer">Where to write the bytes.</param>
     /// <returns>The number of bytes written.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when <paramref name="writer"/> hands out a span shorter than <see cref="GetRawDataSize"/>, against the <see cref="IBufferWriter{T}"/> contract.</exception>
     /// <remarks>
     /// The quiet zone is not written, so pick its width again when restoring.
     /// </remarks>
     public int GetRawData(IBufferWriter<byte> writer)
     {
+        if (writer is null)
+            throw new ArgumentNullException(nameof(writer));
         var totalSize = GetRawDataSize();
-        var buffer = writer.GetSpan(totalSize);
-        WriteRawData(buffer);
+        WriteRawData(BufferWriterSpan.Get(writer, totalSize));
         writer.Advance(totalSize);
         return totalSize;
     }
@@ -476,6 +480,9 @@ public sealed class QRCodeData
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal int GetCoreSize() => _baseSize;
+
+    /// <summary>The core modules as stored: MSB first, row after row, a row as many bits as the core is wide.</summary>
+    internal ReadOnlySpan<byte> CoreBits => _bits;
 
     /// <summary>
     /// Gets the module state at the specified core position (excluding quiet zone), skipping the quiet-zone coordinate translation of the public indexer.

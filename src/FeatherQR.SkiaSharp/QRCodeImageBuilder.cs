@@ -9,9 +9,11 @@ namespace FeatherQR.SkiaSharp;
 /// <remarks>
 /// The static methods cover the common cases in one line, such as <see cref="GetPngBytes(string, QREccLevel, int)"/>.
 /// For anything else, construct the builder and chain the options, from sizing and colors down to <see cref="WithIcon(IconData?)"/> and <c>WithFinderPatternShape</c>.
+/// For a plain image with no SkiaSharp, <see cref="SymbolImageWriter"/> in the core writes SVG, PNG, raw pixels and terminal text at a whole number of pixels a module.
 /// </remarks>
 /// <seealso cref="QRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
+/// <seealso cref="SymbolImageWriter"/>
 public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuilder>
 {
     private readonly string? _content;

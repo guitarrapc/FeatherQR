@@ -595,19 +595,19 @@ public class ImageBuilderCanvasFitTest
             {
                 case "microqr":
                     {
-                        var ok = MicroQRCodeImageDecoder.TryDecode(bitmap, out var text, out var info);
+                        var ok = MicroQRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info);
                         status = info.Status.ToString();
                         return ok && text == Content;
                     }
                 case "rmqr":
                     {
-                        var ok = RmQRCodeImageDecoder.TryDecode(bitmap, out var text, out var info);
+                        var ok = RmQRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info);
                         status = info.Status.ToString();
                         return ok && text == Content;
                     }
                 default:
                     {
-                        var ok = QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info);
+                        var ok = QRCodeDecoderExtensions.TryDecode(bitmap, out var text, out var info);
                         status = info.Status.ToString();
                         return ok && text == Content;
                     }

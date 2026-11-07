@@ -12,7 +12,7 @@
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>FeatherQR</PackageId>
-    <Description>QR Code, Micro QR and rMQR encoder and decoder for .NET. Zero dependencies, zero allocations on the hot paths, trim and NativeAOT safe. Rendering lives in FeatherQR.SkiaSharp.</Description>
+    <Description>QR Code, Micro QR and rMQR encoder, decoder and image writer for .NET, with SVG, PNG, raw pixel and terminal text output. Zero dependencies, zero allocations on the hot paths, trim and NativeAOT safe. Styled rendering lives in FeatherQR.SkiaSharp.</Description>
 
     <!-- API compatibility. Ensures that the package is compatible with the last released version. -->
     <EnablePackageValidation>true</EnablePackageValidation>

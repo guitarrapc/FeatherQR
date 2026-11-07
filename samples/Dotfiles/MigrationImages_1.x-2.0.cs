@@ -172,7 +172,7 @@ static void Save(SKBitmap bitmap, string path)
 // ZXing.Net runs with the settings the test suite's cross-checks use, zxing-cpp with its defaults.
 static void Report(string path, SKBitmap bitmap, bool featherQR, bool zxingNet, bool zxingCpp)
 {
-    var feather = QRCodeImageDecoder.TryDecode(bitmap, out var text, out _) && text == Content;
+    var feather = QRCodeDecoder.TryDecode(bitmap, out var text, out _) && text == Content;
 
     var netReader = new ZXing.SkiaSharp.BarcodeReader
     {

@@ -258,8 +258,8 @@ public class SingleFinderDecodeImageSymbolsTest
         cancellation.Cancel();
 
         if (symbology == TestSymbology.MicroQR)
-            Assert.Throws<OperationCanceledException>(() => MicroQRCodeImageDecoder.DecodeEverySymbol(bitmap, cancellation.Token));
+            Assert.Throws<OperationCanceledException>(() => MicroQRCodeDecoderExtensions.DecodeEverySymbol(bitmap, cancellation.Token));
         else
-            Assert.Throws<OperationCanceledException>(() => RmQRCodeImageDecoder.DecodeEverySymbol(bitmap, cancellation.Token));
+            Assert.Throws<OperationCanceledException>(() => RmQRCodeDecoderExtensions.DecodeEverySymbol(bitmap, cancellation.Token));
     }
 }

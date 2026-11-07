@@ -91,6 +91,22 @@ namespace FeatherQR.SkiaSharp
         public override void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor);
     }
 
+    public static class MicroQRCodeDecoderExtensions
+    {
+        public static MicroQRCodeDecodeResult Decode(Stream image);
+        public static MicroQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
+        public static MicroQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
+        public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image);
+        public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
+        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+        public static Task<MicroQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<MicroQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+        public static bool TryDecode(SKBitmap bitmap, out string text);
+        public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out MicroQRCodeDecodeInfo info);
+    }
+
     public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCodeImageBuilder>
     {
         public MicroQRCodeImageBuilder(MicroQRCodeData microQrCodeData);
@@ -124,27 +140,27 @@ namespace FeatherQR.SkiaSharp
         public static void WriteSvg(string content, IBufferWriter<byte> writer, MicroQREccLevel eccLevel = 2, int size = 512);
     }
 
-    public static class MicroQRCodeImageDecoder
-    {
-        public static MicroQRCodeDecodeResult Decode(Stream image);
-        public static MicroQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
-        public static MicroQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
-        public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image);
-        public static MicroQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
-        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
-        public static Task<MicroQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
-        public static Task<MicroQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
-        public static Task<MicroQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
-        public static bool TryDecode(SKBitmap bitmap, out string text);
-        public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info);
-        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out MicroQRCodeDecodeInfo info);
-    }
-
     public abstract class ModuleShape
     {
         protected ModuleShape();
         public abstract bool RequiresAntialiasing { get; }
         public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
+    }
+
+    public static class QRCodeDecoderExtensions
+    {
+        public static QRCodeDecodeResult Decode(Stream image);
+        public static QRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
+        public static QRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
+        public static QRCodeDecodeResult[] DecodeSymbols(Stream image);
+        public static QRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
+        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+        public static bool TryDecode(SKBitmap bitmap, out string text);
+        public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out QRCodeDecodeInfo info);
     }
 
     public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuilder>
@@ -183,22 +199,6 @@ namespace FeatherQR.SkiaSharp
         public static void WriteSvg(string content, IBufferWriter<byte> writer, QREccLevel eccLevel = 1, int size = 512);
     }
 
-    public static class QRCodeImageDecoder
-    {
-        public static QRCodeDecodeResult Decode(Stream image);
-        public static QRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
-        public static QRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
-        public static QRCodeDecodeResult[] DecodeSymbols(Stream image);
-        public static QRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
-        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
-        public static Task<QRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
-        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
-        public static Task<QRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
-        public static bool TryDecode(SKBitmap bitmap, out string text);
-        public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info);
-        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out QRCodeDecodeInfo info);
-    }
-
     public sealed class RectangleFinderPatternShape : FinderPatternShape
     {
         public static readonly RectangleFinderPatternShape Default;
@@ -211,6 +211,22 @@ namespace FeatherQR.SkiaSharp
         public static readonly RectangleModuleShape Default;
         public override bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
+    }
+
+    public static class RmQRCodeDecoderExtensions
+    {
+        public static RmQRCodeDecodeResult Decode(Stream image);
+        public static RmQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
+        public static RmQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
+        public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image);
+        public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
+        public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+        public static Task<RmQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<RmQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+        public static bool TryDecode(SKBitmap bitmap, out string text);
+        public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
+        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out RmQRCodeDecodeInfo info);
     }
 
     public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
@@ -248,22 +264,6 @@ namespace FeatherQR.SkiaSharp
         public static void WriteSvg(string content, IBufferWriter<byte> writer, RmQREccLevel eccLevel = 0, int size = 512);
     }
 
-    public static class RmQRCodeImageDecoder
-    {
-        public static RmQRCodeDecodeResult Decode(Stream image);
-        public static RmQRCodeDecodeResult Decode(Stream image, ImageStreamReadLimits? limits);
-        public static RmQRCodeDecodeResult[] DecodeSymbols(SKBitmap bitmap);
-        public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image);
-        public static RmQRCodeDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
-        public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, CancellationToken cancellationToken = null);
-        public static Task<RmQRCodeDecodeResult> DecodeAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
-        public static Task<RmQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
-        public static Task<RmQRCodeDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
-        public static bool TryDecode(SKBitmap bitmap, out string text);
-        public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
-        public static bool TryDecodeBytes(SKBitmap bitmap, out byte[] bytes, out RmQRCodeDecodeInfo info);
-    }
-
     public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShape
     {
         public static readonly RoundedRectangleCircleFinderPatternShape Default;
@@ -298,6 +298,15 @@ namespace FeatherQR.SkiaSharp
         public static void Render(SKCanvas canvas, RmQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
     }
 
+    public static class SymbolDecoderExtensions
+    {
+        public static SymbolDecodeResult[] DecodeSymbols(SKBitmap bitmap);
+        public static SymbolDecodeResult[] DecodeSymbols(Stream image);
+        public static SymbolDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
+        public static Task<SymbolDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
+        public static Task<SymbolDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
+    }
+
     public abstract class SymbolImageBuilderBase<TSelf>
     {
         public SKBitmap ToBitmap();
@@ -321,15 +330,6 @@ namespace FeatherQR.SkiaSharp
         public void SaveTo(Stream output);
         public void SaveToSvg(IBufferWriter<byte> writer);
         public void SaveToSvg(Stream output);
-    }
-
-    public static class SymbolImageDecoder
-    {
-        public static SymbolDecodeResult[] DecodeSymbols(SKBitmap bitmap);
-        public static SymbolDecodeResult[] DecodeSymbols(Stream image);
-        public static SymbolDecodeResult[] DecodeSymbols(Stream image, ImageStreamReadLimits? limits);
-        public static Task<SymbolDecodeResult[]> DecodeSymbolsAsync(Stream image, CancellationToken cancellationToken = null);
-        public static Task<SymbolDecodeResult[]> DecodeSymbolsAsync(Stream image, ImageStreamReadLimits? limits, CancellationToken cancellationToken = null);
     }
 
     public static class SymbolRenderer
