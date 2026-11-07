@@ -131,20 +131,21 @@ public record struct SymbolImageOptions
     }
 
     /// <summary>
-    /// The side of each dark module's shape as a percentage of its cell, 1 to 100. Defaults to 100.
+    /// The side of each dark module's shape as a percentage of its cell, 50 to 100. Defaults to 100.
     /// </summary>
     /// <remarks>
     /// Below 100 the shape sits centred in its cell with the light colour around it. A module is read at its centre, so a gap costs
-    /// nothing to a reader, but the finder patterns keep their full cells whatever this is.
+    /// nothing to a reader, but the finder patterns keep their full cells whatever this is. Half the cell is the floor, as the image
+    /// builders' <c>WithModuleStyle</c> takes it.
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is outside 1 to 100.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is outside 50 to 100.</exception>
     public int ModuleScalePercent
     {
         readonly get => DefaultModuleScalePercent + _moduleScaleOffset;
         set
         {
-            if (value is < 1 or > 100)
-                throw new ArgumentOutOfRangeException(nameof(ModuleScalePercent), $"Module scale must be 1 to 100 percent, but was {value}");
+            if (value is < 50 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(ModuleScalePercent), $"Module scale must be 50 to 100 percent, but was {value}");
             _moduleScaleOffset = value - DefaultModuleScalePercent;
         }
     }

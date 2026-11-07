@@ -329,6 +329,73 @@ Image builders render through SkiaSharp and provide one-line methods and a fluen
 var pngBytes = QRCodeImageBuilder.GetPngBytes("content");
 ```
 
+### The same image from either package
+
+`SymbolImageWriter` and the image builders take the same choices in the same units, so code moves between the packages without converting values. Each pair below starts from `var qr = QRCodeGenerator.Create(url, QREccLevel.M);`, with `SymbolImageWriter` from `FeatherQR` first and the builder from `FeatherQR.SkiaSharp` second.
+
+A 512 × 512 PNG, the same pixels from both:
+
+```csharp
+var corePng = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { Width = 512, Height = 512 });
+var skiaPng = QRCodeImageBuilder.GetPngBytes(qr);  // 512 × 512 by default
+```
+
+Circle modules at 92 percent with circle finder patterns. `WithModuleStyle` and `WithFinderPatternStyle` take the core's enums in whole percents with the core's defaults, and `WithModuleShape` and `WithFinderPatternShape` stay for shapes you draw yourself:
+
+```csharp
+var coreSvg = SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions
+{
+    ModuleStyle = ModuleStyle.Circle,
+    ModuleScalePercent = 92,
+    FinderPatternStyle = FinderPatternStyle.Circle,
+});
+var skiaSvg = new QRCodeImageBuilder(qr)
+    .WithModuleStyle(ModuleStyle.Circle, scalePercent: 92)
+    .WithFinderPatternStyle(FinderPatternStyle.Circle)
+    .ToSvgString();
+```
+
+Colors, here a transparent background:
+
+```csharp
+var coreOptions = new SymbolImageOptions { DarkColor = new SymbolColor(30, 58, 138), LightColor = new SymbolColor(255, 255, 255, 0) };
+var skiaBuilder = new QRCodeImageBuilder(qr).WithColors(new SKColor(30, 58, 138), SKColors.Transparent);
+```
+
+An icon. The core embeds it in the SVG and leaves the area light in the PNG and the pixels for you to draw on, and the builder draws it into the image:
+
+```csharp
+var qrH = QRCodeGenerator.Create(url, QREccLevel.H);
+var withIcon = new SymbolImageOptions { IconSizeModules = 7, IconImage = File.ReadAllBytes("logo.png") };
+var coreSvgWithLogo = SymbolImageWriter.GetSvgString(qrH, withIcon);
+var (iconX, iconY, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(qrH, withIcon);
+
+using var logo = SKBitmap.Decode("logo.png");
+var skiaPngWithLogo = new QRCodeImageBuilder(qrH).WithIcon(IconData.FromImageByModules(logo, 7)).ToByteArray();
+```
+
+Raw pixels:
+
+```csharp
+var buffer = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Rgba8888)];
+SymbolImageWriter.TryWritePixels(qr, buffer, PixelLayout.Rgba8888, out var width, out var height);
+
+using var bitmap = new QRCodeImageBuilder(qr).ToBitmap();
+```
+
+Reading an image. The core reads pixels you already have, and the builder package reads an image file:
+
+```csharp
+var luminance = new byte[width * height];
+LuminanceConverter.Convert(rgba, width, height, width * 4, PixelLayout.Rgba8888, premultipliedAlpha: false, luminance);
+QRCodeDecoder.TryDecodeImage(luminance, width, height, out string coreText, out _);
+
+using var photo = SKBitmap.Decode("photo.jpg");
+QRCodeDecoder.TryDecode(photo, out string skiaText);
+```
+
+The core needs no native library. Reach for the builders for JPEG or WebP, gradients, shapes of your own, an icon drawn into the image, or reading image files.
+
 ### SymbolRenderer (Advanced)
 
 `SymbolRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics. The symbol is centered in `area` with square modules, and the background fills the rest of `area`.

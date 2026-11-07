@@ -36,6 +36,9 @@ public class SymbolImageWriterStyleTest
     public async Task OutOfRangeValues_Throw()
     {
         await Assert.That(() => new SymbolImageOptions { ModuleScalePercent = 0 }).Throws<ArgumentOutOfRangeException>();
+        // Half the cell is the floor, as the image builders take it.
+        await Assert.That(() => new SymbolImageOptions { ModuleScalePercent = 49 }).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(new SymbolImageOptions { ModuleScalePercent = 50 }.ModuleScalePercent).IsEqualTo(50);
         await Assert.That(() => new SymbolImageOptions { ModuleScalePercent = 101 }).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => new SymbolImageOptions { CornerRadiusPercent = -1 }).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => new SymbolImageOptions { CornerRadiusPercent = 101 }).Throws<ArgumentOutOfRangeException>();
