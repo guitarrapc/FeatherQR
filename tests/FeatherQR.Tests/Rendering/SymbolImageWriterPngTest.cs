@@ -795,5 +795,8 @@ public class SymbolImageWriterPngTest
         public ReadOnlySpan<byte> CoreBits => _bits;
         public bool GetCoreModule(int coreRow, int coreCol) => grid[coreRow, coreCol];
         public bool IsFinderPattern(int coreRow, int coreCol) => false;
+        public int FinderPatternCount => 0;
+        public void GetFinderPatternOrigin(int index, out int coreRow, out int coreCol) => throw new InvalidOperationException("a synthetic view has no finder patterns");
+        public bool SupportsIcon => false;
     }
 }

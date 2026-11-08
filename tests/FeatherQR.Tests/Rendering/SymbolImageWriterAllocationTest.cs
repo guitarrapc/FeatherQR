@@ -38,6 +38,17 @@ public class SymbolImageWriterAllocationTest
         await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WriteSvg(qr, writer, options); })).IsEqualTo(0);
         await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WriteSvg(micro, writer); })).IsEqualTo(0);
         await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WriteSvg(rm, writer); })).IsEqualTo(0);
+
+        var fitted = new SymbolImageOptions { Width = 600, Height = 400 };
+        await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WriteSvg(qr, writer, fitted); })).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WriteSvg(rm, writer, fitted); })).IsEqualTo(0);
+
+        var shaped = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 90, FinderPatternStyle = FinderPatternStyle.RoundedSquareCircle };
+        await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WriteSvg(qr, writer, shaped); })).IsEqualTo(0);
+
+        // The icon's image goes in as base64 written straight into the document.
+        var icon = new SymbolImageOptions { IconSizeModules = 9, IconImage = new byte[3000] };
+        await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WriteSvg(qr, writer, icon); })).IsEqualTo(0);
     }
 
     [Test]
@@ -64,6 +75,25 @@ public class SymbolImageWriterAllocationTest
         await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WritePng(qr, writer, options); })).IsEqualTo(0);
         await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WritePng(micro, writer); })).IsEqualTo(0);
         await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WritePng(rm, writer, options); })).IsEqualTo(0);
+
+        var fitted = new SymbolImageOptions { Width = 600, Height = 400 };
+        await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WritePng(qr, writer, fitted); })).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WritePng(rm, writer, fitted); })).IsEqualTo(0);
+
+        var shaped = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 90, FinderPatternStyle = FinderPatternStyle.RoundedSquareCircle };
+        await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WritePng(micro, writer, shaped); })).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => { writer.Rewind(); SymbolImageWriter.WritePng(rm, writer, shaped with { Width = 600, Height = 400 }); })).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task TryWritePixels_Styled_AllocatesNothing()
+    {
+        var qr = QRCodeGenerator.Create("allocation", QREccLevel.H, new QRCodeGeneratorOptions { Version = 10 });
+        var shaped = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle, IconSizeModules = 9 };
+        var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Rgba8888, shaped)];
+
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Rgba8888, out _, out _, shaped))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Gray8, out _, out _, shaped with { Width = 500, Height = 400 }))).IsEqualTo(0);
     }
 
     [Test]

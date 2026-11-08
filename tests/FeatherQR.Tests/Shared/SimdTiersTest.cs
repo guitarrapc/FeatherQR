@@ -18,9 +18,9 @@ namespace FeatherQR.Tests;
 public class SimdTiersTest
 {
     /// <summary>
-    /// The files whose flag reads are each kernel's dispatch, paths under src/FeatherQR/Internals.
-    /// A kernel added to <see cref="SimdTiers.Report"/> needs its files here. Two kernels that dispatch in one file can each name their
-    /// dispatch method (<c>file#Method</c>), so a read there belongs to that kernel alone.
+    /// The files whose flag reads are each kernel's dispatch, paths under src/FeatherQR/Internals, or <c>../</c> for a public kernel at
+    /// the package root. A kernel added to <see cref="SimdTiers.Report"/> needs its files here. Two kernels that dispatch in one file can
+    /// each name their dispatch method (<c>file#Method</c>), so a read there belongs to that kernel alone.
     /// </summary>
     private static readonly Dictionary<string, string[]> KernelFiles = new()
     {
@@ -31,7 +31,7 @@ public class SimdTiersTest
         ["ModeSegmenterCosts"] = ["ModeSegmenter.cs", "ModeSegmenter.Costs.X86.cs", "ModeSegmenter.Costs.Arm64.cs"],
         ["EccBinaryEncoder"] = ["BinaryEncoders/EccBinaryEncoder.cs", "BinaryEncoders/EccBinaryEncoder.X86.cs", "BinaryEncoders/EccBinaryEncoder.Wasm.cs"],
         ["EccBinaryDecoder"] = ["BinaryDecoders/EccBinaryDecoder.cs", "BinaryDecoders/EccBinaryDecoder.Arm64.cs", "BinaryDecoders/EccBinaryDecoder.Vector128.cs"],
-        ["LuminanceConverter"] = ["ImageDecoders/LuminanceConverter.cs", "ImageDecoders/LuminanceConverter.Simd.cs"],
+        ["LuminanceConverter"] = ["../LuminanceConverter.cs", "../LuminanceConverter.Simd.cs"],
         ["LuminanceInverter"] = ["ImageDecoders/LuminanceInverter.cs"],
         ["LuminanceHalver"] = ["ImageDecoders/LuminanceHalver.cs"],
         ["Binarizer"] = ["ImageDecoders/Binarizer.cs", "ImageDecoders/Binarizer.Vector128.cs"],

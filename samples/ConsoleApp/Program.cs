@@ -32,6 +32,9 @@ var iconInstaPath = Path.Combine(outputDir, "instarich-logo.png");
 
 var content = "https://github.com/guitarrapc/FeatherQR/blob/main/README.md";
 
+// The README shows patterns 4, 5, 6, 7, 13, 15, 24 and 25 at their pixel size, some three to a row, so they are all 248 px.
+// Pattern 28 has a row to itself and is 798 px wide.
+
 Directory.CreateDirectory(outputDir);
 
 // Static method (Simplest)
@@ -143,10 +146,10 @@ Console.WriteLine("""
     """);
 {
     var path = Path.Combine(outputDir, "pattern4_builder_colors.png");
-    using var stream = File.OpenWrite(path);
+    using var stream = File.Create(path);
 
     new QRCodeImageBuilder(content)
-        .WithSize(800, 800)
+        .WithSize(248, 248)
         .WithErrorCorrection(QREccLevel.H)
         .WithColors(
             codeColor: SKColor.Parse("000080"),       // Navy
@@ -168,14 +171,14 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern5_builder_shape.png");
 
     var qrBuilder = new QRCodeImageBuilder(content)
-        .WithSize(800, 800)
+        .WithSize(248, 248)
         .WithErrorCorrection(QREccLevel.H)
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
         .WithCodeColor(SKColors.DarkBlue);
 
     using var image = qrBuilder.ToImage();
     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-    using var stream = File.OpenWrite(path);
+    using var stream = File.Create(path);
     data.SaveTo(stream);
 
     Console.WriteLine($"  ✓ Saved to: {path}");
@@ -197,7 +200,7 @@ Console.WriteLine("""
         [0f, 0.5f, 1f]);
 
     var qrBuilder = new QRCodeImageBuilder(content)
-        .WithSize(800, 800)
+        .WithSize(248, 248)
         .WithErrorCorrection(QREccLevel.H)
         .WithGradient(gradient)
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f);
@@ -205,7 +208,7 @@ Console.WriteLine("""
     var bitmap = qrBuilder.ToBitmap();
     using (bitmap)
     using (var data = bitmap.Encode(SKEncodedImageFormat.Png, 100))
-    using (var stream = File.OpenWrite(path))
+    using (var stream = File.Create(path))
     {
         data.SaveTo(stream);
     }
@@ -218,7 +221,7 @@ Console.WriteLine();
 Console.WriteLine("""
     Pattern 7: Builder Pattern (Advanced - Icon Overlay)
       - Best for: QR codes with logo/icon in center
-      - API: IconData.FromImageByModules() + WithModulePixelSize() + WithIcon()
+      - API: IconData.FromImageByModules() + WithSize() + WithIcon()
     """);
 {
     var path = Path.Combine(outputDir, "pattern7_builder_icon.png");
@@ -228,7 +231,7 @@ Console.WriteLine("""
     var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 2);
 
     var qrBuilder = new QRCodeImageBuilder(content)
-        .WithModulePixelSize(12)
+        .WithSize(248, 248)
         .WithErrorCorrection(QREccLevel.H) // H recommended for icons
         .WithColors(codeColor: SKColors.DarkGreen, backgroundColor: SKColors.LightYellow)
         .WithIcon(icon);
@@ -441,10 +444,10 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern13_finderpattern_rounded_rectangle.png");
 
     var pngBytes = new QRCodeImageBuilder(content)
-        .WithSize(512, 512)
-        .WithFinderPatternShape(RectangleFinderPatternShape.Default)
+        .WithSize(248, 248)
+        .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
+        //.WithFinderPatternShape(RectangleFinderPatternShape.Default)
         //.WithFinderPatternShape(CircleFinderPatternShape.Default)
-        //.WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
         //.WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
         .ToByteArray();
 
@@ -503,16 +506,18 @@ Console.WriteLine("""
 {
     var path = Path.Combine(outputDir, "pattern15_instagram_frame.png");
 
-    // Create larger canvas for frame
+    // Lay the frame out on a 1200 px grid, then scale it to the image size
     var canvasSize = 1200;
     var qrSize = 900;
     var topPadding = 80;
     var sidePadding = (canvasSize - qrSize) / 2;
     var textY = topPadding + qrSize + 50;
+    var imageSize = 248;
 
-    var info = new SKImageInfo(canvasSize, canvasSize);
+    var info = new SKImageInfo(imageSize, imageSize);
     using var surface = SKSurface.Create(info);
     var canvas = surface.Canvas;
+    canvas.Scale(imageSize / (float)canvasSize);
 
     // Draw Background
     {
@@ -620,7 +625,7 @@ Console.WriteLine("""
     // Save
     using var image = surface.Snapshot();
     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-    using var stream = File.OpenWrite(path);
+    using var stream = File.Create(path);
     data.SaveTo(stream);
 
     Console.WriteLine($"  ✓ Saved to: {path}");
@@ -993,7 +998,7 @@ Console.WriteLine("""
 {
     var path = Path.Combine(outputDir, "pattern24_microqr_static.png");
 
-    var pngBytes = MicroQRCodeImageBuilder.GetPngBytes(microContent, MicroQREccLevel.L, size: 256);
+    var pngBytes = MicroQRCodeImageBuilder.GetPngBytes(microContent, MicroQREccLevel.L, size: 248);
     File.WriteAllBytes(path, pngBytes);
 
     Console.WriteLine($"  ✓ Saved to: {path}");
@@ -1013,7 +1018,7 @@ Console.WriteLine("""
         GradientDirection.TopLeftToBottomRight);
 
     var pngBytes = new MicroQRCodeImageBuilder("SKU-42")
-        .WithModulePixelSize(14)
+        .WithSize(248, 248)
         .WithErrorCorrection(MicroQREccLevel.M)
         .WithColors(codeColor: SKColor.Parse("2D3436"), backgroundColor: SKColors.White)
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.92f)
@@ -1092,7 +1097,7 @@ Console.WriteLine("""
     var pngBytes = new RmQRCodeImageBuilder(rmqrContent)
         .WithHeight(RmQRHeight.H9)                  // 9 modules high, width chosen automatically
         .WithErrorCorrection(RmQREccLevel.H)
-        .WithModulePixelSize(12)
+        .WithWidth(798)                             // image width in pixels, the height follows the symbol
         .WithColors(codeColor: SKColor.Parse("2D3436"), backgroundColor: SKColors.White)
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
         .WithGradient(gradient)

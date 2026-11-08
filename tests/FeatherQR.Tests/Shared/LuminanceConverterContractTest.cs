@@ -1,5 +1,4 @@
 using TUnit.Assertions.Enums;
-using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.SkiaSharp.Internals;
 using SkiaSharp;
 
@@ -7,18 +6,18 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The luminance seam between the core and the rendering package:
-/// <see cref="LuminanceConverter.Convert"/>, internal and reached through
-/// <c>InternalsVisibleTo</c>. Tier parity between the kernels is
-/// <see cref="LuminanceConverterParityTest"/>. This file pins what an adapter sees: the
-/// BT.601 weighting and white compositing, the four layouts, row padding, argument
-/// validation, and that the SkiaSharp adapter produces the same bytes as a direct call
-/// with the pixmap span.
+/// <see cref="LuminanceConverter.Convert"/>, public since 2.0.0. Tier parity between the
+/// kernels is <see cref="LuminanceConverterParityTest"/>, and the public shape and contract
+/// are <see cref="LuminanceConverterPublicContractTest"/>. This file pins what an adapter
+/// sees: the BT.601 weighting and white compositing, the four layouts, row padding,
+/// argument validation, and that the SkiaSharp adapter produces the same bytes as a direct
+/// call with the pixmap span.
 /// </summary>
 public class LuminanceConverterContractTest
 {
     private static readonly PixelLayout[] ColorLayouts = [PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x];
 
-    // The enum is internal, so it cannot be a public test parameter. Layout-generic tests loop instead.
+    // The four layouts, which the layout-generic tests loop over.
     private static readonly PixelLayout[] AllLayouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x];
 
     private static int BytesPerPixel(PixelLayout layout) => layout == PixelLayout.Gray8 ? 1 : 4;

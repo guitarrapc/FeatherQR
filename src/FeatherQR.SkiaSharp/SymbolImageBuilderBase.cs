@@ -222,6 +222,35 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     }
 
     /// <summary>
+    /// Draws the modules in one of the core's styles, with the values <see cref="SymbolImageOptions"/> takes for them.
+    /// </summary>
+    /// <remarks>
+    /// The same as <see cref="WithModuleShape"/> with the matching shape, <see cref="RectangleModuleShape"/>, <see cref="CircleModuleShape"/> or
+    /// <see cref="RoundedRectangleModuleShape"/>, at the scale and radius given here in whole percents. Both calls set one choice, and the later one is drawn.
+    /// </remarks>
+    /// <param name="style">The shape of each data module.</param>
+    /// <param name="scalePercent">The side of each module's shape as a percentage of its cell, 50 to 100. The default is 100.</param>
+    /// <param name="cornerRadiusPercent">The corner radius of a rounded square as a percentage of its side, 0 to 100. The default is 30. The other styles have no corners to round.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="style"/> is not a defined value, <paramref name="scalePercent"/> is outside 50 to 100, or <paramref name="cornerRadiusPercent"/> is outside 0 to 100.</exception>
+    public TSelf WithModuleStyle(ModuleStyle style, int scalePercent = 100, int cornerRadiusPercent = 30)
+    {
+        if (scalePercent is < 50 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(scalePercent), scalePercent, "Module scale must be 50 to 100 percent.");
+        if (cornerRadiusPercent is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(cornerRadiusPercent), cornerRadiusPercent, "Corner radius must be 0 to 100 percent.");
+
+        _moduleShape = style switch
+        {
+            ModuleStyle.Square => RectangleModuleShape.Default,
+            ModuleStyle.Circle => CircleModuleShape.Default,
+            ModuleStyle.RoundedSquare => new RoundedRectangleModuleShape(cornerRadiusPercent / 100f),
+            _ => throw new ArgumentOutOfRangeException(nameof(style), style, "Unknown module style."),
+        };
+        _moduleSizePercent = scalePercent / 100f;
+        return (TSelf)this;
+    }
+
+    /// <summary>
     /// Draws the finder patterns as a shape of their own.
     /// </summary>
     /// <remarks>
@@ -236,6 +265,34 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
             throw new ArgumentNullException(nameof(finderPatternShape));
 
         _finderPatternShape = finderPatternShape;
+        return (TSelf)this;
+    }
+
+    /// <summary>
+    /// Draws the finder patterns in one of the core's styles, with the values <see cref="SymbolImageOptions"/> takes for them.
+    /// </summary>
+    /// <remarks>
+    /// The same as <see cref="WithFinderPatternShape"/> with the matching shape, <see cref="RectangleFinderPatternShape"/>, <see cref="CircleFinderPatternShape"/>,
+    /// <see cref="RoundedRectangleFinderPatternShape"/> or <see cref="RoundedRectangleCircleFinderPatternShape"/>, at the radius given here in whole percents.
+    /// The radius defaults to the core's 30 percent, where the <see cref="RoundedRectangleFinderPatternShape"/> class defaults to 20.
+    /// Both calls set one choice, and the later one is drawn.
+    /// </remarks>
+    /// <param name="style">The shape of the finder patterns.</param>
+    /// <param name="cornerRadiusPercent">The corner radius of the rounded styles as a percentage of the pattern's side, 0 to 100. The default is 30. The other styles have no corners to round.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="style"/> is not a defined value, or <paramref name="cornerRadiusPercent"/> is outside 0 to 100.</exception>
+    public TSelf WithFinderPatternStyle(FinderPatternStyle style, int cornerRadiusPercent = 30)
+    {
+        if (cornerRadiusPercent is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(cornerRadiusPercent), cornerRadiusPercent, "Corner radius must be 0 to 100 percent.");
+
+        _finderPatternShape = style switch
+        {
+            FinderPatternStyle.Square => RectangleFinderPatternShape.Default,
+            FinderPatternStyle.Circle => CircleFinderPatternShape.Default,
+            FinderPatternStyle.RoundedSquare => new RoundedRectangleFinderPatternShape(cornerRadiusPercent / 100f),
+            FinderPatternStyle.RoundedSquareCircle => new RoundedRectangleCircleFinderPatternShape(cornerRadiusPercent / 100f),
+            _ => throw new ArgumentOutOfRangeException(nameof(style), style, "Unknown finder pattern style."),
+        };
         return (TSelf)this;
     }
 

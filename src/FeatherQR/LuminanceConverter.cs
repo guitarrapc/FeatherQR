@@ -1,37 +1,39 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using FeatherQR.Internals.ImageDecoders;
 
-namespace FeatherQR.Internals.ImageDecoders;
+namespace FeatherQR;
 
 /// <summary>
-/// Converts pixel buffers to the 8-bit grayscale luminance the image decoders read (<c>TryDecodeImage</c> on <see cref="QRCodeDecoder"/>, <see cref="MicroQRCodeDecoder"/> and <see cref="RmQRCodeDecoder"/>).
+/// Converts a pixel buffer to the 8-bit luminance the image decoders read: <c>TryDecodeImage</c> on <see cref="QRCodeDecoder"/>, <see cref="MicroQRCodeDecoder"/>, <see cref="RmQRCodeDecoder"/> and <see cref="SymbolDecoder"/>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Internal, reached by the first-party rendering package through <c>InternalsVisibleTo</c>: an adapter reads the pixel layout out of its bitmap type and hands the raw bytes here.
-/// The layouts are the ones QR sources actually use (<see cref="PixelLayout"/>). Anything else is converted by the caller first.
-/// A third-party decoder adapter produces luminance itself and calls <c>TryDecodeImage</c>. This type is not public so that the surface does not grow ahead of a concrete need.
+/// Pixels from a browser canvas, a camera frame or an operating system's image API go in as one of the <see cref="PixelLayout"/> values. The luminance comes out as width × height bytes, one a pixel, rows packed with no padding, 0 black to 255 white, which is what <c>TryDecodeImage</c> takes with the same width and height.
 /// </para>
 /// <para>
-/// Luminance is ITU-R BT.601, (77 R + 150 G + 29 B) / 256. Transparent pixels are composited against white before weighting: QR quiet zones are white by definition, and transparent-background PNGs are a common input.
-/// The kernels run in four tiers (AVX2, NEON, 128-bit, portable scalar) that produce identical bytes.
+/// Luminance is ITU-R BT.601, the integer part of (77 R + 150 G + 29 B) / 256, so white is 255 and pure red is 76.
+/// A pixel whose alpha is below 255 is composited against white before weighting: the quiet zone is white by definition, and a QR code composited against black is not detected. An all-zero buffer with an alpha channel is therefore white, not black.
+/// </para>
+/// <para>
+/// On .NET the conversion runs in vector tiers where the CPU has them (AVX2, NEON, 128-bit), and in a portable loop elsewhere, the netstandard builds included. Every tier produces identical bytes.
 /// </para>
 /// </remarks>
-internal static partial class LuminanceConverter
+public static partial class LuminanceConverter
 {
     /// <summary>
-    /// Converts pixels to luminance: width × height bytes, row-major, no padding.
+    /// Converts pixels to luminance: width × height bytes, row-major, no padding, 0 black to 255 white.
     /// </summary>
     /// <param name="pixels">Source pixels, rows of <paramref name="rowBytes"/> bytes. The last row may end after its <paramref name="width"/> pixels.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
-    /// <param name="rowBytes">Stride between rows in bytes, at least <paramref name="width"/> × bytes per pixel.</param>
-    /// <param name="layout">Channel order and depth of <paramref name="pixels"/>.</param>
-    /// <param name="premultipliedAlpha">Whether the color channels are premultiplied by alpha. Ignored for layouts without alpha.</param>
-    /// <param name="luminance">Destination, at least width × height bytes (<see cref="ImageDimensions.TryGetPixelCount"/>).</param>
+    /// <param name="rowBytes">The stride: the bytes from the start of one row to the start of the next. At least <paramref name="width"/> × bytes per pixel, and more where the source pads its rows. The padding is never read.</param>
+    /// <param name="layout">Channel order and depth of <paramref name="pixels"/>: one byte a pixel for <see cref="PixelLayout.Gray8"/>, four for the others.</param>
+    /// <param name="premultipliedAlpha">Whether the color channels are already multiplied by alpha, as a browser canvas or a GPU texture often holds them. Ignored for layouts without alpha.</param>
+    /// <param name="luminance">Destination, at least width × height bytes. Each pixel's ITU-R BT.601 luminance, the pixel composited against white first where its alpha is below 255.</param>
     /// <remarks>A zero width or height converts nothing and does not touch either buffer.</remarks>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="layout"/> is not a defined value, a dimension is negative, or <paramref name="rowBytes"/> is negative or shorter than one row.</exception>
-    /// <exception cref="ArgumentException"><paramref name="pixels"/> or <paramref name="luminance"/> is too short for the dimensions.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="layout"/> is not a defined value, a dimension is negative, or <paramref name="rowBytes"/> is negative, or shorter than one row when there is a row to read.</exception>
+    /// <exception cref="ArgumentException"><paramref name="pixels"/> or <paramref name="luminance"/> is too short for the dimensions, or width × height does not fit an <see cref="int"/>.</exception>
     public static void Convert(ReadOnlySpan<byte> pixels, int width, int height, int rowBytes, PixelLayout layout, bool premultipliedAlpha, Span<byte> luminance)
     {
         if (width < 0)
@@ -44,8 +46,13 @@ internal static partial class LuminanceConverter
             PixelLayout.Rgba8888 or PixelLayout.Bgra8888 or PixelLayout.Rgb888x => 4,
             _ => throw new ArgumentOutOfRangeException(nameof(layout), layout, "Unknown pixel layout."),
         };
+        if (rowBytes < 0)
+            throw new ArgumentOutOfRangeException(nameof(rowBytes), rowBytes, "Row stride must not be negative.");
         if (width > 0 && height > 0 && rowBytes < width * (long)bytesPerPixel)
             throw new ArgumentOutOfRangeException(nameof(rowBytes), rowBytes, $"Row stride must cover a row of {width} pixels at {bytesPerPixel} bytes each.");
+        // Nothing to convert, and the row loops below would still slice the source by the stride.
+        if (width == 0 || height == 0)
+            return;
 
         switch (layout)
         {
@@ -78,7 +85,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// Pixel buffer to BT.601 luminance.
-    /// Four tiers: an AVX2 kernel at 32 pixels per iteration (LuminanceConverter.X86.cs), a NEON dot-product kernel at 16 (LuminanceConverter.Arm64.cs), a 128-bit kernel at 16 for every other vector target (LuminanceConverter.Simd.cs), and this per-pixel loop for netstandard and rows under 16 pixels.
+    /// Four tiers: an AVX2 kernel at 32 pixels per iteration (LuminanceConverter.X86.cs), a NEON dot-product kernel at 16 (LuminanceConverter.Arm64.cs), a 128-bit kernel at 16 for every other vector target (LuminanceConverter.Simd.cs), and this per-pixel loop for netstandard, for a target with no vector tier, and for rows under 16 pixels without AVX2.
     /// All four produce identical bytes. See LuminanceConverterParityTest.
     /// </summary>
     /// <remarks>

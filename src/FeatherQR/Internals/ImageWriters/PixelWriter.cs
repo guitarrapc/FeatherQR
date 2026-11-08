@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 
@@ -15,7 +16,8 @@ namespace FeatherQR.Internals.ImageWriters;
 /// So a Gray8 buffer equals the decoders' reading of the Rgba8888 and Rgb888x ones.
 /// </para>
 /// <para>
-/// The first pixel row of each module row is written from the runs of the stored module bits, and the module's other rows are copies of it.
+/// The first pixel row of each module row is written from the runs of the stored module bits, each run over the pixels <see cref="ImageLayout"/>
+/// gives its modules, and the module row's other pixel rows are copies of it.
 /// </para>
 /// </remarks>
 internal static class PixelWriter
@@ -24,20 +26,29 @@ internal static class PixelWriter
         where TView : struct, IModuleMatrixView
     {
         var bytesPerPixel = BytesPerPixel(layout);
-        ImageSize.ThrowIfTooLarge(in view, in options);
-        long pixels = options.ModulePixelSize;
+        var image = ImageLayout.Create(in view, in options);
+        // Refused here too, so a caller sizing a buffer learns of an icon that does not fit before writing.
+        IconArea.Get(in view, in options);
+        return BufferSize(in image, bytesPerPixel, in options);
+    }
+
+    private static int BufferSize(in ImageLayout image, int bytesPerPixel, in SymbolImageOptions options)
+    {
         // Each side fits an int, so the pixel count fits a long, but four bytes a pixel can wrap it.
-        var pixelCount = view.Width * pixels * view.Height * pixels;
-        ImageSize.ThrowIfLongerThanAnArray(pixelCount, in options);
+        var pixelCount = (long)image.Width * image.Height;
+        ImageSize.ThrowIfLongerThanAnArray(pixelCount, image.Width, image.Height);
         var length = pixelCount * bytesPerPixel;
-        ImageSize.ThrowIfLongerThanAnArray(length, in options);
+        ImageSize.ThrowIfLongerThanAnArray(length, image.Width, image.Height);
         return (int)length;
     }
 
     public static bool TryWrite<TView>(in TView view, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
-        var length = BufferSize(in view, layout, in options);
+        var bytesPerPixel = BytesPerPixel(layout);
+        var image = ImageLayout.Create(in view, in options);
+        var icon = IconArea.Get(in view, in options);
+        var length = BufferSize(in image, bytesPerPixel, in options);
         if (destination.Length < length)
         {
             width = 0;
@@ -45,49 +56,105 @@ internal static class PixelWriter
             return false;
         }
 
-        var pixels = options.ModulePixelSize;
-        var bytesPerPixel = BytesPerPixel(layout);
-        width = view.Width * pixels;
-        height = view.Height * pixels;
+        width = image.Width;
+        height = image.Height;
         var rowBytes = width * bytesPerPixel;
+        if (options.IsStyled)
+        {
+            WriteStyled(in view, destination, in image, in icon, layout, bytesPerPixel, rowBytes, in options);
+            return true;
+        }
         var dark = Pixel(options.DarkColor.Over(options.LightColor), layout);
         var light = Pixel(options.LightColor, layout);
         var quietZone = (view.Width - view.CoreWidth) / 2;
         var coreWidth = view.CoreWidth;
         var core = view.CoreBits;
+        // At whole pixels a run's bytes follow from its length, so the layout is not asked where each run ends.
+        var runUnit = image.Denominator == 1 ? (int)image.Numerator * bytesPerPixel : 0;
 
-        for (var m = 0; m < view.Height; m++)
+        for (var group = 0; group < image.Groups; group++)
         {
-            var first = destination.Slice(m * pixels * rowBytes, rowBytes);
-            var coreRow = m - quietZone;
+            var top = image.GroupStart(group);
+            var first = destination.Slice((int)((long)top * rowBytes), rowBytes);
+            var coreRow = image.GroupRow(group) - quietZone;
             if ((uint)coreRow >= (uint)view.CoreHeight)
             {
                 Fill(first, light, bytesPerPixel);
             }
             else
             {
-                var edge = quietZone * pixels * bytesPerPixel;
-                Fill(first.Slice(0, edge), light, bytesPerPixel);
-                Fill(first.Slice(rowBytes - edge), light, bytesPerPixel);
-                var at = edge;
+                var at = image.ColumnStart(quietZone) * bytesPerPixel;
+                Fill(first.Slice(0, at), light, bytesPerPixel);
                 var start = (long)coreRow * coreWidth;
                 var column = 0;
                 var isDark = false;
                 while (column < coreWidth)
                 {
                     var run = PackedRuns.Length(core, start + column, coreWidth - column, isDark);
-                    var bytes = run * pixels * bytesPerPixel;
-                    Fill(first.Slice(at, bytes), isDark ? dark : light, bytesPerPixel);
-                    at += bytes;
                     column += run;
+                    var end = runUnit != 0 ? at + run * runUnit : image.ColumnStart(quietZone + column) * bytesPerPixel;
+                    Fill(first.Slice(at, end - at), isDark ? dark : light, bytesPerPixel);
+                    at = end;
                     isDark = !isDark;
+                }
+                Fill(first.Slice(at), light, bytesPerPixel);
+                if (icon.CoversRow(coreRow))
+                {
+                    var from = image.ColumnStart(quietZone + icon.Column) * bytesPerPixel;
+                    Fill(first.Slice(from, image.ColumnStart(quietZone + icon.Column + icon.Size) * bytesPerPixel - from), light, bytesPerPixel);
                 }
             }
 
-            for (var repeat = 1; repeat < pixels; repeat++)
-                first.CopyTo(destination.Slice((m * pixels + repeat) * rowBytes, rowBytes));
+            var rows = image.GroupHeight(group);
+            for (var repeat = 1; repeat < rows; repeat++)
+                first.CopyTo(destination.Slice((int)((long)(top + repeat) * rowBytes), rowBytes));
         }
         return true;
+    }
+
+    /// <summary>
+    /// A styled image row by row: each row's levels, then each level's pixel from a table, so the pixels are the colours the PNG's palette holds.
+    /// </summary>
+    private static void WriteStyled<TView>(in TView view, Span<byte> destination, in ImageLayout image, in IconArea icon, PixelLayout layout, int bytesPerPixel, int rowBytes, in SymbolImageOptions options)
+        where TView : struct, IModuleMatrixView
+    {
+        const int levels = 1 << PngEncoder.StyledBitDepth;
+        var raster = StyledRaster.Take();
+        var levelRow = ArrayPool<byte>.Shared.Rent(image.Width);
+        try
+        {
+            raster.Prepare(in view, in image, in options, in icon, levels);
+            Span<uint> pixels = stackalloc uint[levels];
+            for (var k = 0; k < levels; k++)
+                pixels[k] = Pixel(StyledRaster.LevelColor(options.DarkColor, options.LightColor, k, levels), layout);
+            var row = levelRow.AsSpan(0, image.Width);
+            for (var y = 0; y < image.Height; y++)
+            {
+                var line = destination.Slice((int)((long)y * rowBytes), rowBytes);
+                if (raster.IsLightRow(y))
+                {
+                    Fill(line, pixels[0], bytesPerPixel);
+                    continue;
+                }
+                raster.ComposeRow(in view, y, row);
+                if (bytesPerPixel == 1)
+                {
+                    for (var x = 0; x < row.Length; x++)
+                        line[x] = (byte)pixels[row[x]];
+                }
+                else
+                {
+                    var words = MemoryMarshal.Cast<byte, uint>(line);
+                    for (var x = 0; x < row.Length; x++)
+                        words[x] = pixels[row[x]];
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(levelRow);
+            StyledRaster.Return(raster);
+        }
     }
 
     private static int BytesPerPixel(PixelLayout layout) => layout switch

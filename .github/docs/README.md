@@ -37,8 +37,6 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 | Document | Covers |
 |---|---|
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
-| [core-image-output-gaps-plan.md](plans/core-image-output-gaps-plan.md) | What the core's image output still cannot do that the rendering package can, and the plan for each: an image of a set size, pixel input to the decoders, module and finder pattern shapes, an icon area, and a PNG reader as a decision |
-| [png-start-marks-vector-tier-plan.md](plans/png-start-marks-vector-tier-plan.md) | A portable 128-bit tier, and a gated 256-bit one, for the PNG writer's match-start masks: the marks' share measured first on each build, the tier under the 128-bit round's rules, the timing shapes for the PNG and SVG writers in the report projects |
 
 The 2.0.0 core split plan (`FeatherQR` core, `FeatherQR.SkiaSharp` renderer, `SkiaSharp.QrCode` metapackage, repository rename) completed on 2026-09-06 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (package architecture, seam, graph, the "why three packages" record, scope decisions, lessons) and [DESIGN.md](DESIGN.md).
 
@@ -156,3 +154,5 @@ The core image output plan (SVG, PNG, a raw pixel buffer and text for a terminal
 - The README ("Image Writing (Simple)", the overview, installation, Quick Start, API Overview, and the FAQ answer on SVG output, which was removed), `docs/migration.md` ("Images from the core package" and the packages table), the core package's description, the data types' and the image builders' documentation, the approved API listing and the API page.
 
 It left out per-phase narration, the per-test case lists and suite totals, the probes the path forms, the deflate shapes and the timings were taken with, and the render check pages.
+
+The PNG start marks plan (a portable 128-bit tier, and a 256-bit one on x64 with AVX2, for the masks that mark where the PNG writer's search may take a run or a copy: the marks' share measured first on each build, then the tiers, an entry reshaped by what it cost small symbols end to end, the ARM64 measurement and the entry kept a call) completed on 2026-11-08 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (the PNG part of Image output with each build's figures, and the lessons on measuring a tier's entry and on an entry small enough for dynamic PGO to inline). The kernel's row in `SimdTiers.cs`, its line in [qrcode-simd-tiers.md](specs/qrcode-simd-tiers.md) and the PNG and SVG timing shapes of the report projects came with the tiers. It left out per-phase narration, the machine code read at each step, and the probes the ARM64 figures were taken with.

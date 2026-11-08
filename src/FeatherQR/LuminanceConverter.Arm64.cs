@@ -4,36 +4,24 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 
-namespace FeatherQR.Internals.ImageDecoders;
+namespace FeatherQR;
 
-/// <summary>
-/// ARM64 / NEON luminance conversion: 16 pixels per iteration, bit-identical to the per-pixel loop in LuminanceConverter.cs.
-/// </summary>
-/// <remarks>
-/// The exactness argument is the one the AVX2 kernel uses: the BT.601 weights sum to 256 and every channel is a byte, so the weighted sum never exceeds 255 · 256 = 65,280 and fits in 16 bits unsigned.
-/// <para>
-/// The kernel shape, however, is not the AVX2 one.
-/// NEON has no <c>pmaddubsw</c>, so the shuffle-into-<c>[R, G, G, B]</c> trick has nothing to feed. It has <c>UDOT</c> instead (ARMv8.2 dot product), which multiplies four byte pairs into each 32-bit lane and therefore computes <c>77R + 150G + 29B + 0·A</c> for four whole pixels in one instruction, with no deinterleave at all.
-/// Weighting alpha 0 is also what makes Rgb888x correct, since its fourth byte is padding.
-/// A transliteration of the x64 kernel, with <c>LD4</c> building channel planes, is slower.
-/// </para>
-/// <para>
-/// Alpha is handled by row mode rather than per block.
-/// Testing "is every alpha 255?" every 16 pixels costs a cross-lane reduction plus a vector-to-GPR move. Instead each row is converted optimistically while the pixels are ANDed into a vector accumulator, and one cross-lane test per row decides whether the row was in fact opaque.
-/// A row that carries alpha is redone by the general path and the mode is sticky, so an image with alpha pays the wasted pass once rather than once per row.
-/// </para>
-/// <para>
-/// The general path keeps every alpha shape on the vector unit.
-/// Fully transparent composites to white, which is exactly luminance 255, so those pixels are replaced by 0xFFFFFFFF. A genuinely partial alpha uses the exact composite <c>c' = 255 − ceil((255 − c)·a / 255)</c>, which is equal to the scalar <c>(c·a + 255·(255 − a)) / 255</c> and stays integer-exact in 16-bit lanes because the product is at most 65,025 and <c>floor(t / 255) = (t + 1 + (t &gt;&gt; 8)) &gt;&gt; 8</c> there.
-/// Premultiplied alpha adds 255 − a to every channel, which is exactly 256 · (255 − a) on the sum, so it collapses to an add before the shift and never falls back.
-/// See LuminanceConverterParityTest for the equivalence proof by test.
-/// </para>
-/// <para>
-/// The row modes are separate methods on purpose.
-/// Fused into one, they are slower on the largest inputs on code size alone, in scenarios where the fused-in code never executes. The AVX2 kernel keeps two loops for the same reason.
-/// </para>
-/// </remarks>
-internal static partial class LuminanceConverter
+// ARM64 / NEON luminance conversion: 16 pixels per iteration, bit-identical to the per-pixel loop in LuminanceConverter.cs.
+// The exactness argument is the one the AVX2 kernel uses: the BT.601 weights sum to 256 and every channel is a byte, so the weighted sum never exceeds 255 · 256 = 65,280 and fits in 16 bits unsigned.
+// The kernel shape, however, is not the AVX2 one.
+// NEON has no <c>pmaddubsw</c>, so the shuffle-into-<c>[R, G, G, B]</c> trick has nothing to feed. It has <c>UDOT</c> instead (ARMv8.2 dot product), which multiplies four byte pairs into each 32-bit lane and therefore computes <c>77R + 150G + 29B + 0·A</c> for four whole pixels in one instruction, with no deinterleave at all.
+// Weighting alpha 0 is also what makes Rgb888x correct, since its fourth byte is padding.
+// A transliteration of the x64 kernel, with <c>LD4</c> building channel planes, is slower.
+// Alpha is handled by row mode rather than per block.
+// Testing "is every alpha 255?" every 16 pixels costs a cross-lane reduction plus a vector-to-GPR move. Instead each row is converted optimistically while the pixels are ANDed into a vector accumulator, and one cross-lane test per row decides whether the row was in fact opaque.
+// A row that carries alpha is redone by the general path and the mode is sticky, so an image with alpha pays the wasted pass once rather than once per row.
+// The general path keeps every alpha shape on the vector unit.
+// Fully transparent composites to white, which is exactly luminance 255, so those pixels are replaced by 0xFFFFFFFF. A genuinely partial alpha uses the exact composite <c>c' = 255 − ceil((255 − c)·a / 255)</c>, which is equal to the scalar <c>(c·a + 255·(255 − a)) / 255</c> and stays integer-exact in 16-bit lanes because the product is at most 65,025 and <c>floor(t / 255) = (t + 1 + (t &gt;&gt; 8)) &gt;&gt; 8</c> there.
+// Premultiplied alpha adds 255 − a to every channel, which is exactly 256 · (255 − a) on the sum, so it collapses to an add before the shift and never falls back.
+// See LuminanceConverterParityTest for the equivalence proof by test.
+// The row modes are separate methods on purpose.
+// Fused into one, they are slower on the largest inputs on code size alone, in scenarios where the fused-in code never executes. The AVX2 kernel keeps two loops for the same reason.
+public static partial class LuminanceConverter
 {
     /// <summary>Pixels per iteration of the NEON loops (four 128-bit loads).</summary>
     private const int AdvSimdBlockPixels = 16;

@@ -9,8 +9,10 @@ namespace FeatherQR.Internals.ImageWriters;
 /// <remarks>
 /// <para>
 /// The image data is one zlib stream of one deflate block with dynamic Huffman codes, written by a matcher made for this image.
-/// Every module row repeats its first scanline once for each pixel of the module's height, so only the first scanline is searched,
+/// Every module row repeats its first scanline once for each pixel of its height, so only the first scanline is searched,
 /// for runs of one byte and for copies of the scanline above, and each repeat is a copy of the scanline above, written without comparing.
+/// At a set size each module is the whole pixels <see cref="ImageLayout"/> gives it, within one pixel of its neighbour's, and the light
+/// rows above and below the symbol are rows of their own.
 /// A copy that reaches the end of a module row runs on into the next row's first scanline while that matches.
 /// A scanline past a copy's reach is searched for runs alone, and its symbols are written again for each repeat.
 /// </para>
@@ -26,13 +28,16 @@ namespace FeatherQR.Internals.ImageWriters;
 /// or with more symbols than the record holds, is matched a second time instead. The output is written straight into its destination,
 /// the same bytes on every target framework. Scanlines are packed from the stored module bits, light 1 and dark 0, and padded with light.
 /// </para>
+/// <para>
+/// A styled image, with shaped or scaled modules or shaped finder patterns, is four bits a pixel instead: greyscale or a palette of
+/// sixteen levels between the two colours, every pixel row a scanline of its own, with the lookup on.
+/// </para>
 /// </remarks>
 internal static class PngWriter
 {
     public static byte[] GetBytes<TView>(in TView view, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
-        ImageSize.ThrowIfTooLarge(in view, in options);
         var encoder = PngEncoder.Take();
         try
         {
@@ -50,7 +55,6 @@ internal static class PngWriter
     public static int Write<TView>(in TView view, IBufferWriter<byte> writer, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
-        ImageSize.ThrowIfTooLarge(in view, in options);
         var encoder = PngEncoder.Take();
         try
         {

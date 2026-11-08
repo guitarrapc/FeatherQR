@@ -9,11 +9,15 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every module is a sharp square of <see cref="SymbolImageOptions.ModulePixelSize"/> pixels, and the quiet zone is the one the symbol was made with.
+/// Every module is a sharp square of <see cref="SymbolImageOptions.ModulePixelSize"/> pixels, or with <see cref="SymbolImageOptions.Width"/> or
+/// <see cref="SymbolImageOptions.Height"/> set the symbol fills that canvas, each module still whole pixels. The quiet zone is the one the symbol was made with.
 /// The same symbol and options give the same bytes on every target framework.
 /// </para>
 /// <para>
-/// For module shapes, gradients, icons or an image of a set size in pixels, use the FeatherQR.SkiaSharp package.
+/// <see cref="SymbolImageOptions.ModuleStyle"/>, <see cref="SymbolImageOptions.ModuleScalePercent"/> and <see cref="SymbolImageOptions.FinderPatternStyle"/>
+/// draw the modules and the finder patterns as circles or rounded squares, with soft edges. <see cref="SymbolImageOptions.IconSizeModules"/> leaves an icon area
+/// at the centre of a Standard QR code, which <see cref="GetIconRectangle"/> locates and the SVG fills with <see cref="SymbolImageOptions.IconImage"/>.
+/// For gradients, or an icon drawn into the PNG, use the FeatherQR.SkiaSharp package.
 /// </para>
 /// </remarks>
 public static class SymbolImageWriter
@@ -24,10 +28,10 @@ public static class SymbolImageWriter
     /// Writes the QR code as an SVG document.
     /// </summary>
     /// <param name="data">The QR code.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The document. It has no XML declaration, so it also goes into HTML as it is.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels or the document longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static string GetSvgString(QRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -37,7 +41,7 @@ public static class SymbolImageWriter
 
     /// <inheritdoc cref="GetSvgString(QRCodeData, in SymbolImageOptions)"/>
     /// <param name="data">The Micro QR code.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     public static string GetSvgString(MicroQRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -47,7 +51,7 @@ public static class SymbolImageWriter
 
     /// <inheritdoc cref="GetSvgString(QRCodeData, in SymbolImageOptions)"/>
     /// <param name="data">The rMQR code.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     public static string GetSvgString(RmQRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -60,13 +64,13 @@ public static class SymbolImageWriter
     /// </summary>
     /// <param name="data">The QR code.</param>
     /// <param name="writer">Where to write the bytes.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The number of bytes written.</returns>
     /// <remarks>
     /// The bytes are those of <see cref="GetSvgString(QRCodeData, in SymbolImageOptions)"/>, and once warm nothing is allocated beyond what the writer hands out.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> or <paramref name="writer"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels or the document longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     /// <exception cref="InvalidOperationException">Thrown when <paramref name="writer"/> hands out a span shorter than the document, against the <see cref="IBufferWriter{T}"/> contract.</exception>
     public static int WriteSvg(QRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = default)
     {
@@ -80,7 +84,7 @@ public static class SymbolImageWriter
     /// <inheritdoc cref="WriteSvg(QRCodeData, IBufferWriter{byte}, in SymbolImageOptions)"/>
     /// <param name="data">The Micro QR code.</param>
     /// <param name="writer">Where to write the bytes.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <remarks>
     /// The bytes are those of <see cref="GetSvgString(MicroQRCodeData, in SymbolImageOptions)"/>, and once warm nothing is allocated beyond what the writer hands out.
     /// </remarks>
@@ -96,7 +100,7 @@ public static class SymbolImageWriter
     /// <inheritdoc cref="WriteSvg(QRCodeData, IBufferWriter{byte}, in SymbolImageOptions)"/>
     /// <param name="data">The rMQR code.</param>
     /// <param name="writer">Where to write the bytes.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <remarks>
     /// The bytes are those of <see cref="GetSvgString(RmQRCodeData, in SymbolImageOptions)"/>, and once warm nothing is allocated beyond what the writer hands out.
     /// </remarks>
@@ -112,17 +116,18 @@ public static class SymbolImageWriter
     // PNG
 
     /// <summary>
-    /// Writes the QR code as a PNG file, one bit a pixel.
+    /// Writes the QR code as a PNG file, one bit a pixel, or four with a module style, a module scale below 100 percent or a finder pattern style.
     /// </summary>
     /// <param name="data">The QR code.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The file.</returns>
     /// <remarks>
-    /// Black on white is greyscale. Any other pair is a two-colour palette, the dark colour painted over the light one as in the SVG.
+    /// Black on white is greyscale. Any other pair is a palette, the dark colour painted over the light one as in the SVG: two entries,
+    /// or sixteen levels between the colours with a style, whose shapes have soft edges.
     /// The palette carries transparency when the light colour's alpha is below 255.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, or the file longer than the largest array.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels or the file longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static byte[] GetPngBytes(QRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -132,7 +137,7 @@ public static class SymbolImageWriter
 
     /// <inheritdoc cref="GetPngBytes(QRCodeData, in SymbolImageOptions)"/>
     /// <param name="data">The Micro QR code.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     public static byte[] GetPngBytes(MicroQRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -142,7 +147,7 @@ public static class SymbolImageWriter
 
     /// <inheritdoc cref="GetPngBytes(QRCodeData, in SymbolImageOptions)"/>
     /// <param name="data">The rMQR code.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     public static byte[] GetPngBytes(RmQRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -155,13 +160,13 @@ public static class SymbolImageWriter
     /// </summary>
     /// <param name="data">The QR code.</param>
     /// <param name="writer">Where to write the bytes.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The number of bytes written.</returns>
     /// <remarks>
     /// The bytes are those of <see cref="GetPngBytes(QRCodeData, in SymbolImageOptions)"/>. The writer is asked for exactly their length, and once warm nothing else is allocated.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> or <paramref name="writer"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, or the file longer than the largest array.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels or the file longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     /// <exception cref="InvalidOperationException">Thrown when <paramref name="writer"/> hands out a span shorter than the file, against the <see cref="IBufferWriter{T}"/> contract.</exception>
     public static int WritePng(QRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = default)
     {
@@ -175,7 +180,7 @@ public static class SymbolImageWriter
     /// <inheritdoc cref="WritePng(QRCodeData, IBufferWriter{byte}, in SymbolImageOptions)"/>
     /// <param name="data">The Micro QR code.</param>
     /// <param name="writer">Where to write the bytes.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <remarks>
     /// The bytes are those of <see cref="GetPngBytes(MicroQRCodeData, in SymbolImageOptions)"/>. The writer is asked for exactly their length, and once warm nothing else is allocated.
     /// </remarks>
@@ -191,7 +196,7 @@ public static class SymbolImageWriter
     /// <inheritdoc cref="WritePng(QRCodeData, IBufferWriter{byte}, in SymbolImageOptions)"/>
     /// <param name="data">The rMQR code.</param>
     /// <param name="writer">Where to write the bytes.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <remarks>
     /// The bytes are those of <see cref="GetPngBytes(RmQRCodeData, in SymbolImageOptions)"/>. The writer is asked for exactly their length, and once warm nothing else is allocated.
     /// </remarks>
@@ -211,10 +216,10 @@ public static class SymbolImageWriter
     /// </summary>
     /// <param name="data">The QR code.</param>
     /// <param name="layout">The channel order and depth.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The length <see cref="TryWritePixels(QRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/> needs.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the four, or the buffer would be longer than the largest array.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the four, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static int GetPixelBufferSize(QRCodeData data, PixelLayout layout, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -225,7 +230,7 @@ public static class SymbolImageWriter
     /// <inheritdoc cref="GetPixelBufferSize(QRCodeData, PixelLayout, in SymbolImageOptions)"/>
     /// <param name="data">The Micro QR code.</param>
     /// <param name="layout">The channel order and depth.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The length <see cref="TryWritePixels(MicroQRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/> needs.</returns>
     public static int GetPixelBufferSize(MicroQRCodeData data, PixelLayout layout, in SymbolImageOptions options = default)
     {
@@ -237,7 +242,7 @@ public static class SymbolImageWriter
     /// <inheritdoc cref="GetPixelBufferSize(QRCodeData, PixelLayout, in SymbolImageOptions)"/>
     /// <param name="data">The rMQR code.</param>
     /// <param name="layout">The channel order and depth.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The length <see cref="TryWritePixels(RmQRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/> needs.</returns>
     public static int GetPixelBufferSize(RmQRCodeData data, PixelLayout layout, in SymbolImageOptions options = default)
     {
@@ -254,7 +259,7 @@ public static class SymbolImageWriter
     /// <param name="layout">The channel order and depth.</param>
     /// <param name="width">The image's width in pixels, or 0 when the buffer is too short.</param>
     /// <param name="height">The image's height in pixels, or 0 when the buffer is too short.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns><c>false</c> only when <paramref name="destination"/> is too short, in which case nothing is written.</returns>
     /// <remarks>
     /// Alpha is not premultiplied. <see cref="PixelLayout.Gray8"/> and <see cref="PixelLayout.Rgb888x"/> have no alpha, so they hold each colour
@@ -262,7 +267,7 @@ public static class SymbolImageWriter
     /// so a Gray8 buffer is the luminance input the decoders' <c>TryDecodeImage</c> calls take.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the four, or the buffer would be longer than the largest array.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the four, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static bool TryWritePixels(QRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -276,7 +281,7 @@ public static class SymbolImageWriter
     /// <param name="layout">The channel order and depth.</param>
     /// <param name="width">The image's width in pixels, or 0 when the buffer is too short.</param>
     /// <param name="height">The image's height in pixels, or 0 when the buffer is too short.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     public static bool TryWritePixels(MicroQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -290,12 +295,42 @@ public static class SymbolImageWriter
     /// <param name="layout">The channel order and depth.</param>
     /// <param name="width">The image's width in pixels, or 0 when the buffer is too short.</param>
     /// <param name="height">The image's height in pixels, or 0 when the buffer is too short.</param>
-    /// <param name="options">The module size and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     public static bool TryWritePixels(RmQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
         return PixelWriter.TryWrite(new RmQRMatrixView(data), destination, layout, out width, out height, in options);
+    }
+
+    // Icon area
+
+    /// <summary>
+    /// Where the icon lands in the image the options describe, in pixels, for you to draw it there: the square <see cref="SymbolImageOptions.IconSizeModules"/>
+    /// names, inside the light area the writers leave for it.
+    /// </summary>
+    /// <param name="data">The QR code.</param>
+    /// <param name="options">The options the image is written with, with an icon area.</param>
+    /// <returns>The icon's left, top, width and height in pixels, on the module grid.</returns>
+    /// <remarks>
+    /// Draw into the pixel buffer at it, or over the PNG in whatever decodes your icon.
+    /// The SVG draws <see cref="SymbolImageOptions.IconImage"/> over the same modules itself.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the options have no icon area, or one that does not fit the symbol, or the image's size is out of range.</exception>
+    public static (int X, int Y, int Width, int Height) GetIconRectangle(QRCodeData data, in SymbolImageOptions options)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        var view = new StandardQrMatrixView(data);
+        var layout = ImageLayout.Create(in view, in options);
+        var icon = IconArea.Get(in view, in options);
+        if (!icon.Present)
+            throw new ArgumentOutOfRangeException(nameof(options), "No icon area is set: set IconSizeModules.");
+        var quietZone = (view.Width - view.CoreWidth) / 2;
+        var x = layout.ColumnStart(quietZone + icon.IconColumn);
+        var y = layout.RowStart(quietZone + icon.IconRow);
+        return (x, y, layout.ColumnStart(quietZone + icon.IconColumn + icon.IconSize) - x, layout.RowStart(quietZone + icon.IconRow + icon.IconSize) - y);
     }
 
     // Text output for terminal
