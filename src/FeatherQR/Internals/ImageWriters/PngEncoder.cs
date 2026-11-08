@@ -835,6 +835,9 @@ internal sealed partial class PngEncoder
     /// and a copy the eight from p equal to the scanline above, as <see cref="MayCopy"/> tests. Position 0, whose run is measured against
     /// the scanline above, and the last seven, where those tests compare fewer bytes, are always set, so the search decides them itself.
     /// </summary>
+    // Kept a call, as the lookup's methods are. When dynamic PGO inlined it into Tokenize with a tier inside, Tokenize inlined fewer of
+    // its other callees and small symbols' PNGs ran slower on ARM64.
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private void MarkStarts(ReadOnlySpan<byte> row, ReadOnlySpan<byte> aboveRow, bool hasAbove)
     {
         var words = (_stride + 63) >> 6;
