@@ -869,10 +869,13 @@ public class StyledSymbolDecodabilityTest
         await Assert.That(ok).IsTrue();
     }
 
+    // At the core's default radius rather than the class's 20 percent, so "rounded" is one finder pattern in both packages' cases.
+    private static readonly RoundedRectangleFinderPatternShape RoundedAtTheCoresRadius = new(0.3f);
+
     private static FinderPatternShape FinderShapeOf(string finder) => finder switch
     {
         "circle" => CircleFinderPatternShape.Default,
-        "rounded" => RoundedRectangleFinderPatternShape.Default,
+        "rounded" => RoundedAtTheCoresRadius,
         "roundedCircle" => RoundedRectangleCircleFinderPatternShape.Default,
         _ => RectangleFinderPatternShape.Default,
     };

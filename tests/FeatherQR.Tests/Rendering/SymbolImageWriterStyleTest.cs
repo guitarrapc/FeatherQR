@@ -453,6 +453,61 @@ public class SymbolImageWriterStyleTest
         return XDocument.Parse(svg).Root!.Descendants(Svg + "path").Single(p => p.Attribute("fill-rule") is null);
     }
 
+    /// <summary>
+    /// Past half a square's side the radius stops where its corners meet. At 60 percent the outer radius and both inner shares pass the
+    /// half sides, so each contour of a rounded finder pattern is the circle of its own square, and an unclamped one would show its radius.
+    /// </summary>
+    [Test]
+    public async Task Svg_RoundedFinder_PastHalfTheSide_IsNestedCircles()
+    {
+        var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
+        string FinderPath(FinderPatternStyle style) => XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { FinderPatternStyle = style, CornerRadiusPercent = 60 })).Root!
+            .Element(Svg + "g")!.Elements(Svg + "path").First(p => p.Attribute("fill-rule") is not null).Attribute("d")!.Value;
+
+        var rounded = FinderPath(FinderPatternStyle.RoundedSquare);
+        await Assert.That(rounded).Contains("a3.5 3.5 0 0 1 3.5 3.5");
+        await Assert.That(rounded).Contains("a2.5 2.5 0 0 1 2.5 2.5");
+        await Assert.That(rounded).Contains("a1.5 1.5 0 0 1 1.5 1.5");
+        var aroundACircle = FinderPath(FinderPatternStyle.RoundedSquareCircle);
+        await Assert.That(aroundACircle).Contains("a3.5 3.5 0 0 1 3.5 3.5");
+        await Assert.That(aroundACircle).Contains("a2.5 2.5 0 0 1 2.5 2.5");
+    }
+
+    /// <summary>A radius of 0 is accepted and rounds nothing: a rounded module is the square at the same scale, and the SVG's shape carries no radius.</summary>
+    [Test]
+    public async Task CornerRadius_Zero_IsTheSquare()
+    {
+        var qr = QRCodeGenerator.Create("zero", QREccLevel.M);
+        var rounded = new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 0 };
+        var square = rounded with { ModuleStyle = ModuleStyle.Square };
+
+        await Assert.That(Pixels(qr, rounded, PixelLayout.Gray8)).IsEquivalentTo(Pixels(qr, square, PixelLayout.Gray8), CollectionOrdering.Matching);
+        var shape = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, rounded)).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
+        await Assert.That(shape.Attribute("rx")).IsNull();
+    }
+
+    /// <summary>
+    /// A shaped document's bound counts a use element for each dark module, so at version 40 it stays within the 1,048,576 bytes the
+    /// shared pool keeps on every runtime, and the document stays within the bound, on random text and on one letter repeated.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Svg_ShapedModules_BoundStaysPooled_AndHoldsTheDocument(bool repeated)
+    {
+        var text = repeated ? new string('a', 2000) : string.Concat(Enumerable.Range(0, 2900).Select(i => (char)('!' + (i * 7919 % 90))));
+        var qr = QRCodeGenerator.Create(text, repeated ? QREccLevel.M : QREccLevel.L, new QRCodeGeneratorOptions { Version = 40 });
+        var options = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle };
+        var view = new FeatherQR.Internals.StandardQrMatrixView(qr);
+        var layout = FeatherQR.Internals.ImageWriters.ImageLayout.Create(in view, in options);
+
+        var bound = FeatherQR.Internals.ImageWriters.SvgWriter.MaxLength(in view, in options, in layout);
+        var length = SymbolImageWriter.GetSvgString(qr, options).Length;
+
+        await Assert.That(bound).IsLessThanOrEqualTo(1 << 20);
+        await Assert.That(length).IsLessThanOrEqualTo(bound);
+    }
+
     [Test]
     public async Task Svg_FinderStyles_WriteTheirElements()
     {

@@ -39,6 +39,37 @@ public class SymbolImageWriterIconTest
         await Assert.That(() => new SymbolImageOptions { MaxCoreOccupancyPercent = 101 }).Throws<ArgumentOutOfRangeException>();
     }
 
+    /// <summary>
+    /// An icon image whose base64 would make the document longer than an array is refused naming the options. The memory reports its
+    /// length without holding the bytes, so the refusal has to come from the length alone, before anything is rented.
+    /// </summary>
+    [Test]
+    public async Task IconImage_LongerThanAnArrayCanHold_IsRefused()
+    {
+        var qr = QRCodeGenerator.Create("https://github.com/guitarrapc/FeatherQR", QREccLevel.H);
+        var options = new SymbolImageOptions { IconSizeModules = 7, IconImage = new LengthOnlyMemory(1_700_000_000).Memory };
+        var thrown = await Assert.That(() => SymbolImageWriter.GetSvgString(qr, options)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(thrown!.ParamName).IsEqualTo("options");
+        await Assert.That(() => SymbolImageWriter.WriteSvg(qr, new ArrayBufferWriter<byte>(), options)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    private sealed class LengthOnlyMemory(int length) : MemoryManager<byte>
+    {
+        public override Memory<byte> Memory => CreateMemory(length);
+
+        public override Span<byte> GetSpan() => throw new InvalidOperationException("The bytes are never read before the refusal.");
+
+        public override MemoryHandle Pin(int elementIndex = 0) => throw new InvalidOperationException("The bytes are never read before the refusal.");
+
+        public override void Unpin()
+        {
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+        }
+    }
+
     /// <summary>An icon that does not fit is refused by every call, as the rendering package refuses it, and Micro QR and rMQR take none.</summary>
     [Test]
     public async Task AnIconThatDoesNotFit_OrOnMicroQrOrRmQr_Throws()
@@ -47,7 +78,9 @@ public class SymbolImageWriterIconTest
         // 7 modules and a border of 1 are 9 of the 21, 43 percent, over the 30 allowed.
         var tooLarge = new SymbolImageOptions { IconSizeModules = 7 };
         var writer = new ArrayBufferWriter<byte>();
-        await Assert.That(() => SymbolImageWriter.GetPngBytes(v1, tooLarge)).Throws<ArgumentOutOfRangeException>();
+        // The symbol is 29 modules across with its quiet zone, so the message names the 21 the limit is taken from.
+        var occupancy = await Assert.That(() => SymbolImageWriter.GetPngBytes(v1, tooLarge)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(occupancy!.Message).Contains("30 percent of the symbol's 21 modules without its quiet zone allows 6");
         await Assert.That(() => SymbolImageWriter.WritePng(v1, writer, tooLarge)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => SymbolImageWriter.GetSvgString(v1, tooLarge)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => SymbolImageWriter.WriteSvg(v1, writer, tooLarge)).Throws<ArgumentOutOfRangeException>();
@@ -61,7 +94,8 @@ public class SymbolImageWriterIconTest
         // Without the border the 7 modules start on row 7, just past the finder patterns.
         await Assert.That(SymbolImageWriter.GetPngBytes(v1, tooLarge with { MaxCoreOccupancyPercent = 50, IconBorderModules = 0 }).Length).IsGreaterThan(0);
         // Larger than the core itself.
-        await Assert.That(() => SymbolImageWriter.GetPngBytes(v1, new SymbolImageOptions { IconSizeModules = 21, MaxCoreOccupancyPercent = 100 })).Throws<ArgumentOutOfRangeException>();
+        var larger = await Assert.That(() => SymbolImageWriter.GetPngBytes(v1, new SymbolImageOptions { IconSizeModules = 21, MaxCoreOccupancyPercent = 100 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(larger!.Message).Contains("more than the symbol's 21 modules without its quiet zone");
         await Assert.That(() => SymbolImageWriter.GetIconRectangle(v1, default)).Throws<ArgumentOutOfRangeException>().Because("no icon is set");
 
         var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);

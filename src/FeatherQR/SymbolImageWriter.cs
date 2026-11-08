@@ -31,7 +31,7 @@ public static class SymbolImageWriter
     /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The document. It has no XML declaration, so it also goes into HTML as it is.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels or the document longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static string GetSvgString(QRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -70,7 +70,7 @@ public static class SymbolImageWriter
     /// The bytes are those of <see cref="GetSvgString(QRCodeData, in SymbolImageOptions)"/>, and once warm nothing is allocated beyond what the writer hands out.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> or <paramref name="writer"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels or the document longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     /// <exception cref="InvalidOperationException">Thrown when <paramref name="writer"/> hands out a span shorter than the document, against the <see cref="IBufferWriter{T}"/> contract.</exception>
     public static int WriteSvg(QRCodeData data, IBufferWriter<byte> writer, in SymbolImageOptions options = default)
     {

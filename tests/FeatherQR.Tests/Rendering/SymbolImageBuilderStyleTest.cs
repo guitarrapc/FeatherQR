@@ -19,6 +19,8 @@ public class SymbolImageBuilderStyleTest
         (ModuleStyle.RoundedSquare, 90, 30),
         (ModuleStyle.RoundedSquare, 90, 10),
         (ModuleStyle.RoundedSquare, 80, 50),
+        (ModuleStyle.RoundedSquare, 90, 0),
+        (ModuleStyle.RoundedSquare, 90, 100),
     ];
 
     /// <summary>Every case changes the image, so an entry point that ignored its arguments would fail the case.</summary>
@@ -47,7 +49,19 @@ public class SymbolImageBuilderStyleTest
         (FinderPatternStyle.RoundedSquare, 10),
         (FinderPatternStyle.RoundedSquareCircle, 30),
         (FinderPatternStyle.RoundedSquareCircle, 45),
+        (FinderPatternStyle.RoundedSquare, 100),
+        (FinderPatternStyle.RoundedSquareCircle, 100),
     ];
+
+    /// <summary>A radius of 0 is in range, and draws the rounded finder pattern class at no radius.</summary>
+    [Test]
+    public async Task WithFinderPatternStyle_TakesARadiusOfZero()
+    {
+        var zero = new QRCodeImageBuilder(Content).WithFinderPatternStyle(FinderPatternStyle.RoundedSquare, 0).ToByteArray();
+        var shape = new QRCodeImageBuilder(Content).WithFinderPatternShape(new RoundedRectangleFinderPatternShape(0f)).ToByteArray();
+
+        await Assert.That(zero).IsEquivalentTo(shape, CollectionOrdering.Matching);
+    }
 
     [Test]
     [MethodDataSource(nameof(FinderCases))]

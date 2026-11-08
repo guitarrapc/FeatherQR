@@ -274,7 +274,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <remarks>
     /// The same as <see cref="WithFinderPatternShape"/> with the matching shape, <see cref="RectangleFinderPatternShape"/>, <see cref="CircleFinderPatternShape"/>,
     /// <see cref="RoundedRectangleFinderPatternShape"/> or <see cref="RoundedRectangleCircleFinderPatternShape"/>, at the radius given here in whole percents.
-    /// The radius defaults to the core's 30 percent, where <see cref="RoundedRectangleFinderPatternShape.Default"/> rounds by 20.
+    /// The radius defaults to the core's 30 percent, where the <see cref="RoundedRectangleFinderPatternShape"/> class defaults to 20.
     /// Both calls set one choice, and the later one is drawn.
     /// </remarks>
     /// <param name="style">The shape of the finder patterns.</param>

@@ -49,10 +49,10 @@ internal readonly struct IconArea
         var border = options.IconBorderModules;
         var total = icon + 2L * border;
         if (total > core)
-            throw new ArgumentOutOfRangeException(nameof(options), $"An icon of {icon} modules with a border of {border} takes {total} modules, more than the symbol's {core}.");
+            throw new ArgumentOutOfRangeException(nameof(options), $"An icon of {icon} modules with a border of {border} takes {total} modules, more than the symbol's {core} modules without its quiet zone.");
         var allowed = core * options.MaxCoreOccupancyPercent / 100;
         if (total > allowed)
-            throw new ArgumentOutOfRangeException(nameof(options), $"An icon of {icon} modules with a border of {border} takes {total} modules, but {options.MaxCoreOccupancyPercent} percent of the symbol's {core} allows {allowed}. Raise MaxCoreOccupancyPercent or make the icon smaller.");
+            throw new ArgumentOutOfRangeException(nameof(options), $"An icon of {icon} modules with a border of {border} takes {total} modules, but {options.MaxCoreOccupancyPercent} percent of the symbol's {core} modules without its quiet zone allows {allowed}. Raise MaxCoreOccupancyPercent or make the icon smaller.");
 
         // Snapped to the grid: a core's side is odd, so an even icon cannot sit on the exact centre.
         var origin = (core - icon) / 2;

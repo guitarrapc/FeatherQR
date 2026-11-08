@@ -38,7 +38,7 @@ internal static partial class SvgWriter
     {
         var layout = ImageLayout.Create(in view, in options);
         var icon = IconArea.Get(in view, in options);
-        var rented = ArrayPool<byte>.Shared.Rent(MaxLength(in view, in options));
+        var rented = ArrayPool<byte>.Shared.Rent(MaxLength(in view, in options, in layout));
         try
         {
             var length = Write(in view, in options, in layout, in icon, rented);
@@ -56,7 +56,7 @@ internal static partial class SvgWriter
         var layout = ImageLayout.Create(in view, in options);
         var icon = IconArea.Get(in view, in options);
         // Written in full first, so the caller's writer is asked for the exact length and not for the bound.
-        var rented = ArrayPool<byte>.Shared.Rent(MaxLength(in view, in options));
+        var rented = ArrayPool<byte>.Shared.Rent(MaxLength(in view, in options, in layout));
         try
         {
             var length = Write(in view, in options, in layout, in icon, rented);
@@ -409,7 +409,7 @@ internal static partial class SvgWriter
     /// The longest document the matrix can give.
     /// A relative move stays inside the core, so its numbers have no more digits than the core's sides.
     /// </summary>
-    private static int MaxLength<TView>(in TView view, in SymbolImageOptions options)
+    internal static int MaxLength<TView>(in TView view, in SymbolImageOptions options, in ImageLayout layout)
         where TView : struct, IModuleMatrixView
     {
         int coreWidth = view.CoreWidth, coreHeight = view.CoreHeight;
@@ -417,20 +417,36 @@ internal static partial class SvgWriter
         var perRun = 4 + 2 * Digits(coreWidth) + Digits(coreHeight);
         // The first move is absolute, quiet zone included, and carries the ".5".
         var firstMove = 4 + Digits(view.Width) + Digits(view.Height);
-        var runs = MarkupBound + firstMove + ModuleRunScanner.GetMaxRunCount(coreWidth, coreHeight) * perRun;
+        // In a long, since an icon image of over 1.6 GB alone passes an int.
+        long length = MarkupBound + firstMove + (long)ModuleRunScanner.GetMaxRunCount(coreWidth, coreHeight) * perRun;
         if (!options.IconImage.IsEmpty)
         {
             // The image element, its media type and the bytes in base64.
-            runs += 160 + (options.IconMediaType?.Length ?? 0) + (options.IconImage.Length + 2) / 3 * 4;
+            length += 160 + (options.IconMediaType?.Length ?? 0) + (options.IconImage.Length + 2L) / 3 * 4;
         }
-        if (!options.IsStyled)
-            return runs;
-        // The group, the shape and up to three finder patterns on top of the runs, and a use element for every module where the modules
-        // have a shape of their own.
-        if (options.ModuleStyle == ModuleStyle.Square && options.ModuleScalePercent == 100)
-            return runs + StyledMarkupBound;
-        var perUse = StyledUseBound + Digits(view.Width) + Digits(view.Height);
-        return runs + StyledMarkupBound + coreWidth * coreHeight * perUse;
+        if (options.IsStyled)
+        {
+            // The group, the shape and up to three finder patterns on top of the runs.
+            length += StyledMarkupBound;
+            // A use element for each dark module where the modules have a shape of their own. A bound of every module would pass the
+            // 1 MiB some runtimes' shared pool keeps at the larger versions, and the rent would then allocate.
+            if (options.ModuleStyle != ModuleStyle.Square || options.ModuleScalePercent != 100)
+                length += DarkModules(view.CoreBits) * (StyledUseBound + Digits(view.Width) + Digits(view.Height));
+        }
+        ImageSize.ThrowIfLongerThanAnArray(length, layout.Width, layout.Height);
+        return (int)length;
+    }
+
+    private static long DarkModules(ReadOnlySpan<byte> bits)
+    {
+        long count = 0;
+        foreach (var b in bits)
+        {
+            var v = b - ((b >> 1) & 0x55);
+            v = (v & 0x33) + ((v >> 2) & 0x33);
+            count += (v + (v >> 4)) & 0x0F;
+        }
+        return count;
     }
 
     private static int Digits(int value)

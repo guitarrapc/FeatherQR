@@ -122,7 +122,7 @@ internal readonly struct ImageLayout
         return Math.Min(row, Rows);
     }
 
-    // Module k starts at the first pixel whose centre, k + 1/2 along, is at or past k × Numerator / Denominator.
+    // Module k starts at the first pixel x whose centre, x + 1/2 along, is at or past k × Numerator / Denominator.
     private int Start(int k) => Denominator == 1 ? k * (int)Numerator : (int)CeilDiv(2 * Numerator * k - Denominator, 2 * Denominator);
 
     // The side that follows the other at the scale it gives, rounded up so the symbol fits inside and the same two sides bind on the given one.
