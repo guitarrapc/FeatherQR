@@ -1,24 +1,32 @@
 namespace FeatherQR.Internals.ImageWriters;
 
 /// <summary>
-/// The styled document: one shape in <c>defs</c>, used at each dark module that is not part of a finder pattern, the finder patterns as
+/// The styled document: one stroked path with a subpath at each dark module that is not part of a finder pattern, the finder patterns as
 /// circles or even-odd paths, and the stroked runs of the plain document for squares at full size and for the standard finder patterns.
 /// </summary>
 /// <remarks>
-/// Everything dark sits in one group that carries the colour, so a use element and a finder's elements name no colour of their own.
+/// <para>
+/// Everything dark sits in one group that carries the fill colour, so a finder's filled elements name no colour of their own.
 /// The shape's numbers are in modules to three decimals, which a percent of a module is.
+/// </para>
+/// <para>
+/// A circle or a square below full size is a segment of no length at the module's centre, which a round or a square cap draws the
+/// stroke's width across. A rounded square is a smaller square, filled and stroked with round joins as wide as its corners' diameter.
+/// Every subpath starts at the same place in its cell and ends where it started, so the next one is a move by whole modules.
+/// A subpath costs a few bytes a module, where an element at each module costs several times that.
+/// </para>
 /// </remarks>
 internal static partial class SvgWriter
 {
-    // The group, the shape, and three finder patterns of an even-odd path and a circle each.
+    // The group, the module path's attributes and first move, and three finder patterns of an even-odd path and a circle each.
     private const int StyledMarkupBound = 2048;
-    // "<use href="#m" x="" y=""/>" around the two numbers.
-    private const int StyledUseBound = 26;
+    // The longest shape after a subpath's move: a rounded square's "h.999v.999h-.999z".
+    private const int ModuleTailBound = 17;
 
     /// <summary>
     /// Opens the group that carries the colour. Squares at full size are the plain document's stroked runs, which the caller writes next.
-    /// Shaped modules are the shape defined once and placed at each dark module outside the finder patterns and the icon area, after the
-    /// finder patterns as stroked runs when they are square.
+    /// Shaped modules are one path with a subpath at each dark module outside the finder patterns and the icon area, after the finder
+    /// patterns as stroked runs when they are square.
     /// </summary>
     private static void OpenStyled<TView>(ref AsciiWriter w, in TView view, in SymbolImageOptions options, in IconArea icon, int quietZone, bool squareModules)
         where TView : struct, IModuleMatrixView
@@ -39,9 +47,39 @@ internal static partial class SvgWriter
 
         if (options.FinderPatternStyle == FinderPatternStyle.Square)
             WriteFinderRuns(ref w, in view, quietZone, dark);
-        WriteModuleShape(ref w, in options);
+
+        // In thousandths of a module: the shape's side, its inset from the cell's edge, and its corner radius, which stops where the corners meet.
+        long side = options.ModuleScalePercent * 10, inset = (100 - options.ModuleScalePercent) * 5;
+        var radius = options.ModuleStyle switch
+        {
+            ModuleStyle.Circle => side / 2,
+            ModuleStyle.RoundedSquare => Math.Min(side * options.CornerRadiusPercent / 100, side / 2),
+            _ => 0,
+        };
+        var joined = radius != 0 && radius != side / 2;
+        Span<byte> tail = stackalloc byte[ModuleTailBound];
+        var t = new AsciiWriter(tail);
+        if (joined)
+        {
+            var innerSide = (int)(side - 2 * radius);
+            t.Byte((byte)'h');
+            t.Fraction(innerSide);
+            t.Byte((byte)'v');
+            t.Fraction(innerSide);
+            t.Raw("h-"u8);
+            t.Fraction(innerSide);
+            t.Byte((byte)'z');
+        }
+        else
+        {
+            t.Raw("h0"u8);
+        }
+        tail = tail.Slice(0, t.Position);
+        var offset = joined ? inset + radius : 500;
+
         var bits = view.CoreBits;
         int coreWidth = view.CoreWidth, coreHeight = view.CoreHeight;
+        int lastRow = -1, lastColumn = 0;
         for (var row = 0; row < coreHeight; row++)
         {
             var start = (long)row * coreWidth;
@@ -56,17 +94,49 @@ internal static partial class SvgWriter
                     {
                         if (view.IsFinderPattern(row, c) || icon.Covers(row, c))
                             continue;
-                        w.Raw("<use href=\"#m\" x=\""u8);
-                        w.Int(quietZone + c);
-                        w.Raw("\" y=\""u8);
-                        w.Int(quietZone + row);
-                        w.Raw("\"/>"u8);
+                        if (lastRow < 0)
+                        {
+                            OpenModulePath(ref w, side, radius, joined, dark);
+                            w.Thousandths((quietZone + c) * 1000L + offset);
+                            w.Byte((byte)' ');
+                            w.Thousandths((quietZone + row) * 1000L + offset);
+                        }
+                        else
+                        {
+                            w.Byte((byte)'m');
+                            w.Int(c - lastColumn);
+                            w.Byte((byte)' ');
+                            w.Int(row - lastRow);
+                        }
+                        w.Raw(tail);
+                        lastRow = row;
+                        lastColumn = c;
                     }
                 }
                 column += length;
                 isDark = !isDark;
             }
         }
+        if (lastRow >= 0)
+            w.Raw("\"/>"u8);
+    }
+
+    /// <summary>The module path's stroke up to its first move: a cap that draws a segment of no length, or round joins around a smaller square.</summary>
+    private static void OpenModulePath(ref AsciiWriter w, long side, long radius, bool joined, SymbolColor dark)
+    {
+        w.Raw("<path stroke=\""u8);
+        w.Color(dark);
+        w.Byte((byte)'"');
+        if (dark.A != 255)
+        {
+            // A rounded square's fill and stroke overlap inside it, so its alpha is the path's opacity, which composites the two once.
+            w.Raw(joined ? " fill-opacity=\"1\" opacity=\""u8 : " stroke-opacity=\""u8);
+            w.Opacity(dark.A);
+            w.Byte((byte)'"');
+        }
+        w.Raw(" stroke-width=\""u8);
+        w.Thousandths(joined ? 2 * radius : side);
+        w.Raw(joined ? "\" stroke-linejoin=\"round\" d=\"M"u8 : radius == 0 ? "\" stroke-linecap=\"square\" d=\"M"u8 : "\" stroke-linecap=\"round\" d=\"M"u8);
     }
 
     /// <summary>The finder patterns as shapes of their own when they have one, and the group's end.</summary>
@@ -82,39 +152,6 @@ internal static partial class SvgWriter
             }
         }
         w.Raw("</g>"u8);
-    }
-
-    /// <summary>The module's shape, defined once at the origin of a cell: a rectangle inset by the scale, rounded when asked, or a circle.</summary>
-    private static void WriteModuleShape(ref AsciiWriter w, in SymbolImageOptions options)
-    {
-        // In thousandths of a module: the inset on each side and the side left.
-        long inset = (100 - options.ModuleScalePercent) * 5, side = options.ModuleScalePercent * 10;
-        w.Raw("<defs>"u8);
-        if (options.ModuleStyle == ModuleStyle.Circle)
-        {
-            w.Raw("<circle id=\"m\" cx=\".5\" cy=\".5\" r=\""u8);
-            w.Thousandths(side / 2);
-            w.Raw("\"/>"u8);
-        }
-        else
-        {
-            w.Raw("<rect id=\"m\" x=\""u8);
-            w.Thousandths(inset);
-            w.Raw("\" y=\""u8);
-            w.Thousandths(inset);
-            w.Raw("\" width=\""u8);
-            w.Thousandths(side);
-            w.Raw("\" height=\""u8);
-            w.Thousandths(side);
-            if (options.ModuleStyle == ModuleStyle.RoundedSquare && options.CornerRadiusPercent != 0)
-            {
-                // Past half the side the corners meet, so the radius stops there as the raster's does.
-                w.Raw("\" rx=\""u8);
-                w.Thousandths(Math.Min(side * options.CornerRadiusPercent / 100, side / 2));
-            }
-            w.Raw("\"/>"u8);
-        }
-        w.Raw("</defs>"u8);
     }
 
     /// <summary>

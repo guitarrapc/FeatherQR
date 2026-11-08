@@ -360,30 +360,95 @@ public class SymbolImageWriterStyleTest
 
     // ---- the SVG ----------------------------------------------------------------------------
 
+    /// <summary>
+    /// Circle modules are one stroked path with a zero-length segment at each dark module's centre, which a round cap draws as a disc the
+    /// stroke's width across. The square finder patterns stay the plain document's runs, and the icon area's modules are left out.
+    /// </summary>
     [Test]
-    public async Task Svg_StyledModules_UseOneShape_AndTheSquareFinders_StayRuns()
+    public async Task Svg_CircleModules_AreRoundCapsOnOnePath_AndTheSquareFinders_StayRuns()
     {
-        var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
-        var options = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, DarkColor = Navy };
+        var qr = QRCodeGenerator.Create("svg", QREccLevel.H, new QRCodeGeneratorOptions { Version = 5 });
+        var options = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, DarkColor = Navy, IconSizeModules = 5 };
         var root = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, options)).Root!;
-        var (columns, rows, quietZone, finders) = Geometry(qr);
+        var (_, _, quietZone, _) = Geometry(qr);
 
         await Assert.That(root.Attribute("shape-rendering")).IsNull().Because("a curve is not drawn crisp");
         var group = root.Element(Svg + "g")!;
         await Assert.That(group.Attribute("fill")?.Value).IsEqualTo("#1e3a8a");
+        await Assert.That(group.Elements(Svg + "use").Count() + group.Elements(Svg + "defs").Count()).IsEqualTo(0);
 
-        var shape = group.Element(Svg + "defs")!.Element(Svg + "circle")!;
-        await Assert.That(shape.Attribute("id")?.Value).IsEqualTo("m");
-        await Assert.That(shape.Attribute("r")?.Value).IsEqualTo("0.46");
+        var modules = ModulePath(root);
+        await Assert.That(modules.Attribute("stroke")?.Value).IsEqualTo("#1e3a8a");
+        await Assert.That(modules.Attribute("stroke-width")?.Value).IsEqualTo("0.92");
+        await Assert.That(modules.Attribute("stroke-linecap")?.Value).IsEqualTo("round");
+        await Assert.That(modules.Attribute("stroke-linejoin")).IsNull();
+        var (starts, tails) = ModuleSubpaths(modules);
+        await Assert.That(tails.Single()).IsEqualTo("h0").Because("each segment has no length");
+        await Assert.That(starts.All(s => s.X % 1 == 0.5m && s.Y % 1 == 0.5m)).IsTrue().Because("each segment sits at a module's centre");
 
-        var useElements = group.Elements(Svg + "use").ToArray();
-        var uses = useElements.Select(u => (Row: int.Parse(u.Attribute("y")!.Value) - quietZone, Column: int.Parse(u.Attribute("x")!.Value) - quietZone)).ToHashSet();
-        await Assert.That(useElements.All(x => x.Attribute("href")?.Value == "#m")).IsTrue();
-        await Assert.That(uses.Count).IsEqualTo(useElements.Length).Because("one use a module, none twice");
-        await Assert.That(uses).IsEquivalentTo(DarkModules(qr, finder: false), CollectionOrdering.Any).Because("one use at each dark module outside the finder patterns");
+        var expected = DarkModules(qr, finder: false);
+        var view = new FeatherQR.Internals.StandardQrMatrixView(qr);
+        var icon = FeatherQR.Internals.ImageWriters.IconArea.Get(in view, in options);
+        await Assert.That(expected.RemoveWhere(m => icon.Covers(m.Row, m.Column))).IsGreaterThan(0).Because("the icon area holds dark modules to leave out");
+        var cells = starts.Select(s => (Row: (int)s.Y - quietZone, Column: (int)s.X - quietZone)).ToList();
+        await Assert.That(cells.Distinct().Count()).IsEqualTo(cells.Count).Because("one segment a module, none twice");
+        await Assert.That(cells.ToHashSet()).IsEquivalentTo(expected, CollectionOrdering.Any);
 
-        var runs = PathModules(group.Element(Svg + "path")!.Attribute("d")!.Value, quietZone);
+        var runs = PathModules(group.Elements(Svg + "path").Single(p => p.Attribute("stroke-width") is null).Attribute("d")!.Value, quietZone);
         await Assert.That(runs).IsEquivalentTo(DarkModules(qr, finder: true), CollectionOrdering.Any).Because("the finder patterns are the stroked runs of the plain document");
+    }
+
+    /// <summary>
+    /// A square below full size is a square cap, and a rounded one is a smaller square stroked with round joins, the stroke as wide as the
+    /// corners' diameter. A radius of half the side or more is the circle, and every subpath starts at the same place in its cell.
+    /// </summary>
+    [Test]
+    public async Task Svg_ModuleShapes_TakeTheirCapOrJoin_AndTheirWidth()
+    {
+        var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
+        var (_, _, quietZone, _) = Geometry(qr);
+        var expected = DarkModules(qr, finder: false);
+
+        async Task Check(SymbolImageOptions options, string width, string? cap, string? join, string tail, decimal offset)
+        {
+            var path = ModulePath(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, options)).Root!);
+            await Assert.That(path.Attribute("stroke-width")?.Value).IsEqualTo(width);
+            await Assert.That(path.Attribute("stroke-linecap")?.Value).IsEqualTo(cap);
+            await Assert.That(path.Attribute("stroke-linejoin")?.Value).IsEqualTo(join);
+            var (starts, tails) = ModuleSubpaths(path);
+            await Assert.That(tails.Single()).IsEqualTo(tail);
+            await Assert.That(starts.All(s => s.X % 1 == offset && s.Y % 1 == offset)).IsTrue();
+            await Assert.That(starts.Select(s => (Row: (int)s.Y - quietZone, Column: (int)s.X - quietZone)).ToHashSet()).IsEquivalentTo(expected, CollectionOrdering.Any);
+        }
+
+        await Check(new SymbolImageOptions { ModuleScalePercent = 80 }, "0.8", "square", null, "h0", 0.5m);
+        // Below the clamp the radius follows the option: 30 percent of the 0.9 side is 0.27, so the inner square is 0.36 at 0.05 + 0.27.
+        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 30 }, "0.54", null, "round", "h.36v.36h-.36z", 0.32m);
+        // At half the side the corners meet, and past it the writer stops at the circle, as the raster does.
+        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 50 }, "0.9", "round", null, "h0", 0.5m);
+        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 80 }, "0.9", "round", null, "h0", 0.5m);
+    }
+
+    /// <summary>
+    /// A rounded module's fill and stroke overlap inside it, so a translucent colour painted on each would come out darker there. Its
+    /// path takes the alpha as its opacity instead, which composites the two once. A cap-drawn module is a stroke alone.
+    /// </summary>
+    [Test]
+    public async Task Svg_ShapedModules_WithATranslucentDarkColour_PaintTheAlphaOnce()
+    {
+        var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
+        var translucent = new SymbolColor(0x1E, 0x3A, 0x8A, 128);
+
+        var root = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, DarkColor = translucent })).Root!;
+        var alpha = root.Element(Svg + "g")!.Attribute("fill-opacity")!.Value;
+        var rounded = ModulePath(root);
+        await Assert.That(rounded.Attribute("opacity")?.Value).IsEqualTo(alpha);
+        await Assert.That(rounded.Attribute("fill-opacity")?.Value).IsEqualTo("1");
+        await Assert.That(rounded.Attribute("stroke-opacity")).IsNull();
+
+        var circle = ModulePath(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, DarkColor = translucent })).Root!);
+        await Assert.That(circle.Attribute("stroke-opacity")?.Value).IsEqualTo(alpha);
+        await Assert.That(circle.Attribute("opacity")).IsNull();
     }
 
     [Test]
@@ -395,7 +460,6 @@ public class SymbolImageWriterStyleTest
         var (columns, rows, quietZone, finders) = Geometry(qr);
         var group = root.Element(Svg + "g")!;
 
-        await Assert.That(group.Elements(Svg + "use").Count()).IsEqualTo(0);
         var paths = group.Elements(Svg + "path").ToArray();
         var runs = paths.Single(p => p.Attribute("fill-rule") is null);
         await Assert.That(PathModules(runs.Attribute("d")!.Value, quietZone)).IsEquivalentTo(DarkModules(qr, finder: false), CollectionOrdering.Any);
@@ -473,7 +537,7 @@ public class SymbolImageWriterStyleTest
         await Assert.That(aroundACircle).Contains("a2.5 2.5 0 0 1 2.5 2.5");
     }
 
-    /// <summary>A radius of 0 is accepted and rounds nothing: a rounded module is the square at the same scale, and the SVG's shape carries no radius.</summary>
+    /// <summary>A radius of 0 is accepted and rounds nothing: a rounded module is the square at the same scale, in the SVG a square cap with no join.</summary>
     [Test]
     public async Task CornerRadius_Zero_IsTheSquare()
     {
@@ -482,12 +546,14 @@ public class SymbolImageWriterStyleTest
         var square = rounded with { ModuleStyle = ModuleStyle.Square };
 
         await Assert.That(Pixels(qr, rounded, PixelLayout.Gray8)).IsEquivalentTo(Pixels(qr, square, PixelLayout.Gray8), CollectionOrdering.Matching);
-        var shape = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, rounded)).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(shape.Attribute("rx")).IsNull();
+        var path = ModulePath(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, rounded)).Root!);
+        await Assert.That(path.Attribute("stroke-linecap")?.Value).IsEqualTo("square");
+        await Assert.That(path.Attribute("stroke-linejoin")).IsNull();
+        await Assert.That(path.Attribute("d")!.Value).IsEqualTo(ModulePath(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, square)).Root!).Attribute("d")!.Value);
     }
 
     /// <summary>
-    /// A shaped document's bound counts a use element for each dark module, so at version 40 it stays within the 1,048,576 bytes the
+    /// A shaped document's bound counts a subpath for each dark module, so at version 40 it stays within the 1,048,576 bytes the
     /// shared pool keeps on every runtime, and the document stays within the bound, on random text and on one letter repeated.
     /// </summary>
     [Test]
@@ -534,27 +600,6 @@ public class SymbolImageWriterStyleTest
         await Assert.That(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleScalePercent = 75 })).Root!.Attribute("shape-rendering")?.Value).IsEqualTo("crispEdges");
         await Assert.That(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare })).Root!.Attribute("shape-rendering")).IsNull();
         await Assert.That(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { FinderPatternStyle = FinderPatternStyle.Circle })).Root!.Attribute("shape-rendering")).IsNull();
-    }
-
-    [Test]
-    public async Task Svg_ScaledSquare_IsAnInsetRect_AndARoundedOne_HasARadius()
-    {
-        var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
-        var square = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleScalePercent = 80 })).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(square.Attribute("x")?.Value).IsEqualTo("0.1");
-        await Assert.That(square.Attribute("width")?.Value).IsEqualTo("0.8");
-        await Assert.That(square.Attribute("rx")).IsNull();
-
-        // Below the clamp the radius follows the option: 30 percent of the 0.9 side.
-        var rounded = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 30 })).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(rounded.Attribute("rx")?.Value).IsEqualTo("0.27");
-
-        var half = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 50 })).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(half.Attribute("rx")?.Value).IsEqualTo("0.45");
-
-        // Past half the side the writer stops at the circle, as the raster does, instead of leaving a renderer to clamp the radius.
-        var past = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 80 })).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(past.Attribute("rx")?.Value).IsEqualTo("0.45");
     }
 
     [Test]
@@ -681,6 +726,35 @@ public class SymbolImageWriterStyleTest
                 if (qr.GetCoreModule(row, column) && qr.IsFinderPattern(row, column) == finder)
                     modules.Add((row, column));
         return modules;
+    }
+
+    /// <summary>The path of the shaped modules, the one stroke with a width of its own. The runs and the finder patterns take the default width.</summary>
+    private static XElement ModulePath(XElement root) => root.Descendants(Svg + "path").Single(p => p.Attribute("stroke-width") is not null);
+
+    /// <summary>
+    /// Each subpath's start, from an absolute move and then moves relative to the start before, and the commands after each move. Both
+    /// forms end a subpath where it started, a segment of no length or a closed square, so a relative move counts from the start.
+    /// </summary>
+    private static (List<(decimal X, decimal Y)> Starts, HashSet<string> Tails) ModuleSubpaths(XElement path)
+    {
+        var d = path.Attribute("d")!.Value;
+        var matches = System.Text.RegularExpressions.Regex.Matches(d, @"([Mm])(-?[\d.]+) (-?[\d.]+)([^Mm]*)");
+        var starts = new List<(decimal, decimal)>();
+        var tails = new HashSet<string>();
+        decimal x = 0, y = 0;
+        var consumed = 0;
+        foreach (System.Text.RegularExpressions.Match m in matches)
+        {
+            var dx = decimal.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+            var dy = decimal.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture);
+            (x, y) = m.Groups[1].Value == "M" ? (dx, dy) : (x + dx, y + dy);
+            starts.Add((x, y));
+            tails.Add(m.Groups[4].Value);
+            consumed += m.Length;
+        }
+        if (consumed != d.Length || !d.StartsWith('M') || d.LastIndexOf('M') != 0)
+            throw new FormatException($"not one absolute move then relative ones: {d}");
+        return (starts, tails);
     }
 
     /// <summary>The modules a stroked run path covers: an absolute move with a half, then relative moves, each followed by a horizontal run.</summary>

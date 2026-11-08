@@ -24,8 +24,8 @@ namespace FeatherQR.Internals.ImageWriters;
 /// around the symbol, in modules to three decimals, and the renderer scales the drawing and snaps it to its pixels.
 /// </para>
 /// <para>
-/// A styled image, with shaped or scaled modules or shaped finder patterns, is the other partial file's: one shape defined once and used
-/// at each dark module, the finder patterns as their own elements, and the stroked runs kept for whatever is still a square.
+/// A styled image, with shaped or scaled modules or shaped finder patterns, is the other partial file's: one stroked path with a short
+/// subpath at each dark module, the finder patterns as their own elements, and the stroked runs kept for whatever is still a square.
 /// </para>
 /// </remarks>
 internal static partial class SvgWriter
@@ -426,12 +426,13 @@ internal static partial class SvgWriter
         }
         if (options.IsStyled)
         {
-            // The group, the shape and up to three finder patterns on top of the runs.
+            // The group, the module path's start and up to three finder patterns on top of the runs.
             length += StyledMarkupBound;
-            // A use element for each dark module where the modules have a shape of their own. A bound of every module would pass the
-            // 1 MiB some runtimes' shared pool keeps at the larger versions, and the rent would then allocate.
+            // A subpath for each dark module where the modules have a shape of their own: "m", the sign and digits of the step across, a
+            // space, the step down and the shape. A bound of every module would pass the 1 MiB some runtimes' shared pool keeps at the
+            // larger versions, and the rent would then allocate.
             if (options.ModuleStyle != ModuleStyle.Square || options.ModuleScalePercent != 100)
-                length += DarkModules(view.CoreBits) * (StyledUseBound + Digits(view.Width) + Digits(view.Height));
+                length += DarkModules(view.CoreBits) * (3 + Digits(coreWidth) + Digits(coreHeight) + ModuleTailBound);
         }
         ImageSize.ThrowIfLongerThanAnArray(length, layout.Width, layout.Height);
         return (int)length;
@@ -486,7 +487,7 @@ internal static partial class SvgWriter
             Position += written;
         }
 
-        public void Raw(ReadOnlySpan<byte> text)
+        public void Raw(scoped ReadOnlySpan<byte> text)
         {
             text.CopyTo(_destination.Slice(Position));
             Position += text.Length;
@@ -532,16 +533,21 @@ internal static partial class SvgWriter
             }
             Int((int)(thousandths / 1000));
             var rest = (int)(thousandths % 1000);
-            if (rest == 0)
-                return;
+            if (rest != 0)
+                Fraction(rest);
+        }
+
+        /// <summary>1 to 999 thousandths as a point and their digits with trailing zeros dropped. Path data needs no zero before the point.</summary>
+        public void Fraction(int thousandths)
+        {
             Byte((byte)'.');
-            Byte((byte)('0' + rest / 100));
-            if (rest % 100 == 0)
+            Byte((byte)('0' + thousandths / 100));
+            if (thousandths % 100 == 0)
                 return;
-            Byte((byte)('0' + rest / 10 % 10));
-            if (rest % 10 == 0)
+            Byte((byte)('0' + thousandths / 10 % 10));
+            if (thousandths % 10 == 0)
                 return;
-            Byte((byte)('0' + rest % 10));
+            Byte((byte)('0' + thousandths % 10));
         }
 
         /// <summary><c>#rrggbb</c>, or <c>#rgb</c> when each channel's two digits are the same.</summary>
