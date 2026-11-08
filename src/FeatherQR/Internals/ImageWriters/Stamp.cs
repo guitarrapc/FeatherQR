@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Diagnostics;
+
 namespace FeatherQR.Internals.ImageWriters;
 
 /// <summary>
@@ -23,33 +26,33 @@ internal static class Stamp
     /// <summary>The module shape's coverage of a cell of <paramref name="width"/> by <paramref name="height"/> pixels, row after row.</summary>
     public static void Module(Span<byte> levels, int width, int height, in SymbolImageOptions options, int levelCount)
     {
-        var s = ModuleRegion(width, height, in options, out var outer);
-        Fill(levels, width, 0, height, s, levelCount, in outer, default, default);
+        ModuleRegion(width, height, in options, out var outer);
+        FillMirrored(levels, width, height, levelCount, in outer, default, default);
     }
 
     /// <summary>One pixel row, <paramref name="y"/>, of the module shape's coverage of a cell.</summary>
     public static void ModuleRow(Span<byte> levels, int width, int height, int y, in SymbolImageOptions options, int levelCount)
     {
-        var s = ModuleRegion(width, height, in options, out var outer);
-        Fill(levels, width, y, y + 1, s, levelCount, in outer, default, default);
+        ModuleRegion(width, height, in options, out var outer);
+        Fill(levels, width, y, y + 1, levelCount, in outer, default, default);
     }
 
     /// <summary>A finder pattern's coverage of its box of <paramref name="width"/> by <paramref name="height"/> pixels, row after row.</summary>
     public static void Finder(Span<byte> levels, int width, int height, in SymbolImageOptions options, int levelCount)
     {
-        var s = FinderRegions(width, height, in options, out var outer, out var hole, out var centre);
-        Fill(levels, width, 0, height, s, levelCount, in outer, in hole, in centre);
+        FinderRegions(width, height, in options, out var outer, out var hole, out var centre);
+        FillMirrored(levels, width, height, levelCount, in outer, in hole, in centre);
     }
 
     /// <summary>One pixel row, <paramref name="y"/>, of a finder pattern's coverage of its box.</summary>
     public static void FinderRow(Span<byte> levels, int width, int height, int y, in SymbolImageOptions options, int levelCount)
     {
-        var s = FinderRegions(width, height, in options, out var outer, out var hole, out var centre);
-        Fill(levels, width, y, y + 1, s, levelCount, in outer, in hole, in centre);
+        FinderRegions(width, height, in options, out var outer, out var hole, out var centre);
+        Fill(levels, width, y, y + 1, levelCount, in outer, in hole, in centre);
     }
 
     // The module's shape inset by the scale: a square, a rounded square or the inscribed ellipse.
-    private static int ModuleRegion(int width, int height, in SymbolImageOptions options, out Region outer)
+    internal static void ModuleRegion(int width, int height, in SymbolImageOptions options, out Region outer)
     {
         const int s = SamplesPerSide;
         long w = 4L * s * width, h = 4L * s * height;
@@ -63,11 +66,10 @@ internal static class Stamp
             ModuleStyle.RoundedSquare => Region.RoundedRect(insetX, insetY, w - insetX, h - insetY, side * options.CornerRadiusPercent / 100),
             _ => Region.RoundedRect(insetX, insetY, w - insetX, h - insetY, 0),
         };
-        return s;
     }
 
     // The three regions of a finder pattern in its box: nested ellipses, nested rounded squares, or rounded squares around an ellipse.
-    private static int FinderRegions(int width, int height, in SymbolImageOptions options, out Region outer, out Region hole, out Region centre)
+    internal static void FinderRegions(int width, int height, in SymbolImageOptions options, out Region outer, out Region hole, out Region centre)
     {
         const int s = SamplesPerSide;
         long w = 4L * s * width, h = 4L * s * height;
@@ -93,35 +95,101 @@ internal static class Stamp
                 centre = Region.Ellipse(2 * moduleWidth, 2 * moduleHeight, w - 2 * moduleWidth, h - 2 * moduleHeight);
                 break;
         }
-        return s;
     }
 
-    private static void Fill(Span<byte> levels, int width, int fromRow, int toRow, int s, int levelCount, in Region outer, in Region hole, in Region centre)
+    // Every region is centred on the box's middle row and reads the same at a row and its mirror, so the bottom half copies the top
+    // rather than being sampled. The box is open at its bottom edge and closed at its top, so a row with a sample on a region's bottom edge
+    // is sampled again.
+    private static void FillMirrored(Span<byte> levels, int width, int height, int levelCount, in Region outer, in Region hole, in Region centre)
     {
-        var samples = s * s;
-        var at = 0;
-        for (var py = fromRow; py < toRow; py++)
+        var top = (height + 1) / 2;
+        Fill(levels, width, 0, top, levelCount, in outer, in hole, in centre);
+        for (var py = top; py < height; py++)
+            levels.Slice((height - 1 - py) * width, width).CopyTo(levels.Slice(py * width, width));
+        Refill(levels, width, top, height, outer.BottomEdgeRow, levelCount, in outer, in hole, in centre);
+        Refill(levels, width, top, height, hole.BottomEdgeRow, levelCount, in outer, in hole, in centre);
+        Refill(levels, width, top, height, centre.BottomEdgeRow, levelCount, in outer, in hole, in centre);
+    }
+
+    private static void Refill(Span<byte> levels, int width, int top, int height, int row, int levelCount, in Region outer, in Region hole, in Region centre)
+    {
+        if (row >= top && row < height)
+            Fill(levels.Slice(row * width, width), width, row, row + 1, levelCount, in outer, in hole, in centre);
+    }
+
+    // Each region is convex, so on a sample row it holds one run of sample columns, and a pixel's count is the length of the runs over
+    // its columns. Testing every sample against the regions instead is many times slower on a large shape.
+    private static void Fill(Span<byte> levels, int width, int fromRow, int toRow, int levelCount, in Region outer, in Region hole, in Region centre)
+    {
+        const int s = SamplesPerSide, samples = s * s, StackPixels = 256;
+        var columns = width * s;
+        int[]? rented = null;
+        var counts = width < StackPixels ? stackalloc int[StackPixels + 1] : (rented = ArrayPool<int>.Shared.Rent(width + 1));
+        counts = counts.Slice(0, width + 1);
+        try
         {
-            for (var px = 0; px < width; px++)
+            var at = 0;
+            int outerFrom = 0, outerTo = 0, holeFrom = 0, holeTo = 0, centreFrom = 0, centreTo = 0;
+            for (var py = fromRow; py < toRow; py++)
             {
-                var count = 0;
+                counts.Clear();
                 for (var j = 0; j < s; j++)
                 {
                     long y = 4L * (py * s + j) + 2;
-                    for (var i = 0; i < s; i++)
+                    outer.Next(y, columns, ref outerFrom, ref outerTo);
+                    hole.Next(y, columns, ref holeFrom, ref holeTo);
+                    centre.Next(y, columns, ref centreFrom, ref centreTo);
+                    // The ring is the outer run less the hole's, two runs at most. The centre lies inside the hole, a module in from it in every
+                    // style, so its run never meets the ring's and adds on its own.
+                    int leftFrom = outerFrom, leftTo = outerTo, rightFrom = 0, rightTo = 0;
+                    if (holeFrom < holeTo)
                     {
-                        long x = 4L * (px * s + i) + 2;
-                        if (centre.Contains(x, y) || (outer.Contains(x, y) && !hole.Contains(x, y)))
-                            count++;
+                        leftTo = Math.Min(outerTo, holeFrom);
+                        rightFrom = Math.Max(outerFrom, holeTo);
+                        rightTo = outerTo;
                     }
+                    Add(counts, leftFrom, leftTo);
+                    Add(counts, rightFrom, rightTo);
+                    Add(counts, centreFrom, centreTo);
                 }
-                levels[at++] = (byte)((count * (levelCount - 1) + samples / 2) / samples);
+                var count = 0;
+                for (var px = 0; px < width; px++)
+                {
+                    count += counts[px];
+                    levels[at++] = (byte)((count * (levelCount - 1) + samples / 2) / samples);
+                }
             }
+        }
+        finally
+        {
+            if (rented != null)
+                ArrayPool<int>.Shared.Return(rented);
         }
     }
 
+    // Adds a run of sample columns to the pixels' counts, kept as differences so a run costs four writes whatever its length: the
+    // part in its first pixel, s in each pixel between, and the part in its last.
+    private static void Add(Span<int> counts, int from, int to)
+    {
+        const int s = SamplesPerSide;
+        if (from >= to)
+            return;
+        int first = from / s, last = (to - 1) / s;
+        if (first == last)
+        {
+            counts[first] += to - from;
+            counts[first + 1] -= to - from;
+            return;
+        }
+        int head = (first + 1) * s - from, tail = to - last * s;
+        counts[first] += head;
+        counts[first + 1] += s - head;
+        counts[last] += tail - s;
+        counts[last + 1] -= tail;
+    }
+
     /// <summary>A rounded rectangle, which with no radius is a rectangle, or the ellipse inscribed in one. The default contains nothing.</summary>
-    private readonly struct Region(int kind, long x0, long y0, long x1, long y1, long radius)
+    internal readonly struct Region(int kind, long x0, long y0, long x1, long y1, long radius)
     {
         // Past this product of the axes, the sum of the two squares in the ellipse test passes a long, so the test is made at a coarser unit.
         private const long LargestExactAxes = 2_000_000_000;
@@ -133,6 +201,86 @@ internal static class Stamp
         public static Region RoundedRect(long x0, long y0, long x1, long y1, long radius) => new(1, x0, y0, x1, y1, Math.Min(radius, Math.Min(x1 - x0, y1 - y0) / 2));
 
         public static Region Ellipse(long x0, long y0, long x1, long y1) => new(2, x0, y0, x1, y1, 0);
+
+        // The pixel row that holds a sample on the region's bottom edge, or -1 where no sample lands on it.
+        public int BottomEdgeRow => _kind != 0 && (_y1 - 2) % 4 == 0 ? (int)((_y1 - 2) / (4 * SamplesPerSide)) : -1;
+
+        /// <summary>
+        /// The run of sample columns q below <paramref name="columns"/> whose x = 4q + 2 the region contains on row <paramref name="y"/>,
+        /// from <paramref name="from"/> up to <paramref name="to"/>, empty when the two are equal.
+        /// </summary>
+        public void Run(long y, int columns, out int from, out int to)
+        {
+            from = to = 0;
+            if (_kind == 0 || y < _y0 || y >= _y1)
+                return;
+            // The columns whose samples fall inside the box.
+            int lo = (int)Math.Max(0, (_x0 + 1) / 4), hi = (int)Math.Min(columns, (_x1 + 1) / 4);
+            if (lo >= hi)
+                return;
+            // The shape is convex and symmetric about its centre, so a run that is not empty holds a column next to the centre.
+            var mid = (int)Math.Min(hi - 1, Math.Max(lo, ((_x0 + _x1) / 2 - 2) / 4));
+            var seed = -1;
+            for (var q = Math.Max(lo, mid - 1); q <= Math.Min(hi - 1, mid + 1) && seed < 0; q++)
+            {
+                if (Contains(4L * q + 2, y))
+                    seed = q;
+            }
+            if (seed < 0)
+                return;
+            int low = lo, high = seed;
+            while (low < high)
+            {
+                var m = (low + high) / 2;
+                if (Contains(4L * m + 2, y))
+                    high = m;
+                else
+                    low = m + 1;
+            }
+            from = low;
+            to = MirrorEnd(from, hi);
+        }
+
+        // Every region is centred on a column boundary, so the run's right end mirrors its left. The box's right edge is open where its
+        // left is closed, and hi keeps the column on it out.
+        private int MirrorEnd(int from, int hi)
+        {
+            Debug.Assert((_x0 + _x1) % 4 == 0, "the region is centred on a column boundary");
+            return Math.Min(hi, (int)((_x0 + _x1) / 4) - from);
+        }
+
+        /// <summary>
+        /// The run on row <paramref name="y"/> from the run on the sample row before it. Two runs that are not empty both hold a column
+        /// next to the centre, so the left end walks from where it was by the few columns the edge moves, rather than being searched for
+        /// again, and the right end mirrors it.
+        /// </summary>
+        public void Next(long y, int columns, ref int from, ref int to)
+        {
+            if (from >= to || y < _y0 || y >= _y1)
+            {
+                Run(y, columns, out from, out to);
+                return;
+            }
+            int lo = (int)Math.Max(0, (_x0 + 1) / 4), hi = (int)Math.Min(columns, (_x1 + 1) / 4);
+            if (Contains(4L * from + 2, y))
+            {
+                while (from > lo && Contains(4L * (from - 1) + 2, y))
+                    from--;
+            }
+            else
+            {
+                // Walking in past the column the two runs share means this row's run is empty.
+                do
+                    from++;
+                while (from < to && !Contains(4L * from + 2, y));
+                if (from >= to)
+                {
+                    from = to = 0;
+                    return;
+                }
+            }
+            to = MirrorEnd(from, hi);
+        }
 
         public bool Contains(long x, long y)
         {
