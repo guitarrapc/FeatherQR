@@ -43,10 +43,13 @@ SaveBytes("microqr.png", SymbolImageWriter.GetPngBytes(micro));
 SaveText("rmqr.svg", SymbolImageWriter.GetSvgString(rmqr));
 SaveBytes("rmqr.png", SymbolImageWriter.GetPngBytes(rmqr));
 
-// The module size and the colours. A fully transparent light colour leaves the background out.
+// The README shows qr-navy-transparent.png, qr-styled.png and qr-icon-area.png at their pixel size, so they are 248 px like its other pictures.
+
+// The colours. A fully transparent light colour leaves the background out.
 var navyOnClear = new SymbolImageOptions
 {
-    ModulePixelSize = 12,
+    Width = 248,
+    Height = 248,
     DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A),
     LightColor = new SymbolColor(0, 0, 0, 0),
 };
@@ -62,7 +65,8 @@ SaveText("rmqr-1000-wide.svg", SymbolImageWriter.GetSvgString(rmqr, new SymbolIm
 // Module and finder pattern styles. The finder patterns keep their own shape, so a reader still finds them.
 var styled = new SymbolImageOptions
 {
-    ModulePixelSize = 12,
+    Width = 248,
+    Height = 248,
     ModuleStyle = ModuleStyle.Circle,
     ModuleScalePercent = 90,
     FinderPatternStyle = FinderPatternStyle.RoundedSquareCircle,
@@ -74,7 +78,7 @@ SaveBytes("qr-styled.png", SymbolImageWriter.GetPngBytes(qr, styled));
 // An icon area on a Standard QR code. The symbol relies on its error correction, so it is made at level H. The SVG embeds the image
 // given, here the Micro QR code's own PNG, and for the PNG and the pixels GetIconRectangle says where to draw it.
 var qrH = QRCodeGenerator.Create(url, QREccLevel.H);
-var withIcon = new SymbolImageOptions { IconSizeModules = 7, IconImage = SymbolImageWriter.GetPngBytes(micro) };
+var withIcon = new SymbolImageOptions { Width = 248, Height = 248, IconSizeModules = 7, IconImage = SymbolImageWriter.GetPngBytes(micro) };
 SaveText("qr-icon.svg", SymbolImageWriter.GetSvgString(qrH, withIcon));
 SaveBytes("qr-icon-area.png", SymbolImageWriter.GetPngBytes(qrH, withIcon));
 var (iconX, iconY, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(qrH, withIcon);

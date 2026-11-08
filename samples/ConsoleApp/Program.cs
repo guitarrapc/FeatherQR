@@ -32,7 +32,7 @@ var iconInstaPath = Path.Combine(outputDir, "instarich-logo.png");
 
 var content = "https://github.com/guitarrapc/FeatherQR/blob/main/README.md";
 
-// The README shows patterns 6, 7, 15, 24 and 25 at their pixel size, up to three in a row, so they are 248 px.
+// The README shows patterns 4, 5, 6, 7, 13, 15, 24 and 25 at their pixel size, some three to a row, so they are all 248 px.
 // Pattern 28 has a row to itself and is 798 px wide.
 
 Directory.CreateDirectory(outputDir);
@@ -146,10 +146,10 @@ Console.WriteLine("""
     """);
 {
     var path = Path.Combine(outputDir, "pattern4_builder_colors.png");
-    using var stream = File.OpenWrite(path);
+    using var stream = File.Create(path);
 
     new QRCodeImageBuilder(content)
-        .WithSize(800, 800)
+        .WithSize(248, 248)
         .WithErrorCorrection(QREccLevel.H)
         .WithColors(
             codeColor: SKColor.Parse("000080"),       // Navy
@@ -171,14 +171,14 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern5_builder_shape.png");
 
     var qrBuilder = new QRCodeImageBuilder(content)
-        .WithSize(800, 800)
+        .WithSize(248, 248)
         .WithErrorCorrection(QREccLevel.H)
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
         .WithCodeColor(SKColors.DarkBlue);
 
     using var image = qrBuilder.ToImage();
     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-    using var stream = File.OpenWrite(path);
+    using var stream = File.Create(path);
     data.SaveTo(stream);
 
     Console.WriteLine($"  ✓ Saved to: {path}");
@@ -444,10 +444,10 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern13_finderpattern_rounded_rectangle.png");
 
     var pngBytes = new QRCodeImageBuilder(content)
-        .WithSize(512, 512)
-        .WithFinderPatternShape(RectangleFinderPatternShape.Default)
+        .WithSize(248, 248)
+        .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
+        //.WithFinderPatternShape(RectangleFinderPatternShape.Default)
         //.WithFinderPatternShape(CircleFinderPatternShape.Default)
-        //.WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
         //.WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
         .ToByteArray();
 
