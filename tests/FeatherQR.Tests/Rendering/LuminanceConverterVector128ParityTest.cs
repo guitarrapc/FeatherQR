@@ -18,6 +18,7 @@ public class LuminanceConverterVector128ParityTest
         (2, 1, 0, 3, true),
         (0, 1, 2, 3, false),
         (0, 1, 2, -1, false),
+        (2, 1, 0, -1, true),
     ];
 
     [Test]

@@ -12,8 +12,9 @@ namespace FeatherQR.Internals.ImageWriters;
 /// <para>
 /// A dark pixel is the dark colour painted over the light one, as the SVG paints its path over its background.
 /// <see cref="PixelLayout.Rgba8888"/> and <see cref="PixelLayout.Bgra8888"/> carry each colour straight, alpha not premultiplied.
-/// <see cref="PixelLayout.Gray8"/>, <see cref="PixelLayout.Rgb888x"/>, <see cref="PixelLayout.Rgb24"/> and <see cref="PixelLayout.Bgr24"/> have no alpha,
-/// so they hold each colour composited over white, as the decoders read a transparent pixel, and Rgb888x's fourth byte is 255.
+/// <see cref="PixelLayout.Gray8"/>, <see cref="PixelLayout.Rgb888x"/>, <see cref="PixelLayout.Bgr888x"/>, <see cref="PixelLayout.Rgb24"/> and
+/// <see cref="PixelLayout.Bgr24"/> have no alpha, so they hold each colour composited over white, as the decoders read a transparent pixel,
+/// and the fourth byte of Rgb888x and Bgr888x is 255.
 /// Gray8 then weighs the channels 77, 150 and 29 over 256 (BT.601). So a Gray8 buffer equals the decoders' reading of the others.
 /// </para>
 /// <para>
@@ -213,9 +214,9 @@ internal static class PixelWriter
     private static int BytesPerPixel(PixelLayout layout) => layout switch
     {
         PixelLayout.Gray8 => 1,
-        PixelLayout.Rgba8888 or PixelLayout.Bgra8888 or PixelLayout.Rgb888x => 4,
+        PixelLayout.Rgba8888 or PixelLayout.Bgra8888 or PixelLayout.Rgb888x or PixelLayout.Bgr888x => 4,
         PixelLayout.Rgb24 or PixelLayout.Bgr24 => 3,
-        _ => throw new ArgumentOutOfRangeException(nameof(layout), $"Pixel layout {(int)layout} is not one of the six defined."),
+        _ => throw new ArgumentOutOfRangeException(nameof(layout), $"Pixel layout {(int)layout} is not one of the seven defined."),
     };
 
     /// <summary>
@@ -227,14 +228,14 @@ internal static class PixelWriter
         PixelLayout.Gray8 => Luminance(OverWhite(color)),
         PixelLayout.Rgba8888 => InMemoryOrder(color.R, color.G, color.B, color.A),
         PixelLayout.Bgra8888 => InMemoryOrder(color.B, color.G, color.R, color.A),
-        PixelLayout.Bgr24 => Bgr(OverWhite(color)),
-        // Rgb24 takes the same word, and stores its first three bytes.
+        // A three-byte layout takes the word of its four-byte twin, and stores its first three bytes.
+        PixelLayout.Bgr888x or PixelLayout.Bgr24 => Bgr888x(OverWhite(color)),
         _ => Rgb888x(OverWhite(color)),
     };
 
     private static uint Rgb888x(SymbolColor color) => InMemoryOrder(color.R, color.G, color.B, 255);
 
-    private static uint Bgr(SymbolColor color) => InMemoryOrder(color.B, color.G, color.R, 255);
+    private static uint Bgr888x(SymbolColor color) => InMemoryOrder(color.B, color.G, color.R, 255);
 
     // The word is stored as a native uint, so a big-endian machine needs it reversed to keep the first byte first.
     private static uint InMemoryOrder(byte first, byte second, byte third, byte fourth)

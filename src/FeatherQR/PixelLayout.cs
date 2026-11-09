@@ -26,4 +26,7 @@ public enum PixelLayout
 
     /// <summary>Three bytes a pixel: blue, green, red.</summary>
     Bgr24 = 5,
+
+    /// <summary>Four bytes a pixel: blue, green, red, and a fourth byte that carries no colour.</summary>
+    Bgr888x = 6,
 }

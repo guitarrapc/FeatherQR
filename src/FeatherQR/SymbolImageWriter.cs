@@ -268,7 +268,7 @@ public static class SymbolImageWriter
     /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The length <see cref="TryWritePixels(QRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/> needs.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the six, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the seven, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static int GetPixelBufferSize(QRCodeData data, PixelLayout layout, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -311,12 +311,12 @@ public static class SymbolImageWriter
     /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns><c>false</c> only when <paramref name="destination"/> is too short, in which case nothing is written.</returns>
     /// <remarks>
-    /// Alpha is not premultiplied. <see cref="PixelLayout.Gray8"/>, <see cref="PixelLayout.Rgb888x"/>, <see cref="PixelLayout.Rgb24"/> and <see cref="PixelLayout.Bgr24"/>
-    /// have no alpha, so they hold each colour composited over white, and Rgb888x's fourth byte is 255. Gray8 then holds its luminance with BT.601 weights,
+    /// Alpha is not premultiplied. <see cref="PixelLayout.Gray8"/>, <see cref="PixelLayout.Rgb888x"/>, <see cref="PixelLayout.Bgr888x"/>, <see cref="PixelLayout.Rgb24"/>
+    /// and <see cref="PixelLayout.Bgr24"/> have no alpha, so they hold each colour composited over white, and the fourth byte of Rgb888x and Bgr888x is 255. Gray8 then holds its luminance with BT.601 weights,
     /// as the decoders compute it, so a Gray8 buffer is the luminance input the decoders' <c>TryDecodeImage</c> calls take.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the six, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the seven, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static bool TryWritePixels(QRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -368,7 +368,7 @@ public static class SymbolImageWriter
     /// For a region of a larger image, slice <paramref name="destination"/> at the region's first pixel and pass that image's stride.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the six, <paramref name="rowBytes"/> is shorter than one row, the image's pixels would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the seven, <paramref name="rowBytes"/> is shorter than one row, the image's pixels would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static bool TryWritePixels(QRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
     {
         if (data is null)

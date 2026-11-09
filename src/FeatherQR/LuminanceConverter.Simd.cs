@@ -26,7 +26,7 @@ public static partial class LuminanceConverter
 
     /// <summary>
     /// Converts with 128-bit vectors.
-    /// <paramref name="bgra"/> selects the channel order, <paramref name="hasAlpha"/> is false for RGB888x (its fourth byte is padding).
+    /// <paramref name="bgra"/> selects the channel order, <paramref name="hasAlpha"/> is false for RGB888x and BGR888x (the fourth byte is padding).
     /// Requires <paramref name="width"/> ≥ 16. The caller keeps narrower rows scalar.
     /// </summary>
     internal static void ConvertRgbaVector128(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha, bool premultiplied)
@@ -39,7 +39,7 @@ public static partial class LuminanceConverter
             ConvertStraightVector128(pixels, luminance, width, height, rowBytes, bgra);
     }
 
-    /// <summary>RGB888x: no alpha to test, so no accumulator and no row mode.</summary>
+    /// <summary>RGB888x and BGR888x: no alpha to test, so no accumulator and no row mode.</summary>
     private static void ConvertNoAlphaVector128(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra)
     {
         ref var src = ref MemoryMarshal.GetReference(pixels);
@@ -165,7 +165,7 @@ public static partial class LuminanceConverter
 
     /// <summary>
     /// 16 pixels with no alpha handling, returning the AND of the four pixel vectors so a straight-alpha caller can accumulate it and test
-    /// the whole row at once. RGB888x callers discard it.
+    /// the whole row at once. Callers with no alpha discard it.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<uint> PlainBlockVector128(ref byte row, ref byte dest, nint x, Vector128<uint> weights)

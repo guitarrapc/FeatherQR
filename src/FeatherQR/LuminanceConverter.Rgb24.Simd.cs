@@ -2,15 +2,16 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.Wasm;
 using System.Runtime.Intrinsics.X86;
 
 namespace FeatherQR;
 
-// 128-bit conversion of three-byte pixels for x64 without AVX2 and for WebAssembly: 16 pixels per iteration, bit-identical to the
-// per-pixel loop in LuminanceConverter.Rgb24.cs.
-// A byte shuffle spreads twelve bytes into four four-byte pixels, pshufb on x64 and i8x16.swizzle on WebAssembly, and the four-byte
-// kernel (LuminanceConverter.Simd.cs) weighs them. Each spread pixel's fourth byte is whatever byte follows it, which that kernel masks off.
+// 128-bit conversion of three-byte pixels for x64 without AVX2, ARM64 without the dot product and WebAssembly: 16 pixels per iteration,
+// bit-identical to the per-pixel loop in LuminanceConverter.Rgb24.cs.
+// A byte shuffle spreads twelve bytes into four four-byte pixels, pshufb on x64, tbl on ARM64 and i8x16.swizzle on WebAssembly, and the four-byte
+// kernel (LuminanceConverter.Simd.cs) weighs them. Each spread pixel's fourth byte is filler picked from the load, which that kernel masks off.
 // Bgr24 takes the same shuffle, and the weights of its first and third channel exchanged.
 //
 // Sixteen pixels are 48 bytes, taken as four 16-byte loads that stay inside them:
@@ -59,12 +60,14 @@ public static partial class LuminanceConverter
         StoreBlockVector128(ref dest, x, LumaVector128(v0, weights), LumaVector128(v1, weights), LumaVector128(v2, weights), LumaVector128(v3, weights), wrap: false);
     }
 
-    /// <summary>Four three-byte pixels to four lanes. Every index is under 16, so both instructions pick the same bytes.</summary>
+    /// <summary>Four three-byte pixels to four lanes. Every index is under 16, so the three instructions pick the same bytes.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<uint> Spread24Vector128(Vector128<byte> bytes, Vector128<byte> indices)
     {
         if (Ssse3.IsSupported)
             return Ssse3.Shuffle(bytes, indices).AsUInt32();
+        if (AdvSimd.Arm64.IsSupported)
+            return AdvSimd.Arm64.VectorTableLookup(bytes, indices).AsUInt32();
         return PackedSimd.Swizzle(bytes, indices).AsUInt32();
     }
 }

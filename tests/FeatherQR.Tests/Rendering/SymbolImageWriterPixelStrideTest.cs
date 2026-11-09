@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 public class SymbolImageWriterPixelStrideTest
 {
     private const byte Sentinel = 0xCD;
-    private static readonly PixelLayout[] Layouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
+    private static readonly PixelLayout[] Layouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
     private static readonly SymbolImageOptions Shaped = new() { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 90, FinderPatternStyle = FinderPatternStyle.RoundedSquareCircle };
     private static readonly SymbolColor Navy = new(0x1E, 0x3A, 0x8A, 200);
     private static readonly SymbolColor Ivory = new(0xFF, 0xF8, 0xE7, 51);

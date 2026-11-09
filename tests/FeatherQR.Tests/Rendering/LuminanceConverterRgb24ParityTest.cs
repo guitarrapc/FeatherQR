@@ -24,7 +24,7 @@ public class LuminanceConverterRgb24ParityTest
         yield return ("scalar", LuminanceConverter.ConvertRgb24Scalar, 1);
         if (Avx2.IsSupported)
             yield return ("AVX2", LuminanceConverter.ConvertRgb24Avx2, 1);
-        if (Ssse3.IsSupported || PackedSimd.IsSupported)
+        if (Ssse3.IsSupported || AdvSimd.Arm64.IsSupported || PackedSimd.IsSupported)
             yield return ("128-bit", LuminanceConverter.ConvertRgb24Vector128, LuminanceConverter.Rgb24BlockPixels);
         if (Dp.IsSupported && AdvSimd.Arm64.IsSupported)
             yield return ("NEON", LuminanceConverter.ConvertRgb24AdvSimd, LuminanceConverter.Rgb24BlockPixels);
@@ -49,25 +49,25 @@ public class LuminanceConverterRgb24ParityTest
     }
 
     /// <summary>
-    /// A machine with vector instructions runs a vector tier. Without this a build that lost its flags would compare the per-pixel
-    /// loop with the formula and pass.
+    /// The dispatch's gate, which the other tests do not hold: they enter each tier directly, and the public call gives the formula's
+    /// bytes from the per-pixel loop too. Every build class the tier table lists has 128-bit vectors and a kernel for them, so a gate
+    /// that sent a row a kernel takes to the per-pixel loop fails here, at the narrowest such row and above it.
     /// </summary>
     [Test]
-    public async Task ThisMachine_RunsTheTiersItsInstructionsGive()
+    public async Task Dispatch_TakesAKernel_FromTheNarrowestRowOneTakes()
     {
-        var names = Tiers().Select(t => t.Name).ToArray();
-
-        await Assert.That(names).Contains("scalar");
-        if (System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.X64)
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
         {
-            // Every x64 CPU the runtime supports has SSSE3 unless a knob turns it off.
-            if (Ssse3.IsSupported)
-                await Assert.That(names).Contains("128-bit");
-            if (Avx2.IsSupported)
-                await Assert.That(names).Contains("AVX2");
+            Skip.Test("No 128-bit vectors on this machine");
+            return;
         }
-        if (Dp.IsSupported && AdvSimd.Arm64.IsSupported)
-            await Assert.That(names).Contains("NEON");
+
+        // AVX2 converts a row from one group of 8 pixels. The other kernels need one block of 16.
+        var narrowest = Avx2.IsSupported ? 8 : LuminanceConverter.Rgb24BlockPixels;
+        var refused = Enumerable.Range(narrowest, 500).Where(width => !LuminanceConverter.IsRgb24VectorTierTaken(width)).ToArray();
+
+        await Assert.That(refused).IsEmpty().Because($"rows from {narrowest} pixels reach a kernel");
+        await Assert.That(LuminanceConverter.IsRgb24VectorTierTaken(narrowest - 1)).IsFalse().Because("a narrower row has no group or block to take");
     }
 
     [Test]

@@ -10,15 +10,15 @@ namespace FeatherQR.Tests;
 /// its only public member. The contract is held through the call: BT.601 weights, alpha composited against
 /// white, premultiplied alpha, a stride wider than the row, a packed destination, a zero-size no-op, and the
 /// documented exception for each argument error, including dimensions whose product does not fit an int.
-/// Tier parity is <see cref="LuminanceConverterParityTest"/>, and the first-party adapter is
-/// <see cref="LuminanceConverterContractTest"/>.
+/// Tier parity is <see cref="LuminanceConverterParityTest"/>, and <see cref="LuminanceConverterRgb24ParityTest"/> for three bytes a pixel.
+/// The first-party adapter is <see cref="LuminanceConverterContractTest"/>.
 /// </summary>
 public class LuminanceConverterPublicContractTest
 {
-    private static readonly PixelLayout[] ColorLayouts = [PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
+    private static readonly PixelLayout[] ColorLayouts = [PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
     private static readonly PixelLayout[] AlphaLayouts = [PixelLayout.Rgba8888, PixelLayout.Bgra8888];
-    private static readonly PixelLayout[] AllLayouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
-    private static readonly PixelLayout[] NoAlphaLayouts = [PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
+    private static readonly PixelLayout[] AllLayouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
+    private static readonly PixelLayout[] NoAlphaLayouts = [PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
 
     private static int BytesPerPixel(PixelLayout layout) => layout switch
     {
@@ -60,6 +60,9 @@ public class LuminanceConverterPublicContractTest
                 break;
             case PixelLayout.Rgb888x:
                 pixel[0] = r; pixel[1] = g; pixel[2] = b; pixel[3] = 0x5A;
+                break;
+            case PixelLayout.Bgr888x:
+                pixel[0] = b; pixel[1] = g; pixel[2] = r; pixel[3] = 0x5A;
                 break;
             case PixelLayout.Rgb24:
                 pixel[0] = r; pixel[1] = g; pixel[2] = b;
@@ -244,6 +247,38 @@ public class LuminanceConverterPublicContractTest
         var luminance = new byte[1];
         LuminanceConverter.Convert(gray, 1, 1, 1, PixelLayout.Gray8, true, luminance);
         await Assert.That(luminance[0]).IsEqualTo((byte)123);
+    }
+
+    // ---- a fourth byte that carries no colour -----------------------------------------
+
+    /// <summary>
+    /// Blue, green and red with a fourth byte of 0, as a 32-bit bitmap file written with its padding cleared hands them over. Read as
+    /// <see cref="PixelLayout.Bgr888x"/> the symbol decodes in its colours. Read as <see cref="PixelLayout.Bgra8888"/> every 0 is a
+    /// transparent pixel, which composites to white, so the image is blank and nothing decodes with no error.
+    /// </summary>
+    [Test]
+    public async Task Bgr888x_ReadsAFourthByteOfZero_WhereBgra8888SeesTransparency()
+    {
+        const string text = "https://github.com/guitarrapc/FeatherQR";
+        var qr = QRCodeGenerator.Create(text, QREccLevel.M);
+        var navy = new SymbolImageOptions { ModulePixelSize = 4, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A) };
+        var (width, height) = SymbolImageWriter.GetImageSize(qr, navy);
+        var pixels = new byte[width * height * 4];
+        await Assert.That(SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgr888x, out _, out _, navy)).IsTrue();
+        await Assert.That(pixels[3]).IsEqualTo((byte)255).Because("the writer sets the fourth byte");
+        for (var i = 3; i < pixels.Length; i += 4)
+            pixels[i] = 0;
+        var luminance = new byte[width * height];
+
+        LuminanceConverter.Convert(pixels, width, height, width * 4, PixelLayout.Bgr888x, false, luminance);
+
+        await Assert.That(QRCodeDecoder.TryDecodeImage(luminance, width, height, out string read, out _)).IsTrue();
+        await Assert.That(read).IsEqualTo(text);
+        // Navy's luminance is 58, and read with red and blue exchanged it would be 78.
+        await Assert.That(luminance.Min()).IsEqualTo((byte)58);
+
+        LuminanceConverter.Convert(pixels, width, height, width * 4, PixelLayout.Bgra8888, false, luminance);
+        await Assert.That(luminance.All(v => v == 255)).IsTrue().Because("as alpha, a fourth byte of 0 is a transparent pixel");
     }
 
     // ---- three bytes a pixel -----------------------------------------------------------
@@ -472,7 +507,7 @@ public class LuminanceConverterPublicContractTest
     [Test]
     public async Task UndefinedLayout_ThrowsArgumentOutOfRange()
     {
-        foreach (var layout in new[] { (PixelLayout)42, (PixelLayout)6, (PixelLayout)(-1) })
+        foreach (var layout in new[] { (PixelLayout)42, (PixelLayout)7, (PixelLayout)(-1) })
         {
             var thrown = await Assert.That(() => LuminanceConverter.Convert(new byte[4], 1, 1, 4, layout, false, new byte[1]))
                 .Throws<ArgumentOutOfRangeException>().Because($"{(int)layout}");

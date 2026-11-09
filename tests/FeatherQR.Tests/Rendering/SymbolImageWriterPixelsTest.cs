@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class SymbolImageWriterPixelsTest
 {
-    private static readonly PixelLayout[] Layouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
+    private static readonly PixelLayout[] Layouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
 
     // ---- every symbol -------------------------------------------------------------------
 
@@ -69,10 +69,10 @@ public class SymbolImageWriterPixelsTest
 
     /// <summary>
     /// Gray8 is what the decoders compute from the RGBA buffer: each alpha below 255 composited over white, then BT.601.
-    /// The decoders read Rgb888x without its fourth byte, and the same Gray8 must be their reading of that buffer too.
+    /// The layouts with no alpha hold the same colours composited over white, so the same Gray8 must be the decoders' reading of each.
     /// </summary>
     [Test]
-    public async Task Gray8_IsTheLuminanceTheDecodersReadFromRgbaAndRgb888x()
+    public async Task Gray8_IsTheLuminanceTheDecodersReadFromRgbaAndTheLayoutsWithNoAlpha()
     {
         var rng = new Random(8);
         var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
@@ -86,7 +86,7 @@ public class SymbolImageWriterPixelsTest
             };
             var gray = new byte[SymbolImageWriter.GetPixelBufferSize(micro, PixelLayout.Gray8, options)];
             SymbolImageWriter.TryWritePixels(micro, gray, PixelLayout.Gray8, out var width, out var height, options);
-            foreach (var layout in new[] { PixelLayout.Rgba8888, PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24 })
+            foreach (var layout in new[] { PixelLayout.Rgba8888, PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24 })
             {
                 var color = new byte[SymbolImageWriter.GetPixelBufferSize(micro, layout, options)];
                 SymbolImageWriter.TryWritePixels(micro, color, layout, out _, out _, options);
@@ -278,7 +278,7 @@ public class SymbolImageWriterPixelsTest
         var micro = MicroQRCodeGenerator.Create("1", MicroQREccLevel.ErrorDetectionOnly);
         var rm = RmQRCodeGenerator.Create("1", RmQREccLevel.M);
         var buffer = new byte[1 << 20];
-        foreach (var layout in new[] { (PixelLayout)(-1), (PixelLayout)6 })
+        foreach (var layout in new[] { (PixelLayout)(-1), (PixelLayout)7 })
         {
             await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetPixelBufferSize(qr, layout)).ParamName).IsEqualTo("layout");
             await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, buffer, layout, out _, out _)).ParamName).IsEqualTo("layout");
@@ -389,6 +389,7 @@ public class SymbolImageWriterPixelsTest
         PixelLayout.Rgba8888 => [c.R, c.G, c.B, c.A],
         PixelLayout.Bgra8888 => [c.B, c.G, c.R, c.A],
         PixelLayout.Rgb888x => [OverWhite(c.R, c.A), OverWhite(c.G, c.A), OverWhite(c.B, c.A), 255],
+        PixelLayout.Bgr888x => [OverWhite(c.B, c.A), OverWhite(c.G, c.A), OverWhite(c.R, c.A), 255],
         PixelLayout.Rgb24 => [OverWhite(c.R, c.A), OverWhite(c.G, c.A), OverWhite(c.B, c.A)],
         PixelLayout.Bgr24 => [OverWhite(c.B, c.A), OverWhite(c.G, c.A), OverWhite(c.R, c.A)],
         _ => [Luminance(c)],

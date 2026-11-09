@@ -216,6 +216,7 @@ namespace FeatherQR
         Rgb888x = 3,
         Rgb24 = 4,
         Bgr24 = 5,
+        Bgr888x = 6,
     }
 
     public readonly struct QRCodeCalculatedSize : IEquatable<QRCodeCalculatedSize>

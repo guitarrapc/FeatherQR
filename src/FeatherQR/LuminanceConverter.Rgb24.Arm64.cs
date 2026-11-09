@@ -8,7 +8,7 @@ namespace FeatherQR;
 
 // ARM64 conversion of three-byte pixels: 16 pixels per iteration, bit-identical to the per-pixel loop in LuminanceConverter.Rgb24.cs.
 // A table lookup spreads twelve bytes into four four-byte pixels, and the four-byte kernel's UDOT (LuminanceConverter.Arm64.cs) weighs them.
-// Each spread pixel's fourth byte is whatever byte follows it, which the weights multiply by 0.
+// Each spread pixel's fourth byte is filler picked from the load, which the weights multiply by 0.
 //
 // Sixteen pixels are 48 bytes, taken as four 16-byte loads that stay inside them:
 //

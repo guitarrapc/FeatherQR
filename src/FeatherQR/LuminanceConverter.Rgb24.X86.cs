@@ -10,11 +10,12 @@ namespace FeatherQR;
 // The arithmetic is the four-byte kernel's (LuminanceConverter.X86.cs): each pixel shuffled into the byte quad [R, G, G, B] against
 // the weights [77, 51, 99, 29]. Only the shuffle differs, since it gathers each quad from three bytes instead of four.
 //
-// Eight pixels are 24 bytes, and vpshufb picks within a 128-bit lane, so the two lanes are loaded apart:
+// Eight pixels are 24 bytes, and vpshufb picks within a 128-bit lane, so the two lanes are loaded apart. In the bytes of the group,
+// p marks a byte of the lane's four pixels and . one it loads and does not use:
 //
-//   bytes of the group   0 ........ 11 12 ....... 15 16 ........ 23
-//   lower lane, at 0     [ pixels 0-3 ][  unused    ]
-//   upper lane, at 8                  [  unused    ][ pixels 4-7  ]     (bytes 8-23, its pixels at 4-15 of the lane)
+//   byte        0       8   12  16      24
+//   lower lane  pppppppppppp....
+//   upper lane          ....pppppppppppp
 //
 // The two loads cover exactly the group's 24 bytes, so nothing past a row's last pixel is read.
 public static partial class LuminanceConverter

@@ -28,11 +28,14 @@ public class LuminanceConverterParityTest
     private const int Rgb888x = 2;
 
     /// <summary>
-    /// ARGB channel order. No vector kernel and none of the scalar tier's three
+    /// ARGB channel order. No vector kernel and none of the scalar tier's four
     /// constant-offset arms accept it, so it is the only layout that reaches
     /// <c>RowsGeneral</c>, shipped code that every other layout routes around.
     /// </summary>
     private const int Argb = 3;
+
+    /// <summary>Blue, green, red and a byte that carries no colour: the BGRA kernels with their alpha handling off.</summary>
+    private const int Bgr888x = 4;
 
     /// <summary>
     /// Widths at or above this reach a vector kernel on every machine that has one:
@@ -42,13 +45,14 @@ public class LuminanceConverterParityTest
     /// </summary>
     private const int AlwaysVectorWidth = 16;
 
-    public static IEnumerable<int> Layouts() => [Bgra, Rgba, Rgb888x, Argb];
+    public static IEnumerable<int> Layouts() => [Bgra, Rgba, Rgb888x, Argb, Bgr888x];
 
     private static (int R, int G, int B, int A) Offsets(int layout) => layout switch
     {
         Bgra => (2, 1, 0, 3),
         Rgba => (0, 1, 2, 3),
         Rgb888x => (0, 1, 2, -1),
+        Bgr888x => (2, 1, 0, -1),
         _ => (1, 2, 3, 0),
     };
 
@@ -142,7 +146,7 @@ public class LuminanceConverterParityTest
         var (ro, go, bo, ao) = Offsets(layout);
         // 4, 5, 7, 8 straddle the four-pixel step and its remainder.
         int[] widths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 43, 139, 376];
-        var alphaShapes = layout == Rgb888x ? new[] { 3 } : [0, 1, 2, 3];
+        var alphaShapes = ao < 0 ? new[] { 3 } : [0, 1, 2, 3];
 
         foreach (var alphaShape in alphaShapes)
         {
@@ -197,7 +201,7 @@ public class LuminanceConverterParityTest
         int[] heights = [1, 2, 5];
         var covered = 0;
         var floor = 0;
-        var alphaShapes = layout == Rgb888x ? new[] { 3 } : [0, 1, 2, 3];
+        var alphaShapes = ao < 0 ? new[] { 3 } : [0, 1, 2, 3];
 
         foreach (var alphaShape in alphaShapes)
         {
@@ -464,7 +468,7 @@ public class LuminanceConverterParityTest
         }
         if (ao < 0)
         {
-            Skip.Test("Rgb888x carries no alpha, so it has no row modes to change");
+            Skip.Test("This layout carries no alpha, so it has no row modes to change");
             return;
         }
 

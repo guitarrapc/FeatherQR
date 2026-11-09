@@ -43,7 +43,7 @@ public static partial class LuminanceConverter
         var bytesPerPixel = layout switch
         {
             PixelLayout.Gray8 => 1,
-            PixelLayout.Rgba8888 or PixelLayout.Bgra8888 or PixelLayout.Rgb888x => 4,
+            PixelLayout.Rgba8888 or PixelLayout.Bgra8888 or PixelLayout.Rgb888x or PixelLayout.Bgr888x => 4,
             PixelLayout.Rgb24 or PixelLayout.Bgr24 => 3,
             _ => throw new ArgumentOutOfRangeException(nameof(layout), layout, "Unknown pixel layout."),
         };
@@ -71,6 +71,9 @@ public static partial class LuminanceConverter
                 break;
             case PixelLayout.Bgr24:
                 ConvertRgb24(pixels, luminance, width, height, rowBytes, bgr: true);
+                break;
+            case PixelLayout.Bgr888x:
+                ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset: 2, greenOffset: 1, blueOffset: 0, alphaOffset: -1, premultiplied: false);
                 break;
             default:
                 ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset: 0, greenOffset: 1, blueOffset: 2, alphaOffset: -1, premultiplied: false);
@@ -137,7 +140,7 @@ public static partial class LuminanceConverter
         ConvertRgbaVector128(pixels, luminance, width, height, rowBytes, bgra, hasAlpha, premultiplied);
     }
 
-    /// <summary>BGRA (2,1,0) or RGBA / RGB888x (0,1,2). Nothing else reaches a vector tier.</summary>
+    /// <summary>BGRA or BGR888x (2,1,0), RGBA or RGB888x (0,1,2). Nothing else reaches a vector tier.</summary>
     private static bool IsVectorLayout(int redOffset, int greenOffset, int blueOffset)
         => greenOffset == 1 && (redOffset == 2 ? blueOffset == 0 : redOffset == 0 && blueOffset == 2);
 
@@ -243,7 +246,7 @@ public static partial class LuminanceConverter
     /// <remarks>
     /// <list type="bullet">
     /// <item>The channel offsets are constants of a per-layout loop instead of
-    /// parameters, so the address arithmetic folds and RGB888x drops its alpha branch outright.</item>
+    /// parameters, so the address arithmetic folds and a layout with no alpha drops the alpha branch outright.</item>
     /// <item>Walking by <c>ref</c> rather than re-slicing spans removes the per-pixel
     /// bounds checks.</item>
     /// <item>Four pixels per iteration, because the loop is latency-bound on
@@ -264,6 +267,8 @@ public static partial class LuminanceConverter
             Rows(pixels, luminance, width, height, rowBytes, 0, 1, 2, true, premultiplied);
         else if (greenOffset == 1 && redOffset == 0 && blueOffset == 2 && alphaOffset < 0)
             Rows(pixels, luminance, width, height, rowBytes, 0, 1, 2, false, premultiplied);
+        else if (greenOffset == 1 && redOffset == 2 && blueOffset == 0 && alphaOffset < 0)
+            Rows(pixels, luminance, width, height, rowBytes, 2, 1, 0, false, premultiplied);
         else
             RowsGeneral(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
     }

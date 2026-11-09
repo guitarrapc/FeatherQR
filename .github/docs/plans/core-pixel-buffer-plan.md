@@ -14,7 +14,7 @@ Measured on 2026-11-09 with file-based console probes that reference the core pr
 - Allocating such a buffer and copying it row by row into another array cost 42 to 52 % of `TryWritePixels` itself, on Standard QR version 10 and version 40 at 8 pixels a module (520 and 1,480 pixels a side, `Bgra8888`).
 - `LuminanceConverter.Convert` reads four layouts, `Gray8` and three of four bytes. System.Drawing loads a JPEG it wrote as `Format24bppRgb`, which holds blue, green and red in memory with rows padded to 4 bytes (16 bytes for 5 pixels). The sample asks `LockBits` for `Format32bppArgb`, which converts. That conversion and its copy cost 28 to 34 % on top of the conversion to luminance and the decode, where `LockBits` in the bitmap's own format took no measurable time.
 - WPF decodes the same JPEG and the BMP as `Bgr32` and the PNG as `Bgra32`, both four bytes, so WPF needs no 24-bit layout.
-- Every four-byte source measured fills the fourth byte with 255, so `Bgra8888` reads it: GDI `BitBlt` from the screen into a 32-bit DIB section, `CopyFromScreen` into `Format32bppArgb` and `Format32bppRgb`, a `Format32bppRgb` bitmap cleared to white, and WPF's `Bgr32` from a JPEG. A buffer whose fourth byte is 0 would read as all white through `Bgra8888` and decode nothing with no error, and through `Rgb888x` it decodes with red and blue exchanged (a blue module 28 instead of 76). No measured source hands such a buffer over.
+- Every four-byte source measured on 2026-11-09 fills the fourth byte with 255, so `Bgra8888` reads it: GDI `BitBlt` from the screen into a 32-bit DIB section, `CopyFromScreen` into `Format32bppArgb` and `Format32bppRgb`, a `Format32bppRgb` bitmap cleared to white, and WPF's `Bgr32` from a JPEG. A buffer whose fourth byte is 0 would read as all white through `Bgra8888` and decode nothing with no error, and through `Rgb888x` it decodes with red and blue exchanged (a blue module reads 76 instead of 28). None of those sources hands such a buffer over. The review on 2026-11-10 measured one that does: a 32-bit BMP written with that byte 0, which GDI+ loads as `Format32bppRgb` and WPF as `Bgr32`.
 - `LockBits` hands a bottom-up BMP over top row first, with a positive stride. A buffer whose rows run bottom to top still decodes on all three symbologies, with the corners reported in the buffer's rows: Standard QR at 148 pixels reported its top-left corner at y 132. Unity textures and OpenGL read-backs store rows bottom to top by their own documentation. Neither has a sample or a CI build here.
 
 ## Scope
@@ -22,7 +22,7 @@ Measured on 2026-11-09 with file-based console probes that reference the core pr
 | In | Out |
 |---|---|
 | The image's width and height for given options before writing, for the three data types (Phase 1) | Rows bottom to top, in the writer or the converter. No measured source in the samples' libraries hands them over. Reconsider for a Unity or OpenGL consumer with a build that runs it |
-| A row stride on `TryWritePixels`, for the three data types, so a symbol is written into another library's image, or into a region of a larger buffer, in place (Phase 2) | A layout of three colour bytes and an undefined fourth (blue, green, red, x). Every measured source sets that byte to 255. Reconsider for a source measured to hand over 0 or garbage there |
+| A row stride on `TryWritePixels`, for the three data types, so a symbol is written into another library's image, or into a region of a larger buffer, in place (Phase 2) | A layout of three colour bytes and an undefined fourth (blue, green, red, x). Every source measured on 2026-11-09 sets that byte to 255. Reconsider for a source measured to hand over 0 or garbage there. Moved In on 2026-11-10 as `Bgr888x` (Review below) |
 | `Rgb24` and `Bgr24` (names per D4) in `PixelLayout`, read by `LuminanceConverter.Convert` and written by `TryWritePixels` (Phase 3), with vector tiers for the conversion if D5 asks for them (Phase 4) | Premultiplied alpha in the writer. It changes only colours with an alpha below 255, and no sample writes one into a premultiplied image |
 | The three samples and `ConsoleAppCore` rewritten on the new calls, and the docs | Decode overloads that take pixels, a stride and a layout. The scope row on the luminance conversion API keeps them on request |
 | | Adapter packages for other libraries. The samples stand in for them |
@@ -154,7 +154,7 @@ The equivalence classes every new call is tested over:
 
 ## Progress log
 
-Phases 1 to 4 ran on 2026-11-10 in one session, and Phase 5's docs with them. Left: the ARM64 tier's timing (Phase 4), then the fold and the deletion of this file (Phase 5). The decisions, the measurements and the lessons below are already in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#pixel-buffer), so the fold has only this log's status to move.
+Phases 1 to 4 ran on 2026-11-10 in one session, and Phase 5's docs with them. Left: the ARM64 tiers' timing (Phase 4), then the fold and the deletion of this file (Phase 5).
 
 All times are from .NET 10 on x64 with AVX2, a Ryzen 9 7950X3D that was also running other sessions' builds, so each comparison is interleaved or alternated and none is a figure to quote alone.
 
@@ -162,7 +162,7 @@ All times are from .NET 10 on x64 with AVX2, a Ryzen 9 7950X3D that was also run
 
 Done:
 
-- `GetImageSize` on the three data types, a named tuple at first and an `ImageSize` since D2's revision the same day, with `GetIconRectangle` returning an `ImageRect`, refusing what the writers refuse. `SymbolImageWriterImageSizeTest` holds it to the size `TryWritePixels` reports, the PNG's header and the SVG's root on the three symbologies, plain, styled, at a set size that is not whole pixels, with one side given, and with an icon area.
+- `GetImageSize` on the three data types, a named tuple at first and an `ImageSize` since D2's revision the same day, with `GetIconRectangle` returning an `ImageRect`, refusing the options every writer refuses. `SymbolImageWriterImageSizeTest` holds it to the size `TryWritePixels` reports, the PNG's header and the SVG's root on the three symbologies, plain, styled, at a set size that is not whole pixels, with one side given, and with an icon area.
 - The System.Drawing sample writes into `LockBits` memory, and the ImageSharp sample into the image's memory when that is one block.
 
 Measured, console probes, the median of 15 interleaved rounds, at 520 and 1,480 pixels a side:
@@ -224,14 +224,14 @@ So D5's condition held, and Phase 3 could have merged before Phase 4.
 
 Lessons:
 
-- Version 40 as `Rgb24` took 381 µs with each run filled by copies from its first pixel, and 288 with a run of up to eight pixels stored as overlapping words, against RGBA's 152.
+- Version 40 as `Rgb24` took 381 µs with each run filled by copies from its first pixel, and 288 with a run of up to nine pixels stored as overlapping words and a longer one copied from its first eight, against RGBA's 152.
 - The layouts each library's formats map to were checked with a navy symbol, luminance 58, and 78 with red and blue exchanged. The README's FAQ has the table.
 
 ### Phase 4, vector tiers
 
 Done:
 
-- The kernel row `LuminanceConverterRgb24`: AVX2, the ARM64 dot product, SSSE3 and PackedSimd, with no tier on ARM64 without the dot product or on x64 without SSSE3.
+- The kernel row `LuminanceConverterRgb24`: AVX2, the ARM64 dot product, and a 128-bit tier that spreads the pixels with SSSE3, the ARM64 table lookup or PackedSimd. A process with none of these, the netstandard builds included, takes the per-pixel loop.
 - `LuminanceConverterRgb24ParityTest` enters each tier this machine has, at every width from its narrowest to 140 pixels, with the source ending where readable memory ends. `tests/FeatherQR.AotAnalysis` has the parity check and the timing shapes.
 
 Measured, `--time`, version 40 as BGR with padded rows, the tier against the portable loop:
@@ -240,6 +240,7 @@ Measured, `--time`, version 40 as BGR with padded rows, the tier against the por
 |---|---|---|
 | x64 JIT, AVX2 | 27.8 µs against 296 | 193 µs against 2,213 |
 | x64 JIT, `DOTNET_EnableAVX2=0`, SSSE3 | 61 to 67 µs against 282 to 296 | 461 to 481 µs against 2,200 to 2,213 |
+| x64 default NativeAOT publish, SSSE3, three processes | 46 to 48 µs against 217 to 223 | 334 to 363 µs against 1,532 to 1,563 |
 | WebAssembly interpreted, `--no-liftoff`, three processes a side | 404 to 428 µs against 901 to 1,735 | |
 | WebAssembly AOT-compiled, the fastest of five processes a side | 181 µs against 287 | 1,350 µs against 1,968 |
 
@@ -247,12 +248,23 @@ Every tier measured beat the portable loop, so each stays.
 
 Not done:
 
-- The ARM64 tier is not timed, since the session had no ARM64 machine. Its bytes are held by the parity test on CI's ARM64 runners, which have not run it yet either. To time it: `dotnet build tests/FeatherQR.AotAnalysis -c Release`, then `dotnet tests/FeatherQR.AotAnalysis/bin/Release/net10.0/FeatherQR.AotAnalysis.dll --time --shape LuminanceConverterRgb24`. It stays only if the dispatch's rows beat their `-scalar` rows.
-- A default NativeAOT publish and the `--simd-class` reports were not run here. CI's `aot-analysis` and `wasm-simd` jobs run them.
+- The ARM64 tiers are not timed, since the session had no ARM64 machine. Their parity checks run on CI's ARM64 runners, with and without the dot product, which have not run this branch yet either. To time them: `dotnet build tests/FeatherQR.AotAnalysis -c Release`, then `dotnet tests/FeatherQR.AotAnalysis/bin/Release/net10.0/FeatherQR.AotAnalysis.dll --time --shape LuminanceConverterRgb24`, once as it is and once with `DOTNET_EnableArm64Dp=0`. A tier stays only if the dispatch's rows beat their `-scalar` rows.
+
+### Review, 2026-11-10
+
+An adversarial review of the branch, each finding checked by three verifiers, changed:
+
+- `Bgr888x = 6`, ruled by the maintainer the same day. A 32-bit BMP written with its fourth byte 0 loads in GDI+ as `Format32bppRgb`, and the System.Drawing sample read it in place as `Bgra8888`, so every pixel was transparent, the image white and the decode failed with no error. Before this branch the sample had asked `LockBits` for `Format32bppArgb`, which converts. The sample reads `Format32bppRgb` as `Bgr888x` now, and the README maps it and WPF's `Bgr32` to it. Both read a navy symbol at luminance 58 as `Bgr888x`. The BMP the sample saves through GDI+ from a `Format32bppArgb` bitmap holds 255 in the fourth byte of all 87,616 pixels, which is why the sample's own run had passed. The converter reads it with the four-byte tiers, BGRA with the alpha handling off. The spec's Left out row for this layout went.
+- The ARM64 cell had been `AdvSimdDp` or `Scalar`, a scalar cell for a missing CPU feature, which the tier table's rules exclude. The 128-bit tier now spreads with the ARM64 table lookup too, as the four-byte kernel's portable tier serves ARM64 without the dot product.
+- The dispatch's gate is a predicate the parity test holds with a floor, where a test had compared the tier list with the same flags it was built from.
+- `NetStandardBuildParityTest` runs `LuminanceConverter.Convert` on the netstandard builds at every layout, which no test did before for any layout.
+- The default NativeAOT publish was run: the `X64Sse` tier report and parity pass, and its timing is in the table above. The WebAssembly report and parity passed here interpreted after `Bgr888x`, and AOT-compiled before the review. The `x86-64-v3` and ARM64 reports run on CI's `aot-analysis` jobs.
+- The x64 JIT's code for the AVX2 and SSSE3 three-byte kernels was read. Each step is its loads, the byte shuffles and the multiply-adds, with no call or bounds check in the loop.
+- The benchmark's stride shape writes the 8-pixel image, the allocation test's stride pads every image, and comments, the spec and this log were corrected where they said more than the code or the record.
 
 ### Phase 5, docs
 
-Done: the Pixel buffer section, the Image output table, four Left out rows and the scope row in `qrcode-symbologies.md`, the generated tier table, the README (the raw pixel section and the FAQ's layout table), `docs/migration.md`, and the 2.0.0 plan's row.
+Done: the Pixel buffer section, the Image output table, four Left out rows (one of which the review removed) and the scope row in `qrcode-symbologies.md`, the generated tier table, the README (the raw pixel section and the FAQ's layout table), `docs/migration.md`, and the 2.0.0 plan's row.
 
 The generated API page, `src/FeatherQR.Playground/wwwroot/api/index.html`, was regenerated with D2's revision.
 

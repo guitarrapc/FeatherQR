@@ -29,7 +29,7 @@ public static partial class LuminanceConverter
         77, 51, 99, 29, 77, 51, 99, 29, 77, 51, 99, 29, 77, 51, 99, 29);
 
     /// <summary>
-    /// vpshufb indices turning each BGRA pixel into [R, G, G, B].
+    /// vpshufb indices turning each BGRA or BGR888x pixel into [R, G, G, B].
     /// Indices are per 128-bit lane, so both lanes repeat 0..15.
     /// </summary>
     private static Vector256<byte> BgraShuffle => Vector256.Create(
@@ -43,7 +43,7 @@ public static partial class LuminanceConverter
 
     /// <summary>
     /// Converts with AVX2.
-    /// <paramref name="bgra"/> selects the channel order, <paramref name="hasAlpha"/> is false for RGB888x (its fourth byte is padding).
+    /// <paramref name="bgra"/> selects the channel order, <paramref name="hasAlpha"/> is false for RGB888x and BGR888x (the fourth byte is padding).
     /// </summary>
     internal static void ConvertRgbaAvx2(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha, bool premultiplied)
     {

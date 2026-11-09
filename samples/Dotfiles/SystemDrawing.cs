@@ -88,11 +88,12 @@ static unsafe bool TryDecode(Bitmap bitmap, out string text)
     var (width, height) = (bitmap.Width, bitmap.Height);
 
     // These formats are read as the bitmap holds them. Format24bppRgb keeps blue, green, red in memory despite its name.
+    // Format32bppRgb keeps a fourth byte that is no alpha: a BMP from another tool may hold 0 there, which Bgra8888 would read as transparent.
     // For any other format, an indexed one for example, LockBits converts to Format32bppArgb on the way out.
     var (format, layout) = bitmap.PixelFormat switch
     {
         PixelFormat.Format24bppRgb => (PixelFormat.Format24bppRgb, PixelLayout.Bgr24),
-        PixelFormat.Format32bppRgb => (PixelFormat.Format32bppRgb, PixelLayout.Bgra8888),
+        PixelFormat.Format32bppRgb => (PixelFormat.Format32bppRgb, PixelLayout.Bgr888x),
         _ => (PixelFormat.Format32bppArgb, PixelLayout.Bgra8888),
     };
     var luminance = new byte[width * height];

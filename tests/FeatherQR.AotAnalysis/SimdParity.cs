@@ -711,7 +711,7 @@ internal static class SimdParity
     private static List<string> LuminanceMismatches()
     {
         var mismatches = new List<string>();
-        (int R, int G, int B, int A, PixelLayout Layout)[] layouts = [(2, 1, 0, 3, PixelLayout.Bgra8888), (0, 1, 2, 3, PixelLayout.Rgba8888), (0, 1, 2, -1, PixelLayout.Rgb888x)];
+        (int R, int G, int B, int A, PixelLayout Layout)[] layouts = [(2, 1, 0, 3, PixelLayout.Bgra8888), (0, 1, 2, 3, PixelLayout.Rgba8888), (0, 1, 2, -1, PixelLayout.Rgb888x), (2, 1, 0, -1, PixelLayout.Bgr888x)];
         void Compare(byte[] pixels, int width, int height, int rowBytes, (int R, int G, int B, int A, PixelLayout Layout) layout, bool premultiplied, string label)
         {
             var expected = new byte[width * height];
@@ -783,7 +783,7 @@ internal static class SimdParity
     /// <summary>
     /// Three-byte luminance through the dispatch and through the 128-bit tier's own entry against the scalar tier, both channel orders:
     /// each channel through all 256 values against the other two, then random pixels at every width across two 16-pixel blocks and their
-    /// overlapping tail, packed and padded by a byte count that is not a whole pixel. The dispatch hides the 128-bit tier behind the AVX2 tier.
+    /// overlapping tail, packed and padded by a byte count that is not a whole pixel. The dispatch hides the 128-bit tier behind the AVX2 and dot-product tiers.
     /// </summary>
     private static List<string> LuminanceRgb24Mismatches()
     {
@@ -797,7 +797,7 @@ internal static class SimdParity
             if (!expected.AsSpan().SequenceEqual(actual))
                 mismatches.Add($"{label}, {(bgr ? "Bgr24" : "Rgb24")}");
             // The tier takes rows of one block or more, and its dispatch keeps narrower ones scalar
-            if (width < LuminanceConverter.Rgb24BlockPixels || !(System.Runtime.Intrinsics.X86.Ssse3.IsSupported || PackedSimd.IsSupported))
+            if (width < LuminanceConverter.Rgb24BlockPixels || !(System.Runtime.Intrinsics.X86.Ssse3.IsSupported || System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported || PackedSimd.IsSupported))
                 return;
             Array.Clear(actual);
             LuminanceConverter.ConvertRgb24Vector128(pixels, actual, width, height, rowBytes, bgr);
