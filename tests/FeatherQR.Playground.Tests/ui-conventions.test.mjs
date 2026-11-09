@@ -153,6 +153,58 @@ test('the API page names the release as the Playground does', () => {
   assert.equal(attribute(badge[0], 'href'), `https://github.com/guitarrapc/FeatherQR/releases/tag/${version}`);
 });
 
+test('a color is written once, as a token', () => {
+  // A hex value in a rule is a second copy of a token, or a color the themes cannot reach.
+  const outsideTokens = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/:root[^{]*\{[^}]*\}/g, '');
+  assert.deepEqual(outsideTokens.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [], []);
+});
+
+test('every token is used', () => {
+  const used = css + generator + read('main.js');
+  for (const token of (rules(siteCss).get(':root') ?? new Map()).keys()) {
+    if (token.startsWith('--')) assert.ok(used.includes(`var(${token})`), `${token} is never read`);
+  }
+});
+
+test('a rule is written once', () => {
+  // The dark tokens are the one block plain CSS has to state twice, for the system theme and for the chosen one.
+  const blocks = new Map();
+  for (const match of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = match[1].trim().replace(/\s+/g, ' ');
+    const declarations = match[2].split(';').map(part => part.trim().replace(/\s+/g, ' ')).filter(Boolean).sort();
+    if (selector.includes(':root') || declarations.length < 3) continue;
+    const key = declarations.join('; ');
+    assert.ok(!blocks.has(key), `${selector} repeats ${blocks.get(key)}`);
+    blocks.set(key, selector);
+  }
+});
+
+test('a class a script switches is a state class', () => {
+  // A variant is chosen in the markup with a -- name. What a script turns on and off takes an is- name.
+  const inline = [...apiHtml.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map((match, index) => [`API page script ${index}`, match[1]]);
+  for (const [name, source] of [...scripts, ...inline]) {
+    for (const match of source.matchAll(/classList\.(?:add|remove|toggle)\('([^']+)'/g)) {
+      assert.match(match[1], /^is-/, `${name} switches ${match[1]}`);
+    }
+  }
+});
+
+test('an id ends with the kind of control it names', () => {
+  const suffix = { range: '-range', checkbox: '-check', color: '-color', file: '-file', number: '-input', text: '-input' };
+  for (const match of html.matchAll(/<(select|input)\b[^>]*>/g)) {
+    const id = attribute(match[0], 'id');
+    const expected = match[1] === 'select' ? '-select' : suffix[attribute(match[0], 'type')];
+    if (id) assert.ok(id.endsWith(expected), `${id} should end with ${expected}`);
+  }
+});
+
+test('headings step down one level at a time', () => {
+  const levels = [...html.matchAll(/<h([1-6])\b/g)].map(match => Number(match[1]));
+  levels.forEach((level, index) => {
+    if (index > 0) assert.ok(level <= levels[index - 1] + 1, `h${levels[index - 1]} is followed by h${level}`);
+  });
+});
+
 test('a rule the sample shares with the Playground says the same', () => {
   // The sample keeps its own stylesheet so that it can be copied alone. What it shares must not drift.
   const playground = rules(css);

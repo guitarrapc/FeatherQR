@@ -144,8 +144,8 @@ for (const symbology of ['qr', 'microqr', 'rmqr']) {
       controls.applyStateToControls(presetToState(preset));
       const expectedEcc = ({ qr: ['L', 'M', 'Q', 'H'], microqr: ['EDO', 'L', 'M', 'Q'], rmqr: ['M', 'H'] })[symbology].includes(preset.ecc) ? preset.ecc : 'M';
       assert.equal(el('ecc-select').value, expectedEcc);
-      el('bg-transparent').checked = true;
-      el('gradient-toggle').checked = false;
+      el('bg-transparent-check').checked = true;
+      el('gradient-check').checked = false;
       controls.syncDerivedControls();
       assert.equal(el('bg-color').disabled, true);
       assert.equal(el('fg-color').disabled, false);

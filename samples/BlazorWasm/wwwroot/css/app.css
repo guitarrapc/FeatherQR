@@ -7,6 +7,8 @@
   color-scheme: light dark;
   --accent: #d62976;
   --accent-2: #962fbf;
+  --accent-warm: #fa7e1e;
+  --on-accent: #ffffff;
   --bg: #f6f7fb;
   --panel-bg: #ffffff;
   --panel-border: #e3e6ee;
@@ -92,7 +94,7 @@ main {
   height: 1.2em;
   border-radius: 0.3em;
   background:
-    radial-gradient(circle at 30% 70%, #fa7e1e 0%, #d62976 55%, #962fbf 100%);
+    radial-gradient(circle at 30% 70%, var(--accent-warm) 0%, var(--accent) 55%, var(--accent-2) 100%);
   position: relative;
 }
 
@@ -100,7 +102,7 @@ main {
   content: "";
   position: absolute;
   inset: 0.3em;
-  border: 0.11em solid #fff;
+  border: 0.11em solid var(--on-accent);
   border-radius: 0.17em;
 }
 
@@ -313,7 +315,7 @@ output {
   aspect-ratio: 1;
 }
 
-.qr-stats {
+.status-line {
   font-size: 0.78rem;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;

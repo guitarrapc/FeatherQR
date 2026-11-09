@@ -134,7 +134,7 @@
         </div>
 
         <details class="panel" open>
-          <summary>QR parameters</summary>
+          <summary><h2>QR parameters</h2></summary>
           <div class="panel__grid">
             <label class="field" title="Standard QR (versions 1-40), Micro QR (M1-M4, tiny symbols with a single finder pattern) or rMQR (rectangular Micro QR, R7x43-R17x139).">
               <span class="field__label">Symbology</span>
@@ -195,7 +195,7 @@
         </details>
 
         <details class="panel" open>
-          <summary>Shape</summary>
+          <summary><h2>Shape</h2></summary>
           <div class="panel__grid">
             <label class="field">
               <span class="field__label">Module shape</span>
@@ -227,7 +227,7 @@
         </details>
 
         <details class="panel" open>
-          <summary>Color</summary>
+          <summary><h2>Color</h2></summary>
           <div class="panel__grid">
             <label class="field field--inline">
               <span class="field__label">Modules</span>
@@ -238,15 +238,15 @@
               <input type="color" id="bg-color" value="#ffffff" />
             </label>
             <label class="field field--inline field--checkbox">
-              <input type="checkbox" id="bg-transparent" />
+              <input type="checkbox" id="bg-transparent-check" />
               <span class="field__label">Transparent background</span>
             </label>
             <label class="field field--inline field--checkbox">
-              <input type="checkbox" id="gradient-toggle" />
+              <input type="checkbox" id="gradient-check" />
               <span class="field__label">Gradient modules</span>
             </label>
           </div>
-          <div id="gradient-panel" hidden>
+          <div id="gradient-panel" class="panel__grid panel__grid--gap-top" hidden>
             <div class="field">
               <span class="field__label">Gradient stops</span>
               <div id="gradient-colors" class="gradient-colors"></div>
@@ -254,7 +254,7 @@
             </div>
             <label class="field">
               <span class="field__label">Direction</span>
-              <select id="gradient-direction">
+              <select id="gradient-direction-select">
                 <option value="LeftToRight">Left → Right</option>
                 <option value="RightToLeft">Right → Left</option>
                 <option value="TopToBottom">Top → Bottom</option>
@@ -269,7 +269,7 @@
         </details>
 
         <details class="panel" open id="logo-panel">
-          <summary>Logo</summary>
+          <summary><h2>Logo</h2></summary>
           <div class="panel__grid">
             <label class="field">
               <span class="field__label">Logo</span>
@@ -296,7 +296,7 @@
         </details>
 
         <details class="panel" id="decode-panel">
-          <summary>Decode an image</summary>
+          <summary><h2>Decode an image</h2></summary>
           <div id="decode-drop" class="decode-drop">
             <label class="field">
               <span class="field__label">Image file</span>
@@ -315,11 +315,11 @@
               <input type="checkbox" id="decode-mixed-check" disabled />
               <span class="field__label">Read every symbology together</span>
             </label>
-            <div id="decode-result" class="qr-stats" aria-live="polite"></div>
+            <div id="decode-result" class="status-line" aria-live="polite"></div>
             <div id="decode-bytes" class="decode-bytes" hidden></div>
             <div id="decode-gs1" class="decode-gs1" hidden></div>
             <ol id="decode-symbols" class="decode-symbols" hidden></ol>
-            <figure id="decode-preview" class="decode-preview" hidden>
+            <figure id="decode-preview" class="symbol-preview" hidden>
               <canvas id="decode-canvas"></canvas>
               <figcaption id="decode-preview-caption" class="field__hint"></figcaption>
             </figure>
@@ -333,43 +333,43 @@
         </details>
 
         <details class="panel" id="photo-panel">
-          <summary>Photograph the code</summary>
+          <summary><h2>Photograph the code</h2></summary>
           <div class="panel__grid">
             <label class="field" title="How many pixels a module takes at the symbol's center in the photograph. Capped so the photograph stays near 1,200 px.">
               <span class="field__label">Resolution <output id="photo-ppm-out">4</output> px/module</span>
-              <input type="range" id="photo-ppm" min="1" max="10" step="0.1" value="4" />
+              <input type="range" id="photo-ppm-range" min="1" max="10" step="0.1" value="4" />
             </label>
             <label class="field" title="The angle between the card and the camera's image plane.">
               <span class="field__label">Tilt <output id="photo-tilt-out">0</output>°</span>
-              <input type="range" id="photo-tilt" min="0" max="80" step="1" value="0" />
+              <input type="range" id="photo-tilt-range" min="0" max="80" step="1" value="0" />
             </label>
             <label class="field" title="The direction of the axis the card is tilted about. 0 runs along the symbol's rows.">
               <span class="field__label">Tilt direction <output id="photo-tilt-axis-out">0</output>°</span>
-              <input type="range" id="photo-tilt-axis" min="0" max="359" step="1" value="0" />
+              <input type="range" id="photo-tilt-axis-range" min="0" max="359" step="1" value="0" />
             </label>
             <label class="field" title="The turn of the whole photograph.">
               <span class="field__label">Rotation <output id="photo-roll-out">0</output>°</span>
-              <input type="range" id="photo-roll" min="0" max="359" step="1" value="0" />
+              <input type="range" id="photo-roll-range" min="0" max="359" step="1" value="0" />
             </label>
             <label class="field" title="Radial lens distortion: how much nearer the center a front-on photograph draws the symbol's corners than a pinhole would.">
               <span class="field__label">Barrel lens <output id="photo-barrel-out">0</output>%</span>
-              <input type="range" id="photo-barrel" min="0" max="40" step="0.5" value="0" />
+              <input type="range" id="photo-barrel-range" min="0" max="40" step="0.5" value="0" />
             </label>
             <label class="field" title="The card bent round a cylinder: how far its left and right edges stand off its center, in modules. Negative bends them away from the camera.">
               <span class="field__label">Curved card <output id="photo-bow-out">0</output> modules</span>
-              <input type="range" id="photo-bow" min="-8" max="8" step="0.25" value="0" />
+              <input type="range" id="photo-bow-range" min="-8" max="8" step="0.25" value="0" />
             </label>
             <label class="field" title="Gaussian blur, out of focus or moving, as a fraction of a module.">
               <span class="field__label">Blur <output id="photo-blur-out">0</output> modules</span>
-              <input type="range" id="photo-blur" min="0" max="1.5" step="0.01" value="0" />
+              <input type="range" id="photo-blur-range" min="0" max="1.5" step="0.01" value="0" />
             </label>
             <label class="field" title="Gaussian sensor noise, in gray levels out of 255.">
               <span class="field__label">Noise <output id="photo-noise-out">0</output> gray levels</span>
-              <input type="range" id="photo-noise" min="0" max="100" step="1" value="0" />
+              <input type="range" id="photo-noise-range" min="0" max="100" step="1" value="0" />
             </label>
             <label class="field" title="Light that falls unevenly on the card: a ramp dims it steadily across the photograph, a shadow drops it across a soft edge through the middle.">
               <span class="field__label">Uneven light</span>
-              <select id="photo-light">
+              <select id="photo-light-select">
                 <option value="none">Even</option>
                 <option value="ramp">Ramp</option>
                 <option value="shadow">Shadow edge</option>
@@ -377,15 +377,15 @@
             </label>
             <label class="field" title="How much light the dimmest part loses.">
               <span class="field__label">Light lost <output id="photo-light-depth-out">50</output>%</span>
-              <input type="range" id="photo-light-depth" min="0" max="100" step="1" value="50" />
+              <input type="range" id="photo-light-depth-range" min="0" max="100" step="1" value="50" />
             </label>
             <label class="field" title="The direction the light falls off towards. 0 is to the right, 90 downwards.">
               <span class="field__label">Light direction <output id="photo-light-direction-out">0</output>°</span>
-              <input type="range" id="photo-light-direction" min="0" max="359" step="1" value="0" />
+              <input type="range" id="photo-light-direction-range" min="0" max="359" step="1" value="0" />
             </label>
             <label class="field" title="Saves the photograph as JPEG before it is read, as a phone or a chat app does.">
               <span class="field__label">JPEG</span>
-              <select id="photo-jpeg">
+              <select id="photo-jpeg-select">
                 <option value="0">None</option>
                 <option value="90">Quality 90</option>
                 <option value="70">Quality 70</option>
@@ -396,10 +396,10 @@
             </label>
             <label class="field" title="Seeds the noise and the cluttered scene.">
               <span class="field__label">Seed</span>
-              <input type="number" id="photo-seed" min="0" max="99999" step="1" value="1" />
+              <input type="number" id="photo-seed-input" min="0" max="99999" step="1" value="1" />
             </label>
             <label class="field field--inline field--checkbox" title="Lays the card in a larger scene of random shapes and lines instead of on a plain table.">
-              <input type="checkbox" id="photo-scene" />
+              <input type="checkbox" id="photo-scene-check" />
               <span class="field__label">Cluttered background</span>
             </label>
             <label class="field field--inline field--checkbox" title="Draws the four corners the decoder reported over the photograph.">
@@ -407,11 +407,11 @@
               <span class="field__label">Show detected corners</span>
             </label>
           </div>
-          <div class="bench-actions">
+          <div class="panel__actions">
             <button type="button" id="photo-reset-btn" class="small-btn">Reset</button>
           </div>
-          <div id="photo-result" class="qr-stats" aria-live="polite"></div>
-          <figure id="photo-preview" class="decode-preview" hidden>
+          <div id="photo-result" class="status-line" aria-live="polite"></div>
+          <figure id="photo-preview" class="symbol-preview" hidden>
             <canvas id="photo-canvas"></canvas>
             <figcaption id="photo-preview-caption" class="field__hint"></figcaption>
           </figure>
@@ -420,7 +420,7 @@
           <div class="panel__grid">
             <label class="field" title="The effect made stronger step by step, from none, with the other settings as above.">
               <span class="field__label">Effect</span>
-              <select id="limit-effect">
+              <select id="limit-effect-select">
                 <option value="tilt">Tilt</option>
                 <option value="barrel">Barrel lens</option>
                 <option value="bow">Curved card</option>
@@ -433,7 +433,7 @@
             </label>
             <label class="field" title="Photographs at each step, each with its own seed. Seeds change the noise and the cluttered scene, so with neither every seed takes the same photograph.">
               <span class="field__label">Seeds a step</span>
-              <select id="limit-seeds">
+              <select id="limit-seeds-select">
                 <option value="1">1</option>
                 <option value="3" selected>3</option>
                 <option value="5">5</option>
@@ -441,12 +441,12 @@
               </select>
             </label>
           </div>
-          <div class="bench-actions">
+          <div class="panel__actions">
             <button type="button" id="limit-run-btn" class="action-btn" disabled>Find the limit</button>
             <button type="button" id="limit-cancel-btn" class="action-btn" hidden>Cancel</button>
           </div>
           <progress id="limit-progress" value="0" max="100" hidden></progress>
-          <div id="limit-summary" class="qr-stats" aria-live="polite"></div>
+          <div id="limit-summary" class="status-line" aria-live="polite"></div>
           <table id="limit-table" class="limit-table" hidden>
             <thead><tr><th id="limit-value-head">Value</th><th>Read</th><th></th></tr></thead>
             <tbody></tbody>
@@ -463,7 +463,7 @@
         </details>
 
         <details class="panel">
-          <summary>Performance benchmark</summary>
+          <summary><h2>Performance benchmark</h2></summary>
           <div class="panel__grid">
             <label class="field" title="Encode only exercises the zero-allocation span API; full pipeline also renders and PNG-encodes with the current visual settings.">
               <span class="field__label">Mode</span>
@@ -482,12 +482,12 @@
               </select>
             </label>
           </div>
-          <div class="bench-actions">
+          <div class="panel__actions">
             <button type="button" id="bench-run-btn" class="action-btn" disabled>Run benchmark</button>
             <button type="button" id="bench-cancel-btn" class="action-btn" hidden>Cancel</button>
           </div>
           <progress id="bench-progress" value="0" max="100" hidden></progress>
-          <div id="bench-result" class="qr-stats" aria-live="polite"></div>
+          <div id="bench-result" class="status-line" aria-live="polite"></div>
           <p class="field__hint">
             Generates unique codes sequentially (content is suffixed with #1, #2, …, as ASCII bytes in Bytes mode)
             using the current settings, single-threaded on the WASM runtime in this tab. Native .NET throughput is much
@@ -502,11 +502,11 @@
           <div class="preview-frame">
             <img id="qr-preview" alt="Generated QR code" hidden />
           </div>
-          <div id="generate-error" class="generate-error" hidden></div>
-          <div id="qr-stats" class="qr-stats"></div>
-          <div id="gs1-encoded" class="qr-stats gs1-encoded" hidden
+          <div id="generate-error" class="generate-error" aria-live="polite" hidden></div>
+          <div id="qr-stats" class="status-line"></div>
+          <div id="gs1-encoded" class="status-line gs1-encoded" hidden
             title="The text written into the symbol for the GS1 data: the element string, or the Digital Link URI."></div>
-          <div id="decode-verify" class="qr-stats" aria-live="polite"
+          <div id="decode-verify" class="status-line" aria-live="polite"
             title="The generated image is decoded back with the library's own decoder as a self-check."></div>
           <div class="preview-actions">
             <button type="button" id="download-btn" class="action-btn" disabled>Download PNG</button>

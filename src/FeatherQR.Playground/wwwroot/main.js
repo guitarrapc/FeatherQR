@@ -42,7 +42,7 @@ function showToast(message, variant = 'info', durationMs) {
 
   wrap.append(bodyEl, dismissBtn);
   toastStack.appendChild(wrap);
-  requestAnimationFrame(() => wrap.classList.add('toast--show'));
+  requestAnimationFrame(() => wrap.classList.add('is-shown'));
 
   const hideTimer = window.setTimeout(() => removeToastElement(wrap), ms);
   dismissBtn.addEventListener('click', () => {
@@ -55,8 +55,8 @@ function showToast(message, variant = 'info', durationMs) {
 function removeToastElement(el) {
   if (!el?.parentElement || el.dataset.toastClosing) return;
   el.dataset.toastClosing = '1';
-  el.classList.remove('toast--show');
-  el.classList.add('toast--out');
+  el.classList.remove('is-shown');
+  el.classList.add('is-leaving');
   window.setTimeout(() => el.remove(), 240);
 }
 
@@ -120,12 +120,12 @@ const cornerOut = document.getElementById('corner-out');
 const finderSelect = document.getElementById('finder-select');
 const fgColor = document.getElementById('fg-color');
 const bgColor = document.getElementById('bg-color');
-const bgTransparent = document.getElementById('bg-transparent');
-const gradientToggle = document.getElementById('gradient-toggle');
+const bgTransparent = document.getElementById('bg-transparent-check');
+const gradientToggle = document.getElementById('gradient-check');
 const gradientPanel = document.getElementById('gradient-panel');
 const gradientColorsEl = document.getElementById('gradient-colors');
 const gradientAddBtn = document.getElementById('gradient-add-btn');
-const gradientDirection = document.getElementById('gradient-direction');
+const gradientDirection = document.getElementById('gradient-direction-select');
 const logoModeSelect = document.getElementById('logo-mode-select');
 const logoFileRow = document.getElementById('logo-file-row');
 const logoFile = document.getElementById('logo-file');
@@ -1037,10 +1037,10 @@ decodeDropEl.addEventListener('drop', async (event) => {
 
 const photoPanelEl = document.getElementById('photo-panel');
 const photoResultEl = document.getElementById('photo-result');
-const photoSeedInput = document.getElementById('photo-seed');
-const photoLightSelect = document.getElementById('photo-light');
-const photoJpegSelect = document.getElementById('photo-jpeg');
-const photoSceneCheck = document.getElementById('photo-scene');
+const photoSeedInput = document.getElementById('photo-seed-input');
+const photoLightSelect = document.getElementById('photo-light-select');
+const photoJpegSelect = document.getElementById('photo-jpeg-select');
+const photoSceneCheck = document.getElementById('photo-scene-check');
 const photoView = {
   canvas: document.getElementById('photo-canvas'),
   figure: document.getElementById('photo-preview'),
@@ -1048,7 +1048,7 @@ const photoView = {
   corners: document.getElementById('photo-corners-check'),
 };
 
-/** The sliders: element id, the photograph request's field, and the default. */
+/** The sliders: the name their range and output ids start with, the photograph request's field, and the default. */
 const PHOTO_SLIDERS = [
   ['photo-ppm', 'pixelsPerModule', 4],
   ['photo-tilt', 'tilt', 0],
@@ -1060,7 +1060,7 @@ const PHOTO_SLIDERS = [
   ['photo-noise', 'noise', 0],
   ['photo-light-depth', 'lightDepth', 50],
   ['photo-light-direction', 'lightDirection', 0],
-].map(([id, key, value]) => ({ input: document.getElementById(id), output: document.getElementById(`${id}-out`), key, value }));
+].map(([id, key, value]) => ({ input: document.getElementById(`${id}-range`), output: document.getElementById(`${id}-out`), key, value }));
 
 /** What the last generated code is, for the card: its symbology, matrix and quiet zone, and the text it must read as. */
 let photoSource = null;
@@ -1213,8 +1213,8 @@ syncPhotoOutputs();
 
 /* ─── Find the limit ─── */
 
-const limitEffectSelect = document.getElementById('limit-effect');
-const limitSeedsSelect = document.getElementById('limit-seeds');
+const limitEffectSelect = document.getElementById('limit-effect-select');
+const limitSeedsSelect = document.getElementById('limit-seeds-select');
 const limitRunBtn = document.getElementById('limit-run-btn');
 const limitCancelBtn = document.getElementById('limit-cancel-btn');
 const limitProgressEl = document.getElementById('limit-progress');
@@ -1254,6 +1254,8 @@ function setLimitRunning(running) {
   limitRunBtn.disabled = running || !runtimeReady;
   limitCancelBtn.hidden = !running;
   limitCancelBtn.disabled = false;
+  limitEffectSelect.disabled = running;
+  limitSeedsSelect.disabled = running;
   limitProgressEl.hidden = !running;
 }
 
@@ -1786,7 +1788,7 @@ async function initializeRuntime() {
     await runtime.runMain();
     runtimeReady = true;
     syncVersionBadge();
-    loading.style.display = 'none';
+    loading.hidden = true;
     permalinkBtn.disabled = false;
     benchRunBtn.disabled = false;
     limitRunBtn.disabled = false;
@@ -1798,7 +1800,7 @@ async function initializeRuntime() {
     }
     runtimeAlive = false;
     runtimeReady = false;
-    loading.style.display = 'none';
+    loading.hidden = true;
     showToast(err?.message ?? String(err), 'error', 60000);
   }
 }

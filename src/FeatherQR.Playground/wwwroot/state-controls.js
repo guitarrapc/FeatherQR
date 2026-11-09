@@ -43,10 +43,10 @@ export function createStateControls(document, hooks) {
   const finderSelect = document.getElementById('finder-select');
   const fgColor = document.getElementById('fg-color');
   const bgColor = document.getElementById('bg-color');
-  const bgTransparent = document.getElementById('bg-transparent');
-  const gradientToggle = document.getElementById('gradient-toggle');
+  const bgTransparent = document.getElementById('bg-transparent-check');
+  const gradientToggle = document.getElementById('gradient-check');
   const gradientPanel = document.getElementById('gradient-panel');
-  const gradientDirection = document.getElementById('gradient-direction');
+  const gradientDirection = document.getElementById('gradient-direction-select');
   const logoModeSelect = document.getElementById('logo-mode-select');
   const logoFileRow = document.getElementById('logo-file-row');
   const logoSizeRange = document.getElementById('logo-size-range');
@@ -246,7 +246,7 @@ export function createStateControls(document, hooks) {
       : 'Bytes are written exactly as given, so Kanji mode and the GS1 and AIM data formats are off.';
     contentFileBtn.hidden = !bytes;
     contentEl.placeholder = bytes ? 'Hex bytes, such as 48 65 6C 6C 6F' : 'Text or URL to encode';
-    contentEl.classList.toggle('content--hex', bytes);
+    contentEl.classList.toggle('is-hex', bytes);
     contentHexStatus.hidden = !bytes;
     if (bytes) contentHexStatus.textContent = hexStatus(contentEl.value);
     // Text takes its charset from the library, and Micro QR has no ECI, so the assignment applies to bytes on the other two.
