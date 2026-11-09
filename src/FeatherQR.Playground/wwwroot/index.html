@@ -50,7 +50,8 @@
     <header>
       <div class="site-title-row">
         <h1>
-          <a href="https://github.com/guitarrapc/FeatherQR" aria-label="FeatherQR on GitHub"><span
+          <a href="https://github.com/guitarrapc/FeatherQR" target="_blank" rel="noopener noreferrer"
+            aria-label="FeatherQR on GitHub"><span
               class="site-logo" aria-hidden="true"></span></a>
           FeatherQR Playground
         </h1>
@@ -95,31 +96,27 @@
             <span class="field__hint">Each ␝ is written as the separator U+001D.</span>
           </div>
           <div class="panel__grid gs1-fields">
-            <label class="field" id="format-row">
+            <label class="field" id="format-row" title="Plain text is written as it is. The two GS1 formats take (AI) text such as (01)09520123456788(17)251231, or an element string, and check it first: GS1 QR Code writes the element string under FNC1 in first position, the carrier for healthcare, logistics and assets, and GS1 Digital Link writes the data's URI in a plain symbol, the retail carrier. GS1 does not list rMQR as a carrier, so a GS1 scanner may not accept one. AIM format writes the text under FNC1 in second position, for an industry format registered with AIM and named by the application indicator. Standard QR and rMQR only.">
               <span class="field__label">Data format</span>
-              <select id="format-select"
-                title="Plain text is written as it is. The two GS1 formats take (AI) text such as (01)09520123456788(17)251231, or an element string, and check it first: GS1 QR Code writes the element string under FNC1 in first position, the carrier for healthcare, logistics and assets, and GS1 Digital Link writes the data's URI in a plain symbol, the retail carrier. GS1 does not list rMQR as a carrier, so a GS1 scanner may not accept one. AIM format writes the text under FNC1 in second position, for an industry format registered with AIM and named by the application indicator. Standard QR and rMQR only.">
+              <select id="format-select">
                 <option value="text">Plain text</option>
                 <option value="gs1">GS1 QR Code</option>
                 <option value="link">GS1 Digital Link</option>
                 <option value="aim">AIM format (FNC1 second position)</option>
               </select>
             </label>
-            <label class="field" id="gs1-stem-row">
+            <label class="field" id="gs1-stem-row" title="The URI's scheme and domain, with an optional path, such as a brand's own domain. Blank writes GS1's canonical stem.">
               <span class="field__label">Digital Link stem</span>
-              <input type="text" id="gs1-stem-input" placeholder="https://id.gs1.org" spellcheck="false" autocomplete="off"
-                title="The URI's scheme and domain, with an optional path, such as a brand's own domain. Blank writes GS1's canonical stem." />
+              <input type="text" id="gs1-stem-input" placeholder="https://id.gs1.org" spellcheck="false" autocomplete="off" />
             </label>
-            <label class="field" id="app-indicator-row">
+            <label class="field" id="app-indicator-row" title="The AIM industry format the data follows: a number 00-99 in one or two digits, or one letter A-Z or a-z.">
               <span class="field__label">Application indicator</span>
-              <input type="text" id="app-indicator-input" value="00" maxlength="2" spellcheck="false" autocomplete="off"
-                title="The AIM industry format the data follows: a number 00-99 in one or two digits, or one letter A-Z or a-z." />
+              <input type="text" id="app-indicator-input" value="00" maxlength="2" spellcheck="false" autocomplete="off" />
             </label>
-            <label class="field" id="eci-assignment-row" hidden>
+            <label class="field" id="eci-assignment-row" hidden title="Tells a reader how to interpret the bytes, written as an ECI header before them: 899 for binary data, 26 for UTF-8, 20 for Shift_JIS. Blank writes none, as a binary payload usually carries. Standard QR and rMQR only.">
               <span class="field__label">ECI assignment</span>
               <input type="number" id="eci-assignment-input" min="0" max="999999" step="1" inputmode="numeric"
-                placeholder="none" autocomplete="off"
-                title="Tells a reader how to interpret the bytes, written as an ECI header before them: 899 for binary data, 26 for UTF-8, 20 for Shift_JIS. Blank writes none, as a binary payload usually carries. Standard QR and rMQR only." />
+                placeholder="None" autocomplete="off" />
             </label>
           </div>
           <label class="field">
@@ -138,45 +135,44 @@
         <details class="panel" open>
           <summary>QR parameters</summary>
           <div class="panel__grid">
-            <label class="field">
+            <label class="field" title="Standard QR (versions 1-40), Micro QR (M1-M4, tiny symbols with a single finder pattern) or rMQR (rectangular Micro QR, R7x43-R17x139).">
               <span class="field__label">Symbology</span>
-              <select id="symbology-select"
-                title="Standard QR (versions 1-40), Micro QR (M1-M4, tiny symbols with a single finder pattern) or rMQR (rectangular Micro QR, R7x43-R17x139)">
+              <select id="symbology-select">
                 <option value="qr">QR Code</option>
                 <option value="microqr">Micro QR</option>
                 <option value="rmqr">rMQR</option>
               </select>
             </label>
-            <label class="field">
-              <span class="field__label">Error correction</span>
-              <select id="ecc-select" title="Higher levels survive more damage or overlay, H is recommended with a logo">
+            <label class="field" title="Higher levels survive more damage or overlay, H is recommended with a logo.">
+              <span class="field__label">Error correction (ECC)</span>
+              <select id="ecc-select">
               </select>
             </label>
             <div class="field field--checks">
-              <label class="field field--inline field--checkbox" id="allow-kanji-row">
+              <label class="field field--inline field--checkbox" title="Write Japanese text in Kanji mode instead of UTF-8: 13 bits a character, so a smaller symbol. Applies when every character has a Kanji-mode (JIS X 0208) code; other text stays UTF-8. Off by default because Android's own scanners (camera, Google Lens) cannot read Kanji mode; iPhone and dedicated readers can.">
                 <input type="checkbox" id="allow-kanji-check" />
-                <span class="field__label" title="Write Japanese text in Kanji mode instead of UTF-8: 13 bits a character, so a smaller symbol. Applies when every character has a Kanji-mode (JIS X 0208) code; other text stays UTF-8. Off by default because Android's own scanners (camera, Google Lens) cannot read Kanji mode; iPhone and dedicated readers can.">Kanji mode for Japanese text</span>
+                <span class="field__label">Kanji mode for Japanese text</span>
               </label>
-              <label class="field field--inline field--checkbox" id="ecc-boost-row">
+              <label class="field field--inline field--checkbox" id="ecc-boost-row" title="Raise the ECC level when the chosen version has spare capacity. Never changes the symbol size; the decoded result below shows the level actually used.">
                 <input type="checkbox" id="ecc-boost-check" />
-                <span class="field__label" title="Raise the ECC level when the chosen version has spare capacity. Never changes the symbol size; the decoded result below shows the level actually used.">Boost ECC to fill spare capacity</span>
+                <span class="field__label">Boost ECC to fill spare capacity</span>
               </label>
             </div>
-            <label class="field">
+            <label class="field" title="QR symbol version (matrix size). Auto picks the smallest that fits.">
               <span class="field__label">Version</span>
-              <select id="version-select" title="QR symbol version (matrix size). Auto picks the smallest that fits."></select>
+              <select id="version-select"></select>
             </label>
-            <label class="field" id="rmqr-fit-row">
+            <label class="field" id="rmqr-fit-row" title="How the rMQR version is chosen among those that fit (Auto version only). Fewest modules matches other encoders; Shortest keeps the symbol as flat as possible.">
               <span class="field__label">Fit strategy</span>
-              <select id="rmqr-fit-select" title="How the rMQR version is chosen among those that fit (Auto version only). Fewest modules matches other encoders; Shortest keeps the symbol as flat as possible.">
+              <select id="rmqr-fit-select">
                 <option value="area">Fewest modules</option>
                 <option value="height">Shortest</option>
                 <option value="width">Narrowest</option>
               </select>
             </label>
-            <label class="field" id="rmqr-height-row">
+            <label class="field" id="rmqr-height-row" title="Restrict the rMQR fit to one symbol height (modules); the width is chosen automatically.">
               <span class="field__label">Fixed height</span>
-              <select id="rmqr-height-select" title="Restrict the rMQR fit to one symbol height (modules); the width is chosen automatically.">
+              <select id="rmqr-height-select">
                 <option value="0">Any</option>
                 <option value="7">7 modules</option>
                 <option value="9">9 modules</option>
@@ -208,9 +204,9 @@
                 <option value="rounded">Rounded rectangle</option>
               </select>
             </label>
-            <label class="field" id="finder-row">
+            <label class="field" id="finder-row" title="The three large squares in the corners.">
               <span class="field__label">Finder pattern</span>
-              <select id="finder-select" title="The three large squares in the corners">
+              <select id="finder-select">
                 <option value="auto">Auto (plain square)</option>
                 <option value="rectangle">Rectangle</option>
                 <option value="circle">Circle</option>
@@ -218,10 +214,9 @@
                 <option value="roundedCircle">Rounded + circle center</option>
               </select>
             </label>
-            <label class="field">
+            <label class="field" title="Below 100% leaves gaps between modules. Values under 80% may hurt readability.">
               <span class="field__label">Module size <output id="module-size-out">100</output>%</span>
-              <input type="range" id="module-size-range" min="50" max="100" step="1" value="100"
-                title="Below 100% leaves gaps between modules. Values under 80% may hurt readability." />
+              <input type="range" id="module-size-range" min="50" max="100" step="1" value="100" />
             </label>
             <label class="field" id="corner-row">
               <span class="field__label">Corner radius <output id="corner-out">30</output>%</span>
@@ -233,7 +228,7 @@
         <details class="panel" open>
           <summary>Color</summary>
           <div class="panel__grid">
-            <label class="field field--inline" id="fg-row">
+            <label class="field field--inline">
               <span class="field__label">Modules</span>
               <input type="color" id="fg-color" value="#000000" />
             </label>
@@ -307,17 +302,17 @@
               <input type="file" id="decode-file" accept="image/png,image/jpeg,image/webp" />
             </label>
             <p class="field__hint">Or drop an image here, or paste one from the clipboard anywhere on the page.</p>
-            <label class="field field--inline field--checkbox">
+            <label class="field field--inline field--checkbox" title="Draws the four corners the decoder reported over the image.">
               <input type="checkbox" id="decode-corners-check" checked />
-              <span class="field__label" title="Draws the four corners the decoder reported over the image">Show detected corners</span>
+              <span class="field__label">Show detected corners</span>
             </label>
-            <label class="field field--inline field--checkbox">
+            <label class="field field--inline field--checkbox" title="Reads every QR code in the image, such as a sheet of labels or a shelf, and slower than reading one code. Every Standard QR symbol, or in an image with none every Micro QR symbol, or with none of those every rMQR symbol.">
               <input type="checkbox" id="decode-every-check" />
-              <span class="field__label" title="Reads every QR Code in the image, such as a sheet of labels or a shelf, and slower than reading one code. Every Standard QR symbol, or in an image with none every Micro QR symbol, or with none of those every rMQR symbol.">Read every QR Code in the image</span>
+              <span class="field__label">Read every QR code in the image</span>
             </label>
-            <label class="field field--inline field--checkbox">
+            <label class="field field--inline field--checkbox" title="Reads the codes of every symbology together, Standard QR, Micro QR and rMQR, such as an rMQR code beside a QR code on one label, and slower than reading one symbology. Used with Read every QR code in the image.">
               <input type="checkbox" id="decode-mixed-check" disabled />
-              <span class="field__label" title="Reads the codes of every symbology together, Standard QR, Micro QR and rMQR, such as an rMQR code beside a QR code on one label, and slower than reading one symbology. Used with Read every QR Code in the image.">Read every symbology together</span>
+              <span class="field__label">Read every symbology together</span>
             </label>
             <div id="decode-result" class="qr-stats" aria-live="polite"></div>
             <div id="decode-bytes" class="decode-bytes" hidden></div>
@@ -331,68 +326,64 @@
           <p class="field__hint">
             Runs FeatherQR's built-in decoders (QR Code, Micro QR, rMQR) in your browser, nothing is uploaded.
             They read rendered images, scans and photographs (rotated, mirrored or tilted), one code an image,
-            or with <em>Read every QR Code</em> each code of one symbology it holds, or of all three with <em>Read every symbology together</em>;
+            or with <em>Read every QR code</em> each code of one symbology it holds, or of all three with <em>Read every symbology together</em>;
             a photograph with glare, damage or blur, or a heavily stylized code, may not decode even when a camera app reads it.
           </p>
         </details>
 
         <details class="panel" id="photo-panel">
           <summary>Photograph the code</summary>
-          <p class="field__hint">
-            Prints the generated code on a card and photographs it through a simulated camera, then reads the photograph
-            with the decoder of its symbology. Use it to find where a design stops reading.
-          </p>
           <div class="panel__grid">
-            <label class="field">
-              <span class="field__label" title="The module size at the symbol's centre in the photograph. Capped so the photograph stays near 1,200 px.">Module size <output id="photo-ppm-out">4</output> px</span>
+            <label class="field" title="How many pixels a module takes at the symbol's center in the photograph. Capped so the photograph stays near 1,200 px.">
+              <span class="field__label">Resolution <output id="photo-ppm-out">4</output> px/module</span>
               <input type="range" id="photo-ppm" min="1" max="10" step="0.1" value="4" />
             </label>
-            <label class="field">
-              <span class="field__label" title="The angle between the card and the camera's image plane.">Tilt <output id="photo-tilt-out">0</output>°</span>
+            <label class="field" title="The angle between the card and the camera's image plane.">
+              <span class="field__label">Tilt <output id="photo-tilt-out">0</output>°</span>
               <input type="range" id="photo-tilt" min="0" max="80" step="1" value="0" />
             </label>
-            <label class="field">
-              <span class="field__label" title="The direction of the axis the card is tilted about. 0 runs along the symbol's rows.">Tilt direction <output id="photo-tilt-axis-out">0</output>°</span>
+            <label class="field" title="The direction of the axis the card is tilted about. 0 runs along the symbol's rows.">
+              <span class="field__label">Tilt direction <output id="photo-tilt-axis-out">0</output>°</span>
               <input type="range" id="photo-tilt-axis" min="0" max="359" step="1" value="0" />
             </label>
-            <label class="field">
-              <span class="field__label" title="The turn of the whole photograph.">Rotation <output id="photo-roll-out">0</output>°</span>
+            <label class="field" title="The turn of the whole photograph.">
+              <span class="field__label">Rotation <output id="photo-roll-out">0</output>°</span>
               <input type="range" id="photo-roll" min="0" max="359" step="1" value="0" />
             </label>
-            <label class="field">
-              <span class="field__label" title="Radial lens distortion: how much nearer the centre a front-on photograph draws the symbol's corners than a pinhole would.">Barrel lens <output id="photo-barrel-out">0</output> %</span>
+            <label class="field" title="Radial lens distortion: how much nearer the center a front-on photograph draws the symbol's corners than a pinhole would.">
+              <span class="field__label">Barrel lens <output id="photo-barrel-out">0</output>%</span>
               <input type="range" id="photo-barrel" min="0" max="40" step="0.5" value="0" />
             </label>
-            <label class="field">
-              <span class="field__label" title="The card bent round a cylinder: how far its left and right edges stand off its centre, in modules. Negative bends them away from the camera.">Curved card <output id="photo-bow-out">0</output> modules</span>
+            <label class="field" title="The card bent round a cylinder: how far its left and right edges stand off its center, in modules. Negative bends them away from the camera.">
+              <span class="field__label">Curved card <output id="photo-bow-out">0</output> modules</span>
               <input type="range" id="photo-bow" min="-8" max="8" step="0.25" value="0" />
             </label>
-            <label class="field">
-              <span class="field__label" title="Gaussian blur, out of focus or moving, as a fraction of a module.">Blur <output id="photo-blur-out">0</output> module</span>
+            <label class="field" title="Gaussian blur, out of focus or moving, as a fraction of a module.">
+              <span class="field__label">Blur <output id="photo-blur-out">0</output> modules</span>
               <input type="range" id="photo-blur" min="0" max="1.5" step="0.01" value="0" />
             </label>
-            <label class="field">
-              <span class="field__label" title="Gaussian sensor noise, in grey levels out of 255.">Noise <output id="photo-noise-out">0</output></span>
+            <label class="field" title="Gaussian sensor noise, in gray levels out of 255.">
+              <span class="field__label">Noise <output id="photo-noise-out">0</output> gray levels</span>
               <input type="range" id="photo-noise" min="0" max="100" step="1" value="0" />
             </label>
-            <label class="field">
-              <span class="field__label" title="Light that falls unevenly on the card: a ramp dims it steadily across the photograph, a shadow drops it across a soft edge through the middle.">Uneven light</span>
+            <label class="field" title="Light that falls unevenly on the card: a ramp dims it steadily across the photograph, a shadow drops it across a soft edge through the middle.">
+              <span class="field__label">Uneven light</span>
               <select id="photo-light">
                 <option value="none">Even</option>
                 <option value="ramp">Ramp</option>
                 <option value="shadow">Shadow edge</option>
               </select>
             </label>
-            <label class="field">
-              <span class="field__label" title="How much light the dimmest part loses.">Light lost <output id="photo-light-depth-out">50</output> %</span>
+            <label class="field" title="How much light the dimmest part loses.">
+              <span class="field__label">Light lost <output id="photo-light-depth-out">50</output>%</span>
               <input type="range" id="photo-light-depth" min="0" max="100" step="1" value="50" />
             </label>
-            <label class="field">
-              <span class="field__label" title="The direction the light falls off towards. 0 is to the right, 90 downwards.">Light direction <output id="photo-light-direction-out">0</output>°</span>
+            <label class="field" title="The direction the light falls off towards. 0 is to the right, 90 downwards.">
+              <span class="field__label">Light direction <output id="photo-light-direction-out">0</output>°</span>
               <input type="range" id="photo-light-direction" min="0" max="359" step="1" value="0" />
             </label>
-            <label class="field">
-              <span class="field__label" title="Saves the photograph as JPEG before it is read, as a phone or a chat app does.">JPEG</span>
+            <label class="field" title="Saves the photograph as JPEG before it is read, as a phone or a chat app does.">
+              <span class="field__label">JPEG</span>
               <select id="photo-jpeg">
                 <option value="0">None</option>
                 <option value="90">Quality 90</option>
@@ -402,17 +393,17 @@
                 <option value="15">Quality 15</option>
               </select>
             </label>
-            <label class="field">
-              <span class="field__label" title="Seeds the noise and the cluttered scene.">Seed</span>
+            <label class="field" title="Seeds the noise and the cluttered scene.">
+              <span class="field__label">Seed</span>
               <input type="number" id="photo-seed" min="0" max="99999" step="1" value="1" />
             </label>
-            <label class="field field--inline field--checkbox">
+            <label class="field field--inline field--checkbox" title="Lays the card in a larger scene of random shapes and lines instead of on a plain table.">
               <input type="checkbox" id="photo-scene" />
-              <span class="field__label" title="Lays the card in a larger scene of random shapes and lines instead of on a plain table.">Cluttered background</span>
+              <span class="field__label">Cluttered background</span>
             </label>
-            <label class="field field--inline field--checkbox">
+            <label class="field field--inline field--checkbox" title="Draws the four corners the decoder reported over the photograph.">
               <input type="checkbox" id="photo-corners-check" checked />
-              <span class="field__label" title="Draws the four corners the decoder reported over the photograph">Show detected corners</span>
+              <span class="field__label">Show detected corners</span>
             </label>
           </div>
           <div class="bench-actions">
@@ -426,8 +417,8 @@
 
           <h3 class="panel__subheading">Find the limit</h3>
           <div class="panel__grid">
-            <label class="field">
-              <span class="field__label" title="The effect made stronger step by step, from none, with the other settings as above">Effect</span>
+            <label class="field" title="The effect made stronger step by step, from none, with the other settings as above.">
+              <span class="field__label">Effect</span>
               <select id="limit-effect">
                 <option value="tilt">Tilt</option>
                 <option value="barrel">Barrel lens</option>
@@ -435,12 +426,12 @@
                 <option value="blur">Blur</option>
                 <option value="noise">Noise</option>
                 <option value="lightDepth">Uneven light (shadow edge unless one is chosen)</option>
-                <option value="pixelsPerModule">Module size, shrinking</option>
+                <option value="pixelsPerModule">Resolution, falling</option>
                 <option value="jpeg">JPEG quality, falling</option>
               </select>
             </label>
-            <label class="field">
-              <span class="field__label" title="Photographs at each step, each with its own seed. Seeds change the noise and the cluttered scene, so with neither every seed takes the same photograph.">Seeds a step</span>
+            <label class="field" title="Photographs at each step, each with its own seed. Seeds change the noise and the cluttered scene, so with neither every seed takes the same photograph.">
+              <span class="field__label">Seeds a step</span>
               <select id="limit-seeds">
                 <option value="1">1</option>
                 <option value="3" selected>3</option>
@@ -451,7 +442,7 @@
           </div>
           <div class="bench-actions">
             <button type="button" id="limit-run-btn" class="action-btn" disabled>Find the limit</button>
-            <button type="button" id="limit-cancel-btn" class="small-btn" hidden>Cancel</button>
+            <button type="button" id="limit-cancel-btn" class="action-btn" hidden>Cancel</button>
           </div>
           <progress id="limit-progress" value="0" max="100" hidden></progress>
           <div id="limit-summary" class="qr-stats" aria-live="polite"></div>
@@ -460,8 +451,12 @@
             <tbody></tbody>
           </table>
           <p class="field__hint">
+            Prints the generated code on a card and photographs it through a simulated camera, then reads the photograph
+            with the decoder of its symbology. Use it to find where a design stops reading.
+          </p>
+          <p class="field__hint">
             The camera is the one the library's image decode sweep photographs symbols with: a pinhole camera over a printed
-            card, nine rays a pixel, then blur and noise. Everything runs in this tab; a large symbol at a large module size
+            card, nine rays a pixel, then blur and noise. Everything runs in this tab; a large symbol at a high resolution
             takes a moment to photograph.
           </p>
         </details>
@@ -469,10 +464,9 @@
         <details class="panel">
           <summary>Performance benchmark</summary>
           <div class="panel__grid">
-            <label class="field">
+            <label class="field" title="Encode only exercises the zero-allocation span API; full pipeline also renders and PNG-encodes with the current visual settings.">
               <span class="field__label">Mode</span>
-              <select id="bench-mode-select"
-                title="Encode only exercises the zero-allocation span API; full pipeline also renders and PNG-encodes with the current visual settings">
+              <select id="bench-mode-select">
                 <option value="encode">Encode only, zero-allocation API</option>
                 <option value="render">Full pipeline, encode + render + PNG</option>
               </select>
@@ -489,7 +483,7 @@
           </div>
           <div class="bench-actions">
             <button type="button" id="bench-run-btn" class="action-btn" disabled>Run benchmark</button>
-            <button type="button" id="bench-cancel-btn" class="small-btn" hidden>Cancel</button>
+            <button type="button" id="bench-cancel-btn" class="action-btn" hidden>Cancel</button>
           </div>
           <progress id="bench-progress" value="0" max="100" hidden></progress>
           <div id="bench-result" class="qr-stats" aria-live="polite"></div>
@@ -503,23 +497,23 @@
 
       <div class="preview-column">
         <div class="panel preview-panel">
-          <div id="loading" class="notification">Loading WebAssembly binary...</div>
+          <div id="loading" class="notification">Loading WebAssembly binary…</div>
           <div class="preview-frame">
             <img id="qr-preview" alt="Generated QR code" hidden />
           </div>
           <div id="generate-error" class="generate-error" hidden></div>
           <div id="qr-stats" class="qr-stats"></div>
           <div id="gs1-encoded" class="qr-stats gs1-encoded" hidden
-            title="The text written into the symbol for the GS1 data: the element string, or the Digital Link URI"></div>
+            title="The text written into the symbol for the GS1 data: the element string, or the Digital Link URI."></div>
           <div id="decode-verify" class="qr-stats" aria-live="polite"
-            title="The generated image is decoded back with the library's own decoder as a self-check"></div>
+            title="The generated image is decoded back with the library's own decoder as a self-check."></div>
           <div class="preview-actions">
             <button type="button" id="download-btn" class="action-btn" disabled>Download PNG</button>
             <button type="button" id="download-svg-btn" class="action-btn" disabled
-              title="Vector output, scales to any size without quality loss">Download SVG</button>
+              title="Vector output, scales to any size without quality loss.">Download SVG</button>
             <button type="button" id="copy-image-btn" class="action-btn" disabled>Copy image</button>
             <button type="button" id="permalink-btn" class="action-btn action-btn--primary" disabled
-              title="Share, copy a link with all settings encoded in the URL">Share link</button>
+              title="Share, copy a link with all settings encoded in the URL.">Share link</button>
           </div>
         </div>
       </div>
@@ -565,12 +559,14 @@
         </svg>
       </a>
       <span class="footer-copy-sep" aria-hidden="true">|</span>
-      <span class="footer-copy-text">© 2026 <a href="https://github.com/guitarrapc">guitarrapc</a>. The source
+      <span class="footer-copy-text">© 2026 <a href="https://github.com/guitarrapc" target="_blank"
+          rel="noopener noreferrer">guitarrapc</a>. The source
         code and website content are licensed <a
-          href="https://github.com/guitarrapc/FeatherQR/blob/main/LICENSE">MIT</a>.</span>
+          href="https://github.com/guitarrapc/FeatherQR/blob/main/LICENSE" target="_blank"
+          rel="noopener noreferrer">MIT</a>.</span>
       <span class="footer-copy-sep" aria-hidden="true">|</span>
       <button type="button" id="theme-cycle-btn" class="theme-cycle-btn toolbar-icon-btn" data-theme-mode="system"
-        title="Cycle color theme: System → Light → Dark"
+        title="Cycle color theme: System → Light → Dark."
         aria-label="Color theme: System. Click to cycle: System, Light, Dark.">
         <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--system" width="16" height="16" viewBox="0 0 24 24"
           fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"

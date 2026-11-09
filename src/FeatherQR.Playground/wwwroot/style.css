@@ -239,7 +239,8 @@ details.panel[open] summary {
   gap: 8px;
 }
 
-.field--disabled {
+/* The dim follows the control's own state, so a disabled control cannot miss it. */
+.field:has(> :disabled) {
   opacity: 0.45;
 }
 
@@ -252,9 +253,8 @@ details.panel[open] summary {
 textarea,
 select,
 input[type="text"],
-input[type="url"],
-input[type="file"],
-#eci-assignment-input {
+input[type="number"],
+input[type="file"] {
   font: inherit;
   color: var(--text);
   background: var(--input-bg);
@@ -295,7 +295,7 @@ textarea.content--hex,
 }
 
 .decode-bytes {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
 }
 
@@ -389,25 +389,35 @@ output {
   padding: 3px;
 }
 
-.small-btn {
+/* A file input's own button draws as a small button, and the input keeps showing the chosen file's name. */
+.small-btn,
+input[type="file"]::file-selector-button {
   font: inherit;
   font-size: 0.8rem;
   color: var(--text-muted);
   background: transparent;
   border: 1px solid var(--input-border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 3px 8px;
   cursor: pointer;
+}
+
+.small-btn {
   align-self: flex-start;
 }
 
-.small-btn:hover:not(:disabled) {
+input[type="file"]::file-selector-button {
+  margin-right: 8px;
+}
+
+.small-btn:hover:not(:disabled),
+input[type="file"]::file-selector-button:hover {
   color: var(--accent);
   border-color: var(--accent);
 }
 
 .small-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: default;
 }
 
@@ -453,6 +463,11 @@ output {
   min-height: 1.2em;
 }
 
+/* An operation that failed, in the color the generation error takes. */
+.qr-stats.is-error {
+  color: var(--danger);
+}
+
 /* GS1 data: the carrier fields, the text written into the symbol, and a decoded symbol's elements. */
 .gs1-fields {
   margin-bottom: 10px;
@@ -464,7 +479,7 @@ output {
 
 .decode-gs1 {
   margin-top: 8px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
@@ -662,8 +677,9 @@ output {
   letter-spacing: 1px;
 }
 
+/* The steps where reading starts to fail are the limit, so they take the highlight. Red stays for errors. */
 .limit-table tr.is-partial td {
-  color: var(--danger);
+  color: var(--accent);
 }
 
 .limit-table tr.is-none td {

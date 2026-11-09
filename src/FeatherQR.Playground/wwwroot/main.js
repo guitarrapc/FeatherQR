@@ -130,6 +130,20 @@ function removeToastElement(el) {
   window.setTimeout(() => el.remove(), 240);
 }
 
+/* ─── Status lines ─── */
+
+/**
+ * Writes a panel's status line. A failed operation takes the danger color, as the generation error does.
+ * Every write goes through here, so the line after a failure is plain again.
+ * @param {HTMLElement} el
+ * @param {string} text
+ * @param {boolean} [failed]
+ */
+function setStatus(el, text, failed = false) {
+  el.textContent = text;
+  el.classList.toggle('is-error', failed);
+}
+
 /* ─── Element references ─── */
 
 const loading = document.getElementById('loading');
@@ -174,7 +188,6 @@ const cornerRow = document.getElementById('corner-row');
 const cornerRange = document.getElementById('corner-range');
 const cornerOut = document.getElementById('corner-out');
 const finderSelect = document.getElementById('finder-select');
-const fgRow = document.getElementById('fg-row');
 const fgColor = document.getElementById('fg-color');
 const bgColor = document.getElementById('bg-color');
 const bgTransparent = document.getElementById('bg-transparent');
@@ -262,8 +275,13 @@ function eciLabel(assignment) {
   return Number.isInteger(assignment) ? String(assignment) : 'none';
 }
 
+/** A whole number with separators. The locale is fixed because the page is in English whatever the browser's is. */
+function formatCount(count) {
+  return count.toLocaleString('en-US');
+}
+
 function byteCount(count) {
-  return `${count.toLocaleString()} ${count === 1 ? 'byte' : 'bytes'}`;
+  return `${formatCount(count)} ${count === 1 ? 'byte' : 'bytes'}`;
 }
 
 /** Whether a read holds the bytes a bytes request wrote, under the assignment it wrote them with. A reader takes the bytes by the assignment, so both must come back. */
@@ -647,7 +665,7 @@ function runVerifyDecode(pngBytes, request) {
     decodeVerifyEl.textContent = '⚠ Self-check decoded different text, please test-scan this code.';
   } else {
     decodeVerifyEl.textContent =
-      `Self-check: ${result.status}, the built-in decoder could not read this styling; a camera app may still scan it.`;
+      `✗ Self-check: ${result.status}, the built-in decoder could not read this styling; a camera app may still scan it.`;
   }
 }
 
@@ -688,11 +706,11 @@ const DECODE_PREVIEW_MAX_HEIGHT = 460;
 let lastDecodeImage = null;
 let lastDecodeResult = null;
 
-/** The file the panel last read, so ticking "Read every QR Code" reads it again under the new choice. */
+/** The file the panel last read, so ticking "Read every QR code" reads it again under the new choice. */
 let lastDecodeFile = null;
 
 /**
- * One shape for both calls: the symbols read (none, one, or with "Read every QR Code" any number),
+ * One shape for both calls: the symbols read (none, one, or with "Read every QR code" any number),
  * and the image they were read from.
  */
 function decodedSymbols(result) {
@@ -939,18 +957,18 @@ async function decodeImageFile(file) {
     bytes = new Uint8Array(await file.arrayBuffer());
   } catch (e) {
     if (superseded()) return;
-    decodeResultEl.textContent = `Could not read the file: ${e?.message ?? e}`;
+    setStatus(decodeResultEl, `Could not read the file: ${e?.message ?? e}`, true);
     return;
   }
   if (superseded()) return;
 
   if (!runtimeAlive || !runtimeReady || !exports) {
-    decodeResultEl.textContent = 'The WebAssembly runtime is still loading, try again in a moment.';
+    setStatus(decodeResultEl, 'The WebAssembly runtime is still loading, try again in a moment.');
     return;
   }
 
   // The decode blocks the main thread for seconds, so the status line is painted first.
-  decodeResultEl.textContent = 'Decoding…';
+  setStatus(decodeResultEl, 'Decoding…');
   await afterPaint();
   if (superseded()) return;
 
@@ -958,7 +976,7 @@ async function decodeImageFile(file) {
   const raw = callDecode(bytes, every, every && decodeMixedCheck.checked);
   if (!raw || superseded()) return;
   if (raw.error) {
-    decodeResultEl.textContent = `Decode failed: ${raw.error}`;
+    setStatus(decodeResultEl, `Could not decode the image: ${raw.error}`, true);
     return;
   }
 
@@ -967,14 +985,13 @@ async function decodeImageFile(file) {
   if (symbols.length === 0) {
     // The call for every code reports no status: it returns only the symbols it read.
     const status = result.status ? ` (${result.status})` : '';
-    decodeResultEl.textContent =
-      `No QR code decoded${status}. The built-in decoder targets clean, screen-rendered images.`;
+    setStatus(decodeResultEl, `✗ No QR code decoded${status}. The built-in decoder targets clean, screen-rendered images.`);
   } else if (symbols.length === 1) {
-    decodeResultEl.textContent = `${symbolSummary(symbols[0])} · ${result.totalMs} ms`;
+    setStatus(decodeResultEl, `${symbolSummary(symbols[0])} · ${result.totalMs} ms`);
     renderDecodedBytes(symbols[0]);
     renderDecodedGs1(symbols[0]);
   } else {
-    decodeResultEl.textContent = `${symbols.length} QR codes decoded · ${result.totalMs} ms`;
+    setStatus(decodeResultEl, `${symbols.length} QR codes decoded · ${result.totalMs} ms`);
     for (const symbol of symbols) {
       const item = document.createElement('li');
       const assignment = Number.isInteger(symbol.eciAssignment) ? ` · ECI assignment ${symbol.eciAssignment}` : '';
@@ -1079,7 +1096,7 @@ decodeDropEl.addEventListener('drop', async (event) => {
   event.preventDefault();
   decodeDropEl.classList.remove('is-dragover');
   if (!file) {
-    decodeResultEl.textContent = 'That was not an image file.';
+    setStatus(decodeResultEl, 'That was not an image file.', true);
     return;
   }
   decodeFileEl.value = '';
@@ -1152,13 +1169,13 @@ function readsAsGenerated(read, expected) {
 function ensurePhotoCard(statusEl) {
   if (!photoCardStale) return true;
   if (!lastPngBytes || !photoSource) {
-    statusEl.textContent = 'Generate a code first.';
+    setStatus(statusEl, 'Generate a code first.');
     return false;
   }
   const { symbology, matrixWidth, matrixHeight, quietZone } = photoSource;
   const error = exports.FeatherQR.Playground.QrInterop.SetPhotoCard(lastPngBytes, symbology, matrixWidth, matrixHeight, quietZone);
   if (error) {
-    statusEl.textContent = JSON.parse(error).error;
+    setStatus(statusEl, JSON.parse(error).error, true);
     return false;
   }
   photoCardStale = false;
@@ -1177,7 +1194,7 @@ async function takePhotograph() {
   if (!runtimeAlive || !runtimeReady || !exports || limitRunning) return;
   const generation = ++photoGeneration;
   // The camera blocks the main thread, so the status line is painted first.
-  photoResultEl.textContent = 'Photographing…';
+  setStatus(photoResultEl, 'Photographing…');
   await afterPaint();
   if (generation !== photoGeneration || !ensurePhotoCard(photoResultEl)) return;
 
@@ -1188,7 +1205,7 @@ async function takePhotograph() {
     const interop = exports.FeatherQR.Playground.QrInterop;
     bytes = interop.Photograph(JSON.stringify(request));
     if (bytes.length === 0 || bytes[0] === 0x7b) {
-      photoResultEl.textContent = `Could not photograph the code: ${JSON.parse(utf8Decoder.decode(bytes)).error}`;
+      setStatus(photoResultEl, `Could not photograph the code: ${JSON.parse(utf8Decoder.decode(bytes)).error}`, true);
       return;
     }
     payload = JSON.parse(interop.GetLastPhoto());
@@ -1197,7 +1214,7 @@ async function takePhotograph() {
       handleRuntimeDeath();
       return;
     }
-    photoResultEl.textContent = `Could not photograph the code: ${err?.message ?? err}`;
+    setStatus(photoResultEl, `Could not photograph the code: ${err?.message ?? err}`, true);
     return;
   }
   if (generation !== photoGeneration) return;
@@ -1209,8 +1226,8 @@ async function takePhotograph() {
       ? `⚠ Reads ${photoSource.expected.contentKind === 'bytes' ? 'other bytes' : 'another text'} · ${symbolSummary(read)}`
       : `✗ Does not read (${read.status})`;
   const capped = payload.pixelsPerModule < request.pixelsPerModule ? ' (capped)' : '';
-  photoResultEl.textContent = `${verdict} · photograph ${payload.width}×${payload.height} px at `
-    + `${payload.pixelsPerModule} px/module${capped} · camera ${payload.renderMs} ms, decoder ${payload.readMs} ms`;
+  setStatus(photoResultEl, `${verdict} · photograph ${payload.width}×${payload.height} px at `
+    + `${payload.pixelsPerModule} px/module${capped} · camera ${payload.renderMs} ms, decoder ${payload.readMs} ms`);
 
   let bitmap;
   try {
@@ -1286,16 +1303,16 @@ function steps(from, to, step) {
 /** Each effect the search can raise: the request field, its steps from mild to strong, and how a value reads. */
 const LIMIT_EFFECTS = {
   tilt: { key: 'tilt', head: 'Tilt', values: steps(0, 80, 5), show: (v) => `${v}°` },
-  barrel: { key: 'barrel', head: 'Barrel lens', values: steps(0, 40, 2.5), show: (v) => `${v} %` },
+  barrel: { key: 'barrel', head: 'Barrel lens', values: steps(0, 40, 2.5), show: (v) => `${v}%` },
   bow: { key: 'bow', head: 'Curved card', values: steps(0, 8, 0.5), show: (v) => `${v} modules` },
-  blur: { key: 'blur', head: 'Blur', values: steps(0, 1.5, 0.05), show: (v) => `${v} module` },
-  noise: { key: 'noise', head: 'Noise', values: steps(0, 100, 5), show: (v) => `${v} grey levels` },
+  blur: { key: 'blur', head: 'Blur', values: steps(0, 1.5, 0.05), show: (v) => `${v} modules` },
+  noise: { key: 'noise', head: 'Noise', values: steps(0, 100, 5), show: (v) => `${v} gray levels` },
   // Light lost changes nothing under even light, so the search draws a shadow edge unless a light is chosen.
   lightDepth: {
-    key: 'lightDepth', head: 'Light lost', values: steps(0, 100, 5), show: (v) => `${v} %`,
+    key: 'lightDepth', head: 'Light lost', values: steps(0, 100, 5), show: (v) => `${v}%`,
     adjust: (request) => (request.light === 'none' ? { ...request, light: 'shadow' } : request),
   },
-  pixelsPerModule: { key: 'pixelsPerModule', head: 'Module size', values: steps(6, 1, -0.25), show: (v) => `${v} px` },
+  pixelsPerModule: { key: 'pixelsPerModule', head: 'Resolution', values: steps(6, 1, -0.25), show: (v) => `${v} px/module` },
   jpeg: { key: 'jpeg', head: 'JPEG quality', values: steps(95, 5, -5), show: (v) => `${v}` },
 };
 
@@ -1337,7 +1354,7 @@ async function runLimitSearch() {
   const body = limitTableEl.tBodies[0];
   body.replaceChildren();
   limitTableEl.hidden = false;
-  limitSummaryEl.textContent = '';
+  setStatus(limitSummaryEl, '');
   limitProgressEl.max = effect.values.length * seeds;
   limitProgressEl.value = 0;
 
@@ -1385,7 +1402,7 @@ async function runLimitSearch() {
     : photoSource !== source
       ? 'Stopped: the code was generated again.'
       : limitCancelled ? 'Cancelled.' : '';
-  limitSummaryEl.textContent = [stopped, limitSummary(effect, results, seeds, varied)].filter(Boolean).join(' ');
+  setStatus(limitSummaryEl, [stopped, limitSummary(effect, results, seeds, varied)].filter(Boolean).join(' '), failure !== null);
 }
 
 /** Where reading stops: the last step every seed read before the first miss, the first miss, and the step from which nothing reads. */
@@ -1424,7 +1441,7 @@ function showGenerateError(message) {
 
 function formatBytes(n) {
   if (!Number.isFinite(n)) return '';
-  if (n < 1024) return `${n} B`;
+  if (n < 1024) return byteCount(n);
   return `${(n / 1024).toFixed(1)} KB`;
 }
 
@@ -1703,7 +1720,7 @@ let benchCancelled = false;
 function formatRate(count, ms) {
   if (ms <= 0) return '—';
   const rate = (count / ms) * 1000;
-  return `${rate >= 100 ? Math.round(rate).toLocaleString() : rate.toFixed(1)} codes/s`;
+  return `${rate >= 100 ? formatCount(Math.round(rate)) : rate.toFixed(1)} codes/s`;
 }
 
 function setBenchControlsRunning(running) {
@@ -1725,12 +1742,12 @@ async function runBenchmark() {
 
   const state = collectState();
   if (!state.content.trim()) {
-    showToast('Enter content to encode before running the benchmark.', 'info');
+    setStatus(benchResult, 'Enter content to encode before running the benchmark.');
     return;
   }
   const bytesError = requestError(state);
   if (bytesError) {
-    showToast(bytesError, 'error');
+    setStatus(benchResult, bytesError, true);
     return;
   }
   // Snapshot options once so mid-run control edits do not skew results.
@@ -1746,8 +1763,9 @@ async function runBenchmark() {
   benchProgress.hidden = false;
   benchProgress.max = total;
   benchProgress.value = 0;
-  benchResult.textContent = 'Running…';
+  setStatus(benchResult, 'Running…');
 
+  let failed = false;
   let done = 0;
   let wasmMs = 0;
   let meta = null;
@@ -1761,7 +1779,8 @@ async function runBenchmark() {
       const json = exports.FeatherQR.Playground.QrInterop.BenchmarkBatch(optionsJson, mode, done, count, logoBytes);
       const result = JSON.parse(json);
       if (result.error) {
-        benchResult.textContent = `Failed: ${result.error}`;
+        failed = true;
+        setStatus(benchResult, `Could not run the benchmark: ${result.error}`, true);
         break;
       }
       done += result.count;
@@ -1769,7 +1788,7 @@ async function runBenchmark() {
       meta = result;
 
       benchProgress.value = done;
-      benchResult.textContent = `${done.toLocaleString()} / ${total.toLocaleString()}, ${formatRate(done, wasmMs)}`;
+      setStatus(benchResult, `${formatCount(done)} / ${formatCount(total)} · ${formatRate(done, wasmMs)}`);
 
       // Resize the next batch toward the wall-clock target (bounded so one batch cannot stall the tab).
       const perItem = Math.max(result.elapsedMs / result.count, 0.0001);
@@ -1779,19 +1798,19 @@ async function runBenchmark() {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
-    if (done > 0 && meta && !benchResult.textContent.startsWith('Failed')) {
+    if (done > 0 && meta && !failed) {
       const wallSeconds = ((performance.now() - wallStart) / 1000).toFixed(2);
       const avgMs = wasmMs / done;
-      const prefix = benchCancelled ? `Cancelled, ${done.toLocaleString()} of ${total.toLocaleString()}` : done.toLocaleString();
-      benchResult.textContent =
-        `${prefix} codes in ${(wasmMs / 1000).toFixed(2)} s of WASM time, ${formatRate(done, wasmMs)} `
-        + `(avg ${avgMs >= 1 ? avgMs.toFixed(2) : avgMs.toFixed(3)} ms/code, ${symbolLabel(meta.symbology ?? symbologySelect.value, meta.qrVersion)} ${meta.matrixSize}×${meta.matrixHeight ?? meta.matrixSize}, wall ${wallSeconds} s)`;
+      const prefix = benchCancelled ? `Cancelled, ${formatCount(done)} of ${formatCount(total)}` : formatCount(done);
+      setStatus(benchResult,
+        `${prefix} codes in ${(wasmMs / 1000).toFixed(2)} s of WASM time · ${formatRate(done, wasmMs)} · `
+        + `avg ${avgMs >= 1 ? avgMs.toFixed(2) : avgMs.toFixed(3)} ms/code · ${symbolLabel(meta.symbology ?? symbologySelect.value, meta.qrVersion)} ${meta.matrixSize}×${meta.matrixHeight ?? meta.matrixSize} · wall ${wallSeconds} s`);
     }
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
     } else {
-      benchResult.textContent = `Failed: ${err?.message ?? err}`;
+      setStatus(benchResult, `Could not run the benchmark: ${err?.message ?? err}`, true);
     }
   } finally {
     benchRunning = false;

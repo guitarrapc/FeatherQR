@@ -14,7 +14,6 @@ export function createStateControls(document, hooks) {
   const eccSelect = document.getElementById('ecc-select');
   const eccBoostRow = document.getElementById('ecc-boost-row');
   const eccBoostCheck = document.getElementById('ecc-boost-check');
-  const allowKanjiRow = document.getElementById('allow-kanji-row');
   const allowKanjiCheck = document.getElementById('allow-kanji-check');
   const appIndicatorRow = document.getElementById('app-indicator-row');
   const appIndicatorInput = document.getElementById('app-indicator-input');
@@ -42,7 +41,6 @@ export function createStateControls(document, hooks) {
   const cornerRange = document.getElementById('corner-range');
   const cornerOut = document.getElementById('corner-out');
   const finderSelect = document.getElementById('finder-select');
-  const fgRow = document.getElementById('fg-row');
   const fgColor = document.getElementById('fg-color');
   const bgColor = document.getElementById('bg-color');
   const bgTransparent = document.getElementById('bg-transparent');
@@ -241,9 +239,7 @@ export function createStateControls(document, hooks) {
     // FNC1 and the GS1 carriers. They are disabled rather than cleared, so a return to text finds them as they were.
     const bytes = isBytesContent();
     allowKanjiCheck.disabled = bytes;
-    allowKanjiRow.classList.toggle('field--disabled', bytes);
     formatSelect.disabled = bytes;
-    formatRow.classList.toggle('field--disabled', bytes);
     bytesModeHint.hidden = !bytes;
     bytesModeHint.textContent = isMicroSymbology()
       ? 'Bytes are written exactly as given, so Kanji mode is off. Micro QR has no ECI, so it takes no assignment.'
@@ -255,7 +251,6 @@ export function createStateControls(document, hooks) {
     if (bytes) contentHexStatus.textContent = hexStatus(contentEl.value);
     // Text takes its charset from the library, and Micro QR has no ECI, so the assignment applies to bytes on the other two.
     eciAssignmentRow.hidden = !bytes;
-    eciAssignmentRow.classList.toggle('field--disabled', isMicroSymbology());
     eciAssignmentInput.disabled = isMicroSymbology();
     // Micro QR has neither FNC1 nor a GS1 carrier. The stem belongs to a Digital Link and the indicator
     // to an AIM format alone.
@@ -273,7 +268,6 @@ export function createStateControls(document, hooks) {
     rmqrFitSelect.disabled = versionSelect.value !== '-1';
     rmqrHeightSelect.disabled = versionSelect.value !== '-1';
     gradientPanel.hidden = !gradientToggle.checked;
-    fgRow.classList.toggle('field--disabled', gradientToggle.checked);
     fgColor.disabled = gradientToggle.checked;
     bgColor.disabled = bgTransparent.checked;
     logoFileRow.hidden = logoModeSelect.value !== 'custom';
