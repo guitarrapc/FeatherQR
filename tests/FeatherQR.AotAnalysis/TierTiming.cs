@@ -886,11 +886,11 @@ internal static partial class TierTiming
                 LuminanceHalver.HalveScalar(source, width, height, destination);
                 return destination[1];
             }
-            : () =>
-            {
-                LuminanceHalver.Halve(source, width, height, destination);
-                return destination[1];
-            };
+        : () =>
+        {
+            LuminanceHalver.Halve(source, width, height, destination);
+            return destination[1];
+        };
     }
 
     private static Func<int> LocalBinarize(bool scalar)

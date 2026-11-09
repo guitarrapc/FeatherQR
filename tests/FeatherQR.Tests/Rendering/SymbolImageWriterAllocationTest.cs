@@ -1,5 +1,3 @@
-using System.Buffers;
-
 namespace FeatherQR.Tests;
 
 /// <summary>

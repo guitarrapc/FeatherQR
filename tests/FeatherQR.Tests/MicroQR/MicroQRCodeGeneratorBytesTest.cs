@@ -1,5 +1,4 @@
 using System.Text;
-using FeatherQR.Internals;
 using FeatherQR.Internals.MicroQR;
 using TUnit.Assertions.Enums;
 

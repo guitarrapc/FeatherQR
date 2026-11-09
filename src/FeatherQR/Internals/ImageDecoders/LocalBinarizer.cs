@@ -147,7 +147,7 @@ internal static partial class LocalBinarizer
                     MeasureBlocksVector128(luminance, width, top, packed);
                 else
 #endif
-                    MeasureBlocksScalar(luminance, width, top, packed);
+                MeasureBlocksScalar(luminance, width, top, packed);
             }
             measured = true;
         }
@@ -174,7 +174,7 @@ internal static partial class LocalBinarizer
                     ComputeThresholdsVector256(blackPoints, columns, centreY, columnSums, thresholds);
                 else
 #endif
-                    ComputeThresholdsScalar(blackPoints, columns, centreY, columnSums, thresholds);
+                ComputeThresholdsScalar(blackPoints, columns, centreY, columnSums, thresholds);
                 SpreadThresholds(thresholds, width, thresholdRow);
             }
 
@@ -185,7 +185,7 @@ internal static partial class LocalBinarizer
                 WriteRowsVector128(luminance, binarized, width, top, bottom, flip, globalThreshold, thresholdRow, ref light, ref differs);
             else
 #endif
-                WriteRowsScalar(luminance, binarized, width, top, bottom, flip, globalThreshold, thresholdRow, ref light, ref differs);
+            WriteRowsScalar(luminance, binarized, width, top, bottom, flip, globalThreshold, thresholdRow, ref light, ref differs);
         }
 
         darkCount = pixelCount - light;

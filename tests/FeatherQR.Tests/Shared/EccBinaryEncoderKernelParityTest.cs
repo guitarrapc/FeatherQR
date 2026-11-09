@@ -145,7 +145,7 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccGfni(data, actual, eccCount);
 
-             await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -157,7 +157,7 @@ public class EccBinaryEncoderKernelParityTest
         // never drift from the field definition. gf2p8affineqb convention: qword
         // byte (7-i) = matrix row for result bit i, row bit k = bit i of f·2^k.
         var table = EccBinaryEncoder.GfniMatrix.ToArray();
-         await Assert.That(table.Length).IsEqualTo(256);
+        await Assert.That(table.Length).IsEqualTo(256);
 
         for (var f = 0; f < 256; f++)
         {
