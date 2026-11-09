@@ -211,18 +211,52 @@ public class SymbolImageWriterStyleTest
     }
 
     /// <summary>
-    /// The styled PNG's lookup keys on 8 bytes, the longest key: a key of one module's bytes, 4 at this module size, left this symbol's
-    /// file past the bound.
+    /// The styled PNG's lookup keys on four modules' bytes, 16 at this module size, and searches its whole chain, and a row equal to one in
+    /// reach goes in as copies of it. A circle's lower rows mirror its upper ones, so about half of the version 40 symbol's rows equal an
+    /// earlier one. With an 8-byte key, or with the lookup stopping at a match of 16 bytes, both files passed their bounds, and without the row
+    /// copies the version 40 one did.
     /// </summary>
     [Test]
     public async Task Png_Styled_KeepsTheMeasuredSize()
     {
-        var qr = QRCodeGenerator.Create(new string('a', 150), QREccLevel.M, new QRCodeGeneratorOptions { Version = new QRVersionRange(10, 10) });
         var styled = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle };
+        var repeated = QRCodeGenerator.Create(new string('a', 150), QREccLevel.M, new QRCodeGeneratorOptions { Version = new QRVersionRange(10, 10) });
+        var random = QRCodeGenerator.Create(RandomText(2900), QREccLevel.L);
 
-        var png = SymbolImageWriter.GetPngBytes(qr, styled);
+        await Assert.That(random.Version).IsEqualTo(40);
+        await Assert.That(SymbolImageWriter.GetPngBytes(repeated, styled).Length).IsLessThanOrEqualTo(6_800);
+        await Assert.That(SymbolImageWriter.GetPngBytes(random, styled).Length).IsLessThanOrEqualTo(45_000);
+    }
 
-        await Assert.That(png.Length).IsLessThanOrEqualTo(9_200);
+    /// <summary>
+    /// A row copied whole goes in as copies of 258 bytes, the last one shortened so that no copy is under 3 bytes. A set size at these
+    /// widths leaves 1, 2 and 3 bytes of the row after the 258-byte copies, and its cells' mirrored rows are equal ones, so each image takes
+    /// those copies, and its PNG must still decode to the pixel buffer.
+    /// </summary>
+    [Test]
+    [Arguments(516)]
+    [Arguments(518)]
+    [Arguments(520)]
+    [Arguments(1034)]
+    public async Task Png_Styled_RowsCopiedWhole_DecodeToThePixels(int width)
+    {
+        var qr = QRCodeGenerator.Create("copied rows", QREccLevel.M);
+        foreach (var style in new[] { ModuleStyle.Circle, ModuleStyle.RoundedSquare })
+        {
+            var options = new SymbolImageOptions { Width = width, Height = 300, ModuleStyle = style, FinderPatternStyle = FinderPatternStyle.Circle, DarkColor = Navy, LightColor = Ivory };
+            await Assert.That(DecodePng(SymbolImageWriter.GetPngBytes(qr, options))).IsEquivalentTo(Pixels(qr, options, PixelLayout.Bgra8888), CollectionOrdering.Matching).Because($"{style} at {width}");
+        }
+    }
+
+    private static string RandomText(int length)
+    {
+        var rng = new Random(42);
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:/?&=-_";
+        return string.Create(length, rng, (span, r) =>
+        {
+            for (var i = 0; i < span.Length; i++)
+                span[i] = alphabet[r.Next(alphabet.Length)];
+        });
     }
 
     [Test]
