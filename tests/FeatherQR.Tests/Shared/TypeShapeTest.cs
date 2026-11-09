@@ -201,6 +201,8 @@ public class TypeShapeTest
         yield return () => typeof(RmQRCodeDecodeInfo);
         yield return () => typeof(SymbolCorners);
         yield return () => typeof(ImagePoint);
+        yield return () => typeof(ImageSize);
+        yield return () => typeof(ImageRect);
         yield return () => typeof(QRStructuredAppend);
     }
 

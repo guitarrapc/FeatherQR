@@ -30,7 +30,7 @@ public class SymbolImageWriterImageSizeTest
         var data = Symbol(symbol);
         var options = Options(optionsName);
 
-        var size = ImageSize(data, options);
+        var size = SizeOf(data, options);
 
         var pixels = new byte[PixelBufferSize(data, options)];
         var (written, width, height) = TryWritePixels(data, pixels, options);
@@ -55,19 +55,56 @@ public class SymbolImageWriterImageSizeTest
         var rm = (RmQRCodeData)Symbol("R17x139");
         await Assert.That((qr.Size, micro.Size, rm.Width, rm.Height)).IsEqualTo((37, 21, 143, 21));
 
-        await Assert.That(SymbolImageWriter.GetImageSize(qr)).IsEqualTo((296, 296));
-        await Assert.That(SymbolImageWriter.GetImageSize(micro)).IsEqualTo((168, 168));
-        await Assert.That(SymbolImageWriter.GetImageSize(rm)).IsEqualTo((1144, 168));
-        await Assert.That(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { ModulePixelSize = 3 })).IsEqualTo((429, 63));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(qr))).IsEqualTo((296, 296));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(micro))).IsEqualTo((168, 168));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(rm))).IsEqualTo((1144, 168));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { ModulePixelSize = 3 }))).IsEqualTo((429, 63));
 
-        await Assert.That(SymbolImageWriter.GetImageSize(qr, new SymbolImageOptions { Width = 600, Height = 400 })).IsEqualTo((600, 400));
-        await Assert.That(SymbolImageWriter.GetImageSize(micro, new SymbolImageOptions { Width = 300, Height = 301 })).IsEqualTo((300, 301));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(qr, new SymbolImageOptions { Width = 600, Height = 400 }))).IsEqualTo((600, 400));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(micro, new SymbolImageOptions { Width = 300, Height = 301 }))).IsEqualTo((300, 301));
         // 21 × 1000 / 143 is 146.85, so the side that follows is 147.
-        await Assert.That(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { Width = 1000 })).IsEqualTo((1000, 147));
-        await Assert.That(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { Height = 100 })).IsEqualTo((681, 100));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { Width = 1000 }))).IsEqualTo((1000, 147));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { Height = 100 }))).IsEqualTo((681, 100));
 
-        var size = SymbolImageWriter.GetImageSize(qr);
-        await Assert.That((size.Width, size.Height)).IsEqualTo((296, 296)).Because("the tuple names its two sides");
+    }
+
+    // ---- the value returned ---------------------------------------------------------------
+
+    /// <summary>
+    /// The size is an <see cref="ImageSize"/>: its two sides by name, and split in the order width, height. The rMQR code is 1,144 by 168
+    /// pixels, so a split in the other order shows.
+    /// </summary>
+    [Test]
+    public async Task ImageSize_NamesItsSides_AndSplitsAsWidthThenHeight()
+    {
+        var rm = (RmQRCodeData)Symbol("R17x139");
+
+        ImageSize size = SymbolImageWriter.GetImageSize(rm);
+        var (width, height) = size;
+
+        await Assert.That(size.Width).IsEqualTo(1144);
+        await Assert.That(size.Height).IsEqualTo(168);
+        await Assert.That(width).IsEqualTo(1144);
+        await Assert.That(height).IsEqualTo(168);
+    }
+
+    /// <summary>Two sizes compare by their sides and print them, and <c>default</c> is no pixels at all.</summary>
+    [Test]
+    public async Task ImageSize_ComparesAndPrintsByValue()
+    {
+        var qr = (QRCodeData)Symbol("QR3");
+        var rm = (RmQRCodeData)Symbol("R17x139");
+
+        var size = SymbolImageWriter.GetImageSize(rm);
+
+        await Assert.That(size == SymbolImageWriter.GetImageSize(rm)).IsTrue();
+        await Assert.That(size).IsEqualTo(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { ModulePixelSize = 8 }));
+        await Assert.That(size != SymbolImageWriter.GetImageSize(qr)).IsTrue();
+        // The same two numbers the other way round are another size.
+        await Assert.That(size != SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { Width = 168, Height = 1144 })).IsTrue();
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { Width = 168, Height = 1144 }))).IsEqualTo((168, 1144));
+        await Assert.That(size.ToString()).IsEqualTo("ImageSize { Width = 1144, Height = 168 }");
+        await Assert.That((default(ImageSize).Width, default(ImageSize).Height)).IsEqualTo((0, 0));
     }
 
     /// <summary>
@@ -81,7 +118,7 @@ public class SymbolImageWriterImageSizeTest
         var options = new SymbolImageOptions { ModulePixelSize = 126 };
         await Assert.That(() => SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Rgba8888, options)).Throws<ArgumentOutOfRangeException>();
 
-        await Assert.That(SymbolImageWriter.GetImageSize(qr, options)).IsEqualTo((23_310, 23_310));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(qr, options))).IsEqualTo((23_310, 23_310));
         var root = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, options)).Root!;
         await Assert.That(root.Attribute("width")?.Value).IsEqualTo("23310");
     }
@@ -109,9 +146,9 @@ public class SymbolImageWriterImageSizeTest
         await Assert.That(() => SymbolImageWriter.GetImageSize(micro, new SymbolImageOptions { Width = 20, Height = 20 })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { Width = 1024, Height = 20 })).Throws<ArgumentOutOfRangeException>();
 
-        await Assert.That(SymbolImageWriter.GetImageSize(qr, new SymbolImageOptions { Width = 185, Height = 185 })).IsEqualTo((185, 185));
-        await Assert.That(SymbolImageWriter.GetImageSize(micro, new SymbolImageOptions { Width = 21, Height = 21 })).IsEqualTo((21, 21));
-        await Assert.That(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { Width = 143, Height = 21 })).IsEqualTo((143, 21));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(qr, new SymbolImageOptions { Width = 185, Height = 185 }))).IsEqualTo((185, 185));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(micro, new SymbolImageOptions { Width = 21, Height = 21 }))).IsEqualTo((21, 21));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(rm, new SymbolImageOptions { Width = 143, Height = 21 }))).IsEqualTo((143, 21));
     }
 
     /// <summary>Version 40 is 185 modules a side, so 11,608,019 pixels a module keep a side within an int and 11,608,020 do not.</summary>
@@ -120,7 +157,7 @@ public class SymbolImageWriterImageSizeTest
     {
         var qr = QRCodeGenerator.Create("1", QREccLevel.L, new QRCodeGeneratorOptions { Version = 40 });
 
-        await Assert.That(SymbolImageWriter.GetImageSize(qr, new SymbolImageOptions { ModulePixelSize = 11_608_019 })).IsEqualTo((2_147_483_515, 2_147_483_515));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize(qr, new SymbolImageOptions { ModulePixelSize = 11_608_019 }))).IsEqualTo((2_147_483_515, 2_147_483_515));
         var refused = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetImageSize(qr, new SymbolImageOptions { ModulePixelSize = 11_608_020 }));
         await Assert.That(refused.ParamName).IsEqualTo("options");
     }
@@ -142,7 +179,7 @@ public class SymbolImageWriterImageSizeTest
             .Because("an icon image needs an icon area");
 
         // The same icon on a symbol it fits.
-        await Assert.That(SymbolImageWriter.GetImageSize((QRCodeData)Symbol("QR5 H"), new SymbolImageOptions { IconSizeModules = 7 })).IsEqualTo((360, 360));
+        await Assert.That(Pair(SymbolImageWriter.GetImageSize((QRCodeData)Symbol("QR5 H"), new SymbolImageOptions { IconSizeModules = 7 }))).IsEqualTo((360, 360));
     }
 
     // ---- the calls by symbology -----------------------------------------------------------
@@ -175,13 +212,15 @@ public class SymbolImageWriterImageSizeTest
         _ => throw new ArgumentException(name),
     };
 
-    private static (int Width, int Height) ImageSize(object data, SymbolImageOptions options) => data switch
+    private static (int Width, int Height) SizeOf(object data, SymbolImageOptions options) => Pair(data switch
     {
         QRCodeData qr => SymbolImageWriter.GetImageSize(qr, options),
         MicroQRCodeData micro => SymbolImageWriter.GetImageSize(micro, options),
         RmQRCodeData rm => SymbolImageWriter.GetImageSize(rm, options),
         _ => throw new ArgumentException(nameof(data)),
-    };
+    });
+
+    private static (int Width, int Height) Pair(ImageSize size) => (size.Width, size.Height);
 
     private static int PixelBufferSize(object data, SymbolImageOptions options) => data switch
     {

@@ -37,9 +37,9 @@ internal static class PixelWriter
     {
         // Each side fits an int, so the pixel count fits a long, but four bytes a pixel can wrap it.
         var pixelCount = (long)image.Width * image.Height;
-        ImageSize.ThrowIfLongerThanAnArray(pixelCount, image.Width, image.Height);
+        ImageLimits.ThrowIfLongerThanAnArray(pixelCount, image.Width, image.Height);
         var length = pixelCount * bytesPerPixel;
-        ImageSize.ThrowIfLongerThanAnArray(length, image.Width, image.Height);
+        ImageLimits.ThrowIfLongerThanAnArray(length, image.Width, image.Height);
         return (int)length;
     }
 

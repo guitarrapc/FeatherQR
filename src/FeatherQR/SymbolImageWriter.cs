@@ -222,31 +222,40 @@ public static class SymbolImageWriter
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
-    public static (int Width, int Height) GetImageSize(QRCodeData data, in SymbolImageOptions options = default)
+    public static ImageSize GetImageSize(QRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
-        return ImageSize.Get(new StandardQrMatrixView(data), in options);
+        return ImageSizeOf(new StandardQrMatrixView(data), in options);
     }
 
     /// <inheritdoc cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/>
     /// <param name="data">The Micro QR code.</param>
     /// <param name="options">The module size or the image's size. <c>default</c> is 8 pixels a module.</param>
-    public static (int Width, int Height) GetImageSize(MicroQRCodeData data, in SymbolImageOptions options = default)
+    public static ImageSize GetImageSize(MicroQRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
-        return ImageSize.Get(new MicroQRMatrixView(data), in options);
+        return ImageSizeOf(new MicroQRMatrixView(data), in options);
     }
 
     /// <inheritdoc cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/>
     /// <param name="data">The rMQR code.</param>
     /// <param name="options">The module size or the image's size. <c>default</c> is 8 pixels a module.</param>
-    public static (int Width, int Height) GetImageSize(RmQRCodeData data, in SymbolImageOptions options = default)
+    public static ImageSize GetImageSize(RmQRCodeData data, in SymbolImageOptions options = default)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
-        return ImageSize.Get(new RmQRMatrixView(data), in options);
+        return ImageSizeOf(new RmQRMatrixView(data), in options);
+    }
+
+    private static ImageSize ImageSizeOf<TView>(in TView view, in SymbolImageOptions options)
+        where TView : struct, IModuleMatrixView
+    {
+        var layout = ImageLayout.Create(in view, in options);
+        // Refused here too, so a caller making an image of this size learns of an icon that does not fit before writing.
+        IconArea.Get(in view, in options);
+        return new ImageSize(layout.Width, layout.Height);
     }
 
     // Pixel buffer
@@ -420,7 +429,7 @@ public static class SymbolImageWriter
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the options have no icon area, or one that does not fit the symbol, or the image's size is out of range.</exception>
-    public static (int X, int Y, int Width, int Height) GetIconRectangle(QRCodeData data, in SymbolImageOptions options)
+    public static ImageRect GetIconRectangle(QRCodeData data, in SymbolImageOptions options)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
@@ -432,7 +441,7 @@ public static class SymbolImageWriter
         var quietZone = (view.Width - view.CoreWidth) / 2;
         var x = layout.ColumnStart(quietZone + icon.IconColumn);
         var y = layout.RowStart(quietZone + icon.IconRow);
-        return (x, y, layout.ColumnStart(quietZone + icon.IconColumn + icon.IconSize) - x, layout.RowStart(quietZone + icon.IconRow + icon.IconSize) - y);
+        return new ImageRect(x, y, layout.ColumnStart(quietZone + icon.IconColumn + icon.IconSize) - x, layout.RowStart(quietZone + icon.IconRow + icon.IconSize) - y);
     }
 
     // Text output for terminal

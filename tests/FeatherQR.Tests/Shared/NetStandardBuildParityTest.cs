@@ -1044,7 +1044,10 @@ public class NetStandardBuildParityTest
                 RmQRCodeData rm => SymbolImageWriter.GetImageSize(rm, hostOptions),
                 _ => throw new ArgumentException(symbology),
             };
-            await Assert.That(((int, int))getImageSize.Invoke(null, [loaded, loadedOptions])!).IsEqualTo(hostSize)
+            // The loaded build returns its own ImageSize type, so its sides are read by name.
+            var loadedSize = getImageSize.Invoke(null, [loaded, loadedOptions])!;
+            var loadedSides = ((int)loadedSize.GetType().GetProperty("Width")!.GetValue(loadedSize)!, (int)loadedSize.GetType().GetProperty("Height")!.GetValue(loadedSize)!);
+            await Assert.That(loadedSides).IsEqualTo((hostSize.Width, hostSize.Height))
                 .Because($"{targetFramework} {symbology}: the image size must be this host's");
 
             foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24 })

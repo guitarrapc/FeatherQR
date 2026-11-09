@@ -76,6 +76,13 @@ public static int GetPixelBufferSize(QRCodeData data, PixelLayout layout, out in
 
 A, because the size does not depend on the layout and is also the PNG's and the SVG's size, which B ties to a pixel buffer. The precedent is `GetIconRectangle`'s `(int X, int Y, int Width, int Height)`.
 
+Revised on 2026-11-10 after Phase 1 ran: the call returns an `ImageSize` struct, and `GetIconRectangle` an `ImageRect`, both with `Deconstruct`, so the call site above reads the same. The maintainer ruled a tuple out of a public return value, `out` parameters out of a `Get` call, and the library's own type over `System.Drawing.Size`. The reasons are in the Pixel buffer record.
+
+```
+public static ImageSize GetImageSize(QRCodeData data, in SymbolImageOptions options = default);   // and MicroQRCodeData, RmQRCodeData
+public static ImageRect GetIconRectangle(QRCodeData data, in SymbolImageOptions options);
+```
+
 ### D3, the stride
 
 The call site is `ConsoleAppCore`'s icon composition. Today:
@@ -155,7 +162,7 @@ All times are from .NET 10 on x64 with AVX2, a Ryzen 9 7950X3D that was also run
 
 Done:
 
-- `GetImageSize` on the three data types, a named tuple, refusing what the writers refuse. `SymbolImageWriterImageSizeTest` holds it to the size `TryWritePixels` reports, the PNG's header and the SVG's root on the three symbologies, plain, styled, at a set size that is not whole pixels, with one side given, and with an icon area.
+- `GetImageSize` on the three data types, a named tuple at first and an `ImageSize` since D2's revision the same day, with `GetIconRectangle` returning an `ImageRect`, refusing what the writers refuse. `SymbolImageWriterImageSizeTest` holds it to the size `TryWritePixels` reports, the PNG's header and the SVG's root on the three symbologies, plain, styled, at a set size that is not whole pixels, with one side given, and with an icon area.
 - The System.Drawing sample writes into `LockBits` memory, and the ImageSharp sample into the image's memory when that is one block.
 
 Measured, console probes, the median of 15 interleaved rounds, at 520 and 1,480 pixels a side:
@@ -170,6 +177,7 @@ Lessons:
 - ImageSharp 3.2.0 and later fail a Release build without a license key, so the probe took 3.1.12. The gate was left alone.
 - ImageSharp holds an image past 4 MiB in several blocks (checked on 4.1.3: 1,024 pixels a side is one block and 1,025 is not). Above that the sample writes into a buffer the image wraps. Making the image first and then loading it from a buffer took 3,192 µs against `LoadPixelData`'s 3,019 at 1,480 pixels.
 - WPF was measured and left: a `WriteableBitmap` written in place took 663 and 3,213 µs where `BitmapSource.Create` from a buffer took 409 and 2,915.
+- The tuple was the plan's own pick, made from one call site and one precedent that was itself unshipped. Shown the three shapes side by side, the maintainer took none of the two the plan had weighed. The types went into `TypeShapeTest`'s list of values the library alone builds, and the internal class that held the size limits gave up the name `ImageSize`.
 - An icon that fits version 3 at level H in the plan's head did not: 30 percent of its 29 modules allows 8, and 7 with a border are 9. The tests use version 5.
 
 ### Phase 2, row stride
@@ -246,7 +254,8 @@ Not done:
 
 Done: the Pixel buffer section, the Image output table, four Left out rows and the scope row in `qrcode-symbologies.md`, the generated tier table, the README (the raw pixel section and the FAQ's layout table), `docs/migration.md`, and the 2.0.0 plan's row.
 
+The generated API page, `src/FeatherQR.Playground/wwwroot/api/index.html`, was regenerated with D2's revision.
+
 Not done:
 
 - The fold and the deletion of this file, which wait for the ARM64 timing.
-- `src/FeatherQR.Playground/wwwroot/api/index.html`, the generated API page, was not regenerated: another session had it and `tools/public_api.cs` open with uncommitted changes.

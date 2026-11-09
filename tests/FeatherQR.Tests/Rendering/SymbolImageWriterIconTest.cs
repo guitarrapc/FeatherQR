@@ -155,11 +155,45 @@ public class SymbolImageWriterIconTest
                     expected.Add((row, column));
         await Assert.That(runs).IsEquivalentTo(expected, CollectionOrdering.Any);
 
-        var rectangle = SymbolImageWriter.GetIconRectangle(qr, options);
-        await Assert.That(rectangle).IsEqualTo(((4 + origin) * pixels, (4 + origin) * pixels, iconModules * pixels, iconModules * pixels));
+        ImageRect rectangle = SymbolImageWriter.GetIconRectangle(qr, options);
+        await Assert.That((rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height)).IsEqualTo(((4 + origin) * pixels, (4 + origin) * pixels, iconModules * pixels, iconModules * pixels));
         using var bitmap = new SKBitmap(4, 4);
         var (iconRect, _) = SymbolRenderer.GetIconRects(qr, SKRect.Create(0, 0, width, width), new IconData(new ImageIconShape(bitmap), iconSizeModules: iconModules, iconBorderModules: borderModules));
         await Assert.That((iconRect.Left, iconRect.Top, iconRect.Width, iconRect.Height)).IsEqualTo(((float)rectangle.X, (float)rectangle.Y, (float)rectangle.Width, (float)rectangle.Height));
+    }
+
+    /// <summary>
+    /// The rectangle is an <see cref="ImageRect"/>: its members by name, split in the order x, y, width, height. On a canvas wider than
+    /// tall the symbol is padded on its left, so the left edge differs from the top one and a split that exchanged them shows.
+    /// </summary>
+    [Test]
+    public async Task IconRectangle_NamesItsMembers_AndSplitsAsXYWidthHeight()
+    {
+        var qr = QRCodeGenerator.Create("https://github.com/guitarrapc/FeatherQR", QREccLevel.H);
+        var options = new SymbolImageOptions { Width = 500, Height = 400, IconSizeModules = 7 };
+
+        var rectangle = SymbolImageWriter.GetIconRectangle(qr, options);
+        var (x, y, width, height) = rectangle;
+
+        await Assert.That(rectangle.X).IsNotEqualTo(rectangle.Y);
+        await Assert.That((x, y, width, height)).IsEqualTo((rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height));
+        await Assert.That(rectangle == SymbolImageWriter.GetIconRectangle(qr, options)).IsTrue();
+        await Assert.That(rectangle != SymbolImageWriter.GetIconRectangle(qr, options with { IconSizeModules = 5 })).IsTrue();
+        await Assert.That(rectangle.ToString()).IsEqualTo($"ImageRect {{ X = {rectangle.X}, Y = {rectangle.Y}, Width = {rectangle.Width}, Height = {rectangle.Height} }}");
+    }
+
+    /// <summary>
+    /// The split's order, on a rectangle whose four members all differ. An icon is square, so no rectangle the writer returns can
+    /// tell width from height.
+    /// </summary>
+    [Test]
+    public async Task ImageRect_SplitsItsFourMembersInOrder()
+    {
+        var (x, y, width, height) = new ImageRect(1, 2, 3, 4);
+
+        await Assert.That((x, y, width, height)).IsEqualTo((1, 2, 3, 4));
+        await Assert.That(new ImageRect(1, 2, 3, 4).ToString()).IsEqualTo("ImageRect { X = 1, Y = 2, Width = 3, Height = 4 }");
+        await Assert.That(new ImageRect(1, 2, 3, 4) != new ImageRect(1, 2, 4, 3)).IsTrue();
     }
 
     /// <summary>At a set size and with a style, the area is still the light colour and the rectangle lands on the cells the fit gives.</summary>
