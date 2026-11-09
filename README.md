@@ -73,6 +73,9 @@ FeatherQR supports Standard QR, Micro QR, and rMQR. Examples use Standard QR unl
 | ![rMQR Encode](https://raw.githubusercontent.com/guitarrapc/FeatherQR/main/assets/benchmark_rmqr_encode.png) | ![rMQR Decode](https://raw.githubusercontent.com/guitarrapc/FeatherQR/main/assets/benchmark_rmqr_decode.png) |
 | --- | --- |
 
+FeatherQR `SymbolImageWriter` is faster and allocates less than the FeatherQR.SkiaSharp.
+
+![Image output by package](https://raw.githubusercontent.com/guitarrapc/FeatherQR/main/assets/benchmark_image_output_by_package.png)
 
 ## Installation
 
