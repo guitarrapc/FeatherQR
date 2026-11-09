@@ -522,7 +522,7 @@ if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
     Console.WriteLine($"top-left at ({corners.TopLeft.X}, {corners.TopLeft.Y})");
 }
 ```
-For other image sources, such as a browser canvas or camera frame, convert pixels with `LuminanceConverter.Convert`. Then call `TryDecodeImage(luminance, width, height, ...)`. The converter accepts `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x` with a row stride and writes width × height luminance bytes. It uses ITU-R BT.601 weights and composites transparent pixels against white to match the quiet zone. Pass existing luminance data directly to `TryDecodeImage`.
+For other image sources, such as a browser canvas or camera frame, convert pixels with `LuminanceConverter.Convert`. Then call `TryDecodeImage(luminance, width, height, ...)`. The converter accepts `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x` with a row stride and writes width × height luminance bytes. It uses ITU-R BT.601 weights and composites transparent pixels against white to match the quiet zone. Pass existing luminance data directly to `TryDecodeImage`. A camera frame in NV12, NV21, or I420 carries luminance in its Y plane. Convert that plane as `Gray8` with the frame's row stride.
 
 ```csharp
 using FeatherQR;
@@ -1337,12 +1337,20 @@ app.MapGet("/qr.svg", (string url) =>
 
 With `SymbolImageWriter`, return the bytes or write to the response's `PipeWriter`. See [Plain Images with FeatherQR](#plain-images-with-featherqr). For uploaded images, see [Async and stream I/O](#async-and-stream-io). Span-based APIs let you use slices of memory without additional allocations.
 
-### Does it support Blazor WebAssembly?
+### Does it support WebAssembly?
 
 Yes. FeatherQR supports Blazor WebAssembly and standalone WebAssembly.
 
 - See the [samples/BlazorWasm](samples/BlazorWasm) folder for a Blazor WebAssembly example.
 - See [src/FeatherQR.Playground](src/FeatherQR.Playground) for standalone WebAssembly usage.
+
+### Can I use it with System.Drawing, WPF, or ImageSharp?
+
+Yes, `FeatherQR` supports those. `SymbolImageWriter.TryWritePixels` writes the pixel layouts these libraries use, and `LuminanceConverter` turns their pixels into the luminance `TryDecodeImage` reads. Each sample makes a symbol in the library's own image type and decodes it back.
+
+- See [samples/Dotfiles/SystemDrawing.cs](samples/Dotfiles/SystemDrawing.cs) for System.Drawing usage.
+- See [samples/Dotfiles/Wpf.cs](samples/Dotfiles/Wpf.cs) for WPF usage, including a WPF Window to input text and read QR codes from images.
+- See [samples/Dotfiles/ImageSharp.cs](samples/Dotfiles/ImageSharp.cs) for ImageSharp usage. ImageSharp 3.2.0 and later need a Six Labors license key for Release builds.
 
 ### What about NativeAOT and trimming?
 

@@ -109,6 +109,17 @@ SymbolImageWriter.TryWritePixels(qr, gray, PixelLayout.Gray8, out var width, out
 QRCodeDecoder.TryDecodeImage(gray, width, height, out var text, out _);
 Console.WriteLine($"Gray8 pixels, {width} x {height}, decode as: {text}");
 
+// A camera frame in NV12, NV21 or I420 holds luminance in its Y plane, often with padded rows.
+// Read the plane as Gray8 with the frame's row stride. The colour planes after it are never read.
+var rowStride = width + 64;
+var frame = new byte[rowStride * height * 3 / 2];
+for (var row = 0; row < height; row++)
+    gray.AsSpan(row * width, width).CopyTo(frame.AsSpan(row * rowStride));
+var yPlane = new byte[width * height];
+LuminanceConverter.Convert(frame, width, height, rowStride, PixelLayout.Gray8, premultipliedAlpha: false, yPlane);
+QRCodeDecoder.TryDecodeImage(yPlane, width, height, out text, out _);
+Console.WriteLine($"Y plane of an NV12 frame, row stride {rowStride}, decode as: {text}");
+
 // BGRA for a GPU texture or a platform bitmap: 4 bytes a pixel, rows packed.
 var bgra = new byte[SymbolImageWriter.GetPixelBufferSize(micro, PixelLayout.Bgra8888)];
 SymbolImageWriter.TryWritePixels(micro, bgra, PixelLayout.Bgra8888, out width, out height);

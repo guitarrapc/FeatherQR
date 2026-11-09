@@ -125,6 +125,13 @@ jobs:
       - name: Run SimpleGenerate
         run: dotnet run -c Release -r ${{ matrix.rid }}
         working-directory: ./samples/SimpleGenerate
+      # System.Drawing and WPF run on Windows only.
+      - name: Run SystemDrawing
+        if: ${{ runner.os == 'Windows' }}
+        run: dotnet run -c Release samples/Dotfiles/SystemDrawing.cs
+      - name: Run Wpf
+        if: ${{ runner.os == 'Windows' }}
+        run: dotnet run -c Release samples/Dotfiles/Wpf.cs -- --no-window
       # NativeAOT
       - name: Run ConsoleAppNativeAOT
         shell: bash
