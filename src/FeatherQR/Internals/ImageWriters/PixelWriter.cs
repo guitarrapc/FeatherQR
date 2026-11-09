@@ -1,19 +1,20 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace FeatherQR.Internals.ImageWriters;
 
 /// <summary>
-/// A raw pixel buffer for a module matrix, rows packed with no padding.
+/// A raw pixel buffer for a module matrix, its rows packed with no padding or a stride apart.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A dark pixel is the dark colour painted over the light one, as the SVG paints its path over its background.
 /// <see cref="PixelLayout.Rgba8888"/> and <see cref="PixelLayout.Bgra8888"/> carry each colour straight, alpha not premultiplied.
-/// <see cref="PixelLayout.Gray8"/> and <see cref="PixelLayout.Rgb888x"/> have no alpha, so they hold each colour composited over white,
-/// as the decoders read a transparent pixel, and Rgb888x's fourth byte is 255. Gray8 then weighs the channels 77, 150 and 29 over 256 (BT.601).
-/// So a Gray8 buffer equals the decoders' reading of the Rgba8888 and Rgb888x ones.
+/// <see cref="PixelLayout.Gray8"/>, <see cref="PixelLayout.Rgb888x"/>, <see cref="PixelLayout.Rgb24"/> and <see cref="PixelLayout.Bgr24"/> have no alpha,
+/// so they hold each colour composited over white, as the decoders read a transparent pixel, and Rgb888x's fourth byte is 255.
+/// Gray8 then weighs the channels 77, 150 and 29 over 256 (BT.601). So a Gray8 buffer equals the decoders' reading of the others.
 /// </para>
 /// <para>
 /// The first pixel row of each module row is written from the runs of the stored module bits, each run over the pixels <see cref="ImageLayout"/>
@@ -42,6 +43,7 @@ internal static class PixelWriter
         return (int)length;
     }
 
+    /// <summary>Rows packed: each starts where the one before ends.</summary>
     public static bool TryWrite<TView>(in TView view, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
@@ -58,12 +60,55 @@ internal static class PixelWriter
 
         width = image.Width;
         height = image.Height;
-        var rowBytes = width * bytesPerPixel;
+        Write(in view, destination, in image, in icon, layout, bytesPerPixel, width * bytesPerPixel, in options);
+        return true;
+    }
+
+    /// <summary>Rows <paramref name="rowBytes"/> apart. The bytes between a row's last pixel and the next row are not written.</summary>
+    public static bool TryWrite<TView>(in TView view, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options)
+        where TView : struct, IModuleMatrixView
+    {
+        var bytesPerPixel = BytesPerPixel(layout);
+        var image = ImageLayout.Create(in view, in options);
+        var icon = IconArea.Get(in view, in options);
+        // An image the packed overload refuses is refused here, so the two take the same options.
+        BufferSize(in image, bytesPerPixel, in options);
+        var rowLength = image.Width * bytesPerPixel;
+        if (rowBytes < rowLength)
+            ThrowRowBytesBelowOneRow(rowBytes, image.Width, bytesPerPixel);
+        // The last row ends at its last pixel, so a region that reaches the end of a larger buffer fits.
+        if (destination.Length < (long)(image.Height - 1) * rowBytes + rowLength)
+        {
+            width = 0;
+            height = 0;
+            return false;
+        }
+
+        width = image.Width;
+        height = image.Height;
+        Write(in view, destination, in image, in icon, layout, bytesPerPixel, rowBytes, in options);
+        return true;
+    }
+
+    // The message is built here, so the entry holds none of the code that formats it.
+    private static void ThrowRowBytesBelowOneRow(int rowBytes, int width, int bytesPerPixel)
+        => throw new ArgumentOutOfRangeException(nameof(rowBytes), rowBytes, $"Row stride must cover a row of {width} pixels at {bytesPerPixel} bytes each.");
+
+    /// <summary>The image into a destination already checked to hold it, its rows <paramref name="rowBytes"/> apart.</summary>
+    /// <remarks>
+    /// Kept a method of its own. Inlined into a caller it is compiled on that caller's profile, which is taken before these loops
+    /// have run enough to count, and the plain image is then written far slower.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void Write<TView>(in TView view, Span<byte> destination, in ImageLayout image, in IconArea icon, PixelLayout layout, int bytesPerPixel, int rowBytes, in SymbolImageOptions options)
+        where TView : struct, IModuleMatrixView
+    {
         if (options.IsStyled)
         {
             WriteStyled(in view, destination, in image, in icon, layout, bytesPerPixel, rowBytes, in options);
-            return true;
+            return;
         }
+        var rowLength = image.Width * bytesPerPixel;
         var dark = Pixel(options.DarkColor.Over(options.LightColor), layout);
         var light = Pixel(options.LightColor, layout);
         var quietZone = (view.Width - view.CoreWidth) / 2;
@@ -75,7 +120,7 @@ internal static class PixelWriter
         for (var group = 0; group < image.Groups; group++)
         {
             var top = image.GroupStart(group);
-            var first = destination.Slice((int)((long)top * rowBytes), rowBytes);
+            var first = destination.Slice((int)((long)top * rowBytes), rowLength);
             var coreRow = image.GroupRow(group) - quietZone;
             if ((uint)coreRow >= (uint)view.CoreHeight)
             {
@@ -107,9 +152,8 @@ internal static class PixelWriter
 
             var rows = image.GroupHeight(group);
             for (var repeat = 1; repeat < rows; repeat++)
-                first.CopyTo(destination.Slice((int)((long)(top + repeat) * rowBytes), rowBytes));
+                first.CopyTo(destination.Slice((int)((long)(top + repeat) * rowBytes), rowLength));
         }
-        return true;
     }
 
     /// <summary>
@@ -130,7 +174,7 @@ internal static class PixelWriter
             var row = levelRow.AsSpan(0, image.Width);
             for (var y = 0; y < image.Height; y++)
             {
-                var line = destination.Slice((int)((long)y * rowBytes), rowBytes);
+                var line = destination.Slice((int)((long)y * rowBytes), image.Width * bytesPerPixel);
                 if (raster.IsLightRow(y))
                 {
                     Fill(line, pixels[0], bytesPerPixel);
@@ -141,6 +185,15 @@ internal static class PixelWriter
                 {
                     for (var x = 0; x < row.Length; x++)
                         line[x] = (byte)pixels[row[x]];
+                }
+                else if (bytesPerPixel == 3)
+                {
+                    // Each pixel is stored as a whole word, and the next pixel overwrites its fourth byte.
+                    // The last pixel's fourth byte would land past the row, so that one is stored byte by byte.
+                    var last = row.Length - 1;
+                    for (var x = 0; x < last; x++)
+                        Unsafe.WriteUnaligned(ref line[x * 3], pixels[row[x]]);
+                    FillThreeBytes(line.Slice(last * 3), pixels[row[last]]);
                 }
                 else
                 {
@@ -161,19 +214,27 @@ internal static class PixelWriter
     {
         PixelLayout.Gray8 => 1,
         PixelLayout.Rgba8888 or PixelLayout.Bgra8888 or PixelLayout.Rgb888x => 4,
-        _ => throw new ArgumentOutOfRangeException(nameof(layout), $"Pixel layout {(int)layout} is not one of the four defined."),
+        PixelLayout.Rgb24 or PixelLayout.Bgr24 => 3,
+        _ => throw new ArgumentOutOfRangeException(nameof(layout), $"Pixel layout {(int)layout} is not one of the six defined."),
     };
 
-    /// <summary>One pixel's bytes as they lie in memory, read as a native word. Gray8's one byte is the low byte.</summary>
+    /// <summary>
+    /// One pixel's bytes as they lie in memory, read as a native word. Gray8's one byte is the low byte, and a three-byte pixel
+    /// is the word's first three bytes in memory.
+    /// </summary>
     private static uint Pixel(SymbolColor color, PixelLayout layout) => layout switch
     {
         PixelLayout.Gray8 => Luminance(OverWhite(color)),
         PixelLayout.Rgba8888 => InMemoryOrder(color.R, color.G, color.B, color.A),
         PixelLayout.Bgra8888 => InMemoryOrder(color.B, color.G, color.R, color.A),
+        PixelLayout.Bgr24 => Bgr(OverWhite(color)),
+        // Rgb24 takes the same word, and stores its first three bytes.
         _ => Rgb888x(OverWhite(color)),
     };
 
     private static uint Rgb888x(SymbolColor color) => InMemoryOrder(color.R, color.G, color.B, 255);
+
+    private static uint Bgr(SymbolColor color) => InMemoryOrder(color.B, color.G, color.R, 255);
 
     // The word is stored as a native uint, so a big-endian machine needs it reversed to keep the first byte first.
     private static uint InMemoryOrder(byte first, byte second, byte third, byte fourth)
@@ -200,7 +261,44 @@ internal static class PixelWriter
     {
         if (bytesPerPixel == 1)
             span.Fill((byte)pixel);
+        else if (bytesPerPixel == 3)
+            FillThreeBytes(span, pixel);
         else
             MemoryMarshal.Cast<byte, uint>(span).Fill(pixel);
+    }
+
+    /// <summary>
+    /// A run of three-byte pixels, which no fill takes as a value: a short run as overlapping words, and a longer one
+    /// from its first pixels by copies.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void FillThreeBytes(Span<byte> span, uint pixel)
+    {
+        var count = span.Length / 3;
+        if (count == 0)
+            return;
+        // Up to eight pixels are stored as whole words, each overwriting the fourth byte of the one before.
+        // The run's last pixel is never one of them, since its fourth byte would land past the run.
+        var words = Math.Min(count - 1, 8);
+        for (var i = 0; i < words; i++)
+            Unsafe.WriteUnaligned(ref span[i * 3], pixel);
+        if (words == count - 1)
+        {
+            // The word holds the pixel in memory order, so its first byte is the low one only on a little-endian machine.
+            if (!BitConverter.IsLittleEndian)
+                pixel = BinaryPrimitives.ReverseEndianness(pixel);
+            var last = span.Slice(words * 3, 3);
+            last[0] = (byte)pixel;
+            last[1] = (byte)(pixel >> 8);
+            last[2] = (byte)(pixel >> 16);
+            return;
+        }
+        // A longer run: each copy doubles what is written.
+        for (var written = words * 3; written < span.Length;)
+        {
+            var length = Math.Min(written, span.Length - written);
+            span.Slice(0, length).CopyTo(span.Slice(written));
+            written += length;
+        }
     }
 }

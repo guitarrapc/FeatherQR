@@ -1012,7 +1012,42 @@ public class NetStandardBuildParityTest
             il.Emit(OpCodes.Ret);
             var loadedTryWrite = bridge.CreateDelegate<Func<object, byte[], int, object, bool>>();
 
-            foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x })
+            // The same bridge for the overload that takes a row stride.
+            var tryWriteStride = writer.GetMethod("TryWritePixels", [dataType, typeof(Span<byte>), typeof(int), layoutType, typeof(int).MakeByRefType(), typeof(int).MakeByRefType(), optionsType.MakeByRefType()])!;
+            var strideBridge = new DynamicMethod("TryWritePixelsWithAStride", typeof(bool), [typeof(object), typeof(byte[]), typeof(int), typeof(int), typeof(object)], typeof(NetStandardBuildParityTest).Module);
+            il = strideBridge.GetILGenerator();
+            width = il.DeclareLocal(typeof(int));
+            height = il.DeclareLocal(typeof(int));
+            options = il.DeclareLocal(optionsType);
+            il.Emit(OpCodes.Ldarg_S, (byte)4);
+            il.Emit(OpCodes.Unbox_Any, optionsType);
+            il.Emit(OpCodes.Stloc, options);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, dataType);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Newobj, typeof(Span<byte>).GetConstructor([typeof(byte[])])!);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Ldloca, width);
+            il.Emit(OpCodes.Ldloca, height);
+            il.Emit(OpCodes.Ldloca, options);
+            il.Emit(OpCodes.Call, tryWriteStride);
+            il.Emit(OpCodes.Ret);
+            var loadedTryWriteStride = strideBridge.CreateDelegate<Func<object, byte[], int, int, object, bool>>();
+
+            // The size the image is written at, asked before writing.
+            var getImageSize = writer.GetMethod("GetImageSize", [dataType, optionsType.MakeByRefType()])!;
+            var hostSize = host switch
+            {
+                QRCodeData qr => SymbolImageWriter.GetImageSize(qr, hostOptions),
+                MicroQRCodeData micro => SymbolImageWriter.GetImageSize(micro, hostOptions),
+                RmQRCodeData rm => SymbolImageWriter.GetImageSize(rm, hostOptions),
+                _ => throw new ArgumentException(symbology),
+            };
+            await Assert.That(((int, int))getImageSize.Invoke(null, [loaded, loadedOptions])!).IsEqualTo(hostSize)
+                .Because($"{targetFramework} {symbology}: the image size must be this host's");
+
+            foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24 })
             {
                 var hostPixels = new byte[host switch
                 {
@@ -1032,6 +1067,23 @@ public class NetStandardBuildParityTest
                 await Assert.That(loadedTryWrite(loaded, loadedPixels, (int)layout, loadedOptions)).IsTrue();
                 await Assert.That(loadedPixels.AsSpan().SequenceEqual(hostPixels)).IsTrue()
                     .Because($"{targetFramework} {symbology} {layout}: the pixels must be this host's");
+
+                // Rows five bytes further apart than they are long, in a buffer that holds 0xCD where no pixel goes.
+                var stride = hostPixels.Length / hostSize.Height + 5;
+                var hostPadded = new byte[stride * hostSize.Height];
+                hostPadded.AsSpan().Fill(0xCD);
+                _ = host switch
+                {
+                    QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, hostPadded, stride, layout, out _, out _, hostOptions),
+                    MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, hostPadded, stride, layout, out _, out _, hostOptions),
+                    RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, hostPadded, stride, layout, out _, out _, hostOptions),
+                    _ => throw new ArgumentException(symbology),
+                };
+                var loadedPadded = new byte[hostPadded.Length];
+                loadedPadded.AsSpan().Fill(0xCD);
+                await Assert.That(loadedTryWriteStride(loaded, loadedPadded, stride, (int)layout, loadedOptions)).IsTrue();
+                await Assert.That(loadedPadded.AsSpan().SequenceEqual(hostPadded)).IsTrue()
+                    .Because($"{targetFramework} {symbology} {layout}: the pixels at a stride must be this host's");
             }
         }
     }

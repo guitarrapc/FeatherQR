@@ -15,11 +15,17 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class LuminanceConverterPublicContractTest
 {
-    private static readonly PixelLayout[] ColorLayouts = [PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x];
+    private static readonly PixelLayout[] ColorLayouts = [PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
     private static readonly PixelLayout[] AlphaLayouts = [PixelLayout.Rgba8888, PixelLayout.Bgra8888];
-    private static readonly PixelLayout[] AllLayouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x];
+    private static readonly PixelLayout[] AllLayouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
+    private static readonly PixelLayout[] NoAlphaLayouts = [PixelLayout.Rgb888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
 
-    private static int BytesPerPixel(PixelLayout layout) => layout == PixelLayout.Gray8 ? 1 : 4;
+    private static int BytesPerPixel(PixelLayout layout) => layout switch
+    {
+        PixelLayout.Gray8 => 1,
+        PixelLayout.Rgb24 or PixelLayout.Bgr24 => 3,
+        _ => 4,
+    };
 
     /// <summary>The documented formula: composite against white below alpha 255, then the integer part of (77 R + 150 G + 29 B) / 256.</summary>
     private static byte DocumentedLuma(int r, int g, int b, int a, bool premultiplied)
@@ -55,6 +61,12 @@ public class LuminanceConverterPublicContractTest
             case PixelLayout.Rgb888x:
                 pixel[0] = r; pixel[1] = g; pixel[2] = b; pixel[3] = 0x5A;
                 break;
+            case PixelLayout.Rgb24:
+                pixel[0] = r; pixel[1] = g; pixel[2] = b;
+                break;
+            case PixelLayout.Bgr24:
+                pixel[0] = b; pixel[1] = g; pixel[2] = r;
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(layout));
         }
@@ -62,10 +74,10 @@ public class LuminanceConverterPublicContractTest
 
     private static byte ConvertOne(PixelLayout layout, byte r, byte g, byte b, byte a, bool premultiplied = false)
     {
-        var pixels = new byte[4];
+        var pixels = new byte[BytesPerPixel(layout)];
         WritePixel(pixels, layout, r, g, b, a);
         var luminance = new byte[1];
-        LuminanceConverter.Convert(pixels, 1, 1, 4, layout, premultiplied, luminance);
+        LuminanceConverter.Convert(pixels, 1, 1, pixels.Length, layout, premultiplied, luminance);
         return luminance[0];
     }
 
@@ -182,9 +194,10 @@ public class LuminanceConverterPublicContractTest
         {
             var luminance = new byte[width * height];
 
-            LuminanceConverter.Convert(new byte[width * height * 4], width, height, width * 4, layout, false, luminance);
+            var bpp = BytesPerPixel(layout);
+            LuminanceConverter.Convert(new byte[width * height * bpp], width, height, width * bpp, layout, false, luminance);
 
-            var expected = layout == PixelLayout.Rgb888x ? (byte)0 : (byte)255;
+            var expected = NoAlphaLayouts.Contains(layout) ? (byte)0 : (byte)255;
             await Assert.That(luminance.All(v => v == expected)).IsTrue().Because($"{layout}: {string.Join(",", luminance)}");
         }
     }
@@ -221,13 +234,160 @@ public class LuminanceConverterPublicContractTest
     [Test]
     public async Task PremultipliedFlag_IsIgnoredWithoutAlpha()
     {
-        await Assert.That(ConvertOne(PixelLayout.Rgb888x, 200, 100, 50, 7, premultiplied: true))
-            .IsEqualTo(ConvertOne(PixelLayout.Rgb888x, 200, 100, 50, 7, premultiplied: false));
+        foreach (var layout in NoAlphaLayouts)
+        {
+            await Assert.That(ConvertOne(layout, 200, 100, 50, 7, premultiplied: true))
+                .IsEqualTo(ConvertOne(layout, 200, 100, 50, 7, premultiplied: false)).Because($"{layout}");
+        }
 
         byte[] gray = [123];
         var luminance = new byte[1];
         LuminanceConverter.Convert(gray, 1, 1, 1, PixelLayout.Gray8, true, luminance);
         await Assert.That(luminance[0]).IsEqualTo((byte)123);
+    }
+
+    // ---- three bytes a pixel -----------------------------------------------------------
+
+    /// <summary>The three bytes in memory order: red is the first byte of Rgb24 and the third of Bgr24.</summary>
+    [Test]
+    public async Task Rgb24AndBgr24_ReadTheirBytesInMemoryOrder()
+    {
+        var luminance = new byte[1];
+
+        LuminanceConverter.Convert([255, 0, 0], 1, 1, 3, PixelLayout.Rgb24, false, luminance);
+        await Assert.That(luminance[0]).IsEqualTo((byte)76).Because("Rgb24, the first byte is red");
+        LuminanceConverter.Convert([0, 0, 255], 1, 1, 3, PixelLayout.Rgb24, false, luminance);
+        await Assert.That(luminance[0]).IsEqualTo((byte)28).Because("Rgb24, the third byte is blue");
+
+        LuminanceConverter.Convert([255, 0, 0], 1, 1, 3, PixelLayout.Bgr24, false, luminance);
+        await Assert.That(luminance[0]).IsEqualTo((byte)28).Because("Bgr24, the first byte is blue");
+        LuminanceConverter.Convert([0, 0, 255], 1, 1, 3, PixelLayout.Bgr24, false, luminance);
+        await Assert.That(luminance[0]).IsEqualTo((byte)76).Because("Bgr24, the third byte is red");
+    }
+
+    /// <summary>
+    /// A 24-bit buffer gives the luminance of the same colours held as Rgb888x, and the documented formula, on random colours.
+    /// The widths go one pixel at a time past two blocks of the widest vector tier, and the rows are packed, padded by a byte count
+    /// that is not a whole pixel, and padded to four bytes. The padding holds 0xEE, which no row of the source may take a colour from.
+    /// </summary>
+    [Test]
+    public async Task Rgb24AndBgr24_ReadTheColoursRgb888xReads()
+    {
+        var random = new Random(24);
+        const int height = 3;
+        for (var width = 1; width <= 140; width++)
+        {
+            foreach (var padding in new[] { 0, 1, 5, (4 - width * 3 % 4) % 4 })
+            {
+                var colours = new byte[width * height * 3];
+                random.NextBytes(colours);
+                var four = new byte[width * height * 4];
+                var expected = new byte[width * height];
+                for (var pixel = 0; pixel < width * height; pixel++)
+                {
+                    WritePixel(four.AsSpan(pixel * 4, 4), PixelLayout.Rgb888x, colours[pixel * 3], colours[pixel * 3 + 1], colours[pixel * 3 + 2], 255);
+                    expected[pixel] = DocumentedLuma(colours[pixel * 3], colours[pixel * 3 + 1], colours[pixel * 3 + 2], 255, premultiplied: false);
+                }
+                var fromFour = new byte[width * height];
+                LuminanceConverter.Convert(four, width, height, width * 4, PixelLayout.Rgb888x, false, fromFour);
+                await Assert.That(fromFour.AsSpan().SequenceEqual(expected)).IsTrue().Because("the four-byte reading is the documented formula");
+
+                foreach (var layout in new[] { PixelLayout.Rgb24, PixelLayout.Bgr24 })
+                {
+                    var rowBytes = width * 3 + padding;
+                    // The last row ends at its last pixel.
+                    var pixels = new byte[(height - 1) * rowBytes + width * 3];
+                    pixels.AsSpan().Fill(0xEE);
+                    for (var y = 0; y < height; y++)
+                    {
+                        for (var x = 0; x < width; x++)
+                        {
+                            var colour = colours.AsSpan((y * width + x) * 3, 3);
+                            WritePixel(pixels.AsSpan(y * rowBytes + x * 3, 3), layout, colour[0], colour[1], colour[2], 255);
+                        }
+                    }
+                    // A byte either side of the destination, which the conversion must leave.
+                    var luminance = new byte[width * height + 2];
+                    luminance[0] = 0xA5;
+                    luminance[^1] = 0x5A;
+
+                    LuminanceConverter.Convert(pixels, width, height, rowBytes, layout, false, luminance.AsSpan(1, width * height));
+
+                    await Assert.That(luminance.AsSpan(1, width * height).SequenceEqual(expected)).IsTrue().Because($"{layout}, {width} pixels wide, {padding} bytes of padding");
+                    await Assert.That((luminance[0], luminance[^1])).IsEqualTo(((byte)0xA5, (byte)0x5A)).Because($"{layout}, {width} pixels wide");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// A source that ends where readable memory ends and a destination that ends where writable memory ends: a conversion that loads
+    /// or stores a whole vector past the last pixel faults here, where over an array it would touch the next object unseen.
+    /// </summary>
+    [Test]
+    public async Task Rgb24AndBgr24_ReadAndWriteNothingPastTheLastPixel()
+    {
+        if (!PageEndMemory.IsSupported)
+            return;
+        using var sourcePage = new PageEndMemory();
+        using var destinationPage = new PageEndMemory();
+        var random = new Random(3);
+        var converted = 0;
+        foreach (var layout in new[] { PixelLayout.Rgb24, PixelLayout.Bgr24 })
+        {
+            for (var width = 1; width <= 140; width++)
+            {
+                foreach (var (height, padding) in new[] { (1, 0), (2, 0), (3, 5) })
+                {
+                    var rowBytes = width * 3 + padding;
+                    var managed = new byte[(height - 1) * rowBytes + width * 3];
+                    random.NextBytes(managed);
+                    var expected = new byte[width * height];
+                    for (var y = 0; y < height; y++)
+                    {
+                        for (var x = 0; x < width; x++)
+                        {
+                            var p = y * rowBytes + x * 3;
+                            expected[y * width + x] = layout == PixelLayout.Rgb24
+                                ? DocumentedLuma(managed[p], managed[p + 1], managed[p + 2], 255, false)
+                                : DocumentedLuma(managed[p + 2], managed[p + 1], managed[p], 255, false);
+                        }
+                    }
+
+                    var matches = ConvertAtPageEnds(sourcePage, destinationPage, managed, width, height, rowBytes, layout, expected);
+                    await Assert.That(matches).IsTrue().Because($"{layout}, {width} by {height}, {padding} bytes of padding");
+                    converted++;
+                }
+            }
+        }
+        await Assert.That(converted).IsEqualTo(2 * 140 * 3);
+
+        static bool ConvertAtPageEnds(PageEndMemory sourcePage, PageEndMemory destinationPage, byte[] managed, int width, int height, int rowBytes, PixelLayout layout, byte[] expected)
+        {
+            ReadOnlySpan<byte> source = sourcePage.AtPageEnd(managed);
+            var destination = destinationPage.AtPageEnd(width * height);
+            LuminanceConverter.Convert(source, width, height, rowBytes, layout, false, destination);
+            return destination.SequenceEqual(expected);
+        }
+    }
+
+    [Test]
+    public async Task Rgb24AndBgr24_AStrideUnderThreeBytesAPixel_Throws()
+    {
+        foreach (var layout in new[] { PixelLayout.Rgb24, PixelLayout.Bgr24 })
+        {
+            // Five pixels are fifteen bytes. Fourteen is refused, and so is the 5 that would do for Gray8.
+            foreach (var rowBytes in new[] { 14, 5, 0 })
+            {
+                var thrown = await Assert.That(() => LuminanceConverter.Convert(new byte[64], 5, 2, rowBytes, layout, false, new byte[10]))
+                    .Throws<ArgumentOutOfRangeException>().Because($"{layout}, stride {rowBytes}");
+                await Assert.That(thrown!.ParamName).IsEqualTo("rowBytes");
+            }
+            LuminanceConverter.Convert(new byte[30], 5, 2, 15, layout, false, new byte[10]);
+            // Two rows of 16 with the second ending at its fifteenth byte need 31 bytes.
+            LuminanceConverter.Convert(new byte[31], 5, 2, 16, layout, false, new byte[10]);
+            await Assert.That(() => LuminanceConverter.Convert(new byte[30], 5, 2, 16, layout, false, new byte[10])).ThrowsExactly<ArgumentException>().Because($"{layout}");
+        }
     }
 
     // ---- rows -------------------------------------------------------------------------
@@ -251,7 +411,7 @@ public class LuminanceConverterPublicContractTest
                     if (layout == PixelLayout.Gray8)
                         pixels[y * rowBytes + x] = value;
                     else
-                        WritePixel(pixels.AsSpan(y * rowBytes + x * bpp, 4), layout, value, value, value, 255);
+                        WritePixel(pixels.AsSpan(y * rowBytes + x * bpp, bpp), layout, value, value, value, 255);
                     expected[y * width + x] = value;
                 }
 
@@ -312,8 +472,12 @@ public class LuminanceConverterPublicContractTest
     [Test]
     public async Task UndefinedLayout_ThrowsArgumentOutOfRange()
     {
-        await Assert.That(() => LuminanceConverter.Convert(new byte[4], 1, 1, 4, (PixelLayout)42, false, new byte[1]))
-            .Throws<ArgumentOutOfRangeException>();
+        foreach (var layout in new[] { (PixelLayout)42, (PixelLayout)6, (PixelLayout)(-1) })
+        {
+            var thrown = await Assert.That(() => LuminanceConverter.Convert(new byte[4], 1, 1, 4, layout, false, new byte[1]))
+                .Throws<ArgumentOutOfRangeException>().Because($"{(int)layout}");
+            await Assert.That(thrown!.ParamName).IsEqualTo("layout");
+        }
     }
 
     [Test]

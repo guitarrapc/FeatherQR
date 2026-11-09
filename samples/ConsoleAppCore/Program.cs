@@ -85,16 +85,15 @@ var withIcon = new SymbolImageOptions { Width = 248, Height = 248, IconSizeModul
 SaveText("qr-icon.svg", SymbolImageWriter.GetSvgString(qrH, withIcon));
 SaveBytes("qr-icon-area.png", SymbolImageWriter.GetPngBytes(qrH, withIcon));
 
-// Draw the icon into the pixels where GetIconRectangle says. Here the Micro QR code is written at that size and copied in row by row.
+// Draw the icon into the pixels where GetIconRectangle says. Here the Micro QR code is written at that size straight into the area:
+// the destination starts at the area's first pixel, and the row stride is the whole image's, so each row lands under the one before.
 var (iconX, iconY, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(qrH, withIcon);
 Console.WriteLine($"The icon goes at ({iconX}, {iconY}), {iconWidth} by {iconHeight} pixels");
 var composed = new byte[SymbolImageWriter.GetPixelBufferSize(qrH, PixelLayout.Rgba8888, withIcon)];
 SymbolImageWriter.TryWritePixels(qrH, composed, PixelLayout.Rgba8888, out var composedWidth, out var composedHeight, withIcon);
 var iconOptions = new SymbolImageOptions { Width = iconWidth, Height = iconHeight, DarkColor = navy };
-var iconPixels = new byte[SymbolImageWriter.GetPixelBufferSize(micro, PixelLayout.Rgba8888, iconOptions)];
-SymbolImageWriter.TryWritePixels(micro, iconPixels, PixelLayout.Rgba8888, out _, out _, iconOptions);
-for (var row = 0; row < iconHeight; row++)
-    iconPixels.AsSpan(row * iconWidth * 4, iconWidth * 4).CopyTo(composed.AsSpan(((iconY + row) * composedWidth + iconX) * 4));
+var iconStart = (iconY * composedWidth + iconX) * 4;
+SymbolImageWriter.TryWritePixels(micro, composed.AsSpan(iconStart), composedWidth * 4, PixelLayout.Rgba8888, out _, out _, iconOptions);
 SaveBytes("qr-icon.png", EncodeRgbaPng(composed, composedWidth, composedHeight));
 
 // Into an IBufferWriter<byte>, such as a pipe or a pooled buffer, with no allocation of its own.

@@ -1,11 +1,11 @@
 namespace FeatherQR;
 
 /// <summary>
-/// The channel order and depth of a raw pixel buffer: one byte a pixel for <see cref="Gray8"/>, four for the others.
+/// The channel order and depth of a raw pixel buffer: one byte a pixel for <see cref="Gray8"/>, three for <see cref="Rgb24"/> and <see cref="Bgr24"/>, four for the others.
 /// </summary>
 /// <remarks>
-/// These are the layouts phone cameras, graphics libraries and GPU textures commonly hand over or take.
-/// A buffer <see cref="SymbolImageWriter"/> writes has its rows one after another with no padding. A buffer <see cref="LuminanceConverter"/> reads may have a stride wider than its rows.
+/// These are the layouts phone cameras, graphics libraries, image files and GPU textures commonly hand over or take.
+/// A buffer may have a stride wider than its rows, both where <see cref="SymbolImageWriter"/> writes it and where <see cref="LuminanceConverter"/> reads it.
 /// </remarks>
 public enum PixelLayout
 {
@@ -20,4 +20,10 @@ public enum PixelLayout
 
     /// <summary>Four bytes a pixel: red, green, blue, and a fourth byte that carries no colour.</summary>
     Rgb888x = 3,
+
+    /// <summary>Three bytes a pixel: red, green, blue.</summary>
+    Rgb24 = 4,
+
+    /// <summary>Three bytes a pixel: blue, green, red.</summary>
+    Bgr24 = 5,
 }

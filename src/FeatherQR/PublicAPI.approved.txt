@@ -198,6 +198,8 @@ namespace FeatherQR
         Rgba8888 = 1,
         Bgra8888 = 2,
         Rgb888x = 3,
+        Rgb24 = 4,
+        Bgr24 = 5,
     }
 
     public readonly struct QRCodeCalculatedSize : IEquatable<QRCodeCalculatedSize>
@@ -538,9 +540,15 @@ namespace FeatherQR
     public static class SymbolImageWriter
     {
         public static ValueTuple<int, int, int, int> GetIconRectangle(QRCodeData data, in SymbolImageOptions options);
+        public static ValueTuple<int, int> GetImageSize(MicroQRCodeData data, in SymbolImageOptions options = null);
+        public static ValueTuple<int, int> GetImageSize(QRCodeData data, in SymbolImageOptions options = null);
+        public static ValueTuple<int, int> GetImageSize(RmQRCodeData data, in SymbolImageOptions options = null);
         public static bool TryWritePixels(MicroQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
+        public static bool TryWritePixels(MicroQRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
         public static bool TryWritePixels(QRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
+        public static bool TryWritePixels(QRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
         public static bool TryWritePixels(RmQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
+        public static bool TryWritePixels(RmQRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
         public static byte[] GetPngBytes(MicroQRCodeData data, in SymbolImageOptions options = null);
         public static byte[] GetPngBytes(QRCodeData data, in SymbolImageOptions options = null);
         public static byte[] GetPngBytes(RmQRCodeData data, in SymbolImageOptions options = null);

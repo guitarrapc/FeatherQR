@@ -116,6 +116,16 @@ public class SymbolImageWrite
     [Benchmark]
     public bool Large_PixelsRgba_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Styled);
 
+    // Rows 64 bytes further apart than they are long, as an image with padded rows takes them.
+    [Benchmark]
+    public bool Large_PixelsRgba_Stride() => SymbolImageWriter.TryWritePixels(_large, _pixels, 1480 * 4 + 64, PixelLayout.Rgba8888, out _, out _, new SymbolImageOptions { ModulePixelSize = 7 });
+
+    [Benchmark]
+    public bool Large_PixelsRgb24() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgb24, out _, out _);
+
+    [Benchmark]
+    public bool Large_PixelsRgb24_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgb24, out _, out _, Styled);
+
     [Benchmark]
     public string Small_Text() => SymbolImageWriter.GetTerminalText(_small);
 

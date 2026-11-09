@@ -230,6 +230,16 @@ internal static partial class TierTiming
         new("kernel/LuminanceConverter-rmqr-r17x139-8px-scalar", () => Converter(RmQRCrisp(RmQRLarge()), scalar: true)),
         new("kernel/LuminanceConverter-v40-3px-alpha", () => Converter(Crisp(Large(), 3f), straightAlpha: true)),
         new("kernel/LuminanceConverter-v40-3px-alpha-scalar", () => Converter(Crisp(Large(), 3f), scalar: true, straightAlpha: true)),
+        new("kernel/LuminanceConverterRgb24-v40-3px", () => ConverterRgb24(Crisp(Large(), 3f), LuminanceConverter.ConvertRgb24)),
+        new("kernel/LuminanceConverterRgb24-v40-3px-scalar", () => ConverterRgb24(Crisp(Large(), 3f), LuminanceConverter.ConvertRgb24Scalar)),
+        new("kernel/LuminanceConverterRgb24-v40-3px-v128", () => ConverterRgb24(Crisp(Large(), 3f), LuminanceConverter.ConvertRgb24Vector128), System.Runtime.Intrinsics.X86.Ssse3.IsSupported || PackedSimd.IsSupported),
+        new("kernel/LuminanceConverterRgb24-v40-8px", () => ConverterRgb24(Crisp(Large(), 8f), LuminanceConverter.ConvertRgb24)),
+        new("kernel/LuminanceConverterRgb24-v40-8px-scalar", () => ConverterRgb24(Crisp(Large(), 8f), LuminanceConverter.ConvertRgb24Scalar)),
+        new("kernel/LuminanceConverterRgb24-v40-8px-v128", () => ConverterRgb24(Crisp(Large(), 8f), LuminanceConverter.ConvertRgb24Vector128), System.Runtime.Intrinsics.X86.Ssse3.IsSupported || PackedSimd.IsSupported),
+        new("kernel/LuminanceConverterRgb24-rmqr-r17x139-8px", () => ConverterRgb24(RmQRCrisp(RmQRLarge()), LuminanceConverter.ConvertRgb24)),
+        new("kernel/LuminanceConverterRgb24-rmqr-r17x139-8px-scalar", () => ConverterRgb24(RmQRCrisp(RmQRLarge()), LuminanceConverter.ConvertRgb24Scalar)),
+        new("kernel/LuminanceConverterRgb24-rmqr-r17x139-8px-v128", () => ConverterRgb24(RmQRCrisp(RmQRLarge()), LuminanceConverter.ConvertRgb24Vector128), System.Runtime.Intrinsics.X86.Ssse3.IsSupported || PackedSimd.IsSupported),
+        new("kernel/LuminanceConverter-v40-8px-rgb888x", () => ConverterRgb888x(Crisp(Large(), 8f))),
         new("kernel/MaskCode-v1", () => MaskScoring(1, score: true)),
         new("kernel/MaskCode-v1-copy", () => MaskScoring(1, score: false)),
         new("kernel/MaskCode-v6", () => MaskScoring(6, score: true)),
@@ -851,6 +861,45 @@ internal static partial class TierTiming
         return () =>
         {
             LuminanceConverter.Convert(rgba, width, height, width * 4, PixelLayout.Rgba8888, premultipliedAlpha: !straightAlpha, luminance);
+            return luminance[1];
+        };
+    }
+
+    private delegate void Rgb24Tier(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgr);
+
+    /// <summary>The image as Bgr24 with rows padded to four bytes, as a 24-bit bitmap holds them, through one tier of the conversion.</summary>
+    private static Func<int> ConverterRgb24(Image image, Rgb24Tier convert)
+    {
+        var (width, height) = (image.Width, image.Height);
+        var rowBytes = (width * 3 + 3) & ~3;
+        var bgr = new byte[rowBytes * height];
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var p = y * rowBytes + x * 3;
+                bgr[p] = bgr[p + 1] = bgr[p + 2] = image.Luminance[y * width + x];
+            }
+        }
+        var luminance = new byte[image.Luminance.Length];
+        return () =>
+        {
+            convert(bgr, luminance, width, height, rowBytes, bgr: true);
+            return luminance[1];
+        };
+    }
+
+    /// <summary>The same image at four bytes a pixel with no alpha, the conversion a three-byte source took before it had a layout.</summary>
+    private static Func<int> ConverterRgb888x(Image image)
+    {
+        var (width, height) = (image.Width, image.Height);
+        var pixels = new byte[width * height * 4];
+        for (var i = 0; i < image.Luminance.Length; i++)
+            pixels[4 * i] = pixels[4 * i + 1] = pixels[4 * i + 2] = image.Luminance[i];
+        var luminance = new byte[image.Luminance.Length];
+        return () =>
+        {
+            LuminanceConverter.Convert(pixels, width, height, width * 4, PixelLayout.Rgb888x, premultipliedAlpha: false, luminance);
             return luminance[1];
         };
     }

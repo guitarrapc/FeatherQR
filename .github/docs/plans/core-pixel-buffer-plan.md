@@ -147,4 +147,106 @@ The equivalence classes every new call is tested over:
 
 ## Progress log
 
-No phase has run yet.
+Phases 1 to 4 ran on 2026-11-10 in one session, and Phase 5's docs with them. Left: the ARM64 tier's timing (Phase 4), then the fold and the deletion of this file (Phase 5). The decisions, the measurements and the lessons below are already in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#pixel-buffer), so the fold has only this log's status to move.
+
+All times are from .NET 10 on x64 with AVX2, a Ryzen 9 7950X3D that was also running other sessions' builds, so each comparison is interleaved or alternated and none is a figure to quote alone.
+
+### Phase 1, image size
+
+Done:
+
+- `GetImageSize` on the three data types, a named tuple, refusing what the writers refuse. `SymbolImageWriterImageSizeTest` holds it to the size `TryWritePixels` reports, the PNG's header and the SVG's root on the three symbologies, plain, styled, at a set size that is not whole pixels, with one side given, and with an icon area.
+- The System.Drawing sample writes into `LockBits` memory, and the ImageSharp sample into the image's memory when that is one block.
+
+Measured, console probes, the median of 15 interleaved rounds, at 520 and 1,480 pixels a side:
+
+| Encode | Before | After |
+|---|---|---|
+| System.Drawing | 343 and 3,378 µs | 252 and 1,763 µs, of which the `Bitmap` alone is 206 and 1,283 |
+| ImageSharp 3.1.12 | 190 to 360 and 2,442 µs | 38 to 40 and 1,510 µs |
+
+Lessons:
+
+- ImageSharp 3.2.0 and later fail a Release build without a license key, so the probe took 3.1.12. The gate was left alone.
+- ImageSharp holds an image past 4 MiB in several blocks (checked on 4.1.3: 1,024 pixels a side is one block and 1,025 is not). Above that the sample writes into a buffer the image wraps. Making the image first and then loading it from a buffer took 3,192 µs against `LoadPixelData`'s 3,019 at 1,480 pixels.
+- WPF was measured and left: a `WriteableBitmap` written in place took 663 and 3,213 µs where `BitmapSource.Create` from a buffer took 409 and 2,915.
+- An icon that fits version 3 at level H in the plan's head did not: 30 percent of its 29 modules allows 8, and 7 with a border are 9. The tests use version 5.
+
+### Phase 2, row stride
+
+Done:
+
+- The `rowBytes` overload on the three data types, with the rules D3 lists. `SymbolImageWriterPixelStrideTest` holds the rows to the packed overload's, the bytes between rows and around a region to what they held, the exact length and one byte short, and the throw.
+- `ConsoleAppCore` writes the Micro QR code into the icon area in place. Its 16 output files kept their bytes.
+
+Measured, a probe built against a worktree of the commit before and against the change, alternating processes on two pinned cores, the fastest of five or six a side:
+
+| Shape | Before | After |
+|---|---|---|
+| Version 1, RGBA | 3.50 to 3.58 µs | 3.60 µs |
+| Version 40, RGBA | 153 µs | 152 µs |
+| Version 40, `Gray8` | 107 µs | 108 µs |
+| Version 40, RGBA, 512 by 512 | 98 to 103 µs | 96 to 99 µs |
+| Version 40, RGBA, styled | 1.78 ms | 1.73 ms |
+| Version 40, RGBA, the stride overload | | 151 µs |
+
+Lessons:
+
+- The first shape, one method with a flag for the packed rows, took 300 to 330 µs at version 40, twice the time, and so did the second, the loops in a method both entries inlined. With `DOTNET_TieredPGO=0` every build took 305 to 365 µs, so the loss was the profile's. The loops are now a method that is never inlined.
+- The benchmark in process read the doubling on a loaded machine, where it could have been the load. The alternating probe settled it.
+- A test that fills the destination with one byte did not catch a writer that copied a row's padding into the next row. The stride test fills it with bytes that differ from their neighbours.
+- A planted fault's file, put back with its old time, is older than the build made from the fault, so the next build was skipped and the suite ran the fault. The file is touched after it is put back.
+
+### Phase 3, 24-bit layouts
+
+Done:
+
+- `Rgb24 = 4` and `Bgr24 = 5`, in the writer, plain and styled, and in `LuminanceConverter.Convert`.
+- The System.Drawing sample reads a 24-bit bitmap in its own format, and a 32-bit one without a conversion.
+
+Measured, D5's comparison, the same probe as Phase 1's, with the portable loop and no vector tier:
+
+| Decode of a 24-bit `Bitmap`, 520 and 1,480 pixels | Time |
+|---|---|
+| `LockBits` at 32 bits, a copy, the four-byte AVX2 tier (before) | 327 and 2,970 µs |
+| `LockBits` at 24 bits, a copy, the portable loop | 265 and 2,137 µs |
+| The same two, read from the locked memory with no copy | 208 and 1,706 µs, 189 and 1,566 µs |
+
+So D5's condition held, and Phase 3 could have merged before Phase 4.
+
+Lessons:
+
+- Version 40 as `Rgb24` took 381 µs with each run filled by copies from its first pixel, and 288 with a run of up to eight pixels stored as overlapping words, against RGBA's 152.
+- The layouts each library's formats map to were checked with a navy symbol, luminance 58, and 78 with red and blue exchanged. The README's FAQ has the table.
+
+### Phase 4, vector tiers
+
+Done:
+
+- The kernel row `LuminanceConverterRgb24`: AVX2, the ARM64 dot product, SSSE3 and PackedSimd, with no tier on ARM64 without the dot product or on x64 without SSSE3.
+- `LuminanceConverterRgb24ParityTest` enters each tier this machine has, at every width from its narrowest to 140 pixels, with the source ending where readable memory ends. `tests/FeatherQR.AotAnalysis` has the parity check and the timing shapes.
+
+Measured, `--time`, version 40 as BGR with padded rows, the tier against the portable loop:
+
+| Build | 555 pixels a side | 1,480 pixels a side |
+|---|---|---|
+| x64 JIT, AVX2 | 27.8 µs against 296 | 193 µs against 2,213 |
+| x64 JIT, `DOTNET_EnableAVX2=0`, SSSE3 | 61 to 67 µs against 282 to 296 | 461 to 481 µs against 2,200 to 2,213 |
+| WebAssembly interpreted, `--no-liftoff`, three processes a side | 404 to 428 µs against 901 to 1,735 | |
+| WebAssembly AOT-compiled, the fastest of five processes a side | 181 µs against 287 | 1,350 µs against 1,968 |
+
+Every tier measured beat the portable loop, so each stays.
+
+Not done:
+
+- The ARM64 tier is not timed, since the session had no ARM64 machine. Its bytes are held by the parity test on CI's ARM64 runners, which have not run it yet either. To time it: `dotnet build tests/FeatherQR.AotAnalysis -c Release`, then `dotnet tests/FeatherQR.AotAnalysis/bin/Release/net10.0/FeatherQR.AotAnalysis.dll --time --shape LuminanceConverterRgb24`. It stays only if the dispatch's rows beat their `-scalar` rows.
+- A default NativeAOT publish and the `--simd-class` reports were not run here. CI's `aot-analysis` and `wasm-simd` jobs run them.
+
+### Phase 5, docs
+
+Done: the Pixel buffer section, the Image output table, four Left out rows and the scope row in `qrcode-symbologies.md`, the generated tier table, the README (the raw pixel section and the FAQ's layout table), `docs/migration.md`, and the 2.0.0 plan's row.
+
+Not done:
+
+- The fold and the deletion of this file, which wait for the ARM64 timing.
+- `src/FeatherQR.Playground/wwwroot/api/index.html`, the generated API page, was not regenerated: another session had it and `tools/public_api.cs` open with uncommitted changes.

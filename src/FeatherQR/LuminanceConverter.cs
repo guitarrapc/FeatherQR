@@ -28,7 +28,7 @@ public static partial class LuminanceConverter
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="rowBytes">The stride: the bytes from the start of one row to the start of the next. At least <paramref name="width"/> × bytes per pixel, and more where the source pads its rows. The padding is never read.</param>
-    /// <param name="layout">Channel order and depth of <paramref name="pixels"/>: one byte a pixel for <see cref="PixelLayout.Gray8"/>, four for the others.</param>
+    /// <param name="layout">Channel order and depth of <paramref name="pixels"/>: one byte a pixel for <see cref="PixelLayout.Gray8"/>, three for <see cref="PixelLayout.Rgb24"/> and <see cref="PixelLayout.Bgr24"/>, four for the others.</param>
     /// <param name="premultipliedAlpha">Whether the color channels are already multiplied by alpha, as a browser canvas or a GPU texture often holds them. Ignored for layouts without alpha.</param>
     /// <param name="luminance">Destination, at least width × height bytes. Each pixel's ITU-R BT.601 luminance, the pixel composited against white first where its alpha is below 255.</param>
     /// <remarks>A zero width or height converts nothing and does not touch either buffer.</remarks>
@@ -44,6 +44,7 @@ public static partial class LuminanceConverter
         {
             PixelLayout.Gray8 => 1,
             PixelLayout.Rgba8888 or PixelLayout.Bgra8888 or PixelLayout.Rgb888x => 4,
+            PixelLayout.Rgb24 or PixelLayout.Bgr24 => 3,
             _ => throw new ArgumentOutOfRangeException(nameof(layout), layout, "Unknown pixel layout."),
         };
         if (rowBytes < 0)
@@ -64,6 +65,12 @@ public static partial class LuminanceConverter
                 break;
             case PixelLayout.Bgra8888:
                 ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset: 2, greenOffset: 1, blueOffset: 0, alphaOffset: 3, premultipliedAlpha);
+                break;
+            case PixelLayout.Rgb24:
+                ConvertRgb24(pixels, luminance, width, height, rowBytes, bgr: false);
+                break;
+            case PixelLayout.Bgr24:
+                ConvertRgb24(pixels, luminance, width, height, rowBytes, bgr: true);
                 break;
             default:
                 ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset: 0, greenOffset: 1, blueOffset: 2, alphaOffset: -1, premultiplied: false);
