@@ -211,18 +211,99 @@ public class SymbolImageWriterStyleTest
     }
 
     /// <summary>
-    /// The styled PNG's lookup keys on 8 bytes, the longest key: a key of one module's bytes, 4 at this module size, left this symbol's
-    /// file past the bound.
+    /// The styled PNG's lookup keys on four modules' bytes, 16 at this module size, and searches its whole chain, and a row equal to one in
+    /// reach goes in as copies of it. A circle's lower rows mirror its upper ones, so about half of the version 40 symbol's rows equal an
+    /// earlier one. With an 8-byte key, or with the lookup stopping at a match of 16 bytes, both files passed their bounds, and without the row
+    /// copies the version 40 one did.
     /// </summary>
     [Test]
     public async Task Png_Styled_KeepsTheMeasuredSize()
     {
-        var qr = QRCodeGenerator.Create(new string('a', 150), QREccLevel.M, new QRCodeGeneratorOptions { Version = new QRVersionRange(10, 10) });
         var styled = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle };
+        var repeated = QRCodeGenerator.Create(new string('a', 150), QREccLevel.M, new QRCodeGeneratorOptions { Version = new QRVersionRange(10, 10) });
+        var random = QRCodeGenerator.Create(RandomText(2900), QREccLevel.L);
 
-        var png = SymbolImageWriter.GetPngBytes(qr, styled);
+        await Assert.That(random.Version).IsEqualTo(40);
+        await Assert.That(SymbolImageWriter.GetPngBytes(repeated, styled).Length).IsLessThanOrEqualTo(6_800);
+        await Assert.That(SymbolImageWriter.GetPngBytes(random, styled).Length).IsLessThanOrEqualTo(45_000);
+    }
 
-        await Assert.That(png.Length).IsLessThanOrEqualTo(9_200);
+    /// <summary>
+    /// A row copied whole goes in as copies of 258 bytes, the last one shortened so that no copy is under 3 bytes. A set size at these
+    /// widths leaves 1, 2 and 3 bytes of the row after the 258-byte copies, and its cells' mirrored rows are equal ones, so each image takes
+    /// those copies, and its PNG must still decode to the pixel buffer.
+    /// </summary>
+    [Test]
+    [Arguments(516)]
+    [Arguments(518)]
+    [Arguments(520)]
+    [Arguments(1034)]
+    public async Task Png_Styled_RowsCopiedWhole_DecodeToThePixels(int width)
+    {
+        var qr = QRCodeGenerator.Create("copied rows", QREccLevel.M);
+        foreach (var style in new[] { ModuleStyle.Circle, ModuleStyle.RoundedSquare })
+        {
+            var options = new SymbolImageOptions { Width = width, Height = 300, ModuleStyle = style, FinderPatternStyle = FinderPatternStyle.Circle, DarkColor = Navy, LightColor = Ivory };
+            await Assert.That(DecodePng(SymbolImageWriter.GetPngBytes(qr, options))).IsEquivalentTo(Pixels(qr, options, PixelLayout.Bgra8888), CollectionOrdering.Matching).Because($"{style} at {width}");
+        }
+    }
+
+    public static IEnumerable<(string Symbol, string Size)> StyledPngSizeCases()
+    {
+        foreach (var symbol in new[] { "qr-v1", "qr-v10", "microqr-m2", "rmqr-r7x43" })
+            foreach (var size in new[] { "3px", "5px", "8px", "16px", "300x200", "512" })
+                yield return (symbol, size);
+    }
+
+    /// <summary>
+    /// A copy of the scanline above runs on past a row's last byte into the next row's scanline. Small cells make scanlines shorter than a
+    /// match, a set size pads the symbol with light rows or columns, and the last row has no row after it. Each style's PNG must decode to
+    /// the pixel buffer, in greyscale and with a palette.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(StyledPngSizeCases))]
+    public async Task Png_Styled_AtSmallCellsAndSetSizes_DecodeToThePixels(string symbol, string size)
+    {
+        object data = symbol switch
+        {
+            "qr-v1" => QRCodeGenerator.Create("HELLO WORLD 2026", QREccLevel.M),
+            "qr-v10" => QRCodeGenerator.Create(RandomText(200), QREccLevel.M),
+            "microqr-m2" => MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M2 }),
+            _ => RmQRCodeGenerator.Create("ROWS", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 }),
+        };
+        var sized = size switch
+        {
+            "300x200" => new SymbolImageOptions { Width = 300, Height = 200 },
+            "512" => new SymbolImageOptions { Width = 512, Height = 512 },
+            _ => new SymbolImageOptions { ModulePixelSize = int.Parse(size.AsSpan(0, size.Length - 2), CultureInfo.InvariantCulture) },
+        };
+        foreach (var styled in new[]
+        {
+            sized with { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle },
+            sized with { ModuleStyle = ModuleStyle.RoundedSquare, FinderPatternStyle = FinderPatternStyle.RoundedSquare, DarkColor = Navy, LightColor = Ivory },
+            sized with { ModuleScalePercent = 80 },
+        })
+        {
+            var png = data switch
+            {
+                QRCodeData qr => SymbolImageWriter.GetPngBytes(qr, styled),
+                MicroQRCodeData micro => SymbolImageWriter.GetPngBytes(micro, styled),
+                RmQRCodeData rm => SymbolImageWriter.GetPngBytes(rm, styled),
+                _ => throw new ArgumentException(nameof(data)),
+            };
+            await Assert.That(DecodePng(png)).IsEquivalentTo(Pixels(data, styled, PixelLayout.Bgra8888), CollectionOrdering.Matching).Because($"{styled.ModuleStyle} {styled.ModuleScalePercent}");
+        }
+    }
+
+    private static string RandomText(int length)
+    {
+        var rng = new Random(42);
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:/?&=-_";
+        return string.Create(length, rng, (span, r) =>
+        {
+            for (var i = 0; i < span.Length; i++)
+                span[i] = alphabet[r.Next(alphabet.Length)];
+        });
     }
 
     [Test]
@@ -360,30 +441,223 @@ public class SymbolImageWriterStyleTest
 
     // ---- the SVG ----------------------------------------------------------------------------
 
+    /// <summary>
+    /// Circle modules are one stroked path with a zero-length segment at each dark module's centre, which a round cap draws as a disc the
+    /// stroke's width across. The square finder patterns stay the plain document's runs, and the icon area's modules are left out.
+    /// </summary>
     [Test]
-    public async Task Svg_StyledModules_UseOneShape_AndTheSquareFinders_StayRuns()
+    public async Task Svg_CircleModules_AreRoundCapsOnOnePath_AndTheSquareFinders_StayRuns()
     {
-        var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
-        var options = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, DarkColor = Navy };
+        var qr = QRCodeGenerator.Create("svg", QREccLevel.H, new QRCodeGeneratorOptions { Version = 5 });
+        var options = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, DarkColor = Navy, IconSizeModules = 5 };
         var root = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, options)).Root!;
-        var (columns, rows, quietZone, finders) = Geometry(qr);
+        var (_, _, quietZone, _) = Geometry(qr);
 
         await Assert.That(root.Attribute("shape-rendering")).IsNull().Because("a curve is not drawn crisp");
         var group = root.Element(Svg + "g")!;
         await Assert.That(group.Attribute("fill")?.Value).IsEqualTo("#1e3a8a");
+        await Assert.That(group.Elements(Svg + "use").Count() + group.Elements(Svg + "defs").Count()).IsEqualTo(0);
 
-        var shape = group.Element(Svg + "defs")!.Element(Svg + "circle")!;
-        await Assert.That(shape.Attribute("id")?.Value).IsEqualTo("m");
-        await Assert.That(shape.Attribute("r")?.Value).IsEqualTo("0.46");
+        var modules = ModulePath(root);
+        await Assert.That(modules.Attribute("stroke")?.Value).IsEqualTo("#1e3a8a");
+        await Assert.That(modules.Attribute("stroke-width")?.Value).IsEqualTo("0.92");
+        await Assert.That(modules.Attribute("stroke-linecap")?.Value).IsEqualTo("round");
+        await Assert.That(modules.Attribute("stroke-linejoin")).IsNull();
+        var (starts, tails) = ModuleSubpaths(modules);
+        await Assert.That(tails.Single()).IsEqualTo("h0").Because("each segment has no length");
+        await Assert.That(starts.All(s => s.X % 1 == 0.5m && s.Y % 1 == 0.5m)).IsTrue().Because("each segment sits at a module's centre");
 
-        var useElements = group.Elements(Svg + "use").ToArray();
-        var uses = useElements.Select(u => (Row: int.Parse(u.Attribute("y")!.Value) - quietZone, Column: int.Parse(u.Attribute("x")!.Value) - quietZone)).ToHashSet();
-        await Assert.That(useElements.All(x => x.Attribute("href")?.Value == "#m")).IsTrue();
-        await Assert.That(uses.Count).IsEqualTo(useElements.Length).Because("one use a module, none twice");
-        await Assert.That(uses).IsEquivalentTo(DarkModules(qr, finder: false), CollectionOrdering.Any).Because("one use at each dark module outside the finder patterns");
+        var expected = DarkModules(qr, finder: false);
+        var view = new FeatherQR.Internals.StandardQrMatrixView(qr);
+        var icon = FeatherQR.Internals.ImageWriters.IconArea.Get(in view, in options);
+        await Assert.That(expected.RemoveWhere(m => icon.Covers(m.Row, m.Column))).IsGreaterThan(0).Because("the icon area holds dark modules to leave out");
+        var cells = starts.Select(s => (Row: (int)s.Y - quietZone, Column: (int)s.X - quietZone)).ToList();
+        await Assert.That(cells.Distinct().Count()).IsEqualTo(cells.Count).Because("one segment a module, none twice");
+        await Assert.That(cells.ToHashSet()).IsEquivalentTo(expected, CollectionOrdering.Any);
 
-        var runs = PathModules(group.Element(Svg + "path")!.Attribute("d")!.Value, quietZone);
+        var runs = PathModules(group.Elements(Svg + "path").Single(p => p.Attribute("stroke-width") is null).Attribute("d")!.Value, quietZone);
         await Assert.That(runs).IsEquivalentTo(DarkModules(qr, finder: true), CollectionOrdering.Any).Because("the finder patterns are the stroked runs of the plain document");
+    }
+
+    /// <summary>
+    /// A square below full size is a square cap, and a rounded one is a smaller square stroked with round joins, the stroke as wide as the
+    /// corners' diameter. A radius of half the side or more is the circle, and every subpath starts at the same place in its cell.
+    /// </summary>
+    [Test]
+    public async Task Svg_ModuleShapes_TakeTheirCapOrJoin_AndTheirWidth()
+    {
+        var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
+        var (_, _, quietZone, _) = Geometry(qr);
+        var expected = DarkModules(qr, finder: false);
+
+        async Task Check(SymbolImageOptions options, string width, string? cap, string? join, string tail, decimal offset)
+        {
+            var path = ModulePath(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, options)).Root!);
+            await Assert.That(path.Attribute("stroke-width")?.Value).IsEqualTo(width);
+            await Assert.That(path.Attribute("stroke-linecap")?.Value).IsEqualTo(cap);
+            await Assert.That(path.Attribute("stroke-linejoin")?.Value).IsEqualTo(join);
+            var (starts, tails) = ModuleSubpaths(path);
+            await Assert.That(tails.Single()).IsEqualTo(tail);
+            await Assert.That(starts.All(s => s.X % 1 == offset && s.Y % 1 == offset)).IsTrue();
+            await Assert.That(starts.Select(s => (Row: (int)s.Y - quietZone, Column: (int)s.X - quietZone)).ToHashSet()).IsEquivalentTo(expected, CollectionOrdering.Any);
+        }
+
+        await Check(new SymbolImageOptions { ModuleScalePercent = 80 }, "0.8", "square", null, "h0", 0.5m);
+        // Below the clamp the radius follows the option: 30 percent of the 0.9 side is 0.27, so the inner square is 0.36 at 0.05 + 0.27.
+        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 30 }, "0.54", null, "round", "h.36v.36h-.36z", 0.32m);
+        // At half the side the corners meet, and past it the writer stops at the circle, as the raster does.
+        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 50 }, "0.9", "round", null, "h0", 0.5m);
+        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 80 }, "0.9", "round", null, "h0", 0.5m);
+    }
+
+    public static IEnumerable<(string Symbol, string Shape)> ShapedPathCases()
+    {
+        foreach (var symbol in new[] { "qr-v1", "qr-v5-icon", "qr-v40", "qr-crafted", "qr-blank", "microqr-m4", "rmqr-r17x139" })
+            foreach (var shape in new[] { "circle92", "square80", "rounded90" })
+                yield return (symbol, shape);
+    }
+
+    /// <summary>
+    /// The shaped module path, byte for byte, against one written a module at a time from the module reads: a subpath at each dark module
+    /// outside the finder boxes and the icon area, in row order, each move counted from the start before. The crafted matrix has whole
+    /// dark rows, which cross the 64-bit windows the rows are read in, and rows that start left of the last module, which move back.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(ShapedPathCases))]
+    public async Task Svg_ShapedModulePath_MatchesAModuleByModuleWriting(string symbol, string shape)
+    {
+        var data = ShapedPathSymbol(symbol);
+        var (options, tail, offset) = shape switch
+        {
+            "circle92" => (new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle }, "h0", 0.5m),
+            "square80" => (new SymbolImageOptions { ModuleScalePercent = 80 }, "h0", 0.5m),
+            _ => (new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 30, FinderPatternStyle = FinderPatternStyle.RoundedSquare }, "h.36v.36h-.36z", 0.32m),
+        };
+        if (symbol.EndsWith("-icon"))
+            options = options with { IconSizeModules = 5 };
+        var svg = data switch
+        {
+            QRCodeData qr => SymbolImageWriter.GetSvgString(qr, options),
+            MicroQRCodeData micro => SymbolImageWriter.GetSvgString(micro, options),
+            RmQRCodeData rm => SymbolImageWriter.GetSvgString(rm, options),
+            _ => throw new ArgumentException(nameof(data)),
+        };
+        var root = XDocument.Parse(svg).Root!;
+        var expected = ModuleByModulePath(data, options, tail, offset);
+
+        if (symbol == "qr-blank")
+        {
+            await Assert.That(expected).IsEmpty();
+            await Assert.That(root.Descendants(Svg + "path").Count(p => p.Attribute("stroke-width") is not null)).IsEqualTo(0).Because("no dark module, no module path");
+            return;
+        }
+        if (symbol == "qr-crafted")
+        {
+            await Assert.That(expected).Contains("m-").Because("a row starts left of the last module");
+            await Assert.That(expected).Contains(string.Concat(Enumerable.Repeat("m1 0" + tail, 80))).Because("a run crosses a 64-bit window");
+        }
+        if (symbol.EndsWith("-icon"))
+            await Assert.That(expected.Length).IsLessThan(ModuleByModulePath(data, options with { IconSizeModules = 0 }, tail, offset).Length).Because("the icon area holds dark modules to leave out");
+        await Assert.That(ModulePath(root).Attribute("d")!.Value).IsEqualTo(expected);
+    }
+
+    private static object ShapedPathSymbol(string symbol)
+    {
+        switch (symbol)
+        {
+            case "qr-v1":
+                return QRCodeGenerator.Create("HELLO WORLD 2026", QREccLevel.M);
+            case "qr-v5-icon":
+                return QRCodeGenerator.Create("svg", QREccLevel.H, new QRCodeGeneratorOptions { Version = 5 });
+            case "qr-v40":
+                return QRCodeGenerator.Create(RandomText(2900), QREccLevel.L);
+            case "microqr-m4":
+                return MicroQRCodeGenerator.Create("HELLO2026", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4 });
+            case "rmqr-r17x139":
+                return RmQRCodeGenerator.Create(RandomText(100), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
+        }
+        // Version 20 is 97 modules a row, so a whole dark row reaches past the 57 bits a window always holds.
+        const int version = 20;
+        var size = QRCodeData.SizeFromVersion(version);
+        var source = new byte[size * size];
+        if (symbol == "qr-crafted")
+        {
+            for (var row = 0; row < size; row++)
+            {
+                for (var column = 0; column < size; column++)
+                {
+                    var dark = (row % 3) switch
+                    {
+                        0 => true,
+                        1 => (column * 7 + row) % 5 < 2,
+                        _ => column >= size - 12 - row % 30 && column < size - 2 - row % 30,
+                    };
+                    source[row * size + column] = dark ? (byte)1 : (byte)0;
+                }
+            }
+        }
+        var crafted = new QRCodeData(version, 4);
+        crafted.SetCoreData(source);
+        return crafted;
+    }
+
+    /// <summary>The module path written a module at a time: an absolute move to the first module's start in its cell, then a relative move by whole modules to each next one.</summary>
+    private static string ModuleByModulePath(object data, SymbolImageOptions options, string tail, decimal offset)
+    {
+        var (_, _, quietZone, finders) = Geometry(data);
+        (int Width, int Height, Func<int, int, bool> Module, FeatherQR.Internals.ImageWriters.IconArea Icon) core = data switch
+        {
+            QRCodeData qr => (qr.GetCoreSize(), qr.GetCoreSize(), qr.GetCoreModule, IconOf(qr, options)),
+            MicroQRCodeData micro => (micro.GetCoreSize(), micro.GetCoreSize(), micro.GetCoreModule, default),
+            RmQRCodeData rm => (rm.GetCoreWidth(), rm.GetCoreHeight(), rm.GetCoreModule, default),
+            _ => throw new ArgumentException(nameof(data)),
+        };
+        var path = new System.Text.StringBuilder();
+        int lastRow = -1, lastColumn = 0;
+        for (var row = 0; row < core.Height; row++)
+        {
+            for (var column = 0; column < core.Width; column++)
+            {
+                if (!core.Module(row, column) || core.Icon.Covers(row, column) || finders.Any(f => (uint)(row - f.Row) < 7 && (uint)(column - f.Column) < 7))
+                    continue;
+                if (lastRow < 0)
+                    path.Append('M').Append((quietZone + column + offset).ToString("0.###", CultureInfo.InvariantCulture)).Append(' ').Append((quietZone + row + offset).ToString("0.###", CultureInfo.InvariantCulture));
+                else
+                    path.Append('m').Append((column - lastColumn).ToString(CultureInfo.InvariantCulture)).Append(' ').Append((row - lastRow).ToString(CultureInfo.InvariantCulture));
+                path.Append(tail);
+                lastRow = row;
+                lastColumn = column;
+            }
+        }
+        return path.ToString();
+
+        static FeatherQR.Internals.ImageWriters.IconArea IconOf(QRCodeData qr, SymbolImageOptions options)
+        {
+            var view = new FeatherQR.Internals.StandardQrMatrixView(qr);
+            return FeatherQR.Internals.ImageWriters.IconArea.Get(in view, in options);
+        }
+    }
+
+    /// <summary>
+    /// A rounded module's fill and stroke overlap inside it, so a translucent colour painted on each would come out darker there. Its
+    /// path takes the alpha as its opacity instead, which composites the two once. A cap-drawn module is a stroke alone.
+    /// </summary>
+    [Test]
+    public async Task Svg_ShapedModules_WithATranslucentDarkColour_PaintTheAlphaOnce()
+    {
+        var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
+        var translucent = new SymbolColor(0x1E, 0x3A, 0x8A, 128);
+
+        var root = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, DarkColor = translucent })).Root!;
+        var alpha = root.Element(Svg + "g")!.Attribute("fill-opacity")!.Value;
+        var rounded = ModulePath(root);
+        await Assert.That(rounded.Attribute("opacity")?.Value).IsEqualTo(alpha);
+        await Assert.That(rounded.Attribute("fill-opacity")?.Value).IsEqualTo("1");
+        await Assert.That(rounded.Attribute("stroke-opacity")).IsNull();
+
+        var circle = ModulePath(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, DarkColor = translucent })).Root!);
+        await Assert.That(circle.Attribute("stroke-opacity")?.Value).IsEqualTo(alpha);
+        await Assert.That(circle.Attribute("opacity")).IsNull();
     }
 
     [Test]
@@ -395,7 +669,6 @@ public class SymbolImageWriterStyleTest
         var (columns, rows, quietZone, finders) = Geometry(qr);
         var group = root.Element(Svg + "g")!;
 
-        await Assert.That(group.Elements(Svg + "use").Count()).IsEqualTo(0);
         var paths = group.Elements(Svg + "path").ToArray();
         var runs = paths.Single(p => p.Attribute("fill-rule") is null);
         await Assert.That(PathModules(runs.Attribute("d")!.Value, quietZone)).IsEquivalentTo(DarkModules(qr, finder: false), CollectionOrdering.Any);
@@ -473,7 +746,7 @@ public class SymbolImageWriterStyleTest
         await Assert.That(aroundACircle).Contains("a2.5 2.5 0 0 1 2.5 2.5");
     }
 
-    /// <summary>A radius of 0 is accepted and rounds nothing: a rounded module is the square at the same scale, and the SVG's shape carries no radius.</summary>
+    /// <summary>A radius of 0 is accepted and rounds nothing: a rounded module is the square at the same scale, in the SVG a square cap with no join.</summary>
     [Test]
     public async Task CornerRadius_Zero_IsTheSquare()
     {
@@ -482,12 +755,14 @@ public class SymbolImageWriterStyleTest
         var square = rounded with { ModuleStyle = ModuleStyle.Square };
 
         await Assert.That(Pixels(qr, rounded, PixelLayout.Gray8)).IsEquivalentTo(Pixels(qr, square, PixelLayout.Gray8), CollectionOrdering.Matching);
-        var shape = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, rounded)).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(shape.Attribute("rx")).IsNull();
+        var path = ModulePath(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, rounded)).Root!);
+        await Assert.That(path.Attribute("stroke-linecap")?.Value).IsEqualTo("square");
+        await Assert.That(path.Attribute("stroke-linejoin")).IsNull();
+        await Assert.That(path.Attribute("d")!.Value).IsEqualTo(ModulePath(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, square)).Root!).Attribute("d")!.Value);
     }
 
     /// <summary>
-    /// A shaped document's bound counts a use element for each dark module, so at version 40 it stays within the 1,048,576 bytes the
+    /// A shaped document's bound counts a subpath for each dark module, so at version 40 it stays within the 1,048,576 bytes the
     /// shared pool keeps on every runtime, and the document stays within the bound, on random text and on one letter repeated.
     /// </summary>
     [Test]
@@ -534,27 +809,6 @@ public class SymbolImageWriterStyleTest
         await Assert.That(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleScalePercent = 75 })).Root!.Attribute("shape-rendering")?.Value).IsEqualTo("crispEdges");
         await Assert.That(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare })).Root!.Attribute("shape-rendering")).IsNull();
         await Assert.That(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { FinderPatternStyle = FinderPatternStyle.Circle })).Root!.Attribute("shape-rendering")).IsNull();
-    }
-
-    [Test]
-    public async Task Svg_ScaledSquare_IsAnInsetRect_AndARoundedOne_HasARadius()
-    {
-        var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
-        var square = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleScalePercent = 80 })).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(square.Attribute("x")?.Value).IsEqualTo("0.1");
-        await Assert.That(square.Attribute("width")?.Value).IsEqualTo("0.8");
-        await Assert.That(square.Attribute("rx")).IsNull();
-
-        // Below the clamp the radius follows the option: 30 percent of the 0.9 side.
-        var rounded = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 30 })).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(rounded.Attribute("rx")?.Value).IsEqualTo("0.27");
-
-        var half = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 50 })).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(half.Attribute("rx")?.Value).IsEqualTo("0.45");
-
-        // Past half the side the writer stops at the circle, as the raster does, instead of leaving a renderer to clamp the radius.
-        var past = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 80 })).Root!.Descendants(Svg + "rect").Single(r => r.Attribute("id")?.Value == "m");
-        await Assert.That(past.Attribute("rx")?.Value).IsEqualTo("0.45");
     }
 
     [Test]
@@ -681,6 +935,35 @@ public class SymbolImageWriterStyleTest
                 if (qr.GetCoreModule(row, column) && qr.IsFinderPattern(row, column) == finder)
                     modules.Add((row, column));
         return modules;
+    }
+
+    /// <summary>The path of the shaped modules, the one stroke with a width of its own. The runs and the finder patterns take the default width.</summary>
+    private static XElement ModulePath(XElement root) => root.Descendants(Svg + "path").Single(p => p.Attribute("stroke-width") is not null);
+
+    /// <summary>
+    /// Each subpath's start, from an absolute move and then moves relative to the start before, and the commands after each move. Both
+    /// forms end a subpath where it started, a segment of no length or a closed square, so a relative move counts from the start.
+    /// </summary>
+    private static (List<(decimal X, decimal Y)> Starts, HashSet<string> Tails) ModuleSubpaths(XElement path)
+    {
+        var d = path.Attribute("d")!.Value;
+        var matches = System.Text.RegularExpressions.Regex.Matches(d, @"([Mm])(-?[\d.]+) (-?[\d.]+)([^Mm]*)");
+        var starts = new List<(decimal, decimal)>();
+        var tails = new HashSet<string>();
+        decimal x = 0, y = 0;
+        var consumed = 0;
+        foreach (System.Text.RegularExpressions.Match m in matches)
+        {
+            var dx = decimal.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+            var dy = decimal.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture);
+            (x, y) = m.Groups[1].Value == "M" ? (dx, dy) : (x + dx, y + dy);
+            starts.Add((x, y));
+            tails.Add(m.Groups[4].Value);
+            consumed += m.Length;
+        }
+        if (consumed != d.Length || !d.StartsWith('M') || d.LastIndexOf('M') != 0)
+            throw new FormatException($"not one absolute move then relative ones: {d}");
+        return (starts, tails);
     }
 
     /// <summary>The modules a stroked run path covers: an absolute move with a half, then relative moves, each followed by a horizontal run.</summary>

@@ -32,7 +32,8 @@ internal sealed partial class PngEncoder
     private const int LookupDepth = 8;
     // A match longer than this leaves the positions it covers out of the lookup, since they repeat bytes that came before it.
     private const int MaxInsertedMatch = 32;
-    // A lookup stops once the match in hand is this long, since going further along the chain rarely made the file smaller.
+    // A one-bit image's lookup stops once the match in hand is this long, since going further along the chain rarely made the file
+    // smaller. A styled image's goes on, since its long matches are further along the chain.
     private const int GoodMatch = 16;
 
     private readonly long[] _literalCounts = new long[Deflate.LiteralLengthSymbols];
@@ -87,13 +88,24 @@ internal sealed partial class PngEncoder
     private int[] _slotEnd = new int[3];
     // Where the row being encoded starts, for the lookup's distances.
     private int _rowStart;
+    // A styled image's rows repeat whole, a shape's lower rows mirroring its upper ones, so each slot keeps a hash of its scanline, and
+    // the table holds the latest row + 1 for each hash's top bits, 0 for none. It has four to eight entries a slot, held within 64
+    // and 1,024, since a row out of reach is no use and a small image clears less of it.
+    private bool _equalRows;
+    private ulong[] _slotHash = new ulong[3];
+    private readonly int[] _rowTable = new int[1 << MaxRowTableBits];
+    private int _rowTableBits;
+    private const int MaxRowTableBits = 10;
 
     // The lookup: at module sizes other than 1, 2, 4 and 8 pixels, the positions of the first scanlines in reach, chained by a hash of
     // the bytes there. A position is slot << _slotShift | offset, and an entry is a position + 1, with 0 for none. A position's link holds the module row it
     // was chained for in its high half, which tells an entry whose slot has since taken a later row, and the next entry in its low half.
     private bool _lookup;
     private int _keyBytes;
+    // The key's first 8 bytes and the ones past them, 0 for a key of 8 bytes or fewer.
     private ulong _keyMask;
+    private ulong _keyMaskHigh;
+    private int _goodMatch;
     private int _hashBits;
     private int _hashShift;
     private int _slotShift;
@@ -193,6 +205,7 @@ internal sealed partial class PngEncoder
         _coreHeight = view.CoreHeight;
         _widthPixels = _layout.Width;
         var longestModule = (int)Math.Min(int.MaxValue, (_layout.Numerator + _layout.Denominator - 1) / _layout.Denominator);
+        var longestModulePixels = longestModule;
         var shortestModule = Math.Max(1L, _layout.Numerator / _layout.Denominator);
         if (_styled)
         {
@@ -237,13 +250,17 @@ internal sealed partial class PngEncoder
         var wholePixels = !_styled && _layout.Denominator == 1 ? (int)_layout.Numerator : 0;
         _lookup = _rowCopies && (wholePixels == 0 || wholePixels > 8 || 8 % wholePixels != 0);
         // A key of about eight modules, from 4 to 8 bytes: a shorter key found matches that cost more than their literals, and a longer one
-        // missed matches. A styled image's levels repeat along a shape's edge rather than a module's, and the longest key gave it the
-        // smaller file.
-        _keyBytes = _styled ? 8 : Math.Min(8, Math.Max(4, longestModule));
+        // missed matches. A styled image's key is four modules, from 8 to 16 bytes. Its modules are few patterns of levels, so a key of
+        // two modules is shared by so many positions that a lookup compares its whole chain and still misses the longer matches.
+        _keyBytes = _styled ? Math.Min(16, Math.Max(8, 4 * longestModule)) : Math.Min(8, Math.Max(4, longestModule));
+        _goodMatch = _styled ? Deflate.MaxMatch : GoodMatch;
+        // In a cell of 2 pixels the mirrored row is the one just above, which the copy of the scanline above already covers.
+        _equalRows = _styled && _lookup && longestModulePixels >= 3;
         // From row m, the nearest byte of row m - j is at least (j - 1) × pixels × stride + 1 bytes back, so 32,767 / (pixels × stride) + 1
         // rows back are in reach, counted at the fewest pixels a row can have. They, row m and row m + 1, which a copy reads ahead into,
         // each keep a slot.
         _slots = !_rowCopies ? 1 : !_lookup ? 3 : (int)Math.Min(_moduleRows, (Deflate.MaxDistance - 1) / (shortestModule * _stride) + 3);
+        _rowTableBits = Math.Min(MaxRowTableBits, Math.Max(6, CeilingLog2(_slots) + 2));
 
         Array.Clear(_literalCounts, 0, _literalCounts.Length);
         Array.Clear(_distanceCounts, 0, _distanceCounts.Length);
@@ -470,6 +487,7 @@ internal sealed partial class PngEncoder
         {
             _slotRow = new int[_slots];
             _slotEnd = new int[_slots];
+            _slotHash = new ulong[_slots];
         }
         if (_lookup)
         {
@@ -479,7 +497,8 @@ internal sealed partial class PngEncoder
             // Two to four times as many chains as positions in reach, but no fewer than 2^8 and no more than 2^15.
             _hashBits = Math.Min(15, Math.Max(8, CeilingLog2(_slots * _stride) + 1));
             _hashShift = 64 - _hashBits;
-            _keyMask = ~0UL >> (64 - 8 * _keyBytes);
+            _keyMask = _keyBytes >= 8 ? ~0UL : ~0UL >> (64 - 8 * _keyBytes);
+            _keyMaskHigh = _keyBytes <= 8 ? 0 : ~0UL >> (128 - 8 * _keyBytes);
             if (_links.Length < positions || _head.Length < 1 << _hashBits)
             {
                 if (_links.Length != 0)
@@ -513,6 +532,8 @@ internal sealed partial class PngEncoder
         // The chains are reached only through the heads, so clearing these leaves nothing of an earlier image or pass to find.
         if (_lookup)
             Array.Clear(_head, 0, 1 << _hashBits);
+        if (_equalRows)
+            Array.Clear(_rowTable, 0, 1 << _rowTableBits);
         var stride = _stride;
         var adler = new Adler32();
         var carry = 0;
@@ -551,6 +572,19 @@ internal sealed partial class PngEncoder
             var quiet = RowIsLight(m);
             // A quiet zone row is light alone, so runs and copies cover it and the lookup neither keeps nor searches it.
             var lookup = _lookup && !quiet;
+            // A styled row is one scanline, so a row copied whole has no repeats to follow it.
+            if (_equalRows && !quiet)
+            {
+                _recordedCount = count;
+                var copied = CopyEqualRow(ref w, write, row, m, carry);
+                recorded = _recorded;
+                count = _recordedCount;
+                if (copied)
+                {
+                    carry = 0;
+                    continue;
+                }
+            }
             if (!quiet)
                 MarkStarts(row, above, m > 0);
             ref var rowStart = ref MemoryMarshal.GetReference(row);
@@ -1032,12 +1066,106 @@ internal sealed partial class PngEncoder
         return i;
     }
 
-    /// <summary>The chain for the <see cref="_keyBytes"/> bytes at <paramref name="k"/>, which the slot's slack lets a whole word read.</summary>
+    /// <summary>
+    /// Writes row <paramref name="m"/> from <paramref name="from"/> on as copies of the latest row in reach with the same scanline, if
+    /// there is one, and says whether it did. The row goes in the table either way, so a later row finds it.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private bool CopyEqualRow(ref DeflateBitWriter w, bool write, scoped ReadOnlySpan<byte> row, int m, int from)
+    {
+        var stride = _stride;
+        var hash = _slotHash[m % _slots];
+        ref var latest = ref _rowTable[(int)(hash >> (64 - _rowTableBits))];
+        var earlier = latest - 1;
+        latest = m + 1;
+        // A row equal to the one just above is a copy of the scanline above, which runs on into the next row where this one would stop.
+        if (earlier < 0 || earlier == m - 1)
+            return false;
+        // The table keeps a row whose slot a later row has since taken, and a row of another hash with the same top bits.
+        var slot = earlier % _slots;
+        if (_slotRow[slot] != earlier || _slotHash[slot] != hash)
+            return false;
+        var distance = ((long)_rowStart - _slotEnd[slot] + 1) * stride;
+        if (distance > Deflate.MaxDistance || !row.SequenceEqual(_rows.AsSpan(slot * SlotLength + SlotLead, stride)))
+            return false;
+        var at = from;
+        while (at < stride)
+        {
+            var left = stride - at;
+            var length = Math.Min(Deflate.MaxMatch, left);
+            // The last copy keeps deflate's shortest length by taking bytes from the one before it.
+            if (left - length is 1 or 2)
+                length -= Deflate.MinMatch - (left - length);
+            if (length < Deflate.MinMatch)
+            {
+                Literal(ref w, write, row[at]);
+                at++;
+                continue;
+            }
+            Match(ref w, write, length, (int)distance);
+            at += length;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// A hash of a whole scanline, to find an equal one: four words at a time in lanes of their own, then a word at a time, and the last
+    /// word of the scanline over the bytes left, which only a scanline under a word reads one at a time.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static ulong RowHash(ReadOnlySpan<byte> row)
+    {
+        ref var bytes = ref MemoryMarshal.GetReference(row);
+        var length = row.Length;
+        ulong a = 0, b = 0, c = 0, d = 0;
+        var k = 0;
+        for (; k + 32 <= length; k += 32)
+        {
+            a = (a ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k)))) * HashMultiplier;
+            b = (b ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k + 8)))) * HashMultiplier;
+            c = (c ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k + 16)))) * HashMultiplier;
+            d = (d ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k + 24)))) * HashMultiplier;
+        }
+        for (; k + 8 <= length; k += 8)
+            b = (b ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k)))) * HashMultiplier;
+        if (k < length)
+        {
+            if (length >= 8)
+            {
+                c = (c ^ LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, length - 8)))) * HashMultiplier;
+            }
+            else
+            {
+                for (; k < length; k++)
+                    c = (c ^ Unsafe.Add(ref bytes, k)) * HashMultiplier;
+            }
+        }
+        return ((a * HighMultiplier ^ b) * HighMultiplier ^ c) * HighMultiplier ^ d;
+    }
+
+    /// <summary>The chain for the <see cref="_keyBytes"/> bytes at <paramref name="k"/>, which the slot's slack lets two whole words read.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int Key(ReadOnlySpan<byte> row, int k)
-        => (int)(((LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref MemoryMarshal.GetReference(row), k))) & _keyMask) * HashMultiplier) >> _hashShift);
+    {
+        ref var bytes = ref MemoryMarshal.GetReference(row);
+        return _keyMaskHigh == 0 ? KeyOfWord(ref bytes, k, _keyMask, _hashShift) : KeyOfTwoWords(ref bytes, k, _keyMask, _keyMaskHigh, _hashShift);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int KeyOfWord(ref byte bytes, int k, ulong keyMask, int hashShift)
+        => (int)(((LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k))) & keyMask) * HashMultiplier) >> hashShift);
+
+    // A key past 8 bytes mixes its second word into the first before the hash.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int KeyOfTwoWords(ref byte bytes, int k, ulong keyMask, ulong keyMaskHigh, int hashShift)
+    {
+        var low = LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k))) & keyMask;
+        var high = LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k + 8))) & keyMaskHigh;
+        return (int)(((low ^ high * HighMultiplier) * HashMultiplier) >> hashShift);
+    }
 
     private const ulong HashMultiplier = 0x9E37_79B9_7F4A_7C15UL;
+    private const ulong HighMultiplier = 0xC2B2_AE3D_27D4_EB4FUL;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Chain(int m, int position, int key)
@@ -1058,11 +1186,24 @@ internal sealed partial class PngEncoder
         ref var head = ref MemoryMarshal.GetReference(_head.AsSpan());
         ref var links = ref MemoryMarshal.GetReference(_links.AsSpan());
         var keyMask = _keyMask;
+        var keyMaskHigh = _keyMaskHigh;
         var hashShift = _hashShift;
         var entryRow = (long)m << 32;
+        // The one-word key keeps a loop of its own, so a one-bit image's lookup does not pay for the second word.
+        if (keyMaskHigh == 0)
+        {
+            for (var k = from; k < end; k++)
+            {
+                var key = KeyOfWord(ref bytes, k, keyMask, hashShift);
+                var position = slotBase | k;
+                Unsafe.Add(ref links, position) = entryRow | (uint)Unsafe.Add(ref head, key);
+                Unsafe.Add(ref head, key) = position + 1;
+            }
+            return;
+        }
         for (var k = from; k < end; k++)
         {
-            var key = (int)(((LittleEndian(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref bytes, k))) & keyMask) * HashMultiplier) >> hashShift);
+            var key = KeyOfTwoWords(ref bytes, k, keyMask, keyMaskHigh, hashShift);
             var position = slotBase | k;
             Unsafe.Add(ref links, position) = entryRow | (uint)Unsafe.Add(ref head, key);
             Unsafe.Add(ref head, key) = position + 1;
@@ -1088,10 +1229,11 @@ internal sealed partial class PngEncoder
         ref var rows = ref MemoryMarshal.GetReference(_rows.AsSpan());
         ref var here = ref Unsafe.Add(ref MemoryMarshal.GetReference(row), i);
         var start = _rowStart;
+        var goodMatch = _goodMatch;
         var entry = _head[key];
         var laterRow = m;
         var laterOffset = i;
-        for (var step = 0; step < LookupDepth && entry != 0 && length < GoodMatch; step++)
+        for (var step = 0; step < LookupDepth && entry != 0 && length < goodMatch; step++)
         {
             var position = entry - 1;
             var slot = position >> slotShift;
@@ -1307,6 +1449,8 @@ internal sealed partial class PngEncoder
             PackScanline(in view, m, _rows.AsSpan(start, _stride + Slack));
             _slotRow[slot] = m;
             _slotEnd[slot] = RowStartPixel(m + 1);
+            if (_equalRows)
+                _slotHash[slot] = RowHash(_rows.AsSpan(start, _stride));
         }
         return _rows.AsSpan(start, _stride);
     }

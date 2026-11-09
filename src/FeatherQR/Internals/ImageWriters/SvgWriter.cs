@@ -24,8 +24,8 @@ namespace FeatherQR.Internals.ImageWriters;
 /// around the symbol, in modules to three decimals, and the renderer scales the drawing and snaps it to its pixels.
 /// </para>
 /// <para>
-/// A styled image, with shaped or scaled modules or shaped finder patterns, is the other partial file's: one shape defined once and used
-/// at each dark module, the finder patterns as their own elements, and the stroked runs kept for whatever is still a square.
+/// A styled image, with shaped or scaled modules or shaped finder patterns, is the other partial file's: one stroked path with a short
+/// subpath at each dark module, the finder patterns as their own elements, and the stroked runs kept for whatever is still a square.
 /// </para>
 /// </remarks>
 internal static partial class SvgWriter
@@ -70,10 +70,154 @@ internal static partial class SvgWriter
         }
     }
 
+    // Each document is a method of its own, never inlined, so dynamic PGO profiles each loop apart. In one method, the profile came from
+    // whichever document a process wrote first, and after shaped modules the plain documents ran slower.
     private static int Write<TView>(in TView view, in SymbolImageOptions options, in ImageLayout layout, in IconArea icon, Span<byte> destination)
+        where TView : struct, IModuleMatrixView
+        => HasShapedModules(in options)
+            ? WriteShaped(in view, in options, in layout, in icon, destination)
+            : WriteRuns(in view, in options, in layout, in icon, destination);
+
+    /// <summary>Whether the modules are a shape or a scale of their own, a subpath each, rather than stroked runs.</summary>
+    private static bool HasShapedModules(in SymbolImageOptions options) => options.ModuleStyle != ModuleStyle.Square || options.ModuleScalePercent != 100;
+
+    /// <summary>The document of stroked runs, plain or with a finder style beside squares at full size.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int WriteRuns<TView>(in TView view, in SymbolImageOptions options, in ImageLayout layout, in IconArea icon, Span<byte> destination)
         where TView : struct, IModuleMatrixView
     {
         var w = new AsciiWriter(destination);
+        WriteHead(ref w, in view, in options, in layout);
+        var dark = options.DarkColor;
+        // Both axes share one quiet zone.
+        var quietZone = (view.Width - view.CoreWidth) / 2;
+        if (dark.A == 0)
+            return WriteEnd(ref w, in options, in icon, quietZone);
+        // Styled squares at full size have a finder style, which draws the finder patterns apart from the runs.
+        var styled = options.IsStyled;
+        if (styled)
+            OpenGroup(ref w, dark);
+
+        // The runs come from the packed rows, or from a copy with the icon area's modules and, under a finder style, the finder patterns' cleared.
+        var bits = icon.Present || styled ? MaskedBits(in view, in icon, excludeFinders: styled) : view.CoreBits;
+        // The scan sits in this method, where the writer is a local: as a method of its own, or inlined behind a reference to the writer, it ran slower.
+        int coreWidth = view.CoreWidth, coreHeight = view.CoreHeight;
+        // The scan's state is plain locals of this loop rather than an enumerator's fields, so it stays in registers.
+        // The word holds the row's next bits from the column on, and held says how many of them belong to the row.
+        int row = 0, column = 0, held = 0;
+        ulong word = 0;
+        int at = 0, x = 0, y = 0;
+        var first = true;
+        // MaxLength leaves room past any document, so the path's writes skip bounds checks.
+        ref var d = ref MemoryMarshal.GetReference(destination);
+        while (row < coreHeight)
+        {
+            if (held == 0)
+            {
+                if (column >= coreWidth)
+                {
+                    row++;
+                    column = 0;
+                    continue;
+                }
+                var bit = (long)row * coreWidth + column;
+                held = Math.Min(64 - (int)(bit & 7), coreWidth - column);
+                word = PackedRuns.Window(bits, bit, held);
+            }
+            var lightModules = PackedRuns.LeadingZeros(word);
+            if (lightModules >= held)
+            {
+                column += held;
+                held = 0;
+                continue;
+            }
+            word <<= lightModules;
+            column += lightModules;
+            held -= lightModules;
+
+            var runStart = column;
+            while (true)
+            {
+                var darkModules = PackedRuns.LeadingZeros(~word);
+                if (darkModules < held)
+                {
+                    word <<= darkModules;
+                    held -= darkModules;
+                    column += darkModules;
+                    break;
+                }
+                // The run reaches the end of the word, and goes on if the next bits of the row start dark.
+                column += held;
+                held = 0;
+                if (column >= coreWidth)
+                    break;
+                var bit = (long)row * coreWidth + column;
+                held = Math.Min(64 - (int)(bit & 7), coreWidth - column);
+                word = PackedRuns.Window(bits, bit, held);
+                if ((long)word >= 0)
+                    break;
+            }
+
+            var runLength = column - runStart;
+            var start = runStart + quietZone;
+            var rowAt = row + quietZone;
+            if (first)
+            {
+                w.Raw("<path stroke=\""u8);
+                w.Color(dark);
+                w.Byte((byte)'"');
+                if (dark.A != 255)
+                {
+                    w.Raw(" stroke-opacity=\""u8);
+                    w.Opacity(dark.A);
+                    w.Byte((byte)'"');
+                }
+                w.Raw(" d=\"M"u8);
+                w.Int(start);
+                w.Byte((byte)' ');
+                w.Int(rowAt);
+                w.Raw(".5h"u8);
+                w.Int(runLength);
+                at = w.Position;
+                first = false;
+            }
+            else
+            {
+                Unsafe.Add(ref d, at++) = (byte)'m';
+                at = PutInt(ref d, at, start - x);
+                if (rowAt == y)
+                {
+                    // Most runs share the last one's row, so the step down of 0 goes with its space and "h" in one store.
+                    PutUInt32(ref d, at, 0x00_68_30_20u);
+                    at += 3;
+                }
+                else
+                {
+                    // Rows only go down, so the second number is never negative and needs the space.
+                    Unsafe.Add(ref d, at++) = (byte)' ';
+                    at = PutInt(ref d, at, rowAt - y);
+                    Unsafe.Add(ref d, at++) = (byte)'h';
+                }
+                at = PutInt(ref d, at, runLength);
+            }
+            x = start + runLength;
+            y = rowAt;
+        }
+
+        if (!first)
+        {
+            "\"/>"u8.CopyTo(destination.Slice(at));
+            w.Seek(at + 3);
+        }
+        if (styled)
+            CloseStyled(ref w, in view, in options, quietZone, dark);
+        return WriteEnd(ref w, in options, in icon, quietZone);
+    }
+
+    /// <summary>The root element and the background.</summary>
+    private static void WriteHead<TView>(ref AsciiWriter w, in TView view, in SymbolImageOptions options, in ImageLayout layout)
+        where TView : struct, IModuleMatrixView
+    {
         int width = view.Width, height = view.Height;
         var fitted = !layout.Uniform;
 
@@ -133,137 +277,11 @@ internal static partial class SvgWriter
             }
             w.Raw("/>"u8);
         }
+    }
 
-        var dark = options.DarkColor;
-        // Both axes share one quiet zone.
-        var quietZone = (width - view.CoreWidth) / 2;
-        if (dark.A == 0)
-        {
-            WriteIconImage(ref w, in options, in icon, quietZone);
-            w.Raw("</svg>"u8);
-            return w.Position;
-        }
-        var styled = options.IsStyled;
-        var squareModules = options.ModuleStyle == ModuleStyle.Square && options.ModuleScalePercent == 100;
-        if (styled)
-            OpenStyled(ref w, in view, in options, in icon, quietZone, squareModules);
-        if (squareModules)
-        {
-            // The runs come from the packed rows, or from a copy with the icon area's modules and, under a finder style, the finder patterns' cleared.
-            var excludeFinders = styled && options.FinderPatternStyle != FinderPatternStyle.Square;
-            var bits = icon.Present || excludeFinders ? MaskedBits(in view, in icon, excludeFinders) : view.CoreBits;
-            // The scan sits in this method, where the writer is a local: as a method of its own, or inlined behind a reference to the writer, it ran slower.
-            int coreWidth = view.CoreWidth, coreHeight = view.CoreHeight;
-            // The scan's state is plain locals of this loop rather than an enumerator's fields, so it stays in registers.
-            // The word holds the row's next bits from the column on, and held says how many of them belong to the row.
-            int row = 0, column = 0, held = 0;
-            ulong word = 0;
-            int at = 0, x = 0, y = 0;
-            var first = true;
-            // MaxLength leaves room past any document, so the path's writes skip bounds checks.
-            ref var d = ref MemoryMarshal.GetReference(destination);
-            while (row < coreHeight)
-            {
-                if (held == 0)
-                {
-                    if (column >= coreWidth)
-                    {
-                        row++;
-                        column = 0;
-                        continue;
-                    }
-                    var bit = (long)row * coreWidth + column;
-                    held = Math.Min(64 - (int)(bit & 7), coreWidth - column);
-                    word = PackedRuns.Window(bits, bit, held);
-                }
-                var lightModules = PackedRuns.LeadingZeros(word);
-                if (lightModules >= held)
-                {
-                    column += held;
-                    held = 0;
-                    continue;
-                }
-                word <<= lightModules;
-                column += lightModules;
-                held -= lightModules;
-
-                var runStart = column;
-                while (true)
-                {
-                    var darkModules = PackedRuns.LeadingZeros(~word);
-                    if (darkModules < held)
-                    {
-                        word <<= darkModules;
-                        held -= darkModules;
-                        column += darkModules;
-                        break;
-                    }
-                    // The run reaches the end of the word, and goes on if the next bits of the row start dark.
-                    column += held;
-                    held = 0;
-                    if (column >= coreWidth)
-                        break;
-                    var bit = (long)row * coreWidth + column;
-                    held = Math.Min(64 - (int)(bit & 7), coreWidth - column);
-                    word = PackedRuns.Window(bits, bit, held);
-                    if ((long)word >= 0)
-                        break;
-                }
-
-                var runLength = column - runStart;
-                var start = runStart + quietZone;
-                var rowAt = row + quietZone;
-                if (first)
-                {
-                    w.Raw("<path stroke=\""u8);
-                    w.Color(dark);
-                    w.Byte((byte)'"');
-                    if (dark.A != 255)
-                    {
-                        w.Raw(" stroke-opacity=\""u8);
-                        w.Opacity(dark.A);
-                        w.Byte((byte)'"');
-                    }
-                    w.Raw(" d=\"M"u8);
-                    w.Int(start);
-                    w.Byte((byte)' ');
-                    w.Int(rowAt);
-                    w.Raw(".5h"u8);
-                    w.Int(runLength);
-                    at = w.Position;
-                    first = false;
-                }
-                else
-                {
-                    Unsafe.Add(ref d, at++) = (byte)'m';
-                    at = PutInt(ref d, at, start - x);
-                    if (rowAt == y)
-                    {
-                        // Most runs share the last one's row, so the step down of 0 goes with its space and "h" in one store.
-                        PutUInt32(ref d, at, 0x00_68_30_20u);
-                        at += 3;
-                    }
-                    else
-                    {
-                        // Rows only go down, so the second number is never negative and needs the space.
-                        Unsafe.Add(ref d, at++) = (byte)' ';
-                        at = PutInt(ref d, at, rowAt - y);
-                        Unsafe.Add(ref d, at++) = (byte)'h';
-                    }
-                    at = PutInt(ref d, at, runLength);
-                }
-                x = start + runLength;
-                y = rowAt;
-            }
-
-            if (!first)
-            {
-                "\"/>"u8.CopyTo(destination.Slice(at));
-                w.Seek(at + 3);
-            }
-        }
-        if (styled)
-            CloseStyled(ref w, in view, in options, quietZone, dark);
+    /// <summary>The caller's image over the icon area, if any, and the root element's end, returning the document's length.</summary>
+    private static int WriteEnd(ref AsciiWriter w, in SymbolImageOptions options, in IconArea icon, int quietZone)
+    {
         WriteIconImage(ref w, in options, in icon, quietZone);
         w.Raw("</svg>"u8);
         return w.Position;
@@ -426,12 +444,13 @@ internal static partial class SvgWriter
         }
         if (options.IsStyled)
         {
-            // The group, the shape and up to three finder patterns on top of the runs.
+            // The group, the module path's start and up to three finder patterns on top of the runs.
             length += StyledMarkupBound;
-            // A use element for each dark module where the modules have a shape of their own. A bound of every module would pass the
-            // 1 MiB some runtimes' shared pool keeps at the larger versions, and the rent would then allocate.
-            if (options.ModuleStyle != ModuleStyle.Square || options.ModuleScalePercent != 100)
-                length += DarkModules(view.CoreBits) * (StyledUseBound + Digits(view.Width) + Digits(view.Height));
+            // A subpath for each dark module where the modules have a shape of their own: "m", the sign and digits of the step across, a
+            // space, the step down and the shape. A bound of every module would pass the 1 MiB some runtimes' shared pool keeps at the
+            // larger versions, and the rent would then allocate. The last subpath's words may reach past it by a chunk.
+            if (HasShapedModules(in options))
+                length += DarkModules(view.CoreBits) * (3 + Digits(coreWidth) + Digits(coreHeight) + ModuleTailBound) + ChunkBound;
         }
         ImageSize.ThrowIfLongerThanAnArray(length, layout.Width, layout.Height);
         return (int)length;
@@ -440,13 +459,26 @@ internal static partial class SvgWriter
     private static long DarkModules(ReadOnlySpan<byte> bits)
     {
         long count = 0;
-        foreach (var b in bits)
-        {
-            var v = b - ((b >> 1) & 0x55);
-            v = (v & 0x33) + ((v >> 2) & 0x33);
-            count += (v + (v >> 4)) & 0x0F;
-        }
+        var i = 0;
+        for (; i + 8 <= bits.Length; i += 8)
+            count += PopCount(BinaryPrimitives.ReadUInt64LittleEndian(bits.Slice(i)));
+        for (; i < bits.Length; i++)
+            count += PopCount(bits[i]);
         return count;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int PopCount(ulong value)
+    {
+#if NET8_0_OR_GREATER
+        return System.Numerics.BitOperations.PopCount(value);
+#else
+        // SWAR popcount for targets without System.Numerics.BitOperations.
+        value -= (value >> 1) & 0x5555555555555555UL;
+        value = (value & 0x3333333333333333UL) + ((value >> 2) & 0x3333333333333333UL);
+        value = (value + (value >> 4)) & 0x0F0F0F0F0F0F0F0FUL;
+        return (int)((value * 0x0101010101010101UL) >> 56);
+#endif
     }
 
     private static int Digits(int value)
@@ -486,7 +518,7 @@ internal static partial class SvgWriter
             Position += written;
         }
 
-        public void Raw(ReadOnlySpan<byte> text)
+        public void Raw(scoped ReadOnlySpan<byte> text)
         {
             text.CopyTo(_destination.Slice(Position));
             Position += text.Length;
@@ -532,16 +564,21 @@ internal static partial class SvgWriter
             }
             Int((int)(thousandths / 1000));
             var rest = (int)(thousandths % 1000);
-            if (rest == 0)
-                return;
+            if (rest != 0)
+                Fraction(rest);
+        }
+
+        /// <summary>1 to 999 thousandths as a point and their digits with trailing zeros dropped. Path data needs no zero before the point.</summary>
+        public void Fraction(int thousandths)
+        {
             Byte((byte)'.');
-            Byte((byte)('0' + rest / 100));
-            if (rest % 100 == 0)
+            Byte((byte)('0' + thousandths / 100));
+            if (thousandths % 100 == 0)
                 return;
-            Byte((byte)('0' + rest / 10 % 10));
-            if (rest % 10 == 0)
+            Byte((byte)('0' + thousandths / 10 % 10));
+            if (thousandths % 10 == 0)
                 return;
-            Byte((byte)('0' + rest % 10));
+            Byte((byte)('0' + thousandths % 10));
         }
 
         /// <summary><c>#rrggbb</c>, or <c>#rgb</c> when each channel's two digits are the same.</summary>
