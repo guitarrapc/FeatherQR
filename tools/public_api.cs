@@ -631,10 +631,17 @@ static string Literal(object? value) => value switch
 static string Escape(string value) => value
     .Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
 
-// Self-contained page: it sits next to a fingerprinted Blazor stylesheet it cannot link to,
-// so it carries its own. The colours, the three theme states and the storage key are copied
-// from the Playground on purpose, so a theme chosen there still applies here.
-string Shell(string outline, string content) => $$"""
+// The page sits next to fingerprinted files it cannot link to, so it embeds what the
+// Playground's pages share: the stylesheet, the footer and the theme button's script. They
+// are read from the Playground's wwwroot, so a theme chosen there applies here and nothing
+// is a copy to keep in step.
+string Shell(string outline, string content)
+{
+    var wwwroot = PlaygroundRoot();
+    var siteCss = Embedded(File.ReadAllText(Path.Combine(wwwroot, "site.css")), "    ");
+    var themeJs = Embedded(File.ReadAllText(Path.Combine(wwwroot, "theme.js")), "    ");
+    var footer = Embedded(Element(File.ReadAllText(Path.Combine(wwwroot, "index.html")), "footer"), "");
+    return $$"""
     <!DOCTYPE html>
     <html lang="en">
 
@@ -659,91 +666,56 @@ string Shell(string outline, string content) => $$"""
         })();
       </script>
       <style>
+    {{siteCss}}
+
         :root {
-          color-scheme: light dark;
-          --accent: #d62976;
-          --bg: #f6f7fb;
-          --panel-bg: #ffffff;
-          --panel-border: #e3e6ee;
-          --text: #1f2430;
-          --text-muted: #5b6474;
-          --input-bg: #ffffff;
-          --input-border: #c9cfdd;
           --tag-bg: #fbe7f0;
           --tag-text: #a3306a;
           --sig-bg: #f0f2f8;
-          --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
         }
 
         @media (prefers-color-scheme: dark) {
           :root:not([data-theme="light"]) {
-            --bg: #12141c;
-            --panel-bg: #1a1d28;
-            --panel-border: #2a2f40;
-            --text: #e6e9f2;
-            --text-muted: #98a1b5;
-            --input-bg: #12141c;
-            --input-border: #3a4157;
             --tag-bg: #3a1f2e;
             --tag-text: #f19ac2;
             --sig-bg: #222634;
-            --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
           }
         }
 
         :root[data-theme="dark"] {
-          --bg: #12141c;
-          --panel-bg: #1a1d28;
-          --panel-border: #2a2f40;
-          --text: #e6e9f2;
-          --text-muted: #98a1b5;
-          --input-bg: #12141c;
-          --input-border: #3a4157;
           --tag-bg: #3a1f2e;
           --tag-text: #f19ac2;
           --sig-bg: #222634;
-          --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-        }
-
-        * { box-sizing: border-box; }
-
-        body {
-          margin: 0;
-          background: var(--bg);
-          color: var(--text);
-          font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-          line-height: 1.65;
         }
 
         code {
-          font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+          font-family: var(--font-mono);
           font-size: 0.84rem;
         }
 
+        /* The bar spans the window, and its padding keeps what it holds on the page's column. */
         .bar {
           position: sticky;
           top: 0;
           z-index: 20;
           display: flex;
-          align-items: baseline;
-          gap: 0.9rem;
+          align-items: center;
+          gap: 10px;
           flex-wrap: wrap;
-          padding: 0.7rem clamp(1rem, 3vw, 2rem);
+          padding: 0.6rem max(16px, calc((100% - var(--page-width)) / 2 + 16px));
           background: var(--panel-bg);
           border-bottom: 1px solid var(--panel-border);
         }
-        .bar h1 { font-size: 1rem; margin: 0; }
-        .back { color: var(--accent); text-decoration: none; font-size: 0.85rem; white-space: nowrap; }
-        .back:hover { text-decoration: underline; }
-        .meta { color: var(--text-muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+        .bar h1 { display: flex; align-items: center; gap: 8px; font-size: 1rem; margin: 0; }
+        .meta { margin-left: auto; color: var(--text-muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
 
         .layout {
           display: grid;
           grid-template-columns: minmax(0, 1fr);
           gap: 0 2rem;
-          max-width: 1240px;
+          max-width: var(--page-width);
           margin-inline: auto;
-          padding: 0 clamp(1rem, 3vw, 2rem) 4rem;
+          padding: 0 16px 2rem;
         }
 
         @media (min-width: 60rem) {
@@ -757,20 +729,14 @@ string Shell(string outline, string content) => $$"""
           }
         }
 
-        .sidebar { padding-top: 1.5rem; }
+        /* The sidebar scrolls, so it clips. The side padding leaves room for a focus ring, and the margin takes the width back. */
+        .sidebar { padding: 1.5rem 4px 0; margin-inline: -4px; }
 
         #q {
           width: 100%;
-          padding: 0.45rem 0.7rem;
           margin-bottom: 1rem;
-          background: var(--input-bg);
-          color: var(--text);
-          border: 1px solid var(--input-border);
-          border-radius: 6px;
-          font: inherit;
           font-size: 0.86rem;
         }
-        #q:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
         .toc-ns {
           margin: 1rem 0 0.4rem;
@@ -793,7 +759,7 @@ string Shell(string outline, string content) => $$"""
           white-space: nowrap;
         }
         .toc-item:hover { color: var(--text); }
-        .toc-item.current { border-left-color: var(--accent); color: var(--accent); }
+        .toc-item.is-current { border-left-color: var(--accent); color: var(--accent); }
 
         main { padding-top: 1.5rem; min-width: 0; }
 
@@ -813,7 +779,6 @@ string Shell(string outline, string content) => $$"""
           scroll-margin-top: 4rem;
         }
         .type:last-child { border-bottom: 0; }
-        .type[hidden], .member[hidden], .ns[hidden], .toc-item[hidden], .toc-ns[hidden] { display: none; }
 
         .type > h3, .member > h4 {
           margin: 0 0 0.35rem;
@@ -828,7 +793,6 @@ string Shell(string outline, string content) => $$"""
         .name { color: var(--accent); }
         a.name { text-decoration: none; }
         a.name:hover { text-decoration: underline; }
-        a.name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
         /* Signatures wrap instead of scrolling: a horizontal scrollbar per signature hides
            the end of every long one and makes the reader work for it. C# breaks cleanly at
@@ -875,7 +839,6 @@ string Shell(string outline, string content) => $$"""
         .notes > summary::before { content: "\25B8"; display: inline-block; margin-right: 0.35rem; }
         .notes[open] > summary::before { content: "\25BE"; }
         .notes > summary:hover { color: var(--accent); }
-        .notes > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
         .remarks {
           margin-top: 0.3rem;
@@ -907,7 +870,6 @@ string Shell(string outline, string content) => $$"""
         }
 
         .empty { color: var(--text-muted); }
-        .empty[hidden] { display: none; }
 
         @media (prefers-reduced-motion: no-preference) {
           html { scroll-behavior: smooth; }
@@ -917,9 +879,16 @@ string Shell(string outline, string content) => $$"""
 
     <body>
       <header class="bar">
-        <a class="back" href="../">&#8592; Playground</a>
-        <h1>FeatherQR API</h1>
-        <span class="meta">{{version}} &middot; <span id="count">{{model.Length}} types</span>{{(sourceCommit is null ? "" : $" &middot; source {sourceCommit}")}}</span>
+        <h1>
+          <a href="https://github.com/guitarrapc/FeatherQR" target="_blank" rel="noopener noreferrer"
+            aria-label="FeatherQR on GitHub"><span class="site-logo" aria-hidden="true"></span></a>
+          FeatherQR API
+        </h1>
+        <a class="version-badge" target="_blank" rel="noopener noreferrer"
+          href="https://github.com/guitarrapc/FeatherQR/releases/tag/{{Uri.EscapeDataString(version)}}"
+          aria-label="Release {{version}}, open on GitHub">v{{version}}</a>
+        <a class="nav-link" href="../">Playground</a>
+        <span class="meta"><span id="count">{{model.Length}} types</span>{{(sourceCommit is null ? "" : $" &middot; source {sourceCommit}")}}</span>
       </header>
 
       <div class="layout">
@@ -936,6 +905,8 @@ string Shell(string outline, string content) => $$"""
           <p class="empty" id="empty" hidden>Nothing matches that.</p>
         </main>
       </div>
+
+    {{footer}}
 
       <script>
         (function () {
@@ -1011,8 +982,8 @@ string Shell(string outline, string content) => $$"""
                 if (!entry.isIntersecting) return;
                 var entryLink = tocByType[entry.target.id];
                 if (!entryLink || entryLink === current) return;
-                if (current) current.classList.remove('current');
-                entryLink.classList.add('current');
+                if (current) current.classList.remove('is-current');
+                entryLink.classList.add('is-current');
                 current = entryLink;
               });
             }, { rootMargin: '0px 0px -75% 0px' });
@@ -1022,11 +993,54 @@ string Shell(string outline, string content) => $$"""
           apply();
         })();
       </script>
+      <script type="module">
+    {{themeJs}}
+      </script>
     </body>
 
     </html>
 
     """;
+}
+
+// The tool runs from the repository, at its root or below it.
+static string PlaygroundRoot()
+{
+    for (var directory = new DirectoryInfo(Directory.GetCurrentDirectory()); directory is not null; directory = directory.Parent)
+    {
+        var wwwroot = Path.Combine(directory.FullName, "src", "FeatherQR.Playground", "wwwroot");
+        if (File.Exists(Path.Combine(wwwroot, "site.css"))) return wwwroot;
+    }
+
+    throw new InvalidOperationException("Run the tool inside the repository. The page embeds files of src/FeatherQR.Playground/wwwroot.");
+}
+
+// One element of a page with the lines it spans, as the page indents them.
+static string Element(string html, string name)
+{
+    var lines = html.ReplaceLineEndings("\n").Split('\n');
+    var first = Array.FindIndex(lines, line => line.TrimStart().StartsWith($"<{name}", StringComparison.Ordinal));
+    var last = Array.FindIndex(lines, line => line.TrimStart().StartsWith($"</{name}>", StringComparison.Ordinal));
+    if (first < 0 || last < first) throw new InvalidOperationException($"The Playground page has no <{name}> element on lines of its own.");
+    return string.Join('\n', lines[first..(last + 1)]);
+}
+
+// A file's text as the page takes it. Each line is indented to its place and ends as the page's other lines end.
+static string Embedded(string text, string indent) => string.Join(
+    Environment.NewLine,
+    text.ReplaceLineEndings("\n").TrimEnd('\n').Split('\n').Select(line => line.Length == 0 ? line : indent + line));
+
+// The version the package carries, as the Playground's badge reads it. The assembly version
+// has no prerelease label, so it names no release.
+static string ProductVersion(Assembly assembly)
+{
+    var info = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+    if (string.IsNullOrEmpty(info)) return assembly.GetName().Version?.ToString(3) ?? "unknown";
+
+    // SourceLink appends the commit after a plus sign.
+    var plus = info.IndexOf('+');
+    return plus > 0 ? info[..plus] : info;
+}
 
 static string? GetOutputPath(string[] args)
 {

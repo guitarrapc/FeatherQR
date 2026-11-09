@@ -1,11 +1,12 @@
 #:sdk Microsoft.NET.Sdk
 #:property TargetFramework=net10.0-windows
+// A Span<byte> over the memory LockBits hands out takes a pointer.
+#:property AllowUnsafeBlocks=true
 #:project ../../src/FeatherQR/FeatherQR.csproj
 #:package System.Drawing.Common
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
 using FeatherQR;
 
 // System.Drawing with the FeatherQR package: a symbol into a Bitmap, any Bitmap back to text, and a symbol drawn into a Graphics.
@@ -24,13 +25,16 @@ using (var bitmap = ToBitmap(qr, new SymbolImageOptions { ModulePixelSize = 8 })
     Check("Bitmap from the symbol", bitmap);
     bitmap.Save(Path.Combine(outputDirectory, "qr.png"), ImageFormat.Png);
     bitmap.Save(Path.Combine(outputDirectory, "qr.jpg"), ImageFormat.Jpeg);
+    bitmap.Save(Path.Combine(outputDirectory, "qr.bmp"), ImageFormat.Bmp);
 }
 
-// Any Bitmap back to text, whatever its pixel format.
+// Any Bitmap back to text, whatever its pixel format. Each line prints the format the file loaded as.
 using (var png = new Bitmap(Path.Combine(outputDirectory, "qr.png")))
     Check($"PNG, {png.PixelFormat}", png);
 using (var jpeg = new Bitmap(Path.Combine(outputDirectory, "qr.jpg")))
     Check($"JPEG, {jpeg.PixelFormat}", jpeg);
+using (var bmp = new Bitmap(Path.Combine(outputDirectory, "qr.bmp")))
+    Check($"BMP, {bmp.PixelFormat}", bmp);
 
 // A symbol drawn into a Graphics at a larger scale, as a WinForms OnPaint or a printed page does.
 // The default interpolation blurs the module edges, and NearestNeighbor alone moves them half a pixel.
@@ -60,18 +64,17 @@ void Check(string label, Bitmap bitmap)
         failures++;
 }
 
-static Bitmap ToBitmap(QRCodeData data, SymbolImageOptions options)
+static unsafe Bitmap ToBitmap(QRCodeData data, SymbolImageOptions options)
 {
-    var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Bgra8888, options)];
-    SymbolImageWriter.TryWritePixels(data, pixels, PixelLayout.Bgra8888, out var width, out var height, options);
-
+    // The size comes first, so the symbol is written straight into the bitmap with no buffer between.
+    var (width, height) = SymbolImageWriter.GetImageSize(data, options);
     var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
     var locked = bitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
     try
     {
-        // TryWritePixels packs its rows. The bitmap's rows start Stride bytes apart.
-        for (var row = 0; row < height; row++)
-            Marshal.Copy(pixels, row * width * 4, locked.Scan0 + row * locked.Stride, width * 4);
+        // The bitmap's rows start Stride bytes apart.
+        var memory = new Span<byte>((void*)locked.Scan0, locked.Stride * height);
+        SymbolImageWriter.TryWritePixels(data, memory, locked.Stride, PixelLayout.Bgra8888, out _, out _, options);
     }
     finally
     {
@@ -80,24 +83,30 @@ static Bitmap ToBitmap(QRCodeData data, SymbolImageOptions options)
     return bitmap;
 }
 
-static bool TryDecode(Bitmap bitmap, out string text)
+static unsafe bool TryDecode(Bitmap bitmap, out string text)
 {
     var (width, height) = (bitmap.Width, bitmap.Height);
 
-    // Asking LockBits for Format32bppArgb converts a 24-bit or indexed bitmap on the way out.
-    var locked = bitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-    var stride = locked.Stride;
-    var pixels = new byte[stride * height];
+    // These formats are read as the bitmap holds them. Format24bppRgb keeps blue, green, red in memory despite its name.
+    // Format32bppRgb keeps a fourth byte that is no alpha: a BMP from another tool may hold 0 there, which Bgra8888 would read as transparent.
+    // For any other format, an indexed one for example, LockBits converts to Format32bppArgb on the way out.
+    var (format, layout) = bitmap.PixelFormat switch
+    {
+        PixelFormat.Format24bppRgb => (PixelFormat.Format24bppRgb, PixelLayout.Bgr24),
+        PixelFormat.Format32bppRgb => (PixelFormat.Format32bppRgb, PixelLayout.Bgr888x),
+        _ => (PixelFormat.Format32bppArgb, PixelLayout.Bgra8888),
+    };
+    var luminance = new byte[width * height];
+    var locked = bitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, format);
     try
     {
-        Marshal.Copy(locked.Scan0, pixels, 0, pixels.Length);
+        // A 24-bit row is padded to four bytes, and the stride says where the next row starts.
+        var pixels = new ReadOnlySpan<byte>((void*)locked.Scan0, locked.Stride * height);
+        LuminanceConverter.Convert(pixels, width, height, locked.Stride, layout, premultipliedAlpha: false, luminance);
     }
     finally
     {
         bitmap.UnlockBits(locked);
     }
-
-    var luminance = new byte[width * height];
-    LuminanceConverter.Convert(pixels, width, height, stride, PixelLayout.Bgra8888, premultipliedAlpha: false, luminance);
     return QRCodeDecoder.TryDecodeImage(luminance, width, height, out text, out _);
 }

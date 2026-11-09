@@ -1,5 +1,5 @@
 // FeatherQR
-// 50 exported types
+// 52 exported types
 // net10.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR
@@ -48,6 +48,22 @@ namespace FeatherQR
     {
         public float X { get; }
         public float Y { get; }
+    }
+
+    public readonly struct ImageRect : IEquatable<ImageRect>
+    {
+        public int Height { get; }
+        public int Width { get; }
+        public int X { get; }
+        public int Y { get; }
+        public void Deconstruct(out int x, out int y, out int width, out int height);
+    }
+
+    public readonly struct ImageSize : IEquatable<ImageSize>
+    {
+        public int Height { get; }
+        public int Width { get; }
+        public void Deconstruct(out int width, out int height);
     }
 
     public static class LuminanceConverter
@@ -198,6 +214,9 @@ namespace FeatherQR
         Rgba8888 = 1,
         Bgra8888 = 2,
         Rgb888x = 3,
+        Rgb24 = 4,
+        Bgr24 = 5,
+        Bgr888x = 6,
     }
 
     public readonly struct QRCodeCalculatedSize : IEquatable<QRCodeCalculatedSize>
@@ -537,10 +556,16 @@ namespace FeatherQR
 
     public static class SymbolImageWriter
     {
-        public static ValueTuple<int, int, int, int> GetIconRectangle(QRCodeData data, in SymbolImageOptions options);
+        public static ImageRect GetIconRectangle(QRCodeData data, in SymbolImageOptions options);
+        public static ImageSize GetImageSize(MicroQRCodeData data, in SymbolImageOptions options = null);
+        public static ImageSize GetImageSize(QRCodeData data, in SymbolImageOptions options = null);
+        public static ImageSize GetImageSize(RmQRCodeData data, in SymbolImageOptions options = null);
         public static bool TryWritePixels(MicroQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
+        public static bool TryWritePixels(MicroQRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
         public static bool TryWritePixels(QRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
+        public static bool TryWritePixels(QRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
         public static bool TryWritePixels(RmQRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
+        public static bool TryWritePixels(RmQRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = null);
         public static byte[] GetPngBytes(MicroQRCodeData data, in SymbolImageOptions options = null);
         public static byte[] GetPngBytes(QRCodeData data, in SymbolImageOptions options = null);
         public static byte[] GetPngBytes(RmQRCodeData data, in SymbolImageOptions options = null);

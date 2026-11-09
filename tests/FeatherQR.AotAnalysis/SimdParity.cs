@@ -42,6 +42,7 @@ internal static class SimdParity
         failures += Report("LuminanceHalver", HalverMismatches);
         failures += Report("LocalBinarizer", LocalBinarizerMismatches);
         failures += Report("LuminanceConverter", LuminanceMismatches);
+        failures += Report("LuminanceConverter, three bytes a pixel", LuminanceRgb24Mismatches);
         failures += Report("QRImageDecoder.SampleGridPiecewise", PiecewiseMismatches);
         failures += Report("ModulePlacer.MaskCode", MaskCodeMismatches);
         failures += Report("ModulePlacer.ApplyMaskPattern", MaskApplyMismatches);
@@ -710,7 +711,7 @@ internal static class SimdParity
     private static List<string> LuminanceMismatches()
     {
         var mismatches = new List<string>();
-        (int R, int G, int B, int A, PixelLayout Layout)[] layouts = [(2, 1, 0, 3, PixelLayout.Bgra8888), (0, 1, 2, 3, PixelLayout.Rgba8888), (0, 1, 2, -1, PixelLayout.Rgb888x)];
+        (int R, int G, int B, int A, PixelLayout Layout)[] layouts = [(2, 1, 0, 3, PixelLayout.Bgra8888), (0, 1, 2, 3, PixelLayout.Rgba8888), (0, 1, 2, -1, PixelLayout.Rgb888x), (2, 1, 0, -1, PixelLayout.Bgr888x)];
         void Compare(byte[] pixels, int width, int height, int rowBytes, (int R, int G, int B, int A, PixelLayout Layout) layout, bool premultiplied, string label)
         {
             var expected = new byte[width * height];
@@ -773,6 +774,64 @@ internal static class SimdParity
                     }
                     foreach (var premultiplied in layout.A < 0 ? new[] { false } : [false, true])
                         Compare(pixels, width, Height, rowBytes, layout, premultiplied, $"width {width}, pad {pad}");
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// Three-byte luminance through the dispatch and through the 128-bit tier's own entry against the scalar tier, both channel orders:
+    /// each channel through all 256 values against the other two, then random pixels at every width across two 16-pixel blocks and their
+    /// overlapping tail, packed and padded by a byte count that is not a whole pixel. The dispatch hides the 128-bit tier behind the AVX2 and dot-product tiers.
+    /// </summary>
+    private static List<string> LuminanceRgb24Mismatches()
+    {
+        var mismatches = new List<string>();
+        void Compare(byte[] pixels, int width, int height, int rowBytes, bool bgr, string label)
+        {
+            var expected = new byte[width * height];
+            var actual = new byte[width * height];
+            LuminanceConverter.ConvertRgb24Scalar(pixels, expected, width, height, rowBytes, bgr);
+            LuminanceConverter.Convert(pixels, width, height, rowBytes, bgr ? PixelLayout.Bgr24 : PixelLayout.Rgb24, premultipliedAlpha: false, actual);
+            if (!expected.AsSpan().SequenceEqual(actual))
+                mismatches.Add($"{label}, {(bgr ? "Bgr24" : "Rgb24")}");
+            // The tier takes rows of one block or more, and its dispatch keeps narrower ones scalar
+            if (width < LuminanceConverter.Rgb24BlockPixels || !(System.Runtime.Intrinsics.X86.Ssse3.IsSupported || System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported || PackedSimd.IsSupported))
+                return;
+            Array.Clear(actual);
+            LuminanceConverter.ConvertRgb24Vector128(pixels, actual, width, height, rowBytes, bgr);
+            if (!expected.AsSpan().SequenceEqual(actual))
+                mismatches.Add($"128-bit tier, {label}, {(bgr ? "Bgr24" : "Rgb24")}");
+        }
+
+        foreach (var bgr in new[] { false, true })
+        {
+            var sweep = new byte[256 * 9 * 3];
+            for (var row = 0; row < 9; row++)
+            {
+                for (var c = 0; c < 256; c++)
+                {
+                    var p = (row * 256 + c) * 3;
+                    sweep[p + row / 3] = (byte)c;
+                    sweep[p + (row / 3 + 1) % 3] = (byte)(row % 3 == 0 ? 0 : row % 3 == 1 ? 255 : 255 - c);
+                    sweep[p + (row / 3 + 2) % 3] = (byte)(row % 3 == 0 ? 255 : row % 3 == 1 ? 0 : c ^ 0x55);
+                }
+            }
+            Compare(sweep, 256, 9, 768, bgr, "sweep");
+        }
+
+        var random = new Random(24);
+        foreach (var bgr in new[] { false, true })
+        {
+            for (var width = 1; width <= 70; width++)
+            {
+                foreach (var pad in new[] { 0, 5 })
+                {
+                    var rowBytes = width * 3 + pad;
+                    var pixels = new byte[rowBytes * 3];
+                    random.NextBytes(pixels);
+                    Compare(pixels, width, 3, rowBytes, bgr, $"width {width}, pad {pad}");
                 }
             }
         }

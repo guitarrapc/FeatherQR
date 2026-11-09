@@ -179,10 +179,10 @@ Use an image builder for most applications. All generators and decoders provide 
 | What | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
-| Write SVG, PNG (1-bit, or 4-bit with a style), raw pixels (`Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`), or terminal text| `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
+| Write SVG, PNG (1-bit, or 4-bit with a style), raw pixels (any `PixelLayout`), or terminal text| `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
 | Decode a matrix or grayscale pixels | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 | Decode all symbol types from grayscale pixels | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
-| Convert pixels (`Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`) to grayscale for decoding | `LuminanceConverter` | `LuminanceConverter` | `LuminanceConverter` |
+| Convert pixels (any `PixelLayout`) to grayscale for decoding | `LuminanceConverter` | `LuminanceConverter` | `LuminanceConverter` |
 
 `FeatherQR.SkiaSharp` adds gradients, embedded icons, JPEG and WebP output, rendering to an `SKCanvas`, and decoding from `SKBitmap` objects and image files.
 
@@ -522,7 +522,7 @@ if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
     Console.WriteLine($"top-left at ({corners.TopLeft.X}, {corners.TopLeft.Y})");
 }
 ```
-For other image sources, such as a browser canvas or camera frame, convert pixels with `LuminanceConverter.Convert`. Then call `TryDecodeImage(luminance, width, height, ...)`. The converter accepts `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x` with a row stride and writes width × height luminance bytes. It uses ITU-R BT.601 weights and composites transparent pixels against white to match the quiet zone. Pass existing luminance data directly to `TryDecodeImage`. A camera frame in NV12, NV21, or I420 carries luminance in its Y plane. Convert that plane as `Gray8` with the frame's row stride.
+For other image sources, such as a browser canvas or camera frame, convert pixels with `LuminanceConverter.Convert`. Then call `TryDecodeImage(luminance, width, height, ...)`. The converter accepts `Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`, `Bgr888x`, `Rgb24`, or `Bgr24` with a row stride and writes width × height luminance bytes. It uses ITU-R BT.601 weights and composites transparent pixels against white to match the quiet zone. Pass existing luminance data directly to `TryDecodeImage`. A camera frame in NV12, NV21, or I420 carries luminance in its Y plane. Convert that plane as `Gray8` with the frame's row stride.
 
 ```csharp
 using FeatherQR;
@@ -928,11 +928,22 @@ Console.Write(SymbolImageWriter.GetTerminalText(qr, invert: true));  // light mo
 
 #### Raw Pixels and Buffer Writers
 
-`WriteSvg` and `WritePng` write to an `IBufferWriter<byte>` without allocations after warmup. `TryWritePixels` writes tightly packed rows to your buffer in `Gray8`, `Rgba8888`, `Bgra8888`, or `Rgb888x` format. Pass a `Gray8` buffer directly to `TryDecodeImage`.
+`WriteSvg` and `WritePng` write to an `IBufferWriter<byte>` without allocations after warmup. `TryWritePixels` writes tightly packed rows to your buffer in `Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`, `Bgr888x`, `Rgb24`, or `Bgr24` format. Pass a `Gray8` buffer directly to `TryDecodeImage`.
 
 ```csharp
 var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Bgra8888)];
 SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, out var width, out var height);
+```
+
+To write into memory that another image type owns, ask for the size first with `GetImageSize`, then pass that image's row stride. Rows start `rowBytes` bytes apart, and the bytes between a row's last pixel and the next row are left untouched. The same overload writes a symbol into a region of a larger buffer: slice the buffer at the region's first pixel and pass the larger image's stride.
+
+```csharp
+var (width, height) = SymbolImageWriter.GetImageSize(qr, options);                   // before any pixel is written
+Span<byte> memory = ...;                                                             // your image's pixels, rows of rowBytes bytes
+SymbolImageWriter.TryWritePixels(qr, memory, rowBytes, PixelLayout.Bgra8888, out _, out _, options);
+
+var at = (top * canvasWidth + left) * 4;                                             // a region of a larger RGBA canvas
+SymbolImageWriter.TryWritePixels(micro, canvas.AsSpan(at), canvasWidth * 4, PixelLayout.Rgba8888, out _, out _);
 ```
 
 #### Web and UI Apps
@@ -1347,6 +1358,21 @@ Yes. FeatherQR supports Blazor WebAssembly and standalone WebAssembly.
 ### Can I use it with System.Drawing, WPF, or ImageSharp?
 
 Yes, `FeatherQR` supports those. `SymbolImageWriter.TryWritePixels` writes the pixel layouts these libraries use, and `LuminanceConverter` turns their pixels into the luminance `TryDecodeImage` reads. Each sample makes a symbol in the library's own image type and decodes it back.
+
+Pick the `PixelLayout` by the order of the bytes in memory, which a format's name does not always say:
+
+| Library | Pixel format | `PixelLayout` |
+|---|---|---|
+| System.Drawing | `Format32bppArgb` | `Bgra8888` |
+| System.Drawing | `Format32bppRgb` | `Bgr888x` |
+| System.Drawing | `Format24bppRgb` | `Bgr24` |
+| WPF | `PixelFormats.Bgra32` | `Bgra8888` |
+| WPF | `PixelFormats.Bgr32` | `Bgr888x` |
+| WPF | `PixelFormats.Bgr24`, `PixelFormats.Rgb24` | `Bgr24`, `Rgb24` |
+| ImageSharp | `Rgba32`, `Bgra32` | `Rgba8888`, `Bgra8888` |
+| ImageSharp | `Rgb24`, `Bgr24` | `Rgb24`, `Bgr24` |
+
+A 24-bit row is often padded to a multiple of four bytes. Pass the row stride the library reports, not width × 3. The fourth byte of `Format32bppRgb` and `Bgr32` is no alpha, and a file from another tool may hold 0 there. Read as `Bgra8888`, a 0 is a transparent pixel and the image turns white, so read those formats as `Bgr888x`.
 
 - See [samples/Dotfiles/SystemDrawing.cs](samples/Dotfiles/SystemDrawing.cs) for System.Drawing usage.
 - See [samples/Dotfiles/Wpf.cs](samples/Dotfiles/Wpf.cs) for WPF usage, including a WPF Window to input text and read QR codes from images.

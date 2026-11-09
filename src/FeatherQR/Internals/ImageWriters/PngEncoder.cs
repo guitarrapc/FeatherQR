@@ -229,7 +229,7 @@ internal sealed partial class PngEncoder
         // A match covers at most 258 bytes and costs at least two bits, a length code and a distance code. A literal costs at least a bit for one byte.
         // That bounds the output from below before anything is counted or any stamp is made.
         var rawLength = (long)_stride * _layout.Height;
-        ImageSize.ThrowIfLongerThanAnArray(rawLength * 2 / (Deflate.MaxMatch * 8), _layout.Width, _layout.Height);
+        ImageLimits.ThrowIfLongerThanAnArray(rawLength * 2 / (Deflate.MaxMatch * 8), _layout.Width, _layout.Height);
 
         if (_styled)
         {
@@ -313,7 +313,7 @@ internal sealed partial class PngEncoder
         var deflateLength = (bits + 7) / 8;
         // Signature, IHDR, PLTE and tRNS when used, IDAT with the zlib header and Adler-32, IEND.
         var length = 8 + 25 + (Greyscale ? 0 : 12 + 3 * _levels) + (Transparent ? 12 + _levels : 0) + 12 + 2 + deflateLength + 4 + 12;
-        ImageSize.ThrowIfLongerThanAnArray(length, _layout.Width, _layout.Height);
+        ImageLimits.ThrowIfLongerThanAnArray(length, _layout.Width, _layout.Height);
         _deflateLength = (int)deflateLength;
         return (int)length;
     }

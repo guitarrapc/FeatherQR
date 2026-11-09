@@ -452,7 +452,7 @@ internal static partial class SvgWriter
             if (HasShapedModules(in options))
                 length += DarkModules(view.CoreBits) * (3 + Digits(coreWidth) + Digits(coreHeight) + ModuleTailBound) + ChunkBound;
         }
-        ImageSize.ThrowIfLongerThanAnArray(length, layout.Width, layout.Height);
+        ImageLimits.ThrowIfLongerThanAnArray(length, layout.Width, layout.Height);
         return (int)length;
     }
 

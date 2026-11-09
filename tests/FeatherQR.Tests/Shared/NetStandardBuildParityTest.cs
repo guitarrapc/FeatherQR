@@ -904,6 +904,67 @@ public class NetStandardBuildParityTest
     }
 
     /// <summary>
+    /// The luminance conversion through each netstandard build, every layout, against this host's. A netstandard build has no vector
+    /// tier, so this holds its per-pixel loops to the host's conversion. The pixels are random bytes in packed and padded rows, from one
+    /// pixel wide to a hundred, read as straight and as premultiplied alpha.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Frameworks))]
+    public async Task Luminance_ConvertsAsThisHostsBuild(string targetFramework)
+    {
+        var (build, _) = await LoadBuild(targetFramework);
+        var layoutType = build.GetType("FeatherQR.PixelLayout", throwOnError: true)!;
+        var convert = build.GetType("FeatherQR.LuminanceConverter", throwOnError: true)!
+            .GetMethod("Convert", [typeof(ReadOnlySpan<byte>), typeof(int), typeof(int), typeof(int), layoutType, typeof(bool), typeof(Span<byte>)])!;
+        // The span call is reached through a bridge that wraps the arrays.
+        var bridge = new DynamicMethod("Convert", typeof(void), [typeof(byte[]), typeof(int), typeof(int), typeof(int), typeof(int), typeof(bool), typeof(byte[])], typeof(NetStandardBuildParityTest).Module);
+        var il = bridge.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(ReadOnlySpan<byte>).GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldarg_S, (byte)4);
+        il.Emit(OpCodes.Ldarg_S, (byte)5);
+        il.Emit(OpCodes.Ldarg_S, (byte)6);
+        il.Emit(OpCodes.Newobj, typeof(Span<byte>).GetConstructor([typeof(byte[])])!);
+        il.Emit(OpCodes.Call, convert);
+        il.Emit(OpCodes.Ret);
+        var loadedConvert = bridge.CreateDelegate<Action<byte[], int, int, int, int, bool, byte[]>>();
+
+        var random = new Random(20261110);
+        var mismatches = new List<string>();
+        var layouts = new (PixelLayout Layout, int BytesPerPixel)[]
+        {
+            (PixelLayout.Gray8, 1), (PixelLayout.Rgba8888, 4), (PixelLayout.Bgra8888, 4), (PixelLayout.Rgb888x, 4), (PixelLayout.Bgr888x, 4), (PixelLayout.Rgb24, 3), (PixelLayout.Bgr24, 3),
+        };
+        foreach (var (layout, bytesPerPixel) in layouts)
+        {
+            foreach (var width in new[] { 1, 7, 8, 15, 16, 17, 33, 100 })
+            {
+                foreach (var padding in new[] { 0, 5 })
+                {
+                    foreach (var premultiplied in new[] { false, true })
+                    {
+                        const int height = 3;
+                        var rowBytes = width * bytesPerPixel + padding;
+                        var pixels = new byte[(height - 1) * rowBytes + width * bytesPerPixel];
+                        random.NextBytes(pixels);
+                        var host = new byte[width * height];
+                        LuminanceConverter.Convert(pixels, width, height, rowBytes, layout, premultiplied, host);
+                        var loaded = new byte[width * height];
+                        loadedConvert(pixels, width, height, rowBytes, (int)layout, premultiplied, loaded);
+                        if (!loaded.AsSpan().SequenceEqual(host))
+                            mismatches.Add($"{layout}, {width} wide, {padding} bytes of padding, premultiplied {premultiplied}");
+                    }
+                }
+            }
+        }
+
+        await Assert.That(mismatches).IsEmpty().Because($"{targetFramework}: {string.Join("; ", mismatches.Take(8))}");
+    }
+
+    /// <summary>
     /// Image output from each netstandard build is this host's byte for byte: the SVG text and the PNG file, deflate and checksums
     /// included, with the default options and with colours, an alpha and a module size that straddles bytes.
     /// </summary>
@@ -1012,7 +1073,45 @@ public class NetStandardBuildParityTest
             il.Emit(OpCodes.Ret);
             var loadedTryWrite = bridge.CreateDelegate<Func<object, byte[], int, object, bool>>();
 
-            foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x })
+            // The same bridge for the overload that takes a row stride.
+            var tryWriteStride = writer.GetMethod("TryWritePixels", [dataType, typeof(Span<byte>), typeof(int), layoutType, typeof(int).MakeByRefType(), typeof(int).MakeByRefType(), optionsType.MakeByRefType()])!;
+            var strideBridge = new DynamicMethod("TryWritePixelsWithAStride", typeof(bool), [typeof(object), typeof(byte[]), typeof(int), typeof(int), typeof(object)], typeof(NetStandardBuildParityTest).Module);
+            il = strideBridge.GetILGenerator();
+            width = il.DeclareLocal(typeof(int));
+            height = il.DeclareLocal(typeof(int));
+            options = il.DeclareLocal(optionsType);
+            il.Emit(OpCodes.Ldarg_S, (byte)4);
+            il.Emit(OpCodes.Unbox_Any, optionsType);
+            il.Emit(OpCodes.Stloc, options);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, dataType);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Newobj, typeof(Span<byte>).GetConstructor([typeof(byte[])])!);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Ldloca, width);
+            il.Emit(OpCodes.Ldloca, height);
+            il.Emit(OpCodes.Ldloca, options);
+            il.Emit(OpCodes.Call, tryWriteStride);
+            il.Emit(OpCodes.Ret);
+            var loadedTryWriteStride = strideBridge.CreateDelegate<Func<object, byte[], int, int, object, bool>>();
+
+            // The size the image is written at, asked before writing.
+            var getImageSize = writer.GetMethod("GetImageSize", [dataType, optionsType.MakeByRefType()])!;
+            var hostSize = host switch
+            {
+                QRCodeData qr => SymbolImageWriter.GetImageSize(qr, hostOptions),
+                MicroQRCodeData micro => SymbolImageWriter.GetImageSize(micro, hostOptions),
+                RmQRCodeData rm => SymbolImageWriter.GetImageSize(rm, hostOptions),
+                _ => throw new ArgumentException(symbology),
+            };
+            // The loaded build returns its own ImageSize type, so its sides are read by name.
+            var loadedSize = getImageSize.Invoke(null, [loaded, loadedOptions])!;
+            var loadedSides = ((int)loadedSize.GetType().GetProperty("Width")!.GetValue(loadedSize)!, (int)loadedSize.GetType().GetProperty("Height")!.GetValue(loadedSize)!);
+            await Assert.That(loadedSides).IsEqualTo((hostSize.Width, hostSize.Height))
+                .Because($"{targetFramework} {symbology}: the image size must be this host's");
+
+            foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24 })
             {
                 var hostPixels = new byte[host switch
                 {
@@ -1032,6 +1131,23 @@ public class NetStandardBuildParityTest
                 await Assert.That(loadedTryWrite(loaded, loadedPixels, (int)layout, loadedOptions)).IsTrue();
                 await Assert.That(loadedPixels.AsSpan().SequenceEqual(hostPixels)).IsTrue()
                     .Because($"{targetFramework} {symbology} {layout}: the pixels must be this host's");
+
+                // Rows five bytes further apart than they are long, in a buffer that holds 0xCD where no pixel goes.
+                var stride = hostPixels.Length / hostSize.Height + 5;
+                var hostPadded = new byte[stride * hostSize.Height];
+                hostPadded.AsSpan().Fill(0xCD);
+                _ = host switch
+                {
+                    QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, hostPadded, stride, layout, out _, out _, hostOptions),
+                    MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, hostPadded, stride, layout, out _, out _, hostOptions),
+                    RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, hostPadded, stride, layout, out _, out _, hostOptions),
+                    _ => throw new ArgumentException(symbology),
+                };
+                var loadedPadded = new byte[hostPadded.Length];
+                loadedPadded.AsSpan().Fill(0xCD);
+                await Assert.That(loadedTryWriteStride(loaded, loadedPadded, stride, (int)layout, loadedOptions)).IsTrue();
+                await Assert.That(loadedPadded.AsSpan().SequenceEqual(hostPadded)).IsTrue()
+                    .Because($"{targetFramework} {symbology} {layout}: the pixels at a stride must be this host's");
             }
         }
     }

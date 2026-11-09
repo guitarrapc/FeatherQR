@@ -196,6 +196,8 @@ internal static class SimdTiers
         new("EccBinaryDecoder", (SimdTier.GfniV256, Isa.GfniV256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // LuminanceConverter.ConvertRgba: RGBA / BGRA pixels to 8-bit luminance. The 128-bit tier's 16-bit dot product and narrowing are SSE2 on x64 and PackedSimd on WebAssembly.
         new("LuminanceConverter", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimdDp, Isa.AdvSimdDp), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // LuminanceConverter.ConvertRgb24: three-byte RGB / BGR pixels to 8-bit luminance. A byte shuffle spreads each pixel to four bytes, and the four-byte kernel weighs it. ARM64 without the dot product takes the 128-bit tier, spread by a table lookup.
+        new("LuminanceConverterRgb24", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimdDp, Isa.AdvSimdDp), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // LuminanceInverter: the negative image for the light-on-dark pass
         new("LuminanceInverter", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
         // LuminanceHalver: the reduced-scale search's halving, each pixel the mean of a two by two block. WebAssembly shifts and narrows with its own instructions.
@@ -290,6 +292,7 @@ internal static class SimdTiers
         new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [PackedSimd]),
         new("EccBinaryDecoder",        [Vector128],     [GfniV256, Vector128], [AdvSimd],           [Vector128]),
         new("LuminanceConverter",      [Sse2],          [Avx2],               [AdvSimdDp, Vector128], [PackedSimd]),
+        new("LuminanceConverterRgb24", [Ssse3],         [Avx2],               [AdvSimdDp, AdvSimd], [PackedSimd]),
         new("LuminanceInverter",       [Vector128],     [Vector256],          [Vector128],          [Vector128]),
         new("LuminanceHalver",         [Vector128],     [Vector256],          [Vector128],          [PackedSimd]),
         // WebAssembly keeps the 128-bit tier though AOT-compiled it counts dense input (soft, noise, a gradient) slower than scalar: a decode of such input does not move, and rendered symbols count several times faster

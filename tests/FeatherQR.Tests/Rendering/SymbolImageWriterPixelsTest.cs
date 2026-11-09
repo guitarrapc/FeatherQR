@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class SymbolImageWriterPixelsTest
 {
-    private static readonly PixelLayout[] Layouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x];
+    private static readonly PixelLayout[] Layouts = [PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24];
 
     // ---- every symbol -------------------------------------------------------------------
 
@@ -69,10 +69,10 @@ public class SymbolImageWriterPixelsTest
 
     /// <summary>
     /// Gray8 is what the decoders compute from the RGBA buffer: each alpha below 255 composited over white, then BT.601.
-    /// The decoders read Rgb888x without its fourth byte, and the same Gray8 must be their reading of that buffer too.
+    /// The layouts with no alpha hold the same colours composited over white, so the same Gray8 must be the decoders' reading of each.
     /// </summary>
     [Test]
-    public async Task Gray8_IsTheLuminanceTheDecodersReadFromRgbaAndRgb888x()
+    public async Task Gray8_IsTheLuminanceTheDecodersReadFromRgbaAndTheLayoutsWithNoAlpha()
     {
         var rng = new Random(8);
         var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
@@ -86,12 +86,12 @@ public class SymbolImageWriterPixelsTest
             };
             var gray = new byte[SymbolImageWriter.GetPixelBufferSize(micro, PixelLayout.Gray8, options)];
             SymbolImageWriter.TryWritePixels(micro, gray, PixelLayout.Gray8, out var width, out var height, options);
-            foreach (var layout in new[] { PixelLayout.Rgba8888, PixelLayout.Rgb888x })
+            foreach (var layout in new[] { PixelLayout.Rgba8888, PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24 })
             {
                 var color = new byte[SymbolImageWriter.GetPixelBufferSize(micro, layout, options)];
                 SymbolImageWriter.TryWritePixels(micro, color, layout, out _, out _, options);
                 var expected = new byte[width * height];
-                LuminanceConverter.Convert(color, width, height, width * 4, layout, premultipliedAlpha: false, expected);
+                LuminanceConverter.Convert(color, width, height, width * BytesPerPixel(layout), layout, premultipliedAlpha: false, expected);
                 await Assert.That(gray.AsSpan().SequenceEqual(expected)).IsTrue().Because($"{layout}: {options.DarkColor} on {options.LightColor}");
             }
         }
@@ -110,6 +110,126 @@ public class SymbolImageWriterPixelsTest
             (destination, l) => (SymbolImageWriter.TryWritePixels(qr, destination, l, out var w, out var h, options), w, h),
             l => SymbolImageWriter.GetPixelBufferSize(qr, l, options));
         await Assert.That(Expected(options.LightColor, PixelLayout.Rgb888x)).IsEquivalentTo(new byte[] { 255, 255, 255, 255 });
+    }
+
+    // ---- three bytes a pixel --------------------------------------------------------------
+
+    public static IEnumerable<(string Symbol, string Options)> ThreeByteCases()
+    {
+        foreach (var symbol in new[] { "QR3", "M4", "R17x139" })
+        {
+            foreach (var options in new[] { "default", "module 1", "colours", "styled", "fraction padded", "styled fraction" })
+                yield return (symbol, options);
+        }
+        yield return ("QR5 H", "icon");
+        yield return ("QR5 H", "icon styled");
+    }
+
+    /// <summary>
+    /// Rgb24 is Rgb888x with every fourth byte dropped, and Bgr24 the same with red and blue exchanged, pixel for pixel: plain, styled,
+    /// at a size that is not whole pixels, and with an icon area. The colours have alphas below 255, which both hold composited over white.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(ThreeByteCases))]
+    public async Task Rgb24AndBgr24_AreRgb888xWithoutItsFourthByte(string symbol, string optionsName)
+    {
+        var shaped = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 90, FinderPatternStyle = FinderPatternStyle.RoundedSquareCircle };
+        var navy = new SymbolColor(0x1E, 0x3A, 0x8A, 200);
+        var ivory = new SymbolColor(0xFF, 0xF8, 0xE7, 51);
+        var options = optionsName switch
+        {
+            "default" => default,
+            "module 1" => new SymbolImageOptions { ModulePixelSize = 1 },
+            "colours" => new SymbolImageOptions { ModulePixelSize = 3, DarkColor = navy, LightColor = ivory },
+            "styled" => shaped with { DarkColor = navy, LightColor = ivory },
+            "fraction padded" => new SymbolImageOptions { Width = 500, Height = 333, DarkColor = navy },
+            "styled fraction" => shaped with { Width = 500, Height = 333, DarkColor = navy, LightColor = ivory },
+            "icon" => new SymbolImageOptions { IconSizeModules = 7, ModulePixelSize = 5, DarkColor = navy },
+            "icon styled" => shaped with { IconSizeModules = 7, Width = 333, LightColor = ivory },
+            _ => throw new ArgumentException(optionsName),
+        };
+        object data = symbol switch
+        {
+            "QR3" => QRCodeGenerator.Create("three bytes", QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 }),
+            "QR5 H" => QRCodeGenerator.Create("three bytes", QREccLevel.H, new QRCodeGeneratorOptions { Version = 5 }),
+            "M4" => MicroQRCodeGenerator.Create("HELLO123", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4 }),
+            "R17x139" => RmQRCodeGenerator.Create("HELLO WORLD 1234567890", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }),
+            _ => throw new ArgumentException(symbol),
+        };
+
+        var four = WritePacked(data, PixelLayout.Rgb888x, options, out var width, out var height);
+        var rgb = WritePacked(data, PixelLayout.Rgb24, options, out var rgbWidth, out var rgbHeight);
+        var bgr = WritePacked(data, PixelLayout.Bgr24, options, out var bgrWidth, out var bgrHeight);
+
+        await Assert.That((rgbWidth, rgbHeight)).IsEqualTo((width, height));
+        await Assert.That((bgrWidth, bgrHeight)).IsEqualTo((width, height));
+        await Assert.That(rgb.Length).IsEqualTo(width * height * 3);
+        await Assert.That(bgr.Length).IsEqualTo(width * height * 3);
+        int wrongRgb = 0, wrongBgr = 0;
+        for (var pixel = 0; pixel < width * height; pixel++)
+        {
+            var (r, g, b) = (four[pixel * 4], four[pixel * 4 + 1], four[pixel * 4 + 2]);
+            if (rgb[pixel * 3] != r || rgb[pixel * 3 + 1] != g || rgb[pixel * 3 + 2] != b)
+                wrongRgb++;
+            if (bgr[pixel * 3] != b || bgr[pixel * 3 + 1] != g || bgr[pixel * 3 + 2] != r)
+                wrongBgr++;
+        }
+        await Assert.That(wrongRgb).IsEqualTo(0);
+        await Assert.That(wrongBgr).IsEqualTo(0);
+        // Navy differs in red and blue, so a Bgr24 that kept Rgb24's order would have passed nothing above. This pins that the two differ.
+        if (optionsName != "default" && optionsName != "module 1")
+            await Assert.That(rgb.AsSpan().SequenceEqual(bgr)).IsFalse();
+    }
+
+    private static byte[] WritePacked(object data, PixelLayout layout, SymbolImageOptions options, out int width, out int height)
+    {
+        int w, h;
+        byte[] pixels;
+        bool written;
+        switch (data)
+        {
+            case QRCodeData qr:
+                pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, layout, options)];
+                written = SymbolImageWriter.TryWritePixels(qr, pixels, layout, out w, out h, options);
+                break;
+            case MicroQRCodeData micro:
+                pixels = new byte[SymbolImageWriter.GetPixelBufferSize(micro, layout, options)];
+                written = SymbolImageWriter.TryWritePixels(micro, pixels, layout, out w, out h, options);
+                break;
+            case RmQRCodeData rm:
+                pixels = new byte[SymbolImageWriter.GetPixelBufferSize(rm, layout, options)];
+                written = SymbolImageWriter.TryWritePixels(rm, pixels, layout, out w, out h, options);
+                break;
+            default: throw new ArgumentException(nameof(data));
+        }
+        if (!written)
+            throw new InvalidOperationException("the buffer was sized by the writer");
+        (width, height) = (w, h);
+        return pixels;
+    }
+
+    /// <summary>A 24-bit buffer reads back through the converter and the decoders, in both channel orders and with padded rows.</summary>
+    [Test]
+    public async Task Rgb24AndBgr24_ReadBackThroughTheConverterAndTheDecoders()
+    {
+        const string text = "https://github.com/guitarrapc/FeatherQR";
+        var qr = QRCodeGenerator.Create(text, QREccLevel.M);
+        var options = new SymbolImageOptions { ModulePixelSize = 5, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A), LightColor = new SymbolColor(0xFF, 0xF8, 0xE7) };
+        var (width, height) = SymbolImageWriter.GetImageSize(qr, options);
+        foreach (var layout in new[] { PixelLayout.Rgb24, PixelLayout.Bgr24 })
+        {
+            // 185 pixels are 555 bytes, so a stride that is a multiple of four pads each row by one.
+            var stride = (width * 3 + 3) & ~3;
+            var pixels = new byte[stride * height];
+            await Assert.That(SymbolImageWriter.TryWritePixels(qr, pixels, stride, layout, out _, out _, options)).IsTrue();
+            var luminance = new byte[width * height];
+            LuminanceConverter.Convert(pixels, width, height, stride, layout, premultipliedAlpha: false, luminance);
+
+            await Assert.That(QRCodeDecoder.TryDecodeImage(luminance, width, height, out string read, out _)).IsTrue().Because($"{layout}");
+            await Assert.That(read).IsEqualTo(text);
+            // Navy's luminance: (77 × 0x1E + 150 × 0x3A + 29 × 0x8A) / 256 = 58, and read with red and blue exchanged it would be 78.
+            await Assert.That(luminance.Min()).IsEqualTo((byte)58).Because($"{layout}");
+        }
     }
 
     [Test]
@@ -158,7 +278,7 @@ public class SymbolImageWriterPixelsTest
         var micro = MicroQRCodeGenerator.Create("1", MicroQREccLevel.ErrorDetectionOnly);
         var rm = RmQRCodeGenerator.Create("1", RmQREccLevel.M);
         var buffer = new byte[1 << 20];
-        foreach (var layout in new[] { (PixelLayout)(-1), (PixelLayout)4 })
+        foreach (var layout in new[] { (PixelLayout)(-1), (PixelLayout)7 })
         {
             await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetPixelBufferSize(qr, layout)).ParamName).IsEqualTo("layout");
             await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, buffer, layout, out _, out _)).ParamName).IsEqualTo("layout");
@@ -226,7 +346,7 @@ public class SymbolImageWriterPixelsTest
     private static async Task AssertPixels(SymbolImageWriterPngTest.Grid grid, SymbolImageOptions options, PixelLayout layout, Write write, Func<PixelLayout, int> size)
     {
         var pixels = options.ModulePixelSize;
-        var bytesPerPixel = layout == PixelLayout.Gray8 ? 1 : 4;
+        var bytesPerPixel = BytesPerPixel(layout);
         var width = grid.Width * pixels;
         var height = grid.Height * pixels;
         await Assert.That(size(layout)).IsEqualTo(width * height * bytesPerPixel);
@@ -256,12 +376,22 @@ public class SymbolImageWriterPixelsTest
         await Assert.That(wrong).IsEqualTo(0).Because($"{layout} at {pixels} px");
     }
 
+    private static int BytesPerPixel(PixelLayout layout) => layout switch
+    {
+        PixelLayout.Gray8 => 1,
+        PixelLayout.Rgb24 or PixelLayout.Bgr24 => 3,
+        _ => 4,
+    };
+
     /// <summary>The bytes of one pixel, written out here from each layout's definition.</summary>
     private static byte[] Expected(SymbolColor c, PixelLayout layout) => layout switch
     {
         PixelLayout.Rgba8888 => [c.R, c.G, c.B, c.A],
         PixelLayout.Bgra8888 => [c.B, c.G, c.R, c.A],
         PixelLayout.Rgb888x => [OverWhite(c.R, c.A), OverWhite(c.G, c.A), OverWhite(c.B, c.A), 255],
+        PixelLayout.Bgr888x => [OverWhite(c.B, c.A), OverWhite(c.G, c.A), OverWhite(c.R, c.A), 255],
+        PixelLayout.Rgb24 => [OverWhite(c.R, c.A), OverWhite(c.G, c.A), OverWhite(c.B, c.A)],
+        PixelLayout.Bgr24 => [OverWhite(c.B, c.A), OverWhite(c.G, c.A), OverWhite(c.R, c.A)],
         _ => [Luminance(c)],
     };
 

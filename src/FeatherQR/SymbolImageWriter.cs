@@ -209,6 +209,55 @@ public static class SymbolImageWriter
         return PngWriter.Write(new RmQRMatrixView(data), writer, in options);
     }
 
+    // Image size
+
+    /// <summary>
+    /// The size in pixels of the QR code's image: the size the SVG names, the PNG holds and the pixel buffer is written at.
+    /// </summary>
+    /// <param name="data">The QR code.</param>
+    /// <param name="options">The module size or the image's size. <c>default</c> is 8 pixels a module.</param>
+    /// <returns>The image's width and height in pixels.</returns>
+    /// <remarks>
+    /// Ask it before writing, to make the image the pixels go into. The size is the same for every format and every <see cref="PixelLayout"/>.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    public static ImageSize GetImageSize(QRCodeData data, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return ImageSizeOf(new StandardQrMatrixView(data), in options);
+    }
+
+    /// <inheritdoc cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/>
+    /// <param name="data">The Micro QR code.</param>
+    /// <param name="options">The module size or the image's size. <c>default</c> is 8 pixels a module.</param>
+    public static ImageSize GetImageSize(MicroQRCodeData data, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return ImageSizeOf(new MicroQRMatrixView(data), in options);
+    }
+
+    /// <inheritdoc cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/>
+    /// <param name="data">The rMQR code.</param>
+    /// <param name="options">The module size or the image's size. <c>default</c> is 8 pixels a module.</param>
+    public static ImageSize GetImageSize(RmQRCodeData data, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return ImageSizeOf(new RmQRMatrixView(data), in options);
+    }
+
+    private static ImageSize ImageSizeOf<TView>(in TView view, in SymbolImageOptions options)
+        where TView : struct, IModuleMatrixView
+    {
+        var layout = ImageLayout.Create(in view, in options);
+        // Refused here too, so a caller making an image of this size learns of an icon that does not fit before writing.
+        IconArea.Get(in view, in options);
+        return new ImageSize(layout.Width, layout.Height);
+    }
+
     // Pixel buffer
 
     /// <summary>
@@ -219,7 +268,7 @@ public static class SymbolImageWriter
     /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns>The length <see cref="TryWritePixels(QRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/> needs.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the four, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the seven, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static int GetPixelBufferSize(QRCodeData data, PixelLayout layout, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -262,12 +311,12 @@ public static class SymbolImageWriter
     /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
     /// <returns><c>false</c> only when <paramref name="destination"/> is too short, in which case nothing is written.</returns>
     /// <remarks>
-    /// Alpha is not premultiplied. <see cref="PixelLayout.Gray8"/> and <see cref="PixelLayout.Rgb888x"/> have no alpha, so they hold each colour
-    /// composited over white, and Rgb888x's fourth byte is 255. Gray8 then holds its luminance with BT.601 weights, as the decoders compute it,
-    /// so a Gray8 buffer is the luminance input the decoders' <c>TryDecodeImage</c> calls take.
+    /// Alpha is not premultiplied. <see cref="PixelLayout.Gray8"/>, <see cref="PixelLayout.Rgb888x"/>, <see cref="PixelLayout.Bgr888x"/>, <see cref="PixelLayout.Rgb24"/>
+    /// and <see cref="PixelLayout.Bgr24"/> have no alpha, so they hold each colour composited over white, and the fourth byte of Rgb888x and Bgr888x is 255. Gray8 then holds its luminance with BT.601 weights,
+    /// as the decoders compute it, so a Gray8 buffer is the luminance input the decoders' <c>TryDecodeImage</c> calls take.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the four, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the seven, the buffer would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
     public static bool TryWritePixels(QRCodeData data, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
     {
         if (data is null)
@@ -303,6 +352,68 @@ public static class SymbolImageWriter
         return PixelWriter.TryWrite(new RmQRMatrixView(data), destination, layout, out width, out height, in options);
     }
 
+    /// <summary>
+    /// Writes the QR code's pixels into the buffer you provide, rows <paramref name="rowBytes"/> bytes apart: into an image another library holds, or into a region of a larger buffer.
+    /// </summary>
+    /// <param name="data">The QR code.</param>
+    /// <param name="destination">The buffer, from the image's first pixel. It needs <paramref name="rowBytes"/> bytes for every row but the last, and the last row's pixels. The bytes between a row's last pixel and the next row, and those past the last row, are left as they were.</param>
+    /// <param name="rowBytes">The stride: the bytes from the start of one row to the start of the next. At least the image's width × the bytes of one pixel. <see cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/> gives the width before writing.</param>
+    /// <param name="layout">The channel order and depth.</param>
+    /// <param name="width">The image's width in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="height">The image's height in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <returns><c>false</c> only when <paramref name="destination"/> is too short, in which case nothing is written.</returns>
+    /// <remarks>
+    /// The pixels are those of <see cref="TryWritePixels(QRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/>, which is this call at a stride of one row.
+    /// For a region of a larger image, slice <paramref name="destination"/> at the region's first pixel and pass that image's stride.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="layout"/> is not one of the seven, <paramref name="rowBytes"/> is shorter than one row, the image's pixels would be longer than the largest array, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    public static bool TryWritePixels(QRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return PixelWriter.TryWrite(new StandardQrMatrixView(data), destination, rowBytes, layout, out width, out height, in options);
+    }
+
+    /// <inheritdoc cref="TryWritePixels(QRCodeData, Span{byte}, int, PixelLayout, out int, out int, in SymbolImageOptions)"/>
+    /// <param name="data">The Micro QR code.</param>
+    /// <param name="destination">The buffer, from the image's first pixel. It needs <paramref name="rowBytes"/> bytes for every row but the last, and the last row's pixels. The bytes between a row's last pixel and the next row, and those past the last row, are left as they were.</param>
+    /// <param name="rowBytes">The stride: the bytes from the start of one row to the start of the next. At least the image's width × the bytes of one pixel. <see cref="GetImageSize(MicroQRCodeData, in SymbolImageOptions)"/> gives the width before writing.</param>
+    /// <param name="layout">The channel order and depth.</param>
+    /// <param name="width">The image's width in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="height">The image's height in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <remarks>
+    /// The pixels are those of <see cref="TryWritePixels(MicroQRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/>, which is this call at a stride of one row.
+    /// For a region of a larger image, slice <paramref name="destination"/> at the region's first pixel and pass that image's stride.
+    /// </remarks>
+    public static bool TryWritePixels(MicroQRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return PixelWriter.TryWrite(new MicroQRMatrixView(data), destination, rowBytes, layout, out width, out height, in options);
+    }
+
+    /// <inheritdoc cref="TryWritePixels(QRCodeData, Span{byte}, int, PixelLayout, out int, out int, in SymbolImageOptions)"/>
+    /// <param name="data">The rMQR code.</param>
+    /// <param name="destination">The buffer, from the image's first pixel. It needs <paramref name="rowBytes"/> bytes for every row but the last, and the last row's pixels. The bytes between a row's last pixel and the next row, and those past the last row, are left as they were.</param>
+    /// <param name="rowBytes">The stride: the bytes from the start of one row to the start of the next. At least the image's width × the bytes of one pixel. <see cref="GetImageSize(RmQRCodeData, in SymbolImageOptions)"/> gives the width before writing.</param>
+    /// <param name="layout">The channel order and depth.</param>
+    /// <param name="width">The image's width in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="height">The image's height in pixels, or 0 when the buffer is too short.</param>
+    /// <param name="options">The module size or the image's size, and the colours. <c>default</c> is 8 pixels a module, black on white.</param>
+    /// <remarks>
+    /// The pixels are those of <see cref="TryWritePixels(RmQRCodeData, Span{byte}, PixelLayout, out int, out int, in SymbolImageOptions)"/>, which is this call at a stride of one row.
+    /// For a region of a larger image, slice <paramref name="destination"/> at the region's first pixel and pass that image's stride.
+    /// </remarks>
+    public static bool TryWritePixels(RmQRCodeData data, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return PixelWriter.TryWrite(new RmQRMatrixView(data), destination, rowBytes, layout, out width, out height, in options);
+    }
+
     // Icon area
 
     /// <summary>
@@ -318,7 +429,7 @@ public static class SymbolImageWriter
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the options have no icon area, or one that does not fit the symbol, or the image's size is out of range.</exception>
-    public static (int X, int Y, int Width, int Height) GetIconRectangle(QRCodeData data, in SymbolImageOptions options)
+    public static ImageRect GetIconRectangle(QRCodeData data, in SymbolImageOptions options)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
@@ -330,7 +441,7 @@ public static class SymbolImageWriter
         var quietZone = (view.Width - view.CoreWidth) / 2;
         var x = layout.ColumnStart(quietZone + icon.IconColumn);
         var y = layout.RowStart(quietZone + icon.IconRow);
-        return (x, y, layout.ColumnStart(quietZone + icon.IconColumn + icon.IconSize) - x, layout.RowStart(quietZone + icon.IconRow + icon.IconSize) - y);
+        return new ImageRect(x, y, layout.ColumnStart(quietZone + icon.IconColumn + icon.IconSize) - x, layout.RowStart(quietZone + icon.IconRow + icon.IconSize) - y);
     }
 
     // Text output for terminal

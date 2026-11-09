@@ -10,7 +10,7 @@ namespace FeatherQR;
 // The exactness argument is the one the AVX2 kernel uses: the BT.601 weights sum to 256 and every channel is a byte, so the weighted sum never exceeds 255 · 256 = 65,280 and fits in 16 bits unsigned.
 // The kernel shape, however, is not the AVX2 one.
 // NEON has no <c>pmaddubsw</c>, so the shuffle-into-<c>[R, G, G, B]</c> trick has nothing to feed. It has <c>UDOT</c> instead (ARMv8.2 dot product), which multiplies four byte pairs into each 32-bit lane and therefore computes <c>77R + 150G + 29B + 0·A</c> for four whole pixels in one instruction, with no deinterleave at all.
-// Weighting alpha 0 is also what makes Rgb888x correct, since its fourth byte is padding.
+// Weighting alpha 0 is also what makes Rgb888x and Bgr888x correct, since their fourth byte is padding.
 // A transliteration of the x64 kernel, with <c>LD4</c> building channel planes, is slower.
 // Alpha is handled by row mode rather than per block.
 // Testing "is every alpha 255?" every 16 pixels costs a cross-lane reduction plus a vector-to-GPR move. Instead each row is converted optimistically while the pixels are ANDed into a vector accumulator, and one cross-lane test per row decides whether the row was in fact opaque.
@@ -35,7 +35,7 @@ public static partial class LuminanceConverter
 
     /// <summary>
     /// Converts with NEON.
-    /// <paramref name="bgra"/> selects the channel order, <paramref name="hasAlpha"/> is false for RGB888x (its fourth byte is padding).
+    /// <paramref name="bgra"/> selects the channel order, <paramref name="hasAlpha"/> is false for RGB888x and BGR888x (the fourth byte is padding).
     /// Requires <paramref name="width"/> ≥ 16. The caller keeps narrower rows scalar.
     /// </summary>
     internal static void ConvertRgbaAdvSimd(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha, bool premultiplied)
@@ -48,7 +48,7 @@ public static partial class LuminanceConverter
             ConvertStraightAdvSimd(pixels, luminance, width, height, rowBytes, bgra);
     }
 
-    /// <summary>RGB888x: no alpha to test, so no accumulator and no row mode.</summary>
+    /// <summary>RGB888x and BGR888x: no alpha to test, so no accumulator and no row mode.</summary>
     private static void ConvertNoAlphaAdvSimd(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra)
     {
         ref var src = ref MemoryMarshal.GetReference(pixels);
@@ -147,7 +147,7 @@ public static partial class LuminanceConverter
 
     /// <summary>
     /// 16 pixels with no alpha handling, returning the AND of the four pixel vectors so a straight-alpha caller can accumulate it and test the whole row at once.
-    /// RGB888x callers discard it.
+    /// Callers with no alpha discard it.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<byte> PlainBlockAdvSimd(ref byte row, ref byte dest, nint x, Vector128<byte> weights)

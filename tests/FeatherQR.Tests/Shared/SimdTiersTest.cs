@@ -32,6 +32,7 @@ public class SimdTiersTest
         ["EccBinaryEncoder"] = ["BinaryEncoders/EccBinaryEncoder.cs", "BinaryEncoders/EccBinaryEncoder.X86.cs", "BinaryEncoders/EccBinaryEncoder.Wasm.cs"],
         ["EccBinaryDecoder"] = ["BinaryDecoders/EccBinaryDecoder.cs", "BinaryDecoders/EccBinaryDecoder.Arm64.cs", "BinaryDecoders/EccBinaryDecoder.Vector128.cs"],
         ["LuminanceConverter"] = ["../LuminanceConverter.cs", "../LuminanceConverter.Simd.cs"],
+        ["LuminanceConverterRgb24"] = ["../LuminanceConverter.Rgb24.cs", "../LuminanceConverter.Rgb24.Simd.cs"],
         ["LuminanceInverter"] = ["ImageDecoders/LuminanceInverter.cs"],
         ["LuminanceHalver"] = ["ImageDecoders/LuminanceHalver.cs"],
         ["Binarizer"] = ["ImageDecoders/Binarizer.cs", "ImageDecoders/Binarizer.Vector128.cs"],

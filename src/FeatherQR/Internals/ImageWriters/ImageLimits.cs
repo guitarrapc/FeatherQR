@@ -3,7 +3,7 @@ namespace FeatherQR.Internals.ImageWriters;
 /// <summary>
 /// The size limits of the SVG, PNG and pixel outputs.
 /// </summary>
-internal static class ImageSize
+internal static class ImageLimits
 {
     /// <summary>The longest byte array the runtime makes, and so the longest output.</summary>
     public const int MaxArrayLength = 0x7FFFFFC7;

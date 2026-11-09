@@ -98,8 +98,8 @@ public class SymbolImageWrite
     [Benchmark]
     public byte[] RmQR_Png() => SymbolImageWriter.GetPngBytes(_rmqr);
 
-    // A buffer for the largest case: version 40 at 8 px, four bytes a pixel.
-    private readonly byte[] _pixels = new byte[1480 * 1480 * 4];
+    // A buffer for the largest case: version 40 at 8 px, four bytes a pixel, with room for rows 64 bytes apart beyond their length.
+    private readonly byte[] _pixels = new byte[1480 * (1480 * 4 + 64)];
 
     [Benchmark]
     public bool Small_PixelsRgba() => SymbolImageWriter.TryWritePixels(_small, _pixels, PixelLayout.Rgba8888, out _, out _);
@@ -115,6 +115,16 @@ public class SymbolImageWrite
 
     [Benchmark]
     public bool Large_PixelsRgba_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Styled);
+
+    // Rows 64 bytes further apart than they are long, as an image with padded rows takes them.
+    [Benchmark]
+    public bool Large_PixelsRgba_Stride() => SymbolImageWriter.TryWritePixels(_large, _pixels, 1480 * 4 + 64, PixelLayout.Rgba8888, out _, out _);
+
+    [Benchmark]
+    public bool Large_PixelsRgb24() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgb24, out _, out _);
+
+    [Benchmark]
+    public bool Large_PixelsRgb24_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgb24, out _, out _, Styled);
 
     [Benchmark]
     public string Small_Text() => SymbolImageWriter.GetTerminalText(_small);
