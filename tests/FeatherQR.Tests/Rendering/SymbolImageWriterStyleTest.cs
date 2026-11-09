@@ -463,6 +463,134 @@ public class SymbolImageWriterStyleTest
         await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 80 }, "0.9", "round", null, "h0", 0.5m);
     }
 
+    public static IEnumerable<(string Symbol, string Shape)> ShapedPathCases()
+    {
+        foreach (var symbol in new[] { "qr-v1", "qr-v5-icon", "qr-v40", "qr-crafted", "qr-blank", "microqr-m4", "rmqr-r17x139" })
+            foreach (var shape in new[] { "circle92", "square80", "rounded90" })
+                yield return (symbol, shape);
+    }
+
+    /// <summary>
+    /// The shaped module path, byte for byte, against one written a module at a time from the module reads: a subpath at each dark module
+    /// outside the finder boxes and the icon area, in row order, each move counted from the start before. The crafted matrix has whole
+    /// dark rows, which cross the 64-bit windows the rows are read in, and rows that start left of the last module, which move back.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(ShapedPathCases))]
+    public async Task Svg_ShapedModulePath_MatchesAModuleByModuleWriting(string symbol, string shape)
+    {
+        var data = ShapedPathSymbol(symbol);
+        var (options, tail, offset) = shape switch
+        {
+            "circle92" => (new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle }, "h0", 0.5m),
+            "square80" => (new SymbolImageOptions { ModuleScalePercent = 80 }, "h0", 0.5m),
+            _ => (new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 30, FinderPatternStyle = FinderPatternStyle.RoundedSquare }, "h.36v.36h-.36z", 0.32m),
+        };
+        if (symbol.EndsWith("-icon"))
+            options = options with { IconSizeModules = 5 };
+        var svg = data switch
+        {
+            QRCodeData qr => SymbolImageWriter.GetSvgString(qr, options),
+            MicroQRCodeData micro => SymbolImageWriter.GetSvgString(micro, options),
+            RmQRCodeData rm => SymbolImageWriter.GetSvgString(rm, options),
+            _ => throw new ArgumentException(nameof(data)),
+        };
+        var root = XDocument.Parse(svg).Root!;
+        var expected = ModuleByModulePath(data, options, tail, offset);
+
+        if (symbol == "qr-blank")
+        {
+            await Assert.That(expected).IsEmpty();
+            await Assert.That(root.Descendants(Svg + "path").Count(p => p.Attribute("stroke-width") is not null)).IsEqualTo(0).Because("no dark module, no module path");
+            return;
+        }
+        if (symbol == "qr-crafted")
+        {
+            await Assert.That(expected).Contains("m-").Because("a row starts left of the last module");
+            await Assert.That(expected).Contains(string.Concat(Enumerable.Repeat("m1 0" + tail, 80))).Because("a run crosses a 64-bit window");
+        }
+        if (symbol.EndsWith("-icon"))
+            await Assert.That(expected.Length).IsLessThan(ModuleByModulePath(data, options with { IconSizeModules = 0 }, tail, offset).Length).Because("the icon area holds dark modules to leave out");
+        await Assert.That(ModulePath(root).Attribute("d")!.Value).IsEqualTo(expected);
+    }
+
+    private static object ShapedPathSymbol(string symbol)
+    {
+        switch (symbol)
+        {
+            case "qr-v1":
+                return QRCodeGenerator.Create("HELLO WORLD 2026", QREccLevel.M);
+            case "qr-v5-icon":
+                return QRCodeGenerator.Create("svg", QREccLevel.H, new QRCodeGeneratorOptions { Version = 5 });
+            case "qr-v40":
+                return QRCodeGenerator.Create(RandomText(2900), QREccLevel.L);
+            case "microqr-m4":
+                return MicroQRCodeGenerator.Create("HELLO2026", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4 });
+            case "rmqr-r17x139":
+                return RmQRCodeGenerator.Create(RandomText(100), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
+        }
+        // Version 20 is 97 modules a row, so a whole dark row reaches past the 57 bits a window always holds.
+        const int version = 20;
+        var size = QRCodeData.SizeFromVersion(version);
+        var source = new byte[size * size];
+        if (symbol == "qr-crafted")
+        {
+            for (var row = 0; row < size; row++)
+            {
+                for (var column = 0; column < size; column++)
+                {
+                    var dark = (row % 3) switch
+                    {
+                        0 => true,
+                        1 => (column * 7 + row) % 5 < 2,
+                        _ => column >= size - 12 - row % 30 && column < size - 2 - row % 30,
+                    };
+                    source[row * size + column] = dark ? (byte)1 : (byte)0;
+                }
+            }
+        }
+        var crafted = new QRCodeData(version, 4);
+        crafted.SetCoreData(source);
+        return crafted;
+    }
+
+    /// <summary>The module path written a module at a time: an absolute move to the first module's start in its cell, then a relative move by whole modules to each next one.</summary>
+    private static string ModuleByModulePath(object data, SymbolImageOptions options, string tail, decimal offset)
+    {
+        var (_, _, quietZone, finders) = Geometry(data);
+        (int Width, int Height, Func<int, int, bool> Module, FeatherQR.Internals.ImageWriters.IconArea Icon) core = data switch
+        {
+            QRCodeData qr => (qr.GetCoreSize(), qr.GetCoreSize(), qr.GetCoreModule, IconOf(qr, options)),
+            MicroQRCodeData micro => (micro.GetCoreSize(), micro.GetCoreSize(), micro.GetCoreModule, default),
+            RmQRCodeData rm => (rm.GetCoreWidth(), rm.GetCoreHeight(), rm.GetCoreModule, default),
+            _ => throw new ArgumentException(nameof(data)),
+        };
+        var path = new System.Text.StringBuilder();
+        int lastRow = -1, lastColumn = 0;
+        for (var row = 0; row < core.Height; row++)
+        {
+            for (var column = 0; column < core.Width; column++)
+            {
+                if (!core.Module(row, column) || core.Icon.Covers(row, column) || finders.Any(f => (uint)(row - f.Row) < 7 && (uint)(column - f.Column) < 7))
+                    continue;
+                if (lastRow < 0)
+                    path.Append('M').Append((quietZone + column + offset).ToString("0.###", CultureInfo.InvariantCulture)).Append(' ').Append((quietZone + row + offset).ToString("0.###", CultureInfo.InvariantCulture));
+                else
+                    path.Append('m').Append((column - lastColumn).ToString(CultureInfo.InvariantCulture)).Append(' ').Append((row - lastRow).ToString(CultureInfo.InvariantCulture));
+                path.Append(tail);
+                lastRow = row;
+                lastColumn = column;
+            }
+        }
+        return path.ToString();
+
+        static FeatherQR.Internals.ImageWriters.IconArea IconOf(QRCodeData qr, SymbolImageOptions options)
+        {
+            var view = new FeatherQR.Internals.StandardQrMatrixView(qr);
+            return FeatherQR.Internals.ImageWriters.IconArea.Get(in view, in options);
+        }
+    }
+
     /// <summary>
     /// A rounded module's fill and stroke overlap inside it, so a translucent colour painted on each would come out darker there. Its
     /// path takes the alpha as its opacity instead, which composites the two once. A cap-drawn module is a stroke alone.
