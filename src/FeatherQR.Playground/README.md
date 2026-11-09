@@ -62,7 +62,7 @@ The `build-playground` job in [build.yaml](../../.github/workflows/build.yaml) r
 
 ### Updating the API reference
 
-The generated `wwwroot/api/index.html` is committed. Regenerate it after public API changes:
+The generated `wwwroot/api/index.html` is committed. It embeds `site.css`, `theme.js` and the footer of `index.html`, because it cannot link the fingerprinted files. Regenerate it after public API changes and after a change to one of those three. The JavaScript tests fail while the committed page holds an older copy:
 
 ```bash
 dotnet run tools/public_api.cs -- --html -o src/FeatherQR.Playground/wwwroot/api/index.html

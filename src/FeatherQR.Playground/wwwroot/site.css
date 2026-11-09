@@ -1,0 +1,220 @@
+/* What every page of the site shares. The API page cannot link a fingerprinted file, so its generator embeds this one. */
+
+/* ─── Theme tokens ─── */
+
+:root {
+  color-scheme: light dark;
+  --accent: #d62976;
+  --accent-2: #962fbf;
+  --bg: #f6f7fb;
+  --panel-bg: #ffffff;
+  --panel-border: #e3e6ee;
+  --text: #1f2430;
+  --text-muted: #5b6474;
+  --input-bg: #ffffff;
+  --input-border: #c9cfdd;
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+  --danger: #d13438;
+  --success: #107c41;
+  --checker-a: #ffffff;
+  --checker-b: #e6e8ef;
+  --page-width: 1160px;
+  --font-mono: ui-monospace, "Cascadia Mono", SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12141c;
+    --panel-bg: #1a1d28;
+    --panel-border: #2a2f40;
+    --text: #e6e9f2;
+    --text-muted: #98a1b5;
+    --input-bg: #12141c;
+    --input-border: #3a4157;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --danger: #ff6b70;
+    --success: #4ade80;
+    --checker-a: #262b3a;
+    --checker-b: #1a1d28;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #12141c;
+  --panel-bg: #1a1d28;
+  --panel-border: #2a2f40;
+  --text: #e6e9f2;
+  --text-muted: #98a1b5;
+  --input-bg: #12141c;
+  --input-border: #3a4157;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --danger: #ff6b70;
+  --success: #4ade80;
+  --checker-a: #262b3a;
+  --checker-b: #1a1d28;
+}
+
+/* ─── Base ─── */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", "Helvetica Neue", Arial, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* Author display rules (e.g. .field { display: flex }) override the UA
+   stylesheet's [hidden] { display: none }; restore the attribute's meaning. */
+[hidden] {
+  display: none !important;
+}
+
+/* ─── Typed fields ─── */
+
+textarea,
+select,
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="file"] {
+  font: inherit;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  max-width: 100%;
+}
+
+a:focus-visible,
+summary:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── Site title ─── */
+
+/* Sized in em, so the mark follows the title it sits in. */
+.site-logo {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  border-radius: 0.3em;
+  background:
+    radial-gradient(circle at 30% 70%, #fa7e1e 0%, #d62976 55%, #962fbf 100%);
+  position: relative;
+}
+
+.site-logo::after {
+  content: "";
+  position: absolute;
+  inset: 0.3em;
+  border: 0.11em solid #fff;
+  border-radius: 0.17em;
+}
+
+.version-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+a.version-badge:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* A link to another page of the site. */
+.nav-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  text-decoration: underline;
+}
+
+/* ─── Footer ─── */
+
+footer {
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: 8px 16px 28px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.footer-copy-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 14px;
+}
+
+.repo-mark {
+  color: var(--text-muted);
+  display: inline-flex;
+}
+
+.repo-mark:hover {
+  color: var(--accent);
+}
+
+.repo-mark__icon {
+  width: 20px;
+  height: 20px;
+}
+
+.footer-copy-sep {
+  opacity: 0.5;
+}
+
+/* ─── Theme cycle button ─── */
+
+.toolbar-icon-btn {
+  background: none;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 5px 7px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.toolbar-icon-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.theme-cycle-btn__svg {
+  display: none;
+}
+
+.theme-cycle-btn[data-theme-mode="system"] .theme-cycle-btn__svg--system,
+.theme-cycle-btn[data-theme-mode="light"] .theme-cycle-btn__svg--light,
+.theme-cycle-btn[data-theme-mode="dark"] .theme-cycle-btn__svg--dark {
+  display: block;
+}

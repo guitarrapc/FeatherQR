@@ -1,75 +1,7 @@
-/* ─── Theme tokens ─── */
-
-:root {
-  color-scheme: light dark;
-  --accent: #d62976;
-  --accent-2: #962fbf;
-  --bg: #f6f7fb;
-  --panel-bg: #ffffff;
-  --panel-border: #e3e6ee;
-  --text: #1f2430;
-  --text-muted: #5b6474;
-  --input-bg: #ffffff;
-  --input-border: #c9cfdd;
-  --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
-  --danger: #d13438;
-  --success: #107c41;
-  --checker-a: #ffffff;
-  --checker-b: #e6e8ef;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #12141c;
-    --panel-bg: #1a1d28;
-    --panel-border: #2a2f40;
-    --text: #e6e9f2;
-    --text-muted: #98a1b5;
-    --input-bg: #12141c;
-    --input-border: #3a4157;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-    --danger: #ff6b70;
-    --success: #4ade80;
-    --checker-a: #262b3a;
-    --checker-b: #1a1d28;
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #12141c;
-  --panel-bg: #1a1d28;
-  --panel-border: #2a2f40;
-  --text: #e6e9f2;
-  --text-muted: #98a1b5;
-  --input-bg: #12141c;
-  --input-border: #3a4157;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --danger: #ff6b70;
-  --success: #4ade80;
-  --checker-a: #262b3a;
-  --checker-b: #1a1d28;
-}
-
-/* ─── Base ─── */
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: "Segoe UI", "Helvetica Neue", Arial, "Hiragino Sans", "Noto Sans JP", sans-serif;
-  line-height: 1.5;
-}
-
-a {
-  color: var(--accent);
-}
+/* The Playground's own parts. The theme tokens and what the API page shares are in site.css. */
 
 main {
-  max-width: 1160px;
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: 0 16px 24px;
 }
@@ -77,7 +9,7 @@ main {
 /* ─── Header ─── */
 
 #header-bar {
-  max-width: 1160px;
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: 20px 16px 8px;
 }
@@ -97,44 +29,10 @@ main {
   gap: 10px;
 }
 
-.site-logo {
-  display: inline-block;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  background:
-    radial-gradient(circle at 30% 70%, #fa7e1e 0%, #d62976 55%, #962fbf 100%);
-  position: relative;
-}
-
-.site-logo::after {
-  content: "";
-  position: absolute;
-  inset: 7px;
-  border: 2.5px solid #fff;
-  border-radius: 4px;
-}
-
 .tagline {
   margin: 4px 0 0;
   color: var(--text-muted);
   font-size: 0.95rem;
-}
-
-.version-badge {
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--panel-border);
-  background: var(--panel-bg);
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.version-badge:hover {
-  color: var(--accent);
-  border-color: var(--accent);
 }
 
 /* ─── Layout ─── */
@@ -205,12 +103,6 @@ details.panel[open] summary {
 
 /* ─── Fields ─── */
 
-/* Author display rules (e.g. .field { display: flex }) override the UA
-   stylesheet's [hidden] { display: none }; restore the attribute's meaning. */
-[hidden] {
-  display: none !important;
-}
-
 .field {
   display: flex;
   flex-direction: column;
@@ -250,20 +142,6 @@ details.panel[open] summary {
   color: var(--text-muted);
 }
 
-textarea,
-select,
-input[type="text"],
-input[type="number"],
-input[type="file"] {
-  font: inherit;
-  color: var(--text);
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
-  border-radius: 8px;
-  padding: 7px 10px;
-  max-width: 100%;
-}
-
 textarea {
   resize: vertical;
   min-height: 60px;
@@ -291,7 +169,7 @@ textarea {
 /* Hex reads by columns, so the box takes a fixed-width face in bytes mode. */
 textarea.content--hex,
 .hex-dump {
-  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .decode-bytes {
@@ -328,14 +206,6 @@ textarea.content--hex,
 
 .separator-row .field__hint {
   margin: 0;
-}
-
-textarea:focus-visible,
-select:focus-visible,
-input:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
 }
 
 input[type="range"] {
@@ -748,11 +618,10 @@ input[type="file"]::file-selector-button:hover {
   padding: 0 2px;
 }
 
-/* ─── About & footer ─── */
+/* ─── About ─── */
 
-.playground-about,
-footer {
-  max-width: 1160px;
+.playground-about {
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: 8px 16px;
 }
@@ -767,63 +636,3 @@ footer {
   font-size: 0.9rem;
 }
 
-footer {
-  padding-bottom: 28px;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-.footer-copy-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  border-top: 1px solid var(--panel-border);
-  padding-top: 14px;
-}
-
-.repo-mark {
-  color: var(--text-muted);
-  display: inline-flex;
-}
-
-.repo-mark:hover {
-  color: var(--accent);
-}
-
-.repo-mark__icon {
-  width: 20px;
-  height: 20px;
-}
-
-.footer-copy-sep {
-  opacity: 0.5;
-}
-
-/* ─── Theme cycle button ─── */
-
-.toolbar-icon-btn {
-  background: none;
-  border: 1px solid var(--input-border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 5px 7px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.toolbar-icon-btn:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.theme-cycle-btn__svg {
-  display: none;
-}
-
-.theme-cycle-btn[data-theme-mode="system"] .theme-cycle-btn__svg--system,
-.theme-cycle-btn[data-theme-mode="light"] .theme-cycle-btn__svg--light,
-.theme-cycle-btn[data-theme-mode="dark"] .theme-cycle-btn__svg--dark {
-  display: block;
-}

@@ -39,7 +39,7 @@ var wantsHtml = args.Contains("--html");
 // The shipped assemblies, in the order the packages depend on each other. The project
 // references to the rendering and GS1 packages bring the core along.
 var assemblies = new[] { typeof(FeatherQR.QRCodeData).Assembly, typeof(FeatherQR.SkiaSharp.SymbolRenderer).Assembly, typeof(FeatherQR.Gs1.Gs1ElementString).Assembly };
-var version = assemblies[0].GetName().Version;
+var version = ProductVersion(assemblies[0]);
 var nullability = new NullabilityInfoContext();
 
 // Doc text, keyed by the documentation ID the compiler emits. Exported types never collide

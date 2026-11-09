@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <title>FeatherQR API</title>
-  <meta name="description" content="Every public type in FeatherQR and FeatherQR.SkiaSharp 2.0.0.0" />
+  <meta name="description" content="Every public type in FeatherQR and FeatherQR.SkiaSharp 2.0.0-preview.8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" id="meta-color-scheme" content="light dark" />
   <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
@@ -22,9 +22,14 @@
     })();
   </script>
   <style>
+    /* What every page of the site shares. The API page cannot link a fingerprinted file, so its generator embeds this one. */
+
+    /* ─── Theme tokens ─── */
+
     :root {
       color-scheme: light dark;
       --accent: #d62976;
+      --accent-2: #962fbf;
       --bg: #f6f7fb;
       --panel-bg: #ffffff;
       --panel-border: #e3e6ee;
@@ -32,10 +37,13 @@
       --text-muted: #5b6474;
       --input-bg: #ffffff;
       --input-border: #c9cfdd;
-      --tag-bg: #fbe7f0;
-      --tag-text: #a3306a;
-      --sig-bg: #f0f2f8;
       --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+      --danger: #d13438;
+      --success: #107c41;
+      --checker-a: #ffffff;
+      --checker-b: #e6e8ef;
+      --page-width: 1160px;
+      --font-mono: ui-monospace, "Cascadia Mono", SFMono-Regular, Consolas, "Liberation Mono", monospace;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -47,10 +55,11 @@
         --text-muted: #98a1b5;
         --input-bg: #12141c;
         --input-border: #3a4157;
-        --tag-bg: #3a1f2e;
-        --tag-text: #f19ac2;
-        --sig-bg: #222634;
         --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        --danger: #ff6b70;
+        --success: #4ade80;
+        --checker-a: #262b3a;
+        --checker-b: #1a1d28;
       }
     }
 
@@ -62,51 +71,226 @@
       --text-muted: #98a1b5;
       --input-bg: #12141c;
       --input-border: #3a4157;
-      --tag-bg: #3a1f2e;
-      --tag-text: #f19ac2;
-      --sig-bg: #222634;
       --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      --danger: #ff6b70;
+      --success: #4ade80;
+      --checker-a: #262b3a;
+      --checker-b: #1a1d28;
     }
 
-    * { box-sizing: border-box; }
+    /* ─── Base ─── */
+
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      line-height: 1.65;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      line-height: 1.5;
+    }
+
+    a {
+      color: var(--accent);
+    }
+
+    /* Author display rules (e.g. .field { display: flex }) override the UA
+       stylesheet's [hidden] { display: none }; restore the attribute's meaning. */
+    [hidden] {
+      display: none !important;
+    }
+
+    /* ─── Typed fields ─── */
+
+    textarea,
+    select,
+    input[type="text"],
+    input[type="number"],
+    input[type="search"],
+    input[type="file"] {
+      font: inherit;
+      color: var(--text);
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      max-width: 100%;
+    }
+
+    a:focus-visible,
+    summary:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible,
+    input:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* ─── Site title ─── */
+
+    /* Sized in em, so the mark follows the title it sits in. */
+    .site-logo {
+      display: inline-block;
+      width: 1.2em;
+      height: 1.2em;
+      border-radius: 0.3em;
+      background:
+        radial-gradient(circle at 30% 70%, #fa7e1e 0%, #d62976 55%, #962fbf 100%);
+      position: relative;
+    }
+
+    .site-logo::after {
+      content: "";
+      position: absolute;
+      inset: 0.3em;
+      border: 0.11em solid #fff;
+      border-radius: 0.17em;
+    }
+
+    .version-badge {
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel-bg);
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    a.version-badge:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* A link to another page of the site. */
+    .nav-link {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .nav-link:hover {
+      text-decoration: underline;
+    }
+
+    /* ─── Footer ─── */
+
+    footer {
+      max-width: var(--page-width);
+      margin: 0 auto;
+      padding: 8px 16px 28px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .footer-copy-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--panel-border);
+      padding-top: 14px;
+    }
+
+    .repo-mark {
+      color: var(--text-muted);
+      display: inline-flex;
+    }
+
+    .repo-mark:hover {
+      color: var(--accent);
+    }
+
+    .repo-mark__icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    .footer-copy-sep {
+      opacity: 0.5;
+    }
+
+    /* ─── Theme cycle button ─── */
+
+    .toolbar-icon-btn {
+      background: none;
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 5px 7px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .toolbar-icon-btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .theme-cycle-btn__svg {
+      display: none;
+    }
+
+    .theme-cycle-btn[data-theme-mode="system"] .theme-cycle-btn__svg--system,
+    .theme-cycle-btn[data-theme-mode="light"] .theme-cycle-btn__svg--light,
+    .theme-cycle-btn[data-theme-mode="dark"] .theme-cycle-btn__svg--dark {
+      display: block;
+    }
+
+    :root {
+      --tag-bg: #fbe7f0;
+      --tag-text: #a3306a;
+      --sig-bg: #f0f2f8;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --tag-bg: #3a1f2e;
+        --tag-text: #f19ac2;
+        --sig-bg: #222634;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --tag-bg: #3a1f2e;
+      --tag-text: #f19ac2;
+      --sig-bg: #222634;
     }
 
     code {
-      font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      font-family: var(--font-mono);
       font-size: 0.84rem;
     }
 
+    /* The bar spans the window, and its padding keeps what it holds on the page's column. */
     .bar {
       position: sticky;
       top: 0;
       z-index: 20;
       display: flex;
-      align-items: baseline;
-      gap: 0.9rem;
+      align-items: center;
+      gap: 10px;
       flex-wrap: wrap;
-      padding: 0.7rem clamp(1rem, 3vw, 2rem);
+      padding: 0.6rem max(16px, calc((100% - var(--page-width)) / 2 + 16px));
       background: var(--panel-bg);
       border-bottom: 1px solid var(--panel-border);
     }
-    .bar h1 { font-size: 1rem; margin: 0; }
-    .back { color: var(--accent); text-decoration: none; font-size: 0.85rem; white-space: nowrap; }
-    .back:hover { text-decoration: underline; }
-    .meta { color: var(--text-muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+    .bar h1 { display: flex; align-items: center; gap: 8px; font-size: 1rem; margin: 0; }
+    .meta { margin-left: auto; color: var(--text-muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
 
     .layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 0 2rem;
-      max-width: 1240px;
+      max-width: var(--page-width);
       margin-inline: auto;
-      padding: 0 clamp(1rem, 3vw, 2rem) 4rem;
+      padding: 0 16px 2rem;
     }
 
     @media (min-width: 60rem) {
@@ -120,20 +304,14 @@
       }
     }
 
-    .sidebar { padding-top: 1.5rem; }
+    /* The sidebar scrolls, so it clips. The side padding leaves room for a focus ring, and the margin takes the width back. */
+    .sidebar { padding: 1.5rem 4px 0; margin-inline: -4px; }
 
     #q {
       width: 100%;
-      padding: 0.45rem 0.7rem;
       margin-bottom: 1rem;
-      background: var(--input-bg);
-      color: var(--text);
-      border: 1px solid var(--input-border);
-      border-radius: 6px;
-      font: inherit;
       font-size: 0.86rem;
     }
-    #q:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
     .toc-ns {
       margin: 1rem 0 0.4rem;
@@ -176,7 +354,6 @@
       scroll-margin-top: 4rem;
     }
     .type:last-child { border-bottom: 0; }
-    .type[hidden], .member[hidden], .ns[hidden], .toc-item[hidden], .toc-ns[hidden] { display: none; }
 
     .type > h3, .member > h4 {
       margin: 0 0 0.35rem;
@@ -191,7 +368,6 @@
     .name { color: var(--accent); }
     a.name { text-decoration: none; }
     a.name:hover { text-decoration: underline; }
-    a.name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
     /* Signatures wrap instead of scrolling: a horizontal scrollbar per signature hides
        the end of every long one and makes the reader work for it. C# breaks cleanly at
@@ -238,7 +414,6 @@
     .notes > summary::before { content: "\25B8"; display: inline-block; margin-right: 0.35rem; }
     .notes[open] > summary::before { content: "\25BE"; }
     .notes > summary:hover { color: var(--accent); }
-    .notes > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
     .remarks {
       margin-top: 0.3rem;
@@ -270,7 +445,6 @@
     }
 
     .empty { color: var(--text-muted); }
-    .empty[hidden] { display: none; }
 
     @media (prefers-reduced-motion: no-preference) {
       html { scroll-behavior: smooth; }
@@ -280,9 +454,16 @@
 
 <body>
   <header class="bar">
-    <a class="back" href="../">&#8592; Playground</a>
-    <h1>FeatherQR API</h1>
-    <span class="meta">2.0.0.0 &middot; <span id="count">85 types</span></span>
+    <h1>
+      <a href="https://github.com/guitarrapc/FeatherQR" target="_blank" rel="noopener noreferrer"
+        aria-label="FeatherQR on GitHub"><span class="site-logo" aria-hidden="true"></span></a>
+      FeatherQR API
+    </h1>
+    <a class="version-badge" target="_blank" rel="noopener noreferrer"
+      href="https://github.com/guitarrapc/FeatherQR/releases/tag/2.0.0-preview.8"
+      aria-label="Release 2.0.0-preview.8, open on GitHub">v2.0.0-preview.8</a>
+    <a class="nav-link" href="../">Playground</a>
+    <span class="meta"><span id="count">85 types</span></span>
   </header>
 
   <div class="layout">
@@ -4901,6 +5082,54 @@
     </main>
   </div>
 
+  <footer>
+    <p class="footer-copy-row">
+      <a class="repo-mark" href="https://github.com/guitarrapc/FeatherQR" target="_blank"
+        rel="noopener noreferrer" aria-label="FeatherQR on GitHub">
+        <svg class="repo-mark__icon" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"
+            d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.235-22.23-5.42-22.23-24.251 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.251 1.75 1.52 3.318 4.491 3.318 9.022 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z" />
+        </svg>
+      </a>
+      <span class="footer-copy-sep" aria-hidden="true">|</span>
+      <span class="footer-copy-text">© 2026 <a href="https://github.com/guitarrapc" target="_blank"
+          rel="noopener noreferrer">guitarrapc</a>. The source
+        code and website content are licensed <a
+          href="https://github.com/guitarrapc/FeatherQR/blob/main/LICENSE" target="_blank"
+          rel="noopener noreferrer">MIT</a>.</span>
+      <span class="footer-copy-sep" aria-hidden="true">|</span>
+      <button type="button" id="theme-cycle-btn" class="theme-cycle-btn toolbar-icon-btn" data-theme-mode="system"
+        title="Cycle color theme: System → Light → Dark."
+        aria-label="Color theme: System. Click to cycle: System, Light, Dark.">
+        <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--system" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+        <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--light" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+        <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--dark" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      </button>
+    </p>
+  </footer>
+
   <script>
     (function () {
       var box = document.getElementById('q');
@@ -4985,6 +5214,72 @@
 
       apply();
     })();
+  </script>
+  <script type="module">
+    // The color theme button in the footer. It imports and exports nothing, because the API page's generator embeds this file as it is.
+
+    const THEME_STORAGE_KEY = 'skqr-playground-color-mode';
+    const THEME_CYCLE_ORDER = ['system', 'light', 'dark'];
+
+    function getStoredColorMode() {
+      try {
+        const v = localStorage.getItem(THEME_STORAGE_KEY);
+        if (v === 'light' || v === 'dark') return v;
+      } catch (_) {
+        /* ignore */
+      }
+      return 'system';
+    }
+
+    function setStoredColorMode(mode) {
+      try {
+        if (mode === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
+        else localStorage.setItem(THEME_STORAGE_KEY, mode);
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
+    function applyColorModeToDocument(mode) {
+      const root = document.documentElement;
+      if (mode === 'light') root.setAttribute('data-theme', 'light');
+      else if (mode === 'dark') root.setAttribute('data-theme', 'dark');
+      else root.removeAttribute('data-theme');
+      const meta = document.getElementById('meta-color-scheme');
+      if (meta) {
+        if (mode === 'light') meta.setAttribute('content', 'light');
+        else if (mode === 'dark') meta.setAttribute('content', 'dark');
+        else meta.setAttribute('content', 'light dark');
+      }
+    }
+
+    function themeAccessibilityLabel(mode) {
+      const suffix = 'Click to cycle: System, Light, Dark.';
+      if (mode === 'light') return `Color theme: Light. ${suffix}`;
+      if (mode === 'dark') return `Color theme: Dark. ${suffix}`;
+      return `Color theme: System. ${suffix}`;
+    }
+
+    const themeCycleBtn = document.getElementById('theme-cycle-btn');
+
+    function updateThemeCycleButton() {
+      if (!themeCycleBtn) return;
+      const mode = getStoredColorMode();
+      themeCycleBtn.dataset.themeMode = mode;
+      themeCycleBtn.setAttribute('aria-label', themeAccessibilityLabel(mode));
+    }
+
+    if (themeCycleBtn) {
+      themeCycleBtn.addEventListener('click', () => {
+        const cur = getStoredColorMode();
+        const i = Math.max(0, THEME_CYCLE_ORDER.indexOf(cur));
+        const next = THEME_CYCLE_ORDER[(i + 1) % THEME_CYCLE_ORDER.length];
+        setStoredColorMode(next);
+        applyColorModeToDocument(next);
+        updateThemeCycleButton();
+      });
+    }
+    updateThemeCycleButton();
   </script>
 </body>
 

@@ -42,6 +42,7 @@
       } catch (e) { /* ignore */ }
     })();
   </script>
+  <link rel="stylesheet" href="site#[.{fingerprint}].css">
   <link rel="stylesheet" href="style#[.{fingerprint}].css">
 </head>
 
@@ -61,7 +62,7 @@
         <!-- Spelled out rather than "api/": the dev server has no default document for a
              subdirectory and falls back to this page, so "api/" silently re-serves the
              Playground. GitHub Pages resolves either form. -->
-        <a class="version-badge" href="api/index.html" aria-label="Public API listing">API</a>
+        <a class="nav-link" href="api/index.html" aria-label="Public API listing">API</a>
       </div>
       <p class="tagline">QR codes with gradients, shapes and logos, rendered by Skia in your browser</p>
     </header>

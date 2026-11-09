@@ -1,5 +1,5 @@
-/* Derived from src/FeatherQR.Playground/wwwroot/style.css, same theme tokens
-   and panel design, trimmed to this sample's needs, plus Blazor loading/error UI. */
+/* Derived from the Playground's site.css and style.css in src/FeatherQR.Playground/wwwroot.
+   It keeps the same theme tokens and panel design, trimmed to this sample's needs, and adds the Blazor loading and error UI. */
 
 /* ─── Theme tokens ─── */
 
@@ -18,6 +18,7 @@
   --danger: #d13438;
   --checker-a: #ffffff;
   --checker-b: #e6e8ef;
+  --page-width: 1160px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -56,7 +57,7 @@ a {
 }
 
 main {
-  max-width: 1160px;
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: 0 16px 24px;
 }
@@ -64,7 +65,7 @@ main {
 /* ─── Header ─── */
 
 #header-bar {
-  max-width: 1160px;
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: 20px 16px 8px;
 }
@@ -84,11 +85,12 @@ main {
   gap: 10px;
 }
 
+/* Sized in em, so the mark follows the title it sits in. */
 .site-logo {
   display: inline-block;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  width: 1.2em;
+  height: 1.2em;
+  border-radius: 0.3em;
   background:
     radial-gradient(circle at 30% 70%, #fa7e1e 0%, #d62976 55%, #962fbf 100%);
   position: relative;
@@ -97,9 +99,9 @@ main {
 .site-logo::after {
   content: "";
   position: absolute;
-  inset: 7px;
-  border: 2.5px solid #fff;
-  border-radius: 4px;
+  inset: 0.3em;
+  border: 0.11em solid #fff;
+  border-radius: 0.17em;
 }
 
 .tagline {
@@ -203,7 +205,8 @@ details.panel[open] summary {
   cursor: pointer;
 }
 
-.field--disabled {
+/* The dim follows the control's own state, so a disabled control cannot miss it. */
+.field:has(> :disabled) {
   opacity: 0.45;
 }
 
@@ -230,12 +233,32 @@ textarea {
   min-height: 60px;
 }
 
+a:focus-visible,
+summary:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 input:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
+}
+
+/* A file input's own button draws as a small button, and the input keeps showing the chosen file's name. */
+input[type="file"]::file-selector-button {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 3px 8px;
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+input[type="file"]::file-selector-button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 input[type="range"] {
@@ -336,7 +359,7 @@ output {
 /* ─── Footer ─── */
 
 footer {
-  max-width: 1160px;
+  max-width: var(--page-width);
   margin: 0 auto;
   padding: 8px 16px 28px;
   color: var(--text-muted);

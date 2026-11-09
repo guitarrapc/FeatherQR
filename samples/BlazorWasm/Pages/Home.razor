@@ -22,9 +22,9 @@
         <details class="panel" open>
             <summary>QR parameters</summary>
             <div class="panel__grid">
-                <label class="field">
+                <label class="field" title="Standard QR (versions 1-40), Micro QR (M1-M4, tiny symbols with a single finder pattern) or rMQR (rectangular Micro QR, R7x43-R17x139).">
                     <span class="field__label">Symbology</span>
-                    <select title="Standard QR (versions 1-40), Micro QR (M1-M4, tiny symbols with a single finder pattern) or rMQR (rectangular Micro QR, R7x43-R17x139)"
+                    <select
                             @bind="Options.Symbology" @bind:after="OnSymbologyChanged">
                         <option value="@SymbologyKind.QrCode">QR Code</option>
                         <option value="@SymbologyKind.MicroQR">Micro QR</option>
@@ -33,16 +33,16 @@
                 </label>
                 @if (Options.Symbology == SymbologyKind.RmQR)
                 {
-                    <label class="field">
-                        <span class="field__label">Error correction</span>
-                        <select title="rMQR supports M and H" @bind="Options.RmEcc" @bind:after="Regenerate">
+                    <label class="field" title="rMQR supports M and H.">
+                        <span class="field__label">Error correction (ECC)</span>
+                        <select @bind="Options.RmEcc" @bind:after="Regenerate">
                             <option value="@RmQREccLevel.M">M, 15%</option>
                             <option value="@RmQREccLevel.H">H, 30%</option>
                         </select>
                     </label>
-                    <label class="field">
+                    <label class="field" title="rMQR symbol version R{height}x{width}. Auto picks by the fit strategy below.">
                         <span class="field__label">Version</span>
-                        <select title="rMQR symbol version R{height}x{width}. Auto picks by the fit strategy below."
+                        <select
                                 @bind="Options.Version" @bind:after="Regenerate">
                             <option value="-1">Auto</option>
                             @foreach (var version in Enum.GetValues<RmQRVersion>())
@@ -51,18 +51,18 @@
                             }
                         </select>
                     </label>
-                    <label class="field">
+                    <label class="field" title="How the version is chosen among those that fit (Auto version only). Fewest modules matches other encoders; Shortest keeps the symbol as flat as possible.">
                         <span class="field__label">Fit strategy</span>
-                        <select title="How the version is chosen among those that fit (Auto version only). Fewest modules matches other encoders; Shortest keeps the symbol as flat as possible."
+                        <select
                                 @bind="Options.RmFitStrategy" @bind:after="Regenerate" disabled="@(Options.Version != -1)">
                             <option value="@RmQRFitStrategy.MinimizeArea">Fewest modules</option>
                             <option value="@RmQRFitStrategy.MinimizeHeight">Shortest</option>
                             <option value="@RmQRFitStrategy.MinimizeWidth">Narrowest</option>
                         </select>
                     </label>
-                    <label class="field">
+                    <label class="field" title="Restrict the fit to one symbol height (modules); the width is chosen automatically (Auto version only).">
                         <span class="field__label">Fixed height</span>
-                        <select title="Restrict the fit to one symbol height (modules); the width is chosen automatically (Auto version only)."
+                        <select
                                 @bind="Options.RmHeight" @bind:after="Regenerate" disabled="@(Options.Version != -1)">
                             <option value="">Any</option>
                             @foreach (var height in Enum.GetValues<RmQRHeight>())
@@ -74,9 +74,9 @@
                 }
                 else if (Options.Symbology == SymbologyKind.MicroQR)
                 {
-                    <label class="field">
-                        <span class="field__label">Error correction</span>
-                        <select title="Legal levels depend on the version: M1 is error detection only, M2/M3 allow L and M, M4 adds Q"
+                    <label class="field" title="Legal levels depend on the version: M1 is error detection only, M2/M3 allow L and M, M4 adds Q.">
+                        <span class="field__label">Error correction (ECC)</span>
+                        <select
                                 @bind="Options.MicroEcc" @bind:after="Regenerate">
                             <option value="@MicroQREccLevel.ErrorDetectionOnly">Error detection only (M1)</option>
                             <option value="@MicroQREccLevel.L">L, 7%</option>
@@ -84,9 +84,9 @@
                             <option value="@MicroQREccLevel.Q">Q, 25% (M4 only)</option>
                         </select>
                     </label>
-                    <label class="field">
+                    <label class="field" title="Micro QR symbol version. Auto picks the smallest that fits.">
                         <span class="field__label">Version</span>
-                        <select title="Micro QR symbol version. Auto picks the smallest that fits."
+                        <select
                                 @bind="Options.Version" @bind:after="Regenerate">
                             <option value="-1">Auto</option>
                             @for (var v = 1; v <= 4; v++)
@@ -98,9 +98,9 @@
                 }
                 else
                 {
-                    <label class="field">
-                        <span class="field__label">Error correction</span>
-                        <select title="Higher levels survive more damage or overlay, H is recommended with a logo"
+                    <label class="field" title="Higher levels survive more damage or overlay, H is recommended with a logo.">
+                        <span class="field__label">Error correction (ECC)</span>
+                        <select
                                 @bind="Options.Ecc" @bind:after="Regenerate">
                             <option value="@QREccLevel.L">L, 7%</option>
                             <option value="@QREccLevel.M">M, 15%</option>
@@ -108,9 +108,9 @@
                             <option value="@QREccLevel.H">H, 30%</option>
                         </select>
                     </label>
-                    <label class="field">
+                    <label class="field" title="QR symbol version (matrix size). Auto picks the smallest that fits.">
                         <span class="field__label">Version</span>
-                        <select title="QR symbol version (matrix size). Auto picks the smallest that fits."
+                        <select
                                 @bind="Options.Version" @bind:after="Regenerate">
                             <option value="-1">Auto</option>
                             @for (var v = 1; v <= 40; v++)
@@ -146,9 +146,9 @@
                 </label>
                 @if (Options.Symbology == SymbologyKind.QrCode)
                 {
-                    <label class="field">
+                    <label class="field" title="The three large squares in the corners.">
                         <span class="field__label">Finder pattern</span>
-                        <select title="The three large squares in the corners"
+                        <select
                                 @bind="Options.FinderShape" @bind:after="Regenerate">
                             <option value="@FinderShapeKind.Auto">Auto (plain square)</option>
                             <option value="@FinderShapeKind.Rectangle">Rectangle</option>
@@ -158,10 +158,9 @@
                         </select>
                     </label>
                 }
-                <label class="field">
+                <label class="field" title="Below 100% leaves gaps between modules. Values under 80% may hurt readability.">
                     <span class="field__label">Module size <output>@((int)(Options.ModuleSizePercent * 100))</output>%</span>
                     <input type="range" min="0.5" max="1" step="0.01"
-                           title="Below 100% leaves gaps between modules. Values under 80% may hurt readability."
                            @bind="Options.ModuleSizePercent" @bind:event="oninput" @bind:after="Regenerate" />
                 </label>
                 @if (Options.ModuleShape == ModuleShapeKind.Rounded)
@@ -178,12 +177,12 @@
         <details class="panel" open>
             <summary>Color</summary>
             <div class="panel__grid">
-                <label class="field field--inline @(Options.GradientEnabled ? "field--disabled" : null)">
+                <label class="field field--inline">
                     <span class="field__label">Modules</span>
                     <input type="color" disabled="@Options.GradientEnabled"
                            @bind="Options.Foreground" @bind:after="Regenerate" />
                 </label>
-                <label class="field field--inline @(Options.TransparentBackground ? "field--disabled" : null)">
+                <label class="field field--inline">
                     <span class="field__label">Background</span>
                     <input type="color" disabled="@Options.TransparentBackground"
                            @bind="Options.Background" @bind:after="Regenerate" />
@@ -277,7 +276,7 @@
             <div class="preview-actions">
                 <button type="button" class="action-btn" @onclick="DownloadPngAsync">Download PNG</button>
                 <button type="button" class="action-btn" @onclick="DownloadSvgAsync"
-                        title="Vector output, scales to any size without quality loss">Download SVG</button>
+                        title="Vector output, scales to any size without quality loss.">Download SVG</button>
             </div>
         </div>
     </div>
