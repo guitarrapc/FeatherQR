@@ -1,5 +1,7 @@
 // Images with FeatherQR package. SVG, PNG, raw pixels and text for a terminal.
 using System.Buffers;
+using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Text;
 using FeatherQR;
 
@@ -43,7 +45,7 @@ SaveBytes("microqr.png", SymbolImageWriter.GetPngBytes(micro));
 SaveText("rmqr.svg", SymbolImageWriter.GetSvgString(rmqr));
 SaveBytes("rmqr.png", SymbolImageWriter.GetPngBytes(rmqr));
 
-// The README shows qr-navy-transparent.png, qr-styled.png and qr-icon-area.png at their pixel size, so they are 248 px like its other pictures.
+// The README shows qr-navy-transparent.png, qr-styled.png and qr-icon.png at their pixel size, so they are 248 px like its other pictures.
 
 // The colours. A fully transparent light colour leaves the background out.
 var navyOnClear = new SymbolImageOptions
@@ -76,13 +78,24 @@ SaveText("qr-styled.svg", SymbolImageWriter.GetSvgString(qr, styled));
 SaveBytes("qr-styled.png", SymbolImageWriter.GetPngBytes(qr, styled));
 
 // An icon area on a Standard QR code. The symbol relies on its error correction, so it is made at level H. The SVG embeds the image
-// given, here the Micro QR code's own PNG, and for the PNG and the pixels GetIconRectangle says where to draw it.
+// given, here the Micro QR code's own PNG in navy. The PNG and the pixels leave the area light.
 var qrH = QRCodeGenerator.Create(url, QREccLevel.H);
-var withIcon = new SymbolImageOptions { Width = 248, Height = 248, IconSizeModules = 7, IconImage = SymbolImageWriter.GetPngBytes(micro) };
+var navy = new SymbolColor(0x1E, 0x3A, 0x8A);
+var withIcon = new SymbolImageOptions { Width = 248, Height = 248, IconSizeModules = 7, IconImage = SymbolImageWriter.GetPngBytes(micro, new SymbolImageOptions { DarkColor = navy }) };
 SaveText("qr-icon.svg", SymbolImageWriter.GetSvgString(qrH, withIcon));
 SaveBytes("qr-icon-area.png", SymbolImageWriter.GetPngBytes(qrH, withIcon));
+
+// Draw the icon into the pixels where GetIconRectangle says. Here the Micro QR code is written at that size and copied in row by row.
 var (iconX, iconY, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(qrH, withIcon);
 Console.WriteLine($"The icon goes at ({iconX}, {iconY}), {iconWidth} by {iconHeight} pixels");
+var composed = new byte[SymbolImageWriter.GetPixelBufferSize(qrH, PixelLayout.Rgba8888, withIcon)];
+SymbolImageWriter.TryWritePixels(qrH, composed, PixelLayout.Rgba8888, out var composedWidth, out var composedHeight, withIcon);
+var iconOptions = new SymbolImageOptions { Width = iconWidth, Height = iconHeight, DarkColor = navy };
+var iconPixels = new byte[SymbolImageWriter.GetPixelBufferSize(micro, PixelLayout.Rgba8888, iconOptions)];
+SymbolImageWriter.TryWritePixels(micro, iconPixels, PixelLayout.Rgba8888, out _, out _, iconOptions);
+for (var row = 0; row < iconHeight; row++)
+    iconPixels.AsSpan(row * iconWidth * 4, iconWidth * 4).CopyTo(composed.AsSpan(((iconY + row) * composedWidth + iconX) * 4));
+SaveBytes("qr-icon.png", EncodeRgbaPng(composed, composedWidth, composedHeight));
 
 // Into an IBufferWriter<byte>, such as a pipe or a pooled buffer, with no allocation of its own.
 var writer = new ArrayBufferWriter<byte>();
@@ -125,3 +138,54 @@ void SaveBytes(string name, byte[] png)
 }
 
 void Report(string name) => Console.WriteLine($"{name,-26} {new FileInfo(Path.Combine(outputDir, name)).Length,7:N0} bytes");
+
+// The PNG writer starts from a symbol, so composed pixels need an encoder of their own.
+// This is the smallest valid one: 8-bit RGBA, rows unfiltered, one zlib stream.
+static byte[] EncodeRgbaPng(byte[] rgba, int width, int height)
+{
+    using var idat = new MemoryStream();
+    using (var zlib = new ZLibStream(idat, CompressionLevel.SmallestSize, leaveOpen: true))
+    {
+        for (var row = 0; row < height; row++)
+        {
+            zlib.WriteByte(0); // filter type None
+            zlib.Write(rgba, row * width * 4, width * 4);
+        }
+    }
+
+    var ihdr = new byte[13];
+    BinaryPrimitives.WriteInt32BigEndian(ihdr, width);
+    BinaryPrimitives.WriteInt32BigEndian(ihdr.AsSpan(4), height);
+    ihdr[8] = 8; // bit depth
+    ihdr[9] = 6; // colour type RGBA
+
+    using var png = new MemoryStream();
+    png.Write([0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+    WriteChunk(png, "IHDR"u8, ihdr);
+    WriteChunk(png, "IDAT"u8, idat.ToArray());
+    WriteChunk(png, "IEND"u8, []);
+    return png.ToArray();
+}
+
+static void WriteChunk(Stream png, ReadOnlySpan<byte> type, ReadOnlySpan<byte> data)
+{
+    Span<byte> word = stackalloc byte[4];
+    BinaryPrimitives.WriteInt32BigEndian(word, data.Length);
+    png.Write(word);
+    png.Write(type);
+    png.Write(data);
+    BinaryPrimitives.WriteUInt32BigEndian(word, ~Crc32(Crc32(~0u, type), data));
+    png.Write(word);
+}
+
+// The CRC-32 a PNG chunk ends with, a bit at a time.
+static uint Crc32(uint crc, ReadOnlySpan<byte> bytes)
+{
+    foreach (var b in bytes)
+    {
+        crc ^= b;
+        for (var bit = 0; bit < 8; bit++)
+            crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+    }
+    return crc;
+}

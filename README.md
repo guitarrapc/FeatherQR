@@ -914,7 +914,7 @@ SymbolImageWriter.TryWritePixels(qrH, buffer, PixelLayout.Rgba8888, out var w, o
 var (x, y, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(qrH, withIcon); // draw the logo here
 ```
 
-![The icon area left light in the PNG](https://raw.githubusercontent.com/guitarrapc/FeatherQR/main/samples/ConsoleAppCore/samples/qr-icon-area.png)
+![An icon drawn into the pixels where GetIconRectangle points](https://raw.githubusercontent.com/guitarrapc/FeatherQR/main/samples/ConsoleAppCore/samples/qr-icon.png)
 
 #### Terminal Text
 
