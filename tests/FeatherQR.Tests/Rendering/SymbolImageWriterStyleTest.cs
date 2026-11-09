@@ -248,6 +248,53 @@ public class SymbolImageWriterStyleTest
         }
     }
 
+    public static IEnumerable<(string Symbol, string Size)> StyledPngSizeCases()
+    {
+        foreach (var symbol in new[] { "qr-v1", "qr-v10", "microqr-m2", "rmqr-r7x43" })
+            foreach (var size in new[] { "3px", "5px", "8px", "16px", "300x200", "512" })
+                yield return (symbol, size);
+    }
+
+    /// <summary>
+    /// A copy of the scanline above runs on past a row's last byte into the next row's scanline. Small cells make scanlines shorter than a
+    /// match, a set size pads the symbol with light rows or columns, and the last row has no row after it. Each style's PNG must decode to
+    /// the pixel buffer, in greyscale and with a palette.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(StyledPngSizeCases))]
+    public async Task Png_Styled_AtSmallCellsAndSetSizes_DecodeToThePixels(string symbol, string size)
+    {
+        object data = symbol switch
+        {
+            "qr-v1" => QRCodeGenerator.Create("HELLO WORLD 2026", QREccLevel.M),
+            "qr-v10" => QRCodeGenerator.Create(RandomText(200), QREccLevel.M),
+            "microqr-m2" => MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M2 }),
+            _ => RmQRCodeGenerator.Create("ROWS", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 }),
+        };
+        var sized = size switch
+        {
+            "300x200" => new SymbolImageOptions { Width = 300, Height = 200 },
+            "512" => new SymbolImageOptions { Width = 512, Height = 512 },
+            _ => new SymbolImageOptions { ModulePixelSize = int.Parse(size.AsSpan(0, size.Length - 2), CultureInfo.InvariantCulture) },
+        };
+        foreach (var styled in new[]
+        {
+            sized with { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle },
+            sized with { ModuleStyle = ModuleStyle.RoundedSquare, FinderPatternStyle = FinderPatternStyle.RoundedSquare, DarkColor = Navy, LightColor = Ivory },
+            sized with { ModuleScalePercent = 80 },
+        })
+        {
+            var png = data switch
+            {
+                QRCodeData qr => SymbolImageWriter.GetPngBytes(qr, styled),
+                MicroQRCodeData micro => SymbolImageWriter.GetPngBytes(micro, styled),
+                RmQRCodeData rm => SymbolImageWriter.GetPngBytes(rm, styled),
+                _ => throw new ArgumentException(nameof(data)),
+            };
+            await Assert.That(DecodePng(png)).IsEquivalentTo(Pixels(data, styled, PixelLayout.Bgra8888), CollectionOrdering.Matching).Because($"{styled.ModuleStyle} {styled.ModuleScalePercent}");
+        }
+    }
+
     private static string RandomText(int length)
     {
         var rng = new Random(42);
