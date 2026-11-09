@@ -232,16 +232,20 @@ public class SymbolImageAsyncWriteTest
         // The icon changes the builder while the call copies it, after the builder's own settings are copied and before the call returns.
         // So a render that read the caller's builder reads the change whatever the threads do, and one that read the copy does not
         QRCodeImageBuilder? builder = null;
+        var gate = new GateModuleShape();
         var icon = new CountingIconShape(onCopy: () => builder!.WithSize(300, 300));
-        builder = QR().WithSize(100, 100).WithIcon(new IconData(icon, iconSizePercent: 20));
+        builder = QR().WithSize(100, 100).WithModuleShape(gate).WithIcon(new IconData(icon, iconSizePercent: 20));
         var expected = Written(builder, svg);
         var stream = new AsyncOnlyStream();
         var completedOnReturn = true;
 
         await RunUnder(caller, async () =>
         {
+            // The render waits at its first module until the task is read, so a render on the pool cannot complete it first, however late the caller's thread runs
+            gate.Close();
             var task = Write(builder, stream, svg, CancellationToken.None);
             completedOnReturn = task.IsCompleted;
+            gate.Open();
             await task;
         });
 

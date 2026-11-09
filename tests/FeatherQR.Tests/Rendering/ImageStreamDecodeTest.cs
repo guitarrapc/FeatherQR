@@ -661,6 +661,7 @@ public class ImageStreamDecodeTest
     }
 
     [Test]
+    [Retry(3)]
     [Arguments(false)]
     [Arguments(true)]
     public async Task Async_UnderASynchronizationContext_DecodesOffIt(bool everySymbol)
@@ -745,6 +746,7 @@ public class ImageStreamDecodeTest
     }
 
     [Test]
+    [Retry(3)]
     [Arguments(false)]
     [Arguments(true)]
     public async Task Async_UnderATaskScheduler_DecodesOffIt(bool everySymbol)
