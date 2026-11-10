@@ -196,16 +196,24 @@ public class SymbolImageWriterIconTest
         await Assert.That(new ImageRect(1, 2, 3, 4) != new ImageRect(1, 2, 4, 3)).IsTrue();
     }
 
-    /// <summary>At a set size and with a style, the area is still the light colour and the rectangle lands on the cells the fit gives.</summary>
+    /// <summary>
+    /// At a set size and with a style, the area is still the light colour and the rectangle lands on the cells the layout gives: 45 modules
+    /// over 400 pixels are 8 each, or 8.9 when filling, where the 7 cells are 8 or 9 pixels.
+    /// </summary>
     [Test]
-    public async Task IconArea_AtASetSize_AndStyled_IsLight_AndTheRectangle_IsOnTheGrid()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task IconArea_AtASetSize_AndStyled_IsLight_AndTheRectangle_IsOnTheGrid(bool fillCanvas)
     {
         var qr = QRCodeGenerator.Create("icon area", QREccLevel.H, new QRCodeGeneratorOptions { Version = 5 });
-        var options = new SymbolImageOptions { Width = 500, Height = 400, IconSizeModules = 7, ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 90, DarkColor = Navy, LightColor = Ivory };
+        var options = new SymbolImageOptions { Width = 500, Height = 400, FillCanvas = fillCanvas, IconSizeModules = 7, ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 90, DarkColor = Navy, LightColor = Ivory };
         var pixels = Pixels(qr, options, PixelLayout.Rgba8888);
         var (x, y, width, height) = SymbolImageWriter.GetIconRectangle(qr, options);
 
-        await Assert.That(width).IsBetween(7 * 8, 7 * 9).Because("45 modules over 400 pixels is 8.9 a module");
+        if (fillCanvas)
+            await Assert.That(width).IsBetween(7 * 8, 7 * 9);
+        else
+            await Assert.That(width).IsEqualTo(7 * 8);
         for (var py = y; py < y + height; py++)
             for (var px = x; px < x + width; px++)
                 await Assert.That(pixels.AsSpan((py * 500 + px) * 4, 4).ToArray()).IsEquivalentTo(new byte[] { 0xFF, 0xFF, 0xF0, 255 }, CollectionOrdering.Matching).Because($"({px}, {py})");

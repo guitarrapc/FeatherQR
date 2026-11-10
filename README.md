@@ -200,7 +200,8 @@ Both packages use the same units for image settings. In `FeatherQR`, configure `
 
 | What | `FeatherQR` | `FeatherQR.SkiaSharp` |
 | --- | --- | --- |
-| Size | `Width = 512, Height = 512` | `.WithSize(512, 512)` |
+| Size, equal modules | `Width = 512, Height = 512` | `.WithSize(512, 512).WithModulePixelSize(n)` |
+| Size, filled | `Width = 512, Height = 512, FillCanvas = true` | `.WithSize(512, 512)` |
 | Modules | `ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92` | `.WithModuleStyle(ModuleStyle.Circle, scalePercent: 92)` |
 | Finder patterns | `FinderPatternStyle = FinderPatternStyle.Circle` | `.WithFinderPatternStyle(FinderPatternStyle.Circle)` |
 | Colors | `DarkColor = new SymbolColor(30, 58, 138), LightColor = new SymbolColor(255, 255, 255, 0)` | `.WithColors(new SKColor(30, 58, 138), SKColors.Transparent)` |
@@ -230,7 +231,7 @@ var skiaSvg = new QRCodeImageBuilder(qr)
     .ToSvgString();
 ```
 
-Both packages produce identical pixels for a 512 × 512 image with default colors and square modules. `WithModuleStyle` and `WithFinderPatternStyle` use the core's enums, whole-percent values, and defaults. Use `WithModuleShape` and `WithFinderPatternShape` for custom shapes.
+With `FillCanvas = true`, both packages produce identical pixels for a 512 × 512 image with default colors and square modules. `WithModuleStyle` and `WithFinderPatternStyle` use the core's enums, whole-percent values, and defaults. Use `WithModuleShape` and `WithFinderPatternShape` for custom shapes.
 
 Use `QREccLevel.H` for symbols with icons. The core embeds icons in SVG output. For PNG and raw pixels, it leaves a light area for the icon and returns its bounds through `GetIconRectangle`. The builder draws the `logo` bitmap into the image.
 
@@ -884,15 +885,19 @@ var svgNoMargin = SymbolImageWriter.GetSvgString(noMargin);
 
 #### Image Size
 
-Use `ModulePixelSize` to set pixels per module. Alternatively, use `Width` and `Height` to set the image size. Fixed-size output centers the symbol at a uniform scale, like the builders' `WithSize`. Modules align to whole pixels, so neighboring modules can differ by one pixel and unstyled PNG output remains 1-bit. Any space around the symbol uses the light color.
+Use `ModulePixelSize` to set pixels per module. Alternatively, use `Width` and `Height` to set the image size. With a set size, every module gets the same whole number of pixels, the largest that fits. The writer centers the symbol and uses the light color for the rest of the image. Unstyled PNG output stays 1-bit.
+
+Set `FillCanvas = true` to fill the image like the builders' `WithSize`. The symbol then fills the image at a fractional scale, and neighboring modules can differ by one pixel. Use it when the symbol must keep the same size in a fixed area, for example when the content length changes. Equal modules make dense symbols smaller: in a 512 × 512 image, version 10 fills 89% of each side and version 40 fills 72%.
 
 Fixed dimensions override `ModulePixelSize`. The writer calculates a dimension set to `0` from the symbol's aspect ratio.
 
 ```csharp
 // Use 10 pixels per module instead of the default 8.
 var png10 = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { ModulePixelSize = 10 });
-// 512 × 512, pixel for pixel the image QRCodeImageBuilder.GetPngBytes(qr) writes, with no SkiaSharp.
+// 512 × 512 with equal modules. The space around the symbol is light.
 var png512 = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { Width = 512, Height = 512 });
+// 512 × 512 filled, pixel for pixel the image QRCodeImageBuilder.GetPngBytes(qr) writes.
+var filled = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { Width = 512, Height = 512, FillCanvas = true });
 // Set the width to 300 pixels and preserve the symbol's aspect ratio.
 var svg300 = SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { Width = 300 });
 ```
@@ -903,8 +908,9 @@ var svg300 = SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { Width =
 var options = new SymbolImageOptions { Width = 400, Height = 300 };
 var (x, y, width, height) = SymbolImageWriter.GetSymbolRectangle(qr, options);
 // Pixels per module. qr.Size counts the quiet zone, as the image does.
+// With FillCanvas, divide as double. The modules are then this size rounded down or up.
 var (imageWidth, imageHeight) = SymbolImageWriter.GetImageSize(qr, options);
-var modulePixels = Math.Min((double)imageWidth / qr.Size, (double)imageHeight / qr.Size);
+var modulePixels = Math.Min(imageWidth / qr.Size, imageHeight / qr.Size);
 ```
 
 #### Colors and Transparent Background
@@ -1641,7 +1647,7 @@ Console.WriteLine(flat.Version); // R7x43
 
 To get the largest modules in a frame, find the narrowest version at each of the six heights. Then use the version with the largest modules. At a fixed height, a narrower symbol never has smaller modules. So these six calls find the best of all 32 versions.
 
-Do not choose the version whose aspect ratio is closest to the frame's. For 9 characters in a 400 × 60 frame, that version is R17x139 with 2.8-pixel modules. The six calls choose R7x59, with 5.5-pixel modules.
+Do not choose the version whose aspect ratio is closest to the frame's. For 9 characters in a 400 × 60 frame, that version is R17x139 with 2-pixel modules. The six calls choose R7x59, with 5-pixel modules.
 
 ```csharp
 using FeatherQR;
@@ -1649,14 +1655,15 @@ using FeatherQR;
 const string text = "HELLO2026";
 int frameWidth = 400, frameHeight = 60;
 RmQRVersion? best = null;
-double bestModule = 0;
+var bestModule = 0;
 foreach (var height in Enum.GetValues<RmQRHeight>())
 {
     var fit = new RmQRCodeGeneratorOptions { Height = height, FitStrategy = RmQRFitStrategy.MinimizeWidth };
     if (!RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out var size, fit))
         continue; // The text does not fit at this height.
     // size.Width and size.Height include the quiet zone, as the image does.
-    var module = Math.Min((double)frameWidth / size.Width, (double)frameHeight / size.Height);
+    // Whole pixels a module, as the image is written. With FillCanvas, divide as double.
+    var module = Math.Min(frameWidth / size.Width, frameHeight / size.Height);
     if (module > bestModule)
         (best, bestModule) = (size.Version, module);
 }

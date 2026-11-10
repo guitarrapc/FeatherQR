@@ -8,9 +8,11 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// An image of a set size. The symbol fills the canvas as the rendering package's <c>WithSize</c> fills it, so the two write the same pixels:
-/// one uniform scale, the symbol centred on whole pixels, and each pixel belonging to the module its centre falls in.
-/// The test computes that rule on its own from the fit and holds the pixel buffer and the PNG to it, and the SVG to the canvas's size.
+/// An image of a set size. By default every module is the same whole number of pixels, the largest both sides allow, with the symbol centred
+/// and the rest light: the rendering package's <c>WithSize</c> with <c>WithModulePixelSize</c> at that size. With <c>FillCanvas</c> the symbol
+/// fills the canvas as <c>WithSize</c> alone fills it: one scale, the symbol centred on whole pixels, and each pixel belonging to the module
+/// its centre falls in. The test computes both rules on its own and holds the renderer, the pixel buffer and the PNG to them, and the SVG to
+/// the canvas's size.
 /// </summary>
 public class SymbolImageWriterSizeTest
 {
@@ -44,17 +46,38 @@ public class SymbolImageWriterSizeTest
 
     // ---- the renderer's pixels ----------------------------------------------------------
 
+    /// <summary>
+    /// By default a module is the largest whole number of pixels both sides allow, and the spare pixels are split as the rendering package
+    /// splits them, an odd one going right or down. That is the renderer's image with that module size pinned.
+    /// </summary>
     [Test]
     [MethodDataSource(nameof(SymbolsAndCanvases))]
-    public async Task SetSize_WritesTheRenderersPixels(string symbol, int width, int height)
+    public async Task SetSize_WritesEqualWholePixelModules_AsTheRendererWithThatModuleSize(string symbol, int width, int height)
     {
         var data = Symbol(symbol);
-        var options = new SymbolImageOptions { Width = width, Height = height };
+        var (columns, rows, _) = Modules(data);
+        var modulePixels = Math.Min(width / columns, height / rows);
+        var rule = WholePixelRulePixels(data, width, height, new SymbolColor(0, 0, 0), new SymbolColor(255, 255, 255));
+
+        await Assert.That(RendererPixels(data, width, height, modulePixels)).IsEquivalentTo(rule, CollectionOrdering.Matching)
+            .Because("pinning that module size in the renderer draws the same image");
+        await AssertEveryFormat(data, new SymbolImageOptions { Width = width, Height = height }, rule, width, height);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(SymbolsAndCanvases))]
+    public async Task FillCanvas_WritesTheRenderersPixels(string symbol, int width, int height)
+    {
+        var data = Symbol(symbol);
         var rule = RulePixels(data, width, height, new SymbolColor(0, 0, 0), new SymbolColor(255, 255, 255));
 
         await Assert.That(RendererPixels(data, width, height)).IsEquivalentTo(rule, CollectionOrdering.Matching)
             .Because("the pixel-centre rule is what the renderer draws");
+        await AssertEveryFormat(data, new SymbolImageOptions { Width = width, Height = height, FillCanvas = true }, rule, width, height);
+    }
 
+    private static async Task AssertEveryFormat(object data, SymbolImageOptions options, byte[] rule, int width, int height)
+    {
         var pixels = new byte[PixelBufferSize(data, PixelLayout.Bgra8888, options)];
         var (written, w, h) = TryWritePixels(data, pixels, PixelLayout.Bgra8888, options);
         await Assert.That(written).IsTrue();
@@ -73,12 +96,14 @@ public class SymbolImageWriterSizeTest
 
     /// <summary>The symbol at a set size still reads, down to modules of one and two pixels.</summary>
     [Test]
-    [Arguments(512)]
-    [Arguments(300)]
-    public async Task SetSize_Decodes(int side)
+    [Arguments(512, false)]
+    [Arguments(300, false)]
+    [Arguments(512, true)]
+    [Arguments(300, true)]
+    public async Task SetSize_Decodes(int side, bool fillCanvas)
     {
         var qr = QRCodeGenerator.Create(new string('a', 2000), QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
-        var options = new SymbolImageOptions { Width = side, Height = side };
+        var options = new SymbolImageOptions { Width = side, Height = side, FillCanvas = fillCanvas };
         var gray = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, options)];
         await Assert.That(SymbolImageWriter.TryWritePixels(qr, gray, PixelLayout.Gray8, out var w, out var h, options)).IsTrue();
 
@@ -100,6 +125,20 @@ public class SymbolImageWriterSizeTest
             .IsEquivalentTo(SymbolImageWriter.GetPngBytes(qr), CollectionOrdering.Matching);
     }
 
+    /// <summary>Whole-pixel modules are the default, and without a set size there is no canvas to fill, so <c>FillCanvas</c> changes nothing.</summary>
+    [Test]
+    public async Task FillCanvas_IsOffByDefault_AndWithoutASizeChangesNothing()
+    {
+        await Assert.That(default(SymbolImageOptions).FillCanvas).IsFalse();
+        await Assert.That(new SymbolImageOptions { FillCanvas = false }).IsEqualTo(default(SymbolImageOptions));
+
+        var qr = QRCodeGenerator.Create("own size", QREccLevel.M);
+        var fill = new SymbolImageOptions { FillCanvas = true, ModulePixelSize = 3 };
+        await Assert.That(SymbolImageWriter.GetPngBytes(qr, fill))
+            .IsEquivalentTo(SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { ModulePixelSize = 3 }), CollectionOrdering.Matching);
+        await Assert.That(SymbolImageWriter.GetSvgString(qr, fill)).IsEqualTo(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModulePixelSize = 3 }));
+    }
+
     [Test]
     public async Task NegativeSize_Throws()
     {
@@ -107,13 +146,15 @@ public class SymbolImageWriterSizeTest
         await Assert.That(() => new SymbolImageOptions { Height = -1 }).Throws<ArgumentOutOfRangeException>();
     }
 
-    /// <summary>With a size set, the module size is the fit's, so <c>ModulePixelSize</c> changes nothing.</summary>
+    /// <summary>With a size set, the module size is the canvas's, so <c>ModulePixelSize</c> changes nothing in either mode.</summary>
     [Test]
-    public async Task SetSize_IgnoresModulePixelSize()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SetSize_IgnoresModulePixelSize(bool fillCanvas)
     {
         var rm = RmQRCodeGenerator.Create("ignored", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
-        var fit = new SymbolImageOptions { Width = 600, Height = 400 };
-        var pinned = new SymbolImageOptions { Width = 600, Height = 400, ModulePixelSize = 3 };
+        var fit = new SymbolImageOptions { Width = 600, Height = 400, FillCanvas = fillCanvas };
+        var pinned = fit with { ModulePixelSize = 3 };
 
         await Assert.That(SymbolImageWriter.GetPngBytes(rm, pinned)).IsEquivalentTo(SymbolImageWriter.GetPngBytes(rm, fit), CollectionOrdering.Matching);
         await Assert.That(SymbolImageWriter.GetSvgString(rm, pinned)).IsEqualTo(SymbolImageWriter.GetSvgString(rm, fit));
@@ -123,56 +164,70 @@ public class SymbolImageWriterSizeTest
     /// <summary>
     /// One side at 0 follows the symbol's aspect at the scale the other side gives, rounded up to whole pixels, so the symbol fits inside
     /// and the image is the one both sides would give: rounded down, the same two sides would bind on the followed one at a smaller scale.
+    /// The image's size is the same with and without <c>FillCanvas</c>, which changes only where the modules fall in it.
     /// </summary>
     [Test]
-    public async Task OneSideAtZero_FollowsTheAspect()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task OneSideAtZero_FollowsTheAspect(bool fillCanvas)
     {
         var qr = QRCodeGenerator.Create("aspect", QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
         var rm = RmQRCodeGenerator.Create("aspect", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
         await Assert.That((rm.Width, rm.Height)).IsEqualTo((143, 21));
+        var mode = new SymbolImageOptions { FillCanvas = fillCanvas };
 
-        await Assert.That(Size(qr, new SymbolImageOptions { Width = 300 })).IsEqualTo((300, 300));
-        await Assert.That(Size(qr, new SymbolImageOptions { Height = 300 })).IsEqualTo((300, 300));
+        await Assert.That(Size(qr, mode with { Width = 300 })).IsEqualTo((300, 300));
+        await Assert.That(Size(qr, mode with { Height = 300 })).IsEqualTo((300, 300));
         // 21 × 1430 / 143 is exactly 210, and 143 × 210 / 21 exactly 1430.
-        await Assert.That(Size(rm, new SymbolImageOptions { Width = 1430 })).IsEqualTo((1430, 210));
-        await Assert.That(Size(rm, new SymbolImageOptions { Height = 210 })).IsEqualTo((1430, 210));
+        await Assert.That(Size(rm, mode with { Width = 1430 })).IsEqualTo((1430, 210));
+        await Assert.That(Size(rm, mode with { Height = 210 })).IsEqualTo((1430, 210));
         // 21 × 1000 / 143 is 146.85, so the symbol needs 147 rows.
-        await Assert.That(Size(rm, new SymbolImageOptions { Width = 1000 })).IsEqualTo((1000, 147));
+        await Assert.That(Size(rm, mode with { Width = 1000 })).IsEqualTo((1000, 147));
         // 143 × 100 / 21 is 680.95.
-        await Assert.That(Size(rm, new SymbolImageOptions { Height = 100 })).IsEqualTo((681, 100));
+        await Assert.That(Size(rm, mode with { Height = 100 })).IsEqualTo((681, 100));
 
         // The image with one side given is the one with both, so its pixels follow the same rule.
-        var options = new SymbolImageOptions { Width = 1000 };
+        var options = mode with { Width = 1000 };
         var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(rm, PixelLayout.Rgba8888, options)];
         await Assert.That(SymbolImageWriter.TryWritePixels(rm, pixels, PixelLayout.Rgba8888, out _, out _, options)).IsTrue();
-        await Assert.That(pixels).IsEquivalentTo(RulePixels(rm, 1000, 147, new SymbolColor(0, 0, 0), new SymbolColor(255, 255, 255), PixelLayout.Rgba8888), CollectionOrdering.Matching);
+        var rule = fillCanvas
+            ? RulePixels(rm, 1000, 147, new SymbolColor(0, 0, 0), new SymbolColor(255, 255, 255), PixelLayout.Rgba8888)
+            : WholePixelRulePixels(rm, 1000, 147, new SymbolColor(0, 0, 0), new SymbolColor(255, 255, 255), PixelLayout.Rgba8888);
+        await Assert.That(pixels).IsEquivalentTo(rule, CollectionOrdering.Matching);
 
         // 7 × 419 / 139 is 21.1 rows, so the followed side is 22: at 21 the same canvas with both sides set would bind on the height at
         // 3 pixels a module with a column of pad, a different image.
         var narrow = RmQRCodeGenerator.Create("aspect", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x139, QuietZoneSize = 0 });
-        await Assert.That(Size(narrow, new SymbolImageOptions { Width = 419 })).IsEqualTo((419, 22));
+        await Assert.That(Size(narrow, mode with { Width = 419 })).IsEqualTo((419, 22));
         foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888 })
         {
-            var oneSide = new byte[SymbolImageWriter.GetPixelBufferSize(narrow, layout, new SymbolImageOptions { Width = 419 })];
-            await Assert.That(SymbolImageWriter.TryWritePixels(narrow, oneSide, layout, out _, out _, new SymbolImageOptions { Width = 419 })).IsTrue();
-            var bothSides = new byte[SymbolImageWriter.GetPixelBufferSize(narrow, layout, new SymbolImageOptions { Width = 419, Height = 22 })];
-            await Assert.That(SymbolImageWriter.TryWritePixels(narrow, bothSides, layout, out _, out _, new SymbolImageOptions { Width = 419, Height = 22 })).IsTrue();
+            var oneSide = new byte[SymbolImageWriter.GetPixelBufferSize(narrow, layout, mode with { Width = 419 })];
+            await Assert.That(SymbolImageWriter.TryWritePixels(narrow, oneSide, layout, out _, out _, mode with { Width = 419 })).IsTrue();
+            var bothSides = new byte[SymbolImageWriter.GetPixelBufferSize(narrow, layout, mode with { Width = 419, Height = 22 })];
+            await Assert.That(SymbolImageWriter.TryWritePixels(narrow, bothSides, layout, out _, out _, mode with { Width = 419, Height = 22 })).IsTrue();
             await Assert.That(oneSide).IsEquivalentTo(bothSides, CollectionOrdering.Matching);
         }
-        await Assert.That(SymbolImageWriter.GetSvgString(narrow, new SymbolImageOptions { Width = 419 })).IsEqualTo(SymbolImageWriter.GetSvgString(narrow, new SymbolImageOptions { Width = 419, Height = 22 }));
+        await Assert.That(SymbolImageWriter.GetSvgString(narrow, mode with { Width = 419 })).IsEqualTo(SymbolImageWriter.GetSvgString(narrow, mode with { Width = 419, Height = 22 }));
     }
 
-    /// <summary>A canvas that gives a module under one pixel is refused by every call, since modules then vanish and nothing reads the result.</summary>
+    /// <summary>
+    /// A canvas that gives a module under one pixel is refused by every call in either mode, since modules then vanish and nothing reads
+    /// the result. Rounding the fit down to whole pixels leaves at least one pixel exactly when the fit is at least one.
+    /// </summary>
     [Test]
-    [Arguments(100, 100)]
-    [Arguments(1024, 160)]
-    [Arguments(184, 0)]
-    [Arguments(0, 184)]
-    public async Task ModuleUnderOnePixel_Throws(int width, int height)
+    [Arguments(100, 100, false)]
+    [Arguments(1024, 160, false)]
+    [Arguments(184, 0, false)]
+    [Arguments(0, 184, false)]
+    [Arguments(100, 100, true)]
+    [Arguments(1024, 160, true)]
+    [Arguments(184, 0, true)]
+    [Arguments(0, 184, true)]
+    public async Task ModuleUnderOnePixel_Throws(int width, int height, bool fillCanvas)
     {
         var qr = QRCodeGenerator.Create("too small", QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
         await Assert.That(qr.Size).IsEqualTo(185);
-        var options = new SymbolImageOptions { Width = width, Height = height };
+        var options = new SymbolImageOptions { Width = width, Height = height, FillCanvas = fillCanvas };
         var writer = new ArrayBufferWriter<byte>();
 
         await Assert.That(() => SymbolImageWriter.GetSvgString(qr, options)).Throws<ArgumentOutOfRangeException>();
@@ -184,7 +239,7 @@ public class SymbolImageWriterSizeTest
         await Assert.That(writer.WrittenCount).IsEqualTo(0);
 
         // One pixel a module is the floor, and 185 pixels give exactly that.
-        var floor = new SymbolImageOptions { Width = 185, Height = 185 };
+        var floor = new SymbolImageOptions { Width = 185, Height = 185, FillCanvas = fillCanvas };
         await Assert.That(Size(qr, floor)).IsEqualTo((185, 185));
         await Assert.That(SymbolImageWriter.GetPngBytes(qr, floor)).IsEquivalentTo(SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { ModulePixelSize = 1 }), CollectionOrdering.Matching);
     }
@@ -196,11 +251,11 @@ public class SymbolImageWriterSizeTest
     /// The PNG is read back without premultiplying, so the palette's bytes come back as written.
     /// </summary>
     [Test]
-    public async Task Pad_IsTheLightColor_WithItsAlpha()
+    public async Task FillCanvas_Pad_IsTheLightColor_WithItsAlpha()
     {
         var rm = RmQRCodeGenerator.Create("pad", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
         var light = new SymbolColor(0xFF, 0xFF, 0xF0, 51);
-        var options = new SymbolImageOptions { Width = 300, Height = 300, DarkColor = Navy, LightColor = light };
+        var options = new SymbolImageOptions { Width = 300, Height = 300, FillCanvas = true, DarkColor = Navy, LightColor = light };
         var rule = RulePixels(rm, 300, 300, Navy, light);
         // 300 × 143 - 21 × 300 over 2 × 143 is 127.97, so the symbol starts on row 127.
         var top = 127;
@@ -221,6 +276,37 @@ public class SymbolImageWriterSizeTest
         await Assert.That(rect.Attribute("fill-opacity")?.Value).IsEqualTo("0.2");
     }
 
+    /// <summary>
+    /// With whole-pixel modules a pad can lie on both axes at once, which the fill never gives: 143 by 21 modules at 2 pixels in a
+    /// 300-pixel square leave 7 columns on the left and 129 rows above. Every pixel outside the symbol is the light colour with its alpha.
+    /// </summary>
+    [Test]
+    public async Task Pad_OnBothAxes_IsTheLightColor_WithItsAlpha()
+    {
+        var rm = RmQRCodeGenerator.Create("pad", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
+        var light = new SymbolColor(0xFF, 0xFF, 0xF0, 51);
+        var options = new SymbolImageOptions { Width = 300, Height = 300, DarkColor = Navy, LightColor = light };
+        var rule = WholePixelRulePixels(rm, 300, 300, Navy, light);
+        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(rm, options))).IsEqualTo((7 + 2 * 2, 129 + 2 * 2, 139 * 2, 17 * 2));
+
+        var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(rm, PixelLayout.Bgra8888, options)];
+        await Assert.That(SymbolImageWriter.TryWritePixels(rm, pixels, PixelLayout.Bgra8888, out _, out _, options)).IsTrue();
+        await Assert.That(pixels).IsEquivalentTo(rule, CollectionOrdering.Matching);
+        var outsideNotLight = 0;
+        for (var y = 0; y < 300; y++)
+        {
+            for (var x = 0; x < 300; x++)
+            {
+                var inside = x >= 7 && x < 7 + 286 && y >= 129 && y < 129 + 42;
+                if (!inside && !pixels.AsSpan((y * 300 + x) * 4, 4).SequenceEqual(new byte[] { 0xF0, 0xFF, 0xFF, 51 }))
+                    outsideNotLight++;
+            }
+        }
+        await Assert.That(outsideNotLight).IsEqualTo(0);
+
+        await Assert.That(DecodePng(SymbolImageWriter.GetPngBytes(rm, options), unpremultiplied: true)).IsEquivalentTo(rule, CollectionOrdering.Matching);
+    }
+
     // ---- the SVG ----------------------------------------------------------------------------
 
     /// <summary>
@@ -228,10 +314,10 @@ public class SymbolImageWriterSizeTest
     /// background grow by the pad in module units, to three decimals.
     /// </summary>
     [Test]
-    public async Task Svg_HasTheCanvasSize_AndTheViewBoxGrownByThePad()
+    public async Task FillCanvas_Svg_HasTheCanvasSize_AndTheViewBoxGrownByThePad()
     {
         var rm = RmQRCodeGenerator.Create("svg", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
-        var fitted = XDocument.Parse(SymbolImageWriter.GetSvgString(rm, new SymbolImageOptions { Width = 300, Height = 300 })).Root!;
+        var fitted = XDocument.Parse(SymbolImageWriter.GetSvgString(rm, new SymbolImageOptions { Width = 300, Height = 300, FillCanvas = true })).Root!;
         var own = XDocument.Parse(SymbolImageWriter.GetSvgString(rm)).Root!;
         XNamespace ns = "http://www.w3.org/2000/svg";
 
@@ -268,12 +354,12 @@ public class SymbolImageWriterSizeTest
         await Assert.That(root.Attribute("height")?.Value).IsEqualTo("296");
     }
 
-    /// <summary>A square symbol in a square canvas has no pad, and the view box is the symbol's own.</summary>
+    /// <summary>A square symbol filling a square canvas has no pad, and the view box is the symbol's own.</summary>
     [Test]
-    public async Task Svg_WithoutAPad_KeepsTheViewBoxInModules()
+    public async Task FillCanvas_Svg_WithoutAPad_KeepsTheViewBoxInModules()
     {
         var qr = QRCodeGenerator.Create("svg", QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
-        var root = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { Width = 512, Height = 512 })).Root!;
+        var root = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { Width = 512, Height = 512, FillCanvas = true })).Root!;
         XNamespace ns = "http://www.w3.org/2000/svg";
 
         await Assert.That(root.Attribute("viewBox")?.Value).IsEqualTo("0 0 37 37");
@@ -281,6 +367,31 @@ public class SymbolImageWriterSizeTest
         var rect = root.Element(ns + "rect")!;
         await Assert.That(rect.Attribute("width")?.Value).IsEqualTo("37");
         await Assert.That(rect.Attribute("height")?.Value).IsEqualTo("37");
+    }
+
+    /// <summary>A canvas that is a multiple of the symbol leaves no pad, so the SVG is the one written at that module size: 481 pixels are 37 modules of 13.</summary>
+    [Test]
+    public async Task Svg_WholePixelsWithoutAPad_IsTheModuleSizesSvg()
+    {
+        var qr = QRCodeGenerator.Create("svg", QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
+
+        await Assert.That(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { Width = 481, Height = 481 }))
+            .IsEqualTo(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { ModulePixelSize = 13 }));
+    }
+
+    /// <summary>
+    /// Whole-pixel modules can pad both axes, and the view box grows on both: 37 modules of 8 pixels in a 300-pixel square leave
+    /// 2 pixels, a quarter of a module, on the left and above.
+    /// </summary>
+    [Test]
+    public async Task Svg_PadOnBothAxes_GrowsTheViewBoxOnBoth()
+    {
+        var root = XDocument.Parse(GetSvgString(Symbol("QR3"), new SymbolImageOptions { Width = 300, Height = 300 })).Root!;
+
+        var viewBox = root.Attribute("viewBox")!.Value.Split(' ').Select(double.Parse).ToArray();
+        await Assert.That(viewBox).IsEquivalentTo(new[] { -0.25, -0.25, 37.5, 37.5 }, CollectionOrdering.Matching);
+        await Assert.That(root.Attribute("width")?.Value).IsEqualTo("300");
+        await Assert.That(root.Attribute("height")?.Value).IsEqualTo("300");
     }
 
     [Test]
@@ -312,15 +423,35 @@ public class SymbolImageWriterSizeTest
         var scale = Math.Min((double)width / columns, (double)height / rows);
         var left = Math.Max(0, Math.Floor((width - columns * scale) / 2 + 1e-6));
         var top = Math.Max(0, Math.Floor((height - rows * scale) / 2 + 1e-6));
+        return Paint(width, height, dark, light, layout, (x, y) =>
+        {
+            var column = (int)Math.Floor((x + 0.5 - left) / scale);
+            var row = (int)Math.Floor((y + 0.5 - top) / scale);
+            return x + 0.5 >= left && y + 0.5 >= top && column < columns && row < rows && isDark(row, column);
+        });
+    }
+
+    /// <summary>
+    /// The pixels of whole-pixel modules: the largest module both sides allow, the spare pixels halved and rounded down on the left and
+    /// above, as the rendering package places a pinned module size. Outside the symbol the light colour.
+    /// </summary>
+    private static byte[] WholePixelRulePixels(object data, int width, int height, SymbolColor dark, SymbolColor light, PixelLayout layout = PixelLayout.Bgra8888)
+    {
+        var (columns, rows, isDark) = Modules(data);
+        var module = Math.Min(width / columns, height / rows);
+        int left = (width - module * columns) / 2, top = (height - module * rows) / 2;
+        return Paint(width, height, dark, light, layout, (x, y) =>
+            x >= left && y >= top && x < left + module * columns && y < top + module * rows && isDark((y - top) / module, (x - left) / module));
+    }
+
+    private static byte[] Paint(int width, int height, SymbolColor dark, SymbolColor light, PixelLayout layout, Func<int, int, bool> isDarkPixel)
+    {
         var pixels = new byte[width * height * 4];
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
-                var column = (int)Math.Floor((x + 0.5 - left) / scale);
-                var row = (int)Math.Floor((y + 0.5 - top) / scale);
-                var inside = x + 0.5 >= left && y + 0.5 >= top && column < columns && row < rows;
-                var color = inside && isDark(row, column) ? dark : light;
+                var color = isDarkPixel(x, y) ? dark : light;
                 var at = (y * width + x) * 4;
                 if (layout == PixelLayout.Bgra8888)
                 {
@@ -340,17 +471,22 @@ public class SymbolImageWriterSizeTest
         return pixels;
     }
 
-    private static byte[] RendererPixels(object data, int width, int height)
+    private static byte[] RendererPixels(object data, int width, int height, int? modulePixelSize = null)
     {
         using var bitmap = data switch
         {
-            QRCodeData qr => new QRCodeImageBuilder(qr).WithSize(width, height).ToBitmap(),
-            MicroQRCodeData micro => new MicroQRCodeImageBuilder(micro).WithSize(width, height).ToBitmap(),
-            RmQRCodeData rm => new RmQRCodeImageBuilder(rm).WithSize(width, height).ToBitmap(),
+            QRCodeData qr => Pinned(new QRCodeImageBuilder(qr).WithSize(width, height), modulePixelSize).ToBitmap(),
+            MicroQRCodeData micro => Pinned(new MicroQRCodeImageBuilder(micro).WithSize(width, height), modulePixelSize).ToBitmap(),
+            RmQRCodeData rm => Pinned(new RmQRCodeImageBuilder(rm).WithSize(width, height), modulePixelSize).ToBitmap(),
             _ => throw new ArgumentException(nameof(data)),
         };
         return Bgra(bitmap);
     }
+
+    private static T Pinned<T>(T builder, int? modulePixelSize) where T : SymbolImageBuilderBase<T>
+        => modulePixelSize is { } pixels ? builder.WithModulePixelSize(pixels) : builder;
+
+    private static (int X, int Y, int Width, int Height) Tuple(ImageRect rectangle) => (rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
 
     private static byte[] DecodePng(byte[] png, bool unpremultiplied = false)
     {

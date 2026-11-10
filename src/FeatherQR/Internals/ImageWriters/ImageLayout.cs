@@ -7,10 +7,11 @@ namespace FeatherQR.Internals.ImageWriters;
 /// <remarks>
 /// <para>
 /// A module is <see cref="Numerator"/> / <see cref="Denominator"/> pixels. Without a set size that is <see cref="SymbolImageOptions.ModulePixelSize"/>
-/// whole pixels, and module k starts at k times it. With a set size the symbol fills the canvas at one scale, the smaller the two sides allow,
-/// centred on whole pixels, and pixel x belongs to module floor((x + 1/2) × Denominator / Numerator), the module its centre falls in, which is
-/// where a renderer that snaps a module drawn at a fractional position puts it. So module k starts at the first pixel whose centre is at or past
-/// k × Numerator / Denominator, and adjacent modules differ by at most one pixel.
+/// whole pixels, and module k starts at k times it. With a set size the fit is one scale, the smaller the two sides allow. By default it is
+/// rounded down to whole pixels and the symbol centred in the fit's canvas. With <see cref="SymbolImageOptions.FillCanvas"/> the symbol fills the
+/// canvas at the fit's scale, centred on whole pixels, and pixel x belongs to module floor((x + 1/2) × Denominator / Numerator), the module its
+/// centre falls in, which is where a renderer that snaps a module drawn at a fractional position puts it. So module k starts at the first pixel
+/// whose centre is at or past k × Numerator / Denominator, and adjacent modules differ by at most one pixel.
 /// </para>
 /// <para>
 /// The symbol's columns and rows, quiet zone included, are numbered from 0. The light rows above and below the symbol are a row group each,
@@ -88,6 +89,14 @@ internal readonly struct ImageLayout
         {
             numerator /= denominator;
             denominator = 1;
+        }
+        else if (!options.FillCanvas)
+        {
+            // The image keeps the fit's size, so only the module and the centring change. The halves round down as the builders centre a pinned module size.
+            numerator /= denominator;
+            denominator = 1;
+            left = (int)((width - numerator * columns) / 2);
+            top = (int)((height - numerator * rows) / 2);
         }
         return new ImageLayout((int)width, (int)height, left, top, columns, rows, numerator, denominator);
     }

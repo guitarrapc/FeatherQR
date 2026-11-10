@@ -10,7 +10,7 @@ public class SymbolImageWriterSymbolRectangleTest
     {
         foreach (var symbol in new[] { "QR3", "QR40", "QR5 q0", "QR2 q1", "M1", "M4", "M3 q0", "R7x43", "R17x139", "R11x77 q0" })
         {
-            foreach (var options in new[] { "default", "module 1", "module 3", "fraction", "fraction wider", "fraction taller", "width only", "height only", "whole pixels padded" })
+            foreach (var options in new[] { "default", "module 1", "module 3", "fraction", "fraction wider", "fraction taller", "width only", "height only", "whole pixels padded", "fill", "fill wider", "fill width only" })
                 yield return (symbol, options);
         }
     }
@@ -68,22 +68,41 @@ public class SymbolImageWriterSymbolRectangleTest
     }
 
     /// <summary>
-    /// At a set size, worked out by hand: module k starts at the first pixel whose centre is at or past k times the module's size,
+    /// At a set size, worked out by hand: each module is the largest whole number of pixels both sides allow, and the spare pixels are
+    /// halved, rounded down on the left and above.
+    /// </summary>
+    [Test]
+    public async Task SymbolRectangle_AtASetSize_IsWhereTheWholePixelModulesPutIt()
+    {
+        var qr = (QRCodeData)Symbol("QR3").Data;
+        var micro = (MicroQRCodeData)Symbol("M4").Data;
+        var rm = (RmQRCodeData)Symbol("R17x139").Data;
+
+        // 400 pixels hold 37 modules of 10, so 370 pixels centred leave 115 columns on the left and 15 rows above.
+        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(qr, new SymbolImageOptions { Width = 600, Height = 400 }))).IsEqualTo((155, 55, 290, 290));
+        // 300 pixels hold 21 modules of 14, so 294 pixels leave 6 columns and 7 rows, 3 of each before the symbol.
+        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(micro, new SymbolImageOptions { Width = 300, Height = 301 }))).IsEqualTo((31, 31, 238, 238));
+        // 1,000 pixels hold 143 modules of 6, and the height follows the fit at 147 rows, so 858 by 126 pixels leave 71 columns and 10 rows before.
+        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(rm, new SymbolImageOptions { Width = 1000 }))).IsEqualTo((83, 22, 834, 102));
+    }
+
+    /// <summary>
+    /// With <c>FillCanvas</c>, worked out by hand: module k starts at the first pixel whose centre is at or past k times the module's size,
     /// after the pixels that centre the symbol.
     /// </summary>
     [Test]
-    public async Task SymbolRectangle_AtASetSize_IsWhereTheFitPutsIt()
+    public async Task SymbolRectangle_FillingTheCanvas_IsWhereTheFitPutsIt()
     {
         var qr = (QRCodeData)Symbol("QR3").Data;
         var micro = (MicroQRCodeData)Symbol("M4").Data;
         var rm = (RmQRCodeData)Symbol("R17x139").Data;
 
         // 37 modules over 400 pixels is 10.81 a module, centred 100 pixels in. Modules 4 and 33 start 43 and 357 pixels into the symbol.
-        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(qr, new SymbolImageOptions { Width = 600, Height = 400 }))).IsEqualTo((143, 43, 314, 314));
+        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(qr, new SymbolImageOptions { Width = 600, Height = 400, FillCanvas = true }))).IsEqualTo((143, 43, 314, 314));
         // 21 modules over 300 pixels is 14.29 a module. The one spare row goes below, since half a pixel of centring rounds down.
-        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(micro, new SymbolImageOptions { Width = 300, Height = 301 }))).IsEqualTo((29, 29, 242, 242));
+        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(micro, new SymbolImageOptions { Width = 300, Height = 301, FillCanvas = true }))).IsEqualTo((29, 29, 242, 242));
         // 143 modules over 1,000 pixels is 6.99 a module. Modules 2 and 141 start 14 and 986 pixels in, rows 2 and 19 at 14 and 133.
-        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(rm, new SymbolImageOptions { Width = 1000 }))).IsEqualTo((14, 14, 972, 119));
+        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(rm, new SymbolImageOptions { Width = 1000, FillCanvas = true }))).IsEqualTo((14, 14, 972, 119));
     }
 
     /// <summary>Styles, colours and an icon area change what is drawn, not where, so the rectangle is the plain image's.</summary>
@@ -126,43 +145,48 @@ public class SymbolImageWriterSymbolRectangleTest
             await Assert.That(corners.IsEmpty).IsFalse();
 
             var (x, y, w, h) = RectangleOf(symbol.Data, options);
-            var module = Math.Min((double)width / symbol.Columns, (double)height / symbol.Rows);
-            await Assert.That(module).IsGreaterThanOrEqualTo(8.0);
+            var module = Math.Min(width / symbol.Columns, height / symbol.Rows);
+            await Assert.That(module).IsGreaterThanOrEqualTo(8);
             var expected = new[] { (x, y), (x + w, y), (x + w, y + h), (x, y + h) };
             var reported = new[] { corners.TopLeft, corners.TopRight, corners.BottomRight, corners.BottomLeft };
             for (var i = 0; i < 4; i++)
             {
-                await Assert.That(Math.Abs((double)reported[i].X - expected[i].Item1)).IsLessThanOrEqualTo(module / 2);
-                await Assert.That(Math.Abs((double)reported[i].Y - expected[i].Item2)).IsLessThanOrEqualTo(module / 2);
+                await Assert.That(Math.Abs((double)reported[i].X - expected[i].Item1)).IsLessThanOrEqualTo(module / 2.0);
+                await Assert.That(Math.Abs((double)reported[i].Y - expected[i].Item2)).IsLessThanOrEqualTo(module / 2.0);
             }
         }
     }
 
     /// <summary>
     /// The remarks give a module's size as the image's width over the modules across, quiet zone included, or its height over the modules
-    /// down where that is smaller, and say each module is that size rounded down or up. Core row 6 is a finder's bottom row, the separator,
-    /// the timing pattern and the separator and finder on the right, so across the rectangle every run but the first and last is one module.
-    /// The run count checks that the pixel row taken is in that module row.
+    /// down where that is smaller: every module is that size rounded down, or with <c>FillCanvas</c> rounded down or up. Core row 6 is a
+    /// finder's bottom row, the separator, the timing pattern and the separator and finder on the right, so across the rectangle every run
+    /// but the first and last is one module. The run count checks that the pixel row taken is in that module row.
     /// </summary>
     [Test]
-    [Arguments(0, 0)]
-    [Arguments(600, 400)]
-    [Arguments(400, 600)]
-    [Arguments(777, 0)]
-    [Arguments(0, 333)]
-    public async Task ModuleSize_FromTheImageSize_IsEveryModuleRoundedDownOrUp(int canvasWidth, int canvasHeight)
+    [Arguments(0, 0, false)]
+    [Arguments(600, 400, false)]
+    [Arguments(400, 600, false)]
+    [Arguments(777, 0, false)]
+    [Arguments(0, 333, false)]
+    [Arguments(600, 400, true)]
+    [Arguments(400, 600, true)]
+    [Arguments(777, 0, true)]
+    [Arguments(0, 333, true)]
+    public async Task ModuleSize_FromTheImageSize_IsEveryModuleRounded(int canvasWidth, int canvasHeight, bool fillCanvas)
     {
         var symbol = Symbol("QR40");
         var qr = (QRCodeData)symbol.Data;
-        var options = new SymbolImageOptions { Width = canvasWidth, Height = canvasHeight };
+        var options = new SymbolImageOptions { Width = canvasWidth, Height = canvasHeight, FillCanvas = fillCanvas };
         var (width, height) = SymbolImageWriter.GetImageSize(qr, options);
         var module = Math.Min((double)width / qr.Size, (double)height / qr.Size);
+        var pitch = fillCanvas ? module : Math.Floor(module);
 
         var pixels = new byte[width * height];
         await Assert.That(TryWriteGray8(qr, pixels, options)).IsTrue();
         var (x, y, w, _) = SymbolImageWriter.GetSymbolRectangle(qr, options);
         var core = qr.Size - 2 * symbol.QuietZone;
-        var row = (y + (int)(6.5 * module)) * width;
+        var row = (y + (int)(6.5 * pitch)) * width;
         var runs = new List<int>();
         var start = x;
         for (var px = x + 1; px <= x + w; px++)
@@ -176,8 +200,14 @@ public class SymbolImageWriterSymbolRectangleTest
 
         await Assert.That(runs.Count).IsEqualTo(core - 14 + 2);
         foreach (var run in runs.Skip(1).SkipLast(1))
-            await Assert.That(run == (int)Math.Floor(module) || run == (int)Math.Ceiling(module)).IsTrue().Because($"a run of {run} at {module:F3} pixels a module");
-        await Assert.That(Math.Abs((double)w / core - module)).IsLessThan(1.0 / core);
+        {
+            var rounded = fillCanvas ? run == (int)Math.Floor(module) || run == (int)Math.Ceiling(module) : run == (int)pitch;
+            await Assert.That(rounded).IsTrue().Because($"a run of {run} at {module:F3} pixels a module");
+        }
+        if (fillCanvas)
+            await Assert.That(Math.Abs((double)w / core - module)).IsLessThan(1.0 / core);
+        else
+            await Assert.That(w).IsEqualTo((int)pitch * core);
     }
 
     // ---- what every image call refuses, refused here too ---------------------------------
@@ -270,6 +300,9 @@ public class SymbolImageWriterSymbolRectangleTest
         "height only" => new SymbolImageOptions { Height = 500 },
         // 5 pixels a module with 9 spare columns, so the symbol starts 4 pixels in.
         "whole pixels padded" => new SymbolImageOptions { Width = 5 * symbol.Columns + 9, Height = 5 * symbol.Rows },
+        "fill" => new SymbolImageOptions { Width = 777, Height = 777, FillCanvas = true },
+        "fill wider" => new SymbolImageOptions { Width = 1000, Height = 777, FillCanvas = true },
+        "fill width only" => new SymbolImageOptions { Width = 1000, FillCanvas = true },
         _ => throw new ArgumentException(name),
     };
 

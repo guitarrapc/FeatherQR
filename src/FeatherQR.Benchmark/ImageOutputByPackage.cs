@@ -21,11 +21,13 @@ public class ImageOutputByPackage
 {
     private QRCodeData _v2 = default!;
     private QRCodeData _v40 = default!;
-    private static readonly SymbolImageOptions Plain = new() { Width = 512, Height = 512 };
+    // Filling the canvas as the builders' WithSize does, so both packages write the same image.
+    private static readonly SymbolImageOptions Plain = new() { Width = 512, Height = 512, FillCanvas = true };
     private static readonly SymbolImageOptions Styled = new()
     {
         Width = 512,
         Height = 512,
+        FillCanvas = true,
         ModuleStyle = ModuleStyle.Circle,
         ModuleScalePercent = 92,
         FinderPatternStyle = FinderPatternStyle.Circle,

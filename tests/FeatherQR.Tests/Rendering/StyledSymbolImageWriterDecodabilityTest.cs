@@ -22,6 +22,7 @@ public class StyledSymbolImageWriterDecodabilityTest
 
         await AssertDecodes(qr, options, Content);
         await AssertDecodes(qr, options with { Width = 512, Height = 512 }, Content);
+        await AssertDecodes(qr, options with { Width = 512, Height = 512, FillCanvas = true }, Content);
     }
 
     [Test]
@@ -33,6 +34,7 @@ public class StyledSymbolImageWriterDecodabilityTest
 
         await AssertDecodes(micro, options, ShortContent);
         await AssertDecodes(micro, options with { Width = 504, Height = 504 }, ShortContent);
+        await AssertDecodes(micro, options with { Width = 504, Height = 504, FillCanvas = true }, ShortContent);
     }
 
     /// <summary>The sub-finder and the corner patterns take the module style, as they do in the rendering package, and the symbol still reads.</summary>
@@ -45,6 +47,7 @@ public class StyledSymbolImageWriterDecodabilityTest
 
         await AssertDecodes(rm, options, ShortContent);
         await AssertDecodes(rm, options with { Width = 630, Height = 160 }, ShortContent);
+        await AssertDecodes(rm, options with { Width = 630, Height = 160, FillCanvas = true }, ShortContent);
     }
 
     [Test]
@@ -56,6 +59,7 @@ public class StyledSymbolImageWriterDecodabilityTest
 
         await AssertDecodes(qr, options, Content);
         await AssertDecodes(qr, options with { Width = 900, Height = 540 }, Content);
+        await AssertDecodes(qr, options with { Width = 900, Height = 540, FillCanvas = true }, Content);
     }
 
     [Test]
@@ -67,6 +71,7 @@ public class StyledSymbolImageWriterDecodabilityTest
 
         await AssertDecodes(micro, options, ShortContent);
         await AssertDecodes(micro, options with { Width = 504, Height = 504 }, ShortContent);
+        await AssertDecodes(micro, options with { Width = 504, Height = 504, FillCanvas = true }, ShortContent);
     }
 
     [Test]
@@ -78,6 +83,7 @@ public class StyledSymbolImageWriterDecodabilityTest
 
         await AssertDecodes(rm, options, ShortContent);
         await AssertDecodes(rm, options with { Width = 630, Height = 160 }, ShortContent);
+        await AssertDecodes(rm, options with { Width = 630, Height = 160, FillCanvas = true }, ShortContent);
     }
 
     /// <summary>The PNG, read as a file by the rendering package's decoder, which decodes it through SkiaSharp.</summary>

@@ -15,7 +15,7 @@ public class SymbolImageWriterImageSizeTest
     {
         foreach (var symbol in new[] { "QR3", "QR40", "M4", "R17x139" })
         {
-            foreach (var options in new[] { "default", "module 1", "module 3", "styled", "fraction", "fraction padded", "width only", "height only", "styled fraction" })
+            foreach (var options in new[] { "default", "module 1", "module 3", "styled", "fraction", "fraction padded", "width only", "height only", "styled fraction", "whole padded", "styled whole padded" })
                 yield return (symbol, options);
         }
         yield return ("QR5 H", "icon");
@@ -201,13 +201,15 @@ public class SymbolImageWriterImageSizeTest
         "module 3" => new SymbolImageOptions { ModulePixelSize = 3 },
         "styled" => Shaped,
         // 777 is whole pixels for none of the four symbols: 37, 185, 21 and 143 modules across.
-        "fraction" => new SymbolImageOptions { Width = 777, Height = 777 },
-        "fraction padded" => new SymbolImageOptions { Width = 1000, Height = 777 },
+        "fraction" => new SymbolImageOptions { Width = 777, Height = 777, FillCanvas = true },
+        "fraction padded" => new SymbolImageOptions { Width = 1000, Height = 777, FillCanvas = true },
+        "whole padded" => new SymbolImageOptions { Width = 1000, Height = 777 },
         "width only" => new SymbolImageOptions { Width = 1000 },
         "height only" => new SymbolImageOptions { Height = 500 },
-        "styled fraction" => Shaped with { Width = 1000, Height = 777 },
+        "styled fraction" => Shaped with { Width = 1000, Height = 777, FillCanvas = true },
+        "styled whole padded" => Shaped with { Width = 1000, Height = 777 },
         "icon" => new SymbolImageOptions { IconSizeModules = 7 },
-        "icon fraction" => new SymbolImageOptions { IconSizeModules = 7, Width = 500, Height = 400 },
+        "icon fraction" => new SymbolImageOptions { IconSizeModules = 7, Width = 500, Height = 400, FillCanvas = true },
         "icon styled" => Shaped with { IconSizeModules = 7, Width = 500 },
         _ => throw new ArgumentException(name),
     };

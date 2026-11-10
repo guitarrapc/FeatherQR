@@ -542,6 +542,7 @@ namespace FeatherQR
         public ReadOnlyMemory<byte> IconImage { get; set; }
         public SymbolColor DarkColor { get; set; }
         public SymbolColor LightColor { get; set; }
+        public bool FillCanvas { get; set; }
         public int CornerRadiusPercent { get; set; }
         public int Height { get; set; }
         public int IconBorderModules { get; set; }

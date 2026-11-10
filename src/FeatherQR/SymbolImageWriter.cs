@@ -10,7 +10,8 @@ namespace FeatherQR;
 /// <remarks>
 /// <para>
 /// Every module is a sharp square of <see cref="SymbolImageOptions.ModulePixelSize"/> pixels, or with <see cref="SymbolImageOptions.Width"/> or
-/// <see cref="SymbolImageOptions.Height"/> set the symbol fills that canvas, each module still whole pixels. The quiet zone is the one the symbol was made with.
+/// <see cref="SymbolImageOptions.Height"/> set the largest whole number of pixels that canvas allows. <see cref="SymbolImageOptions.FillCanvas"/>
+/// fills the canvas instead, each module still whole pixels. The quiet zone is the one the symbol was made with.
 /// The same symbol and options give the same bytes on every target framework.
 /// </para>
 /// <para>
@@ -430,9 +431,10 @@ public static class SymbolImageWriter
     /// image back reports these corners in <see cref="SymbolCorners"/>.
     /// </para>
     /// <para>
-    /// A module is the image's width over the symbol's modules across, quiet zone included, or its height over the modules down where that is smaller:
-    /// <c>Size</c> both ways on Standard QR and Micro QR, <c>Width</c> and <c>Height</c> on rMQR, with the image's size from <see cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/>.
-    /// Without a set size that is <see cref="SymbolImageOptions.ModulePixelSize"/>. With one it can be a fraction, and each module is that size rounded down or up.
+    /// A module is the image's width over the symbol's modules across, quiet zone included, or its height over the modules down where that is smaller,
+    /// rounded down: <c>Size</c> both ways on Standard QR and Micro QR, <c>Width</c> and <c>Height</c> on rMQR, with the image's size from
+    /// <see cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/>. Without a set size that is <see cref="SymbolImageOptions.ModulePixelSize"/>.
+    /// With <see cref="SymbolImageOptions.FillCanvas"/> each module is that size rounded down or up.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
