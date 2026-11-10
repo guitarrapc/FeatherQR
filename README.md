@@ -897,6 +897,16 @@ var png512 = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { Width = 
 var svg300 = SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { Width = 300 });
 ```
 
+Use `GetSymbolRectangle` to find where the symbol lands, quiet zone excluded, for example to draw a frame around it or to warn when its modules are too small. Read the edges from it instead of scaling the canvas yourself, because the writer rounds them to whole pixels.
+
+```csharp
+var options = new SymbolImageOptions { Width = 400, Height = 300 };
+var (x, y, width, height) = SymbolImageWriter.GetSymbolRectangle(qr, options);
+// Pixels per module: the image's size over the symbol's modules, quiet zone included.
+var (imageWidth, imageHeight) = SymbolImageWriter.GetImageSize(qr, options);
+var modulePixels = Math.Min((double)imageWidth / qr.Size, (double)imageHeight / qr.Size);
+```
+
 #### Colors and Transparent Background
 
 Colors support alpha. The dark color is drawn over the light color. A fully transparent light color omits the background.

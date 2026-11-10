@@ -414,6 +414,68 @@ public static class SymbolImageWriter
         return PixelWriter.TryWrite(new RmQRMatrixView(data), destination, rowBytes, layout, out width, out height, in options);
     }
 
+    // Symbol area
+
+    /// <summary>
+    /// Where the QR code lands in the image the options describe, in pixels: its modules, quiet zone excluded.
+    /// </summary>
+    /// <param name="data">The QR code.</param>
+    /// <param name="options">The options the image is written with. <c>default</c> is 8 pixels a module.</param>
+    /// <returns>The symbol's left, top, width and height in pixels.</returns>
+    /// <remarks>
+    /// <para>
+    /// Use it to draw a frame around the symbol or to check how large its modules came out. With <see cref="SymbolImageOptions.Width"/> or
+    /// <see cref="SymbolImageOptions.Height"/> set, the symbol is centred and its edges fall where the writers round them, so read them here
+    /// rather than scaling the canvas yourself. The quiet zone and any canvas left around it are the light colour. An image decoder reading the
+    /// image back reports these corners in <see cref="SymbolCorners"/>.
+    /// </para>
+    /// <para>
+    /// A module is the image's width over the symbol's modules across, quiet zone included, or its height over the modules down where that is smaller:
+    /// <c>Size</c> both ways on Standard QR and Micro QR, <c>Width</c> and <c>Height</c> on rMQR, with the image's size from <see cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/>.
+    /// Without a set size that is <see cref="SymbolImageOptions.ModulePixelSize"/>. With one it can be a fraction, and each module is that size rounded down or up.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image would be wider or taller than <see cref="int.MaxValue"/> pixels, a set size gives a module under one pixel, or an icon area does not fit the symbol or its symbology, or an icon image comes without one.</exception>
+    public static ImageRect GetSymbolRectangle(QRCodeData data, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return SymbolRectangleOf(new StandardQrMatrixView(data), in options);
+    }
+
+    /// <inheritdoc cref="GetSymbolRectangle(QRCodeData, in SymbolImageOptions)"/>
+    /// <param name="data">The Micro QR code.</param>
+    /// <param name="options">The options the image is written with. <c>default</c> is 8 pixels a module.</param>
+    public static ImageRect GetSymbolRectangle(MicroQRCodeData data, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return SymbolRectangleOf(new MicroQRMatrixView(data), in options);
+    }
+
+    /// <inheritdoc cref="GetSymbolRectangle(QRCodeData, in SymbolImageOptions)"/>
+    /// <param name="data">The rMQR code.</param>
+    /// <param name="options">The options the image is written with. <c>default</c> is 8 pixels a module.</param>
+    public static ImageRect GetSymbolRectangle(RmQRCodeData data, in SymbolImageOptions options = default)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        return SymbolRectangleOf(new RmQRMatrixView(data), in options);
+    }
+
+    private static ImageRect SymbolRectangleOf<TView>(in TView view, in SymbolImageOptions options)
+        where TView : struct, IModuleMatrixView
+    {
+        var layout = ImageLayout.Create(in view, in options);
+        // Options the writers refuse are refused here too, as the image's size refuses them.
+        IconArea.Get(in view, in options);
+        var quietZone = (view.Width - view.CoreWidth) / 2;
+        var x = layout.ColumnStart(quietZone);
+        var y = layout.RowStart(quietZone);
+        return new ImageRect(x, y, layout.ColumnStart(quietZone + view.CoreWidth) - x, layout.RowStart(quietZone + view.CoreHeight) - y);
+    }
+
     // Icon area
 
     /// <summary>

@@ -557,6 +557,9 @@ namespace FeatherQR
     public static class SymbolImageWriter
     {
         public static ImageRect GetIconRectangle(QRCodeData data, in SymbolImageOptions options);
+        public static ImageRect GetSymbolRectangle(MicroQRCodeData data, in SymbolImageOptions options = null);
+        public static ImageRect GetSymbolRectangle(QRCodeData data, in SymbolImageOptions options = null);
+        public static ImageRect GetSymbolRectangle(RmQRCodeData data, in SymbolImageOptions options = null);
         public static ImageSize GetImageSize(MicroQRCodeData data, in SymbolImageOptions options = null);
         public static ImageSize GetImageSize(QRCodeData data, in SymbolImageOptions options = null);
         public static ImageSize GetImageSize(RmQRCodeData data, in SymbolImageOptions options = null);
