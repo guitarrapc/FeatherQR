@@ -307,7 +307,7 @@ var automatic = new QRCodeGeneratorOptions();
 ```
 
 > [!TIP]
-> rMQR uses `FitStrategy` and `Height` instead of version ranges. Its 32 versions have no single size ordering: R7x43, R9x43, and R7x59 differ in width and height.
+> rMQR uses `FitStrategy` and `Height` instead of version ranges. Its 32 versions have no single size ordering: R7x43, R9x43, and R7x59 differ in width and height. To fill a fixed frame, see [Fit a frame](#fit-a-frame-largest-modules).
 
 #### Mask pattern pinning
 
@@ -897,12 +897,12 @@ var png512 = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { Width = 
 var svg300 = SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { Width = 300 });
 ```
 
-Use `GetSymbolRectangle` to find where the symbol lands, quiet zone excluded, for example to draw a frame around it or to warn when its modules are too small. Read the edges from it instead of scaling the canvas yourself, because the writer rounds them to whole pixels.
+`GetSymbolRectangle` returns the symbol's area in the image as a pixel rectangle, without the quiet zone. Use it to draw a frame around the symbol or to warn when the modules are too small. Do not calculate the edges from the scale yourself. The writer rounds them to whole pixels.
 
 ```csharp
 var options = new SymbolImageOptions { Width = 400, Height = 300 };
 var (x, y, width, height) = SymbolImageWriter.GetSymbolRectangle(qr, options);
-// Pixels per module: the image's size over the symbol's modules, quiet zone included.
+// Pixels per module. qr.Size counts the quiet zone, as the image does.
 var (imageWidth, imageHeight) = SymbolImageWriter.GetImageSize(qr, options);
 var modulePixels = Math.Min((double)imageWidth / qr.Size, (double)imageHeight / qr.Size);
 ```
@@ -1636,6 +1636,35 @@ Console.WriteLine(flat.Version); // R7x43
 ```
 
 ![rMQR R9x139 with a fixed 9-module height](https://raw.githubusercontent.com/guitarrapc/FeatherQR/main/samples/ConsoleApp/samples/pattern28_rmqr_fixed_height.png)
+
+#### Fit a frame (largest modules)
+
+To get the largest modules in a frame, find the narrowest version at each of the six heights. Then use the version with the largest modules. At a fixed height, a narrower symbol never has smaller modules. So these six calls find the best of all 32 versions.
+
+Do not choose the version whose aspect ratio is closest to the frame's. For 9 characters in a 400 × 60 frame, that version is R17x139 with 2.8-pixel modules. The six calls choose R7x59, with 5.5-pixel modules.
+
+```csharp
+using FeatherQR;
+
+const string text = "HELLO2026";
+int frameWidth = 400, frameHeight = 60;
+RmQRVersion? best = null;
+double bestModule = 0;
+foreach (var height in Enum.GetValues<RmQRHeight>())
+{
+    var fit = new RmQRCodeGeneratorOptions { Height = height, FitStrategy = RmQRFitStrategy.MinimizeWidth };
+    if (!RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out var size, fit))
+        continue; // The text does not fit at this height.
+    // size.Width and size.Height include the quiet zone, as the image does.
+    var module = Math.Min((double)frameWidth / size.Width, (double)frameHeight / size.Height);
+    if (module > bestModule)
+        (best, bestModule) = (size.Version, module);
+}
+Console.WriteLine(best); // R7x59
+
+var rmqr = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = best });
+var png = SymbolImageWriter.GetPngBytes(rmqr, new SymbolImageOptions { Width = frameWidth, Height = frameHeight });
+```
 
 #### Mixed-mode segmentation (smaller symbols for mixed content)
 
