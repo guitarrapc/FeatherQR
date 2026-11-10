@@ -41,7 +41,7 @@ See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these 
 
 ## Overview
 
-FeatherQR allocates memory for QR code data without additional allocations during processing. The core writes SVG, PNG, raw pixels, and terminal text. SkiaSharp integration adds styled image rendering.
+FeatherQR allocates memory for QR code data without additional allocations during processing. The core returns the dark modules as rectangles for your own renderer. It also writes SVG, PNG, raw pixels, and terminal text. SkiaSharp integration adds styled image rendering.
 
 - **Generation**: Create a QR code with one method call and sensible defaults
 - **Performance**: Designed for speed and minimal memory allocation
@@ -179,6 +179,7 @@ Use an image builder for most applications. All generators and decoders provide 
 | What | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
+| [Get dark modules as rectangles](#module-rectangles-for-your-renderer) for your own renderer | `GetModuleRectangles` | `GetModuleRectangles` | `GetModuleRectangles` |
 | Write SVG, PNG (1-bit, or 4-bit with a style), raw pixels (any `PixelLayout`), or terminal text| `SymbolImageWriter` | `SymbolImageWriter` | `SymbolImageWriter` |
 | Decode a matrix or grayscale pixels | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 | Decode all symbol types from grayscale pixels | `SymbolDecoder` | `SymbolDecoder` | `SymbolDecoder` |
@@ -831,6 +832,36 @@ The `Try` methods return `false` with a `Gs1Error` for invalid input instead of 
 
 The examples below illustrate common uses and their output. [samples/ConsoleAppCore](samples/ConsoleAppCore) and [samples/ConsoleApp](samples/ConsoleApp) generate the images at 248 × 248.
 
+### Module Rectangles for Your Renderer
+
+`GetModuleRectangles` returns the dark modules as merged rectangles. Apps that render with a GPU or their own graphics API draw them directly, with no image to encode, decode, or upload as a texture. The edges stay sharp at any scale. Use the [image writers](#plain-images-with-featherqr) when you need an image.
+
+Coordinates are in module units, include the quiet zone, and match the `qr[row, col]` indexer. Multiply by the pixels per module, or scale in a shader or an SVG `viewBox`. The rectangles cover exactly the dark modules without overlap, so a translucent color stays even.
+
+```csharp
+using FeatherQR;
+
+var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
+
+// GPU: one quad per rectangle, in pixels.
+const float scale = 8; // pixels per module
+foreach (var r in qr.GetModuleRectangles())
+    batch.AddQuad(r.X * scale, r.Y * scale, r.Width * scale, r.Height * scale); // your sprite batch or vertex buffer
+
+// SVG: one path in module units.
+var sb = new StringBuilder();
+sb.Append($"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {qr.Size} {qr.Size}\" shape-rendering=\"crispEdges\">");
+sb.Append("<rect width=\"100%\" height=\"100%\" fill=\"#fff\"/><path fill=\"#000\" d=\"");
+foreach (var r in qr.GetModuleRectangles())
+    sb.Append(CultureInfo.InvariantCulture, $"M{r.X},{r.Y}h{r.Width}v{r.Height}h{-r.Width}z");
+sb.Append("\"/></svg>");
+```
+
+Anti-aliasing each rectangle separately leaves a faint seam where two rectangles meet inside a pixel. To avoid it, fill them as one path or align the edges to whole pixels. See Pattern 30 in [samples/ConsoleApp](samples/ConsoleApp) and `ToDrawingImage` in [samples/Dotfiles/Wpf.cs](samples/Dotfiles/Wpf.cs).
+
+> [!TIP]
+> `MicroQRCodeData` and `RmQRCodeData` expose the same members (use `Width`/`Height` instead of `Size` for rMQR). For allocation-free use, size a pooled buffer with `GetModuleRectanglesMaxCount()` and call `TryGetModuleRectangles(Span<ModuleRect>, out int)`.
+
 ### Plain Images with FeatherQR
 
 `SymbolImageWriter` converts `QRCodeData`, `MicroQRCodeData`, and `RmQRCodeData` to SVG, PNG, raw pixels, or terminal text using only `FeatherQR`. The same symbol produces identical bytes on every target framework. Use an [image builder](#styled-images-with-featherqrskiasharp) for gradients, icons rendered into raster images, JPEG, or WebP.
@@ -1238,30 +1269,6 @@ Pattern 15 in [samples/ConsoleApp](samples/ConsoleApp) uses this API to render a
 
 ![A symbol in a card with text below it](https://raw.githubusercontent.com/guitarrapc/FeatherQR/main/samples/ConsoleApp/samples/pattern15_instagram_frame.png)
 
-### Module Matrix
-
-Generators create module matrices. Use `SymbolImageWriter` for SVG, PNG, raw pixels, or terminal text.
-
-```csharp
-using FeatherQR;
-
-var qrData = QRCodeGenerator.Create("content", QREccLevel.M);
-var isDark = qrData[row, col];
-```
-
-`GetModuleRectangles` returns dark modules as merged rectangles in module coordinates, including the quiet zone, matching the indexer. Use these rectangles for vector output or graphics APIs. Scale them by the number of pixels per module, or write them directly to an SVG path with a `viewBox` in module units.
-
-```csharp
-var sb = new StringBuilder();
-sb.Append($"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {qrData.Size} {qrData.Size}\" shape-rendering=\"crispEdges\">");
-sb.Append("<rect width=\"100%\" height=\"100%\" fill=\"#fff\"/><path fill=\"#000\" d=\"");
-foreach (var r in qrData.GetModuleRectangles())
-    sb.Append(CultureInfo.InvariantCulture, $"M{r.X},{r.Y}h{r.Width}v{r.Height}h{-r.Width}z");
-sb.Append("\"/></svg>");
-```
-> [!TIP]
-> `MicroQRCodeData` and `RmQRCodeData` expose the same members (use `Width`/`Height` instead of `Size` for rMQR). For allocation-free use, size a pooled buffer with `GetModuleRectanglesMaxCount()` and call `TryGetModuleRectangles(Span<ModuleRect>, out int)`.
-
 ## Platform-Specific Considerations
 
 ### NativeAOT Support
@@ -1357,7 +1364,7 @@ Yes. FeatherQR supports Blazor WebAssembly and standalone WebAssembly.
 
 ### Can I use it with System.Drawing, WPF, or ImageSharp?
 
-Yes, `FeatherQR` supports those. `SymbolImageWriter.TryWritePixels` writes the pixel layouts these libraries use, and `LuminanceConverter` turns their pixels into the luminance `TryDecodeImage` reads. Each sample makes a symbol in the library's own image type and decodes it back.
+Yes, `FeatherQR` supports those. `SymbolImageWriter.TryWritePixels` writes the pixel layouts these libraries use, and `LuminanceConverter` turns their pixels into the luminance `TryDecodeImage` reads. Each sample makes a symbol in the library's own image type and decodes it back. To draw shapes instead of pixels, use [module rectangles](#module-rectangles-for-your-renderer).
 
 Pick the `PixelLayout` by the order of the bytes in memory, which a format's name does not always say:
 
