@@ -22,6 +22,7 @@ public class SymbolImageWriterPixelStrideTest
         }
         yield return ("QR5 H", "icon");
         yield return ("QR5 H", "icon styled");
+        yield return ("QR5 H", "icon styled fill");
     }
 
     // ---- rows a stride apart --------------------------------------------------------------
@@ -305,12 +306,13 @@ public class SymbolImageWriterPixelStrideTest
         "colours" => new SymbolImageOptions { ModulePixelSize = 3, DarkColor = Navy, LightColor = Ivory },
         "styled" => Shaped with { DarkColor = Navy, LightColor = Ivory },
         // Neither side is whole pixels for 37, 21 or 143 modules. Filling pads the symbol on one axis, and whole-pixel modules can pad both.
-        "fraction padded" => new SymbolImageOptions { Width = 500, Height = 333, DarkColor = Navy, FillCanvas = true },
-        "styled fraction" => Shaped with { Width = 500, Height = 333, FillCanvas = true },
-        "whole padded" => new SymbolImageOptions { Width = 500, Height = 333, DarkColor = Navy },
-        "styled whole padded" => Shaped with { Width = 500, Height = 333 },
+        "fraction padded" => new SymbolImageOptions { Width = 500, Height = 334, DarkColor = Navy, FillCanvas = true },
+        "styled fraction" => Shaped with { Width = 500, Height = 334, FillCanvas = true },
+        "whole padded" => new SymbolImageOptions { Width = 500, Height = 334, DarkColor = Navy },
+        "styled whole padded" => Shaped with { Width = 500, Height = 334 },
         "icon" => new SymbolImageOptions { IconSizeModules = 7, ModulePixelSize = 5 },
         "icon styled" => Shaped with { IconSizeModules = 7, Width = 333 },
+        "icon styled fill" => Shaped with { IconSizeModules = 7, Width = 333, FillCanvas = true },
         _ => throw new ArgumentException(name),
     };
 

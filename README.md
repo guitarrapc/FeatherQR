@@ -139,7 +139,7 @@ Both `FeatherQR` and `FeatherQR.SkiaSharp` generate images from a QR code symbol
 using FeatherQR;
 
 var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
-var options = new SymbolImageOptions { Width = 512, Height = 512 }; // the builders' default size
+var options = new SymbolImageOptions { Width = 512, Height = 512 }; // the builders' default size. FillCanvas = true gives their exact pixels.
 ```
 
 Choose an output method:
@@ -200,7 +200,7 @@ Both packages use the same units for image settings. In `FeatherQR`, configure `
 
 | What | `FeatherQR` | `FeatherQR.SkiaSharp` |
 | --- | --- | --- |
-| Size, equal modules | `Width = 512, Height = 512` | `.WithSize(512, 512).WithModulePixelSize(n)` |
+| Size, equal modules | `Width = 512, Height = 512` | `.WithSize(512, 512).WithModulePixelSize(512 / qr.Size)` |
 | Size, filled | `Width = 512, Height = 512, FillCanvas = true` | `.WithSize(512, 512)` |
 | Modules | `ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92` | `.WithModuleStyle(ModuleStyle.Circle, scalePercent: 92)` |
 | Finder patterns | `FinderPatternStyle = FinderPatternStyle.Circle` | `.WithFinderPatternStyle(FinderPatternStyle.Circle)` |

@@ -123,6 +123,7 @@ public class SymbolImageWriterPixelsTest
         }
         yield return ("QR5 H", "icon");
         yield return ("QR5 H", "icon styled");
+        yield return ("QR5 H", "icon styled fill");
     }
 
     /// <summary>
@@ -142,12 +143,13 @@ public class SymbolImageWriterPixelsTest
             "module 1" => new SymbolImageOptions { ModulePixelSize = 1 },
             "colours" => new SymbolImageOptions { ModulePixelSize = 3, DarkColor = navy, LightColor = ivory },
             "styled" => shaped with { DarkColor = navy, LightColor = ivory },
-            "fraction padded" => new SymbolImageOptions { Width = 500, Height = 333, DarkColor = navy, FillCanvas = true },
-            "styled fraction" => shaped with { Width = 500, Height = 333, DarkColor = navy, LightColor = ivory, FillCanvas = true },
-            "whole padded" => new SymbolImageOptions { Width = 500, Height = 333, DarkColor = navy },
-            "styled whole padded" => shaped with { Width = 500, Height = 333, DarkColor = navy, LightColor = ivory },
+            "fraction padded" => new SymbolImageOptions { Width = 500, Height = 334, DarkColor = navy, FillCanvas = true },
+            "styled fraction" => shaped with { Width = 500, Height = 334, DarkColor = navy, LightColor = ivory, FillCanvas = true },
+            "whole padded" => new SymbolImageOptions { Width = 500, Height = 334, DarkColor = navy },
+            "styled whole padded" => shaped with { Width = 500, Height = 334, DarkColor = navy, LightColor = ivory },
             "icon" => new SymbolImageOptions { IconSizeModules = 7, ModulePixelSize = 5, DarkColor = navy },
             "icon styled" => shaped with { IconSizeModules = 7, Width = 333, LightColor = ivory },
+            "icon styled fill" => shaped with { IconSizeModules = 7, Width = 333, LightColor = ivory, FillCanvas = true },
             _ => throw new ArgumentException(optionsName),
         };
         object data = symbol switch

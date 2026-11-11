@@ -1384,3 +1384,26 @@ Done: the ARM64 JIT that F25 left unread, on the Apple M2 under .NET 10.0.13. Ea
 Not checked: NativeAOT on ARM64. The SDK on this Mac restores `Microsoft.DotNet.ILCompiler` 10.0.13, which NuGet audit refuses (NU1903), so the harness was built for the JIT with `PublishAot=false` and the audit was left on.
 
 Lesson: the ARM64 release JIT prints no target for an indirect call (`blr` through a cell), so a listing alone cannot name a call that stayed a call, as the x64 listings' `[Method]` comments do. Read the blocks around each `blr` instead. Also, the timing mode with no `--shape` filter stops on ARM64 at `kernel/RmQRExtract-*`, which pins `PairPlanesVector128`, a tier ARM64 does not take. A full timing run there needs a filter until those shapes check the tier.
+
+### Phase 6m, the symbol's place in its image (2026-11-11)
+
+Done: `SymbolImageWriter.GetSymbolRectangle` for the three data types returns the symbol's modules in pixels, quiet zone excluded, as an `ImageRect`, and refuses what `GetImageSize` refuses. The README, the migration notes, the Image output section of the spec and the API listing carry it.
+
+Checks: `SymbolImageWriterSymbolRectangleTest` holds the rectangle to the bounds of the dark pixels on ten symbols with quiet zones of 0 to 4 modules, to values worked out by hand, and to the corners the decoders report, within half a module. The Debug suite passed on net10.0 (32,403 passed, 404 skipped on this x64 machine).
+
+Lesson: a caller who rounds the scaled and centred edges of a filled canvas lands a pixel off on about half of the canvases (1,691 of 3,652 in a console probe), which is why the place is a query and not a formula in the docs. The quiet zone is left out because the decoders' `SymbolCorners` leave it out.
+
+No hot path moved: the call is a new query over the existing layout.
+
+### Phase 6n, equal whole-pixel modules at a set size (2026-11-11)
+
+Done: with `Width` or `Height` set, every module is the same whole number of pixels, the largest that fits, centred with the rest light, and `SymbolImageOptions.FillCanvas` keeps the fill of 2026-11-07. The image's size is the same in both modes, and the rendering package keeps the fill as its default. The README, the migration notes, the spec, the API listing and the sample images written at a set size followed, and the benchmark's 512 by 512 rows now write equal modules beside new filled rows.
+
+Checks: `SymbolImageWriterSizeTest` holds the default to a rule computed in the test and to the rendering package's `WithSize` with `WithModulePixelSize` at that size, and the fill to the pixel-centre rule and to `WithSize` alone. The Release suite passed on net10.0 (32,723 passed, 403 skipped on this x64 machine) after the branch review.
+
+Benchmark delta (one in-process run, 2026-11-11): version 40 at 512 by 512 writes its PNG in 129 µs with equal modules against 270 µs filled, and its RGBA pixels in 61 against 138 µs. Version 1's PNG takes 11.2 against 11.8 µs.
+
+Lessons:
+- The tests that compare one writer or format with another moved to the new default without failing. The fractional path dropped out of the style, stride, three-byte, allocation, parity and decodability tests until each case named its mode.
+- Canvases meant to be fractional were whole for some symbols, since 777 is 21 × 37 and 333 is 9 × 37. The review replaced them with 778 and 334.
+- Equal modules cost most where a small symbol is drawn into a small area: the sample's Micro QR icon, 19 modules in 35 pixels, fell to 1 pixel a module, so the sample draws it with `FillCanvas`.

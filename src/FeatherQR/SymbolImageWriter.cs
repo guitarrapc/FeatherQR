@@ -428,13 +428,13 @@ public static class SymbolImageWriter
     /// Use it to draw a frame around the symbol or to check how large its modules came out. With <see cref="SymbolImageOptions.Width"/> or
     /// <see cref="SymbolImageOptions.Height"/> set, the symbol is centred and its edges fall where the writers round them, so read them here
     /// rather than scaling the canvas yourself. The quiet zone and any canvas left around it are the light colour. An image decoder reading the
-    /// image back reports these corners in <see cref="SymbolCorners"/>.
+    /// image back reports its estimate of these corners in <see cref="SymbolCorners"/>.
     /// </para>
     /// <para>
-    /// A module is the image's width over the symbol's modules across, quiet zone included, or its height over the modules down where that is smaller,
-    /// rounded down: <c>Size</c> both ways on Standard QR and Micro QR, <c>Width</c> and <c>Height</c> on rMQR, with the image's size from
-    /// <see cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/>. Without a set size that is <see cref="SymbolImageOptions.ModulePixelSize"/>.
-    /// With <see cref="SymbolImageOptions.FillCanvas"/> each module is that size rounded down or up.
+    /// A module's size is the image's width over the symbol's modules across, quiet zone included, or its height over the modules down where that is
+    /// smaller: <c>Size</c> both ways on Standard QR and Micro QR, <c>Width</c> and <c>Height</c> on rMQR, with the image's size from
+    /// <see cref="GetImageSize(QRCodeData, in SymbolImageOptions)"/>. Every module is that size rounded down, or with <see cref="SymbolImageOptions.FillCanvas"/>
+    /// rounded down or up. Without a set size it is <see cref="SymbolImageOptions.ModulePixelSize"/>.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>

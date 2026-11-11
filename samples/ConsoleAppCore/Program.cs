@@ -92,7 +92,7 @@ var (iconX, iconY, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(q
 Console.WriteLine($"The icon goes at ({iconX}, {iconY}), {iconWidth} by {iconHeight} pixels");
 var composed = new byte[SymbolImageWriter.GetPixelBufferSize(qrH, PixelLayout.Rgba8888, withIcon)];
 SymbolImageWriter.TryWritePixels(qrH, composed, PixelLayout.Rgba8888, out var composedWidth, out var composedHeight, withIcon);
-// The icon fills its area. With equal whole-pixel modules, 19 modules in 35 pixels would be 1 pixel each, half the area.
+// The icon fills its area. With equal whole-pixel modules, 19 modules in 35 pixels would be 1 pixel each, 19 of the 35 pixels across.
 var iconOptions = new SymbolImageOptions { Width = iconWidth, Height = iconHeight, DarkColor = navy, FillCanvas = true };
 var iconStart = (iconY * composedWidth + iconX) * 4;
 SymbolImageWriter.TryWritePixels(micro, composed.AsSpan(iconStart), composedWidth * 4, PixelLayout.Rgba8888, out _, out _, iconOptions);

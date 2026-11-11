@@ -18,8 +18,8 @@ public class SymbolImageWriterSymbolRectangleTest
     /// <summary>
     /// The rectangle is the bounds of the dark pixels the writer draws. That holds because the core's first and last rows and columns each
     /// hold a dark module, which the test checks first: the finder patterns on Standard QR, the finder pattern and the timing patterns, which end
-    /// dark on an odd side, on Micro QR, and the finder and sub-finder patterns on rMQR. The writer's pixels are held to the rendering package's,
-    /// so this cannot pass with a query and a writer wrong together.
+    /// dark on an odd side, on Micro QR, and the finder and sub-finder patterns on rMQR. The writer and the rectangle read the same layout, so
+    /// a fault in the layout moves both. SymbolImageWriterSizeTest holds the writer's pixels to rules computed on their own and to the rendering package.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(SymbolsAndOptions))]
@@ -120,16 +120,18 @@ public class SymbolImageWriterSymbolRectangleTest
 
     /// <summary>
     /// The decoders report a symbol's corners with the quiet zone excluded too, so the image read back gives the rectangle's corners,
-    /// within the half a module their documentation holds them to at 8 pixels a module or more.
+    /// within the half a module their documentation holds them to at 8 pixels a module or more, with whole-pixel modules and filled.
     /// </summary>
     [Test]
-    public async Task SymbolRectangle_IsWhereTheDecodersFindTheSymbol()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SymbolRectangle_IsWhereTheDecodersFindTheSymbol(bool fillCanvas)
     {
         var cases = new (SymbolCase Symbol, SymbolImageOptions Options)[]
         {
-            (Symbol("QR3"), new SymbolImageOptions { Width = 600, Height = 400 }),
-            (Symbol("M4"), new SymbolImageOptions { Width = 300, Height = 301 }),
-            (Symbol("R17x139"), new SymbolImageOptions { Width = 1200 }),
+            (Symbol("QR3"), new SymbolImageOptions { Width = 600, Height = 400, FillCanvas = fillCanvas }),
+            (Symbol("M4"), new SymbolImageOptions { Width = 300, Height = 301, FillCanvas = fillCanvas }),
+            (Symbol("R17x139"), new SymbolImageOptions { Width = 1200, FillCanvas = fillCanvas }),
         };
         foreach (var (symbol, options) in cases)
         {
@@ -145,8 +147,9 @@ public class SymbolImageWriterSymbolRectangleTest
             await Assert.That(corners.IsEmpty).IsFalse();
 
             var (x, y, w, h) = RectangleOf(symbol.Data, options);
-            var module = Math.Min(width / symbol.Columns, height / symbol.Rows);
-            await Assert.That(module).IsGreaterThanOrEqualTo(8);
+            var fit = Math.Min((double)width / symbol.Columns, (double)height / symbol.Rows);
+            var module = fillCanvas ? fit : Math.Floor(fit);
+            await Assert.That(module).IsGreaterThanOrEqualTo(8.0);
             var expected = new[] { (x, y), (x + w, y), (x + w, y + h), (x, y + h) };
             var reported = new[] { corners.TopLeft, corners.TopRight, corners.BottomRight, corners.BottomLeft };
             for (var i = 0; i < 4; i++)
@@ -236,6 +239,18 @@ public class SymbolImageWriterSymbolRectangleTest
         await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(qr, new SymbolImageOptions { Width = 185, Height = 185 }))).IsEqualTo((4, 4, 177, 177));
     }
 
+    /// <summary>Version 40 is 185 modules a side, so 11,608,019 pixels a module keep a side within an int and 11,608,020 do not.</summary>
+    [Test]
+    public async Task SidePastAnInt_Throws_AndUpToItIsPlaced()
+    {
+        var qr = (QRCodeData)Symbol("QR40").Data;
+
+        await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(qr, new SymbolImageOptions { ModulePixelSize = 11_608_019 })))
+            .IsEqualTo((4 * 11_608_019, 4 * 11_608_019, 177 * 11_608_019, 177 * 11_608_019));
+        var refused = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.GetSymbolRectangle(qr, new SymbolImageOptions { ModulePixelSize = 11_608_020 }));
+        await Assert.That(refused.ParamName).IsEqualTo("options");
+    }
+
     /// <summary>An icon that the writers refuse is refused here too, as the image's size refuses it.</summary>
     [Test]
     public async Task AnIconTheWritersRefuse_Throws()
@@ -293,15 +308,15 @@ public class SymbolImageWriterSymbolRectangleTest
         "default" => default,
         "module 1" => new SymbolImageOptions { ModulePixelSize = 1 },
         "module 3" => new SymbolImageOptions { ModulePixelSize = 3 },
-        "fraction" => new SymbolImageOptions { Width = 777, Height = 777 },
-        "fraction wider" => new SymbolImageOptions { Width = 1000, Height = 777 },
-        "fraction taller" => new SymbolImageOptions { Width = 777, Height = 1000 },
+        "fraction" => new SymbolImageOptions { Width = 778, Height = 778 },
+        "fraction wider" => new SymbolImageOptions { Width = 1000, Height = 778 },
+        "fraction taller" => new SymbolImageOptions { Width = 778, Height = 1000 },
         "width only" => new SymbolImageOptions { Width = 1000 },
         "height only" => new SymbolImageOptions { Height = 500 },
-        // 5 pixels a module with 9 spare columns, so the symbol starts 4 pixels in.
+        // 5 pixels a module with 9 spare columns, so the quiet zone starts 4 pixels in.
         "whole pixels padded" => new SymbolImageOptions { Width = 5 * symbol.Columns + 9, Height = 5 * symbol.Rows },
-        "fill" => new SymbolImageOptions { Width = 777, Height = 777, FillCanvas = true },
-        "fill wider" => new SymbolImageOptions { Width = 1000, Height = 777, FillCanvas = true },
+        "fill" => new SymbolImageOptions { Width = 778, Height = 778, FillCanvas = true },
+        "fill wider" => new SymbolImageOptions { Width = 1000, Height = 778, FillCanvas = true },
         "fill width only" => new SymbolImageOptions { Width = 1000, FillCanvas = true },
         _ => throw new ArgumentException(name),
     };

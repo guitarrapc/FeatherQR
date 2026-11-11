@@ -4,7 +4,8 @@ namespace FeatherQR;
 /// An axis-aligned rectangle in an image, in whole pixels: (0, 0) is the image's top-left pixel, X grows to the right and Y downward.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="SymbolImageWriter.GetIconRectangle"/> as where an icon lands in a symbol's image. <see cref="ModuleRect"/> is the same
+/// Returned by <see cref="SymbolImageWriter.GetIconRectangle"/> as where an icon lands in a symbol's image, and by
+/// <see cref="SymbolImageWriter.GetSymbolRectangle(QRCodeData, in SymbolImageOptions)"/> as where the symbol's modules land. <see cref="ModuleRect"/> is the same
 /// shape in modules, a different unit: this one is pixels of the image.
 /// </remarks>
 public readonly record struct ImageRect

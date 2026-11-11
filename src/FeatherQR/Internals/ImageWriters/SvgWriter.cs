@@ -542,7 +542,7 @@ internal static partial class SvgWriter
 
         /// <summary>
         /// A length in pixels as modules, to three decimals with trailing zeros dropped.
-        /// A thousandth of a module is well under a pixel at any scale a symbol reads at, and whole values stay whole.
+        /// A thousandth of a module stays under a pixel up to a thousand pixels a module, and whole values stay whole.
         /// </summary>
         public void Modules(long pixels, in ImageLayout layout)
         {

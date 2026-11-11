@@ -39,9 +39,13 @@ public class SymbolImageWriterSizeTest
         yield return ("QR3", 296, 364);
         yield return ("M4", 200, 168);
         yield return ("R17x139", 286, 60);
-        // A single light row below the symbol and none above it, at whole pixels and at a fraction.
+        // A single light row below the symbol and none above it: at whole pixels in both modes, and at a fraction when filling.
         yield return ("QR3", 296, 297);
         yield return ("R17x139", 1000, 148);
+        // A whole fit whose height binds with an odd spare: 296 pixels hold 37 modules of 8, and the 69 spare columns put 34 on the left.
+        yield return ("QR3", 365, 296);
+        // A wide symbol whose height binds. Filling pads only its left and right, and rounds the left pad of 495.7 pixels down.
+        yield return ("R17x139", 1400, 60);
     }
 
     // ---- the renderer's pixels ----------------------------------------------------------
@@ -162,7 +166,7 @@ public class SymbolImageWriterSizeTest
     }
 
     /// <summary>
-    /// One side at 0 follows the symbol's aspect at the scale the other side gives, rounded up to whole pixels, so the symbol fits inside
+    /// One side at 0 follows the symbol's aspect at the scale that fills the other side, rounded up to whole pixels, so the symbol fits inside
     /// and the image is the one both sides would give: rounded down, the same two sides would bind on the followed one at a smaller scale.
     /// The image's size is the same with and without <c>FillCanvas</c>, which changes only where the modules fall in it.
     /// </summary>
@@ -395,10 +399,12 @@ public class SymbolImageWriterSizeTest
     }
 
     [Test]
-    public async Task WriteSvg_AndWritePng_AtASetSize_WriteTheStringAndTheArray()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task WriteSvg_AndWritePng_AtASetSize_WriteTheStringAndTheArray(bool fillCanvas)
     {
         var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
-        var options = new SymbolImageOptions { Width = 300, Height = 200, DarkColor = Navy, LightColor = Ivory };
+        var options = new SymbolImageOptions { Width = 300, Height = 200, FillCanvas = fillCanvas, DarkColor = Navy, LightColor = Ivory };
         var writer = new ArrayBufferWriter<byte>();
 
         var svgLength = SymbolImageWriter.WriteSvg(micro, writer, options);

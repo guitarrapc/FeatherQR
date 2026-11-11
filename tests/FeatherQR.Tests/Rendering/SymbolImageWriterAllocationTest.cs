@@ -186,6 +186,21 @@ public class SymbolImageWriterAllocationTest
         await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetTerminalText(qr, invert: true)) / 4).IsEqualTo(oneString);
     }
 
+    /// <summary>The symbol's rectangle, with and without a set size, filled, and with an icon area that the query checks.</summary>
+    [Test]
+    public async Task GetSymbolRectangle_AllocatesNothing()
+    {
+        var qr = QRCodeGenerator.Create("allocation", QREccLevel.H, new QRCodeGeneratorOptions { Version = 10 });
+        var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
+        var rm = RmQRCodeGenerator.Create("allocation", RmQREccLevel.M);
+        var sized = new SymbolImageOptions { Width = 500, Height = 400 };
+
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetSymbolRectangle(qr))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetSymbolRectangle(micro, sized))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetSymbolRectangle(rm, sized with { FillCanvas = true }))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetSymbolRectangle(qr, sized with { IconSizeModules = 9 }))).IsEqualTo(0);
+    }
+
     /// <summary>A writer over one array that starts again at its front on <see cref="Rewind"/>.</summary>
     private sealed class RewindingWriter(int capacity) : IBufferWriter<byte>
     {

@@ -72,7 +72,7 @@ public record struct SymbolImageOptions
     /// builders write for the same size with that module size given to <c>WithModulePixelSize</c>. <see cref="FillCanvas"/> fills the canvas instead.
     /// </para>
     /// <para>
-    /// A side left at 0 follows the symbol's aspect at the scale the other side gives, rounded up to whole pixels, so the image is the one
+    /// A side left at 0 follows the symbol's aspect at the scale that fills the other side, rounded up to whole pixels, so the image is the one
     /// both sides would give. <see cref="ModulePixelSize"/> does not apply once a size is set. The writer refuses a canvas that gives a module under one pixel.
     /// </para>
     /// </remarks>
