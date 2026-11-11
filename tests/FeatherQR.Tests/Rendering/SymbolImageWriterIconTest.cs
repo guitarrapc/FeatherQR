@@ -164,7 +164,7 @@ public class SymbolImageWriterIconTest
 
     /// <summary>
     /// The rectangle is an <see cref="ImageRect"/>: its members by name, split in the order x, y, width, height. On a canvas wider than
-    /// tall the symbol is padded on its left, so the left edge differs from the top one and a split that exchanged them shows.
+    /// tall the symbol starts further in from the left than from the top, so the left edge differs from the top one and a split that exchanged them shows.
     /// </summary>
     [Test]
     public async Task IconRectangle_NamesItsMembers_AndSplitsAsXYWidthHeight()
@@ -183,8 +183,8 @@ public class SymbolImageWriterIconTest
     }
 
     /// <summary>
-    /// The split's order, on a rectangle whose four members all differ. An icon is square, so no rectangle the writer returns can
-    /// tell width from height.
+    /// The split's order, on a rectangle whose four members all differ. An icon is square, so the icon rectangle cannot tell width
+    /// from height.
     /// </summary>
     [Test]
     public async Task ImageRect_SplitsItsFourMembersInOrder()
@@ -196,16 +196,22 @@ public class SymbolImageWriterIconTest
         await Assert.That(new ImageRect(1, 2, 3, 4) != new ImageRect(1, 2, 4, 3)).IsTrue();
     }
 
-    /// <summary>At a set size and with a style, the area is still the light colour and the rectangle lands on the cells the fit gives.</summary>
+    /// <summary>
+    /// At a set size and with a style, the area is still the light colour and the rectangle lands on the cells the layout gives. The icon
+    /// is modules 19 to 25 of 45. Whole pixels are 8 each, centred 70 columns and 20 rows in. Filling, a module is 400 / 45 pixels from
+    /// column 50, and modules 19 and 26 start 169 and 231 pixels in. The two rectangles differ, so a query that ignored the mode fails.
+    /// </summary>
     [Test]
-    public async Task IconArea_AtASetSize_AndStyled_IsLight_AndTheRectangle_IsOnTheGrid()
+    [Arguments(false, 222, 172, 56)]
+    [Arguments(true, 219, 169, 62)]
+    public async Task IconArea_AtASetSize_AndStyled_IsLight_AndTheRectangle_IsOnTheGrid(bool fillCanvas, int expectedX, int expectedY, int expectedSide)
     {
         var qr = QRCodeGenerator.Create("icon area", QREccLevel.H, new QRCodeGeneratorOptions { Version = 5 });
-        var options = new SymbolImageOptions { Width = 500, Height = 400, IconSizeModules = 7, ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 90, DarkColor = Navy, LightColor = Ivory };
+        var options = new SymbolImageOptions { Width = 500, Height = 400, FillCanvas = fillCanvas, IconSizeModules = 7, ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 90, DarkColor = Navy, LightColor = Ivory };
         var pixels = Pixels(qr, options, PixelLayout.Rgba8888);
         var (x, y, width, height) = SymbolImageWriter.GetIconRectangle(qr, options);
 
-        await Assert.That(width).IsBetween(7 * 8, 7 * 9).Because("45 modules over 400 pixels is 8.9 a module");
+        await Assert.That((x, y, width, height)).IsEqualTo((expectedX, expectedY, expectedSide, expectedSide));
         for (var py = y; py < y + height; py++)
             for (var px = x; px < x + width; px++)
                 await Assert.That(pixels.AsSpan((py * 500 + px) * 4, 4).ToArray()).IsEquivalentTo(new byte[] { 0xFF, 0xFF, 0xF0, 255 }, CollectionOrdering.Matching).Because($"({px}, {py})");

@@ -542,6 +542,7 @@ namespace FeatherQR
         public ReadOnlyMemory<byte> IconImage { get; set; }
         public SymbolColor DarkColor { get; set; }
         public SymbolColor LightColor { get; set; }
+        public bool FillCanvas { get; set; }
         public int CornerRadiusPercent { get; set; }
         public int Height { get; set; }
         public int IconBorderModules { get; set; }
@@ -557,6 +558,9 @@ namespace FeatherQR
     public static class SymbolImageWriter
     {
         public static ImageRect GetIconRectangle(QRCodeData data, in SymbolImageOptions options);
+        public static ImageRect GetSymbolRectangle(MicroQRCodeData data, in SymbolImageOptions options = null);
+        public static ImageRect GetSymbolRectangle(QRCodeData data, in SymbolImageOptions options = null);
+        public static ImageRect GetSymbolRectangle(RmQRCodeData data, in SymbolImageOptions options = null);
         public static ImageSize GetImageSize(MicroQRCodeData data, in SymbolImageOptions options = null);
         public static ImageSize GetImageSize(QRCodeData data, in SymbolImageOptions options = null);
         public static ImageSize GetImageSize(RmQRCodeData data, in SymbolImageOptions options = null);

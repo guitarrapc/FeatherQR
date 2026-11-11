@@ -28,6 +28,7 @@ public record struct SymbolImageOptions
     private uint _lightColorDifference;
     private int _width;
     private int _height;
+    private bool _fillCanvas;
     private ModuleStyle _moduleStyle;
     private int _moduleScaleOffset;
     private FinderPatternStyle _finderPatternStyle;
@@ -66,15 +67,13 @@ public record struct SymbolImageOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// With a width or a height set, the symbol fills the canvas: one scale, the smaller the two sides allow, the symbol with its quiet zone
-    /// centred on whole pixels, and each pixel belonging to the module its centre falls in. Every module is still whole pixels, so the PNG stays
-    /// one bit a pixel, and adjacent modules differ by at most one pixel. The rest of the canvas, where its aspect differs from the symbol's, is
-    /// the light colour. This is the image the FeatherQR.SkiaSharp builders write for the same size with no module size pinned.
+    /// With a width or a height set, the image is that size and the symbol, with its quiet zone, is centred in it. Every module is the same whole
+    /// number of pixels, the largest the canvas allows, and the rest of the canvas is the light colour. This is the image the FeatherQR.SkiaSharp
+    /// builders write for the same size with that module size given to <c>WithModulePixelSize</c>. <see cref="FillCanvas"/> fills the canvas instead.
     /// </para>
     /// <para>
-    /// A side left at 0 follows the symbol's aspect at the scale the other side gives, rounded up to whole pixels, so the image is the one
-    /// both sides would give. <see cref="ModulePixelSize"/> does not apply once a size is set, where the builders pin it and pad the canvas instead.
-    /// The writer refuses a canvas that gives a module under one pixel.
+    /// A side left at 0 follows the symbol's aspect at the scale that fills the other side, rounded up to whole pixels, so the image is the one
+    /// both sides would give. <see cref="ModulePixelSize"/> does not apply once a size is set. The writer refuses a canvas that gives a module under one pixel.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is negative.</exception>
@@ -93,7 +92,7 @@ public record struct SymbolImageOptions
     /// The image's height in pixels. Defaults to 0, which is the symbol's own height at <see cref="ModulePixelSize"/>.
     /// </summary>
     /// <remarks>
-    /// Sized together with <see cref="Width"/>, which says how the symbol fills the canvas.
+    /// Sized together with <see cref="Width"/>, which says where the symbol goes in the canvas.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is negative.</exception>
     public int Height
@@ -107,7 +106,27 @@ public record struct SymbolImageOptions
         }
     }
 
-    /// <summary>Whether a width or a height is set, so the symbol fills a canvas instead of taking <see cref="ModulePixelSize"/>.</summary>
+    /// <summary>
+    /// Whether the symbol fills a set size at a fractional scale instead of taking one whole number of pixels a module. Defaults to <c>false</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It applies only with <see cref="Width"/> or <see cref="Height"/> set. Filling, the symbol takes one scale, the smaller the two sides allow, and each
+    /// pixel belongs to the module its centre falls in. Every module is still whole pixels, so the PNG stays one bit a pixel, and adjacent modules differ
+    /// by at most one pixel. This is the image the FeatherQR.SkiaSharp builders' <c>WithSize</c> writes with no module size given.
+    /// </para>
+    /// <para>
+    /// The image's size is the same either way. Filling keeps the symbol as large as the canvas allows whatever its version. Whole pixels shrink a
+    /// symbol whose fit is just under a whole number of pixels a module, to just over half its side where the fit is just under two.
+    /// </para>
+    /// </remarks>
+    public bool FillCanvas
+    {
+        readonly get => _fillCanvas;
+        set => _fillCanvas = value;
+    }
+
+    /// <summary>Whether a width or a height is set, so the canvas decides the module size instead of <see cref="ModulePixelSize"/>.</summary>
     internal readonly bool HasSize => _width != 0 || _height != 0;
 
     /// <summary>

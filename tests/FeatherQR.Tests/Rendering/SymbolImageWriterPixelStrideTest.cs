@@ -17,11 +17,12 @@ public class SymbolImageWriterPixelStrideTest
     {
         foreach (var symbol in new[] { "QR3", "M4", "R17x139" })
         {
-            foreach (var options in new[] { "default", "module 1", "colours", "styled", "fraction padded", "styled fraction" })
+            foreach (var options in new[] { "default", "module 1", "colours", "styled", "fraction padded", "styled fraction", "whole padded", "styled whole padded" })
                 yield return (symbol, options);
         }
         yield return ("QR5 H", "icon");
         yield return ("QR5 H", "icon styled");
+        yield return ("QR5 H", "icon styled fill");
     }
 
     // ---- rows a stride apart --------------------------------------------------------------
@@ -212,6 +213,7 @@ public class SymbolImageWriterPixelStrideTest
     [Arguments("M4", "styled", 232, 100)]
     [Arguments("M4", "default", 232, 232)]
     [Arguments("M4", "fraction padded", 0, 150)]
+    [Arguments("M4", "whole padded", 0, 150)]
     [Arguments("R17x139", "module 1", 100, 379)]
     [Arguments("QR3", "styled fraction", 0, 0)]
     public async Task Region_HoldsTheSymbol_AndEveryByteOutsideIsKept(string symbol, string optionsName, int left, int top)
@@ -220,8 +222,9 @@ public class SymbolImageWriterPixelStrideTest
         var options = optionsName switch
         {
             // The canvas is 400 pixels a side, so the set sizes here are ones that fit inside it.
-            "fraction padded" => new SymbolImageOptions { Width = 400, Height = 250 },
-            "styled fraction" => Shaped with { Width = 400, Height = 400 },
+            "fraction padded" => new SymbolImageOptions { Width = 400, Height = 250, FillCanvas = true },
+            "whole padded" => new SymbolImageOptions { Width = 400, Height = 250 },
+            "styled fraction" => Shaped with { Width = 400, Height = 400, FillCanvas = true },
             _ => Options(optionsName),
         };
         const int canvasWidth = 400, canvasHeight = 400;
@@ -302,11 +305,14 @@ public class SymbolImageWriterPixelStrideTest
         "module 1" => new SymbolImageOptions { ModulePixelSize = 1 },
         "colours" => new SymbolImageOptions { ModulePixelSize = 3, DarkColor = Navy, LightColor = Ivory },
         "styled" => Shaped with { DarkColor = Navy, LightColor = Ivory },
-        // Neither side is whole pixels for 37, 21 or 143 modules, and the symbol is padded on one axis.
-        "fraction padded" => new SymbolImageOptions { Width = 500, Height = 333, DarkColor = Navy },
-        "styled fraction" => Shaped with { Width = 500, Height = 333 },
+        // Neither side is whole pixels for 37, 21 or 143 modules. Filling pads the symbol on one axis, and whole-pixel modules can pad both.
+        "fraction padded" => new SymbolImageOptions { Width = 500, Height = 334, DarkColor = Navy, FillCanvas = true },
+        "styled fraction" => Shaped with { Width = 500, Height = 334, FillCanvas = true },
+        "whole padded" => new SymbolImageOptions { Width = 500, Height = 334, DarkColor = Navy },
+        "styled whole padded" => Shaped with { Width = 500, Height = 334 },
         "icon" => new SymbolImageOptions { IconSizeModules = 7, ModulePixelSize = 5 },
         "icon styled" => Shaped with { IconSizeModules = 7, Width = 333 },
+        "icon styled fill" => Shaped with { IconSizeModules = 7, Width = 333, FillCanvas = true },
         _ => throw new ArgumentException(name),
     };
 

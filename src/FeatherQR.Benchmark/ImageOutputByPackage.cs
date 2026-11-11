@@ -4,7 +4,7 @@ using System.Text;
 
 /// <summary>
 /// The same 512 × 512 image from either package: SymbolImageWriter in FeatherQR against the builders in FeatherQR.SkiaSharp.
-/// Each pair uses the calls the README shows side by side, and the plain PNG pair and the pixel rows write identical pixels.
+/// Each pair uses the calls the README shows side by side. The core's options fill the canvas as the builders do, so the plain PNG pair and the pixel rows write identical pixels.
 ///
 ///   V2  : "https://example.com" at level M, the README's example symbol
 ///   V40 : version 40, about 31k modules
@@ -21,11 +21,13 @@ public class ImageOutputByPackage
 {
     private QRCodeData _v2 = default!;
     private QRCodeData _v40 = default!;
-    private static readonly SymbolImageOptions Plain = new() { Width = 512, Height = 512 };
+    // Filling the canvas as the builders' WithSize does, so both packages write the same image.
+    private static readonly SymbolImageOptions Plain = new() { Width = 512, Height = 512, FillCanvas = true };
     private static readonly SymbolImageOptions Styled = new()
     {
         Width = 512,
         Height = 512,
+        FillCanvas = true,
         ModuleStyle = ModuleStyle.Circle,
         ModuleScalePercent = 92,
         FinderPatternStyle = FinderPatternStyle.Circle,

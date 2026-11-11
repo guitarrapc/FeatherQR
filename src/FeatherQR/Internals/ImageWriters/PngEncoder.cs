@@ -244,9 +244,9 @@ internal sealed partial class PngEncoder
         }
         _rowCopies = _stride <= Deflate.MaxDistance;
         // At 1, 2, 4 and 8 pixels a literal byte is one module or a whole number of them, so literals are already cheap and the lookup's
-        // matches cost more than they save. A set size that comes to whole pixels keeps that rule even where a pad shifts the modules
-        // across bytes, since the lookup bought little there. At a set size that is not whole pixels the modules straddle bytes too, and a
-        // styled image's levels repeat along a shape's edge rather than a module's.
+        // matches cost more than they save. Whole pixels keep that rule even where a set size's pad shifts the modules across bytes, since
+        // the lookup bought little there. At a fractional scale, which only filling gives, the modules straddle bytes too, and a styled
+        // image's levels repeat along a shape's edge rather than a module's.
         var wholePixels = !_styled && _layout.Denominator == 1 ? (int)_layout.Numerator : 0;
         _lookup = _rowCopies && (wholePixels == 0 || wholePixels > 8 || 8 % wholePixels != 0);
         // A key of about eight modules, from 4 to 8 bytes: a shorter key found matches that cost more than their literals, and a longer one

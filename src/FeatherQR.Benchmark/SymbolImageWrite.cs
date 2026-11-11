@@ -22,8 +22,10 @@ public class SymbolImageWrite
     private readonly ArrayBufferWriter<byte> _writer = new(1 << 20);
     private static readonly SymbolImageOptions ThreePixels = new() { ModulePixelSize = 3 };
     private static readonly SymbolImageOptions TenPixels = new() { ModulePixelSize = 10 };
-    // The builders' default canvas, where version 40's modules are two and three pixels and version 1's seventeen and eighteen.
-    private static readonly SymbolImageOptions Fit512 = new() { Width = 512, Height = 512 };
+    // The builders' default canvas with whole-pixel modules: two pixels at version 40 and seventeen at version 1, the rest light.
+    private static readonly SymbolImageOptions Whole512 = new() { Width = 512, Height = 512 };
+    // The same canvas filled, where version 40's modules are two and three pixels and version 1's seventeen and eighteen.
+    private static readonly SymbolImageOptions Fill512 = new() { Width = 512, Height = 512, FillCanvas = true };
     // Circle modules with circle finder patterns, where the PNG is 4-bit and every pixel row is searched.
     private static readonly SymbolImageOptions Styled = new() { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle };
 
@@ -78,10 +80,16 @@ public class SymbolImageWrite
     public byte[] Small_Png_10px() => SymbolImageWriter.GetPngBytes(_small, TenPixels);
 
     [Benchmark]
-    public byte[] Large_Png_512() => SymbolImageWriter.GetPngBytes(_large, Fit512);
+    public byte[] Large_Png_512() => SymbolImageWriter.GetPngBytes(_large, Whole512);
 
     [Benchmark]
-    public byte[] Small_Png_512() => SymbolImageWriter.GetPngBytes(_small, Fit512);
+    public byte[] Small_Png_512() => SymbolImageWriter.GetPngBytes(_small, Whole512);
+
+    [Benchmark]
+    public byte[] Large_Png_512_Fill() => SymbolImageWriter.GetPngBytes(_large, Fill512);
+
+    [Benchmark]
+    public byte[] Small_Png_512_Fill() => SymbolImageWriter.GetPngBytes(_small, Fill512);
 
     [Benchmark]
     public byte[] Large_Png_Styled() => SymbolImageWriter.GetPngBytes(_large, Styled);
@@ -111,7 +119,10 @@ public class SymbolImageWrite
     public bool Large_PixelsGray8() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Gray8, out _, out _);
 
     [Benchmark]
-    public bool Large_PixelsRgba_512() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Fit512);
+    public bool Large_PixelsRgba_512() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Whole512);
+
+    [Benchmark]
+    public bool Large_PixelsRgba_512_Fill() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Fill512);
 
     [Benchmark]
     public bool Large_PixelsRgba_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Styled);

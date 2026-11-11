@@ -58,10 +58,11 @@ var navyOnClear = new SymbolImageOptions
 SaveText("qr-navy-transparent.svg", SymbolImageWriter.GetSvgString(qr, navyOnClear));
 SaveBytes("qr-navy-transparent.png", SymbolImageWriter.GetPngBytes(qr, navyOnClear));
 
-// An image of a set size. The symbol fills the canvas as the image builders' WithSize does, every module still whole pixels,
-// and a side left at 0 follows the symbol's aspect.
+// An image of a set size. Every module is the same whole number of pixels, the largest that fits, with the rest light,
+// and a side left at 0 follows the symbol's aspect. FillCanvas fills the canvas instead, as the image builders' WithSize does.
 var fit = new SymbolImageOptions { Width = 512, Height = 512 };
 SaveBytes("qr-512.png", SymbolImageWriter.GetPngBytes(qr, fit));
+SaveBytes("qr-512-fill.png", SymbolImageWriter.GetPngBytes(qr, fit with { FillCanvas = true }));
 SaveText("rmqr-1000-wide.svg", SymbolImageWriter.GetSvgString(rmqr, new SymbolImageOptions { Width = 1000 }));
 
 // Module and finder pattern styles. The finder patterns keep their own shape, so a reader still finds them.
@@ -91,7 +92,8 @@ var (iconX, iconY, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(q
 Console.WriteLine($"The icon goes at ({iconX}, {iconY}), {iconWidth} by {iconHeight} pixels");
 var composed = new byte[SymbolImageWriter.GetPixelBufferSize(qrH, PixelLayout.Rgba8888, withIcon)];
 SymbolImageWriter.TryWritePixels(qrH, composed, PixelLayout.Rgba8888, out var composedWidth, out var composedHeight, withIcon);
-var iconOptions = new SymbolImageOptions { Width = iconWidth, Height = iconHeight, DarkColor = navy };
+// The icon fills its area. With equal whole-pixel modules, 19 modules in 35 pixels would be 1 pixel each, 19 of the 35 pixels across.
+var iconOptions = new SymbolImageOptions { Width = iconWidth, Height = iconHeight, DarkColor = navy, FillCanvas = true };
 var iconStart = (iconY * composedWidth + iconX) * 4;
 SymbolImageWriter.TryWritePixels(micro, composed.AsSpan(iconStart), composedWidth * 4, PixelLayout.Rgba8888, out _, out _, iconOptions);
 SaveBytes("qr-icon.png", EncodeRgbaPng(composed, composedWidth, composedHeight));

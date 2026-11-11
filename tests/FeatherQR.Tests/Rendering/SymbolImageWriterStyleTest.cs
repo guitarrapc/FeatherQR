@@ -119,16 +119,21 @@ public class SymbolImageWriterStyleTest
         await Assert.That(ChunkTypes(png)).IsEquivalentTo(new[] { "IHDR", "PLTE", "IDAT", "IEND" }, CollectionOrdering.Matching);
     }
 
-    /// <summary>Where the canvas is taller than the symbol, the rows above and below it are the light colour in a styled image too.</summary>
+    /// <summary>
+    /// Where the canvas is larger than the symbol, the rows and columns around it are the light colour in a styled image too. Filling pads
+    /// above and below only, and whole-pixel modules pad on both axes: 143 modules of 2 pixels leave 14 columns.
+    /// </summary>
     [Test]
-    public async Task Styled_AtASetSizeWithAPad_LeavesThePadLight()
+    [Arguments(true, 0)]
+    [Arguments(false, 14)]
+    public async Task Styled_AtASetSizeWithAPad_LeavesThePadLight(bool fillCanvas, int padColumns)
     {
         var rm = RmQRCodeGenerator.Create("pad", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
-        var options = new SymbolImageOptions { Width = 300, Height = 300, ModuleStyle = ModuleStyle.Circle, FinderPatternStyle = FinderPatternStyle.Circle };
-        var gray = Pixels(rm, options, PixelLayout.Gray8);
-        // The plain image is written without the styled rows, so its light rows say where the pad and the quiet zone are.
-        var plain = Pixels(rm, new SymbolImageOptions { Width = 300, Height = 300 }, PixelLayout.Gray8);
-        var lightRows = 0;
+        var plainOptions = new SymbolImageOptions { Width = 300, Height = 300, FillCanvas = fillCanvas };
+        var gray = Pixels(rm, plainOptions with { ModuleStyle = ModuleStyle.Circle, FinderPatternStyle = FinderPatternStyle.Circle }, PixelLayout.Gray8);
+        // The plain image is written without the styled rows, so its light rows and columns say where the pad and the quiet zone are.
+        var plain = Pixels(rm, plainOptions, PixelLayout.Gray8);
+        int lightRows = 0, lightColumns = 0;
         for (var y = 0; y < 300; y++)
         {
             var light = gray.AsSpan(y * 300, 300).IndexOfAnyExcept((byte)255) < 0;
@@ -137,7 +142,20 @@ public class SymbolImageWriterStyleTest
             if (light)
                 lightRows++;
         }
+        for (var x = 0; x < 300; x++)
+        {
+            bool light = true, plainLight = true;
+            for (var y = 0; y < 300; y++)
+            {
+                light &= gray[y * 300 + x] == 255;
+                plainLight &= plain[y * 300 + x] == 255;
+            }
+            await Assert.That(light).IsEqualTo(plainLight).Because($"column {x}");
+            if (light)
+                lightColumns++;
+        }
         await Assert.That(lightRows).IsGreaterThan(250).Because("the symbol is 21 modules of the 300 rows");
+        await Assert.That(lightColumns).IsGreaterThanOrEqualTo(padColumns + 8).Because("the quiet zone's 2 modules a side are at least 4 pixels each, beside the pad");
     }
 
     /// <summary>
@@ -241,17 +259,20 @@ public class SymbolImageWriterStyleTest
     public async Task Png_Styled_RowsCopiedWhole_DecodeToThePixels(int width)
     {
         var qr = QRCodeGenerator.Create("copied rows", QREccLevel.M);
-        foreach (var style in new[] { ModuleStyle.Circle, ModuleStyle.RoundedSquare })
+        foreach (var fillCanvas in new[] { false, true })
         {
-            var options = new SymbolImageOptions { Width = width, Height = 300, ModuleStyle = style, FinderPatternStyle = FinderPatternStyle.Circle, DarkColor = Navy, LightColor = Ivory };
-            await Assert.That(DecodePng(SymbolImageWriter.GetPngBytes(qr, options))).IsEquivalentTo(Pixels(qr, options, PixelLayout.Bgra8888), CollectionOrdering.Matching).Because($"{style} at {width}");
+            foreach (var style in new[] { ModuleStyle.Circle, ModuleStyle.RoundedSquare })
+            {
+                var options = new SymbolImageOptions { Width = width, Height = 300, FillCanvas = fillCanvas, ModuleStyle = style, FinderPatternStyle = FinderPatternStyle.Circle, DarkColor = Navy, LightColor = Ivory };
+                await Assert.That(DecodePng(SymbolImageWriter.GetPngBytes(qr, options))).IsEquivalentTo(Pixels(qr, options, PixelLayout.Bgra8888), CollectionOrdering.Matching).Because($"{style} at {width}, filling {fillCanvas}");
+            }
         }
     }
 
     public static IEnumerable<(string Symbol, string Size)> StyledPngSizeCases()
     {
         foreach (var symbol in new[] { "qr-v1", "qr-v10", "microqr-m2", "rmqr-r7x43" })
-            foreach (var size in new[] { "3px", "5px", "8px", "16px", "300x200", "512" })
+            foreach (var size in new[] { "3px", "5px", "8px", "16px", "300x200", "512", "300x200 fill", "512 fill" })
                 yield return (symbol, size);
     }
 
@@ -275,6 +296,8 @@ public class SymbolImageWriterStyleTest
         {
             "300x200" => new SymbolImageOptions { Width = 300, Height = 200 },
             "512" => new SymbolImageOptions { Width = 512, Height = 512 },
+            "300x200 fill" => new SymbolImageOptions { Width = 300, Height = 200, FillCanvas = true },
+            "512 fill" => new SymbolImageOptions { Width = 512, Height = 512, FillCanvas = true },
             _ => new SymbolImageOptions { ModulePixelSize = int.Parse(size.AsSpan(0, size.Length - 2), CultureInfo.InvariantCulture) },
         };
         foreach (var styled in new[]
@@ -828,12 +851,12 @@ public class SymbolImageWriterStyleTest
         await Assert.That(pngLength).IsEqualTo(writer.WrittenCount);
     }
 
-    /// <summary>At a set size the cells come in two sizes, each with a stamp of its own, and the PNG and the pixels still agree.</summary>
+    /// <summary>Filling a set size, the cells come in two sizes, each with a stamp of its own, and the PNG and the pixels still agree.</summary>
     [Test]
-    public async Task AtASetSize_StyledPngAndPixels_Agree()
+    public async Task FillingASetSize_StyledPngAndPixels_Agree()
     {
         var qr = QRCodeGenerator.Create("set size", QREccLevel.M, new QRCodeGeneratorOptions { Version = 5 });
-        var options = new SymbolImageOptions { Width = 500, Height = 400, ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 88, FinderPatternStyle = FinderPatternStyle.Circle, DarkColor = Navy, LightColor = Ivory };
+        var options = new SymbolImageOptions { Width = 500, Height = 400, FillCanvas = true, ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 88, FinderPatternStyle = FinderPatternStyle.Circle, DarkColor = Navy, LightColor = Ivory };
 
         var png = SymbolImageWriter.GetPngBytes(qr, options);
         await Assert.That(DecodePng(png)).IsEquivalentTo(Pixels(qr, options, PixelLayout.Bgra8888), CollectionOrdering.Matching);
