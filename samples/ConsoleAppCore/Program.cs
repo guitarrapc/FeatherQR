@@ -129,10 +129,18 @@ Console.WriteLine($"Bgra8888 pixels, {width} x {height}, {bgra.Length} bytes");
 // Text for a terminal: dark modules drawn for a light background, light modules drawn for a dark one.
 Console.OutputEncoding = Encoding.UTF8;
 Console.WriteLine();
+Console.WriteLine("QR for a light background:");
+Console.Write(SymbolImageWriter.GetTerminalText(qr));
+Console.WriteLine("QR for a dark background:");
+Console.Write(SymbolImageWriter.GetTerminalText(qr, invert: true));
 Console.WriteLine("Micro QR for a light background:");
 Console.Write(SymbolImageWriter.GetTerminalText(micro));
 Console.WriteLine("Micro QR for a dark background:");
 Console.Write(SymbolImageWriter.GetTerminalText(micro, invert: true));
+Console.WriteLine("rMQR for a light background:");
+Console.Write(SymbolImageWriter.GetTerminalText(rmqr));
+Console.WriteLine("rMQR for a dark background:");
+Console.Write(SymbolImageWriter.GetTerminalText(rmqr, invert: true));
 
 Console.WriteLine();
 Console.WriteLine($"Images written to {outputDir}");
