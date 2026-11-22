@@ -127,12 +127,14 @@ SymbolImageWriter.TryWritePixels(micro, bgra, PixelLayout.Bgra8888, out width, o
 Console.WriteLine($"Bgra8888 pixels, {width} x {height}, {bgra.Length} bytes");
 
 // Text for a terminal: dark modules drawn for a light background, light modules drawn for a dark one.
+// The text draws the quiet zone the symbol was made with. The 4-module default looks wide in a terminal, so this QR code has 2.
+var terminalQr = QRCodeGenerator.Create(url, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 2 });
 Console.OutputEncoding = Encoding.UTF8;
 Console.WriteLine();
 Console.WriteLine("QR for a light background:");
-Console.Write(SymbolImageWriter.GetTerminalText(qr));
+Console.Write(SymbolImageWriter.GetTerminalText(terminalQr));
 Console.WriteLine("QR for a dark background:");
-Console.Write(SymbolImageWriter.GetTerminalText(qr, invert: true));
+Console.Write(SymbolImageWriter.GetTerminalText(terminalQr, invert: true));
 Console.WriteLine("Micro QR for a light background:");
 Console.Write(SymbolImageWriter.GetTerminalText(micro));
 Console.WriteLine("Micro QR for a dark background:");
