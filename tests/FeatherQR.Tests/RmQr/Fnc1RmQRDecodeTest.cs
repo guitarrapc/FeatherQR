@@ -29,8 +29,6 @@ public class Fnc1RmQRDecodeTest
         return (status, new string(destination, 0, written), fnc1);
     }
 
-    // Alphanumeric values at R7x43: 3-bit count, 11 bits a pair, 6 bits a single.
-    private const string A = "001010";          // 10
     private const string Percent = "100110";    // 38
     private const string PairAPercent = "00111101000"; // 10 * 45 + 38 = 488
     private const string PairPercentA = "11010111000"; // 38 * 45 + 10 = 1720

@@ -1,4 +1,3 @@
-using FeatherQR.Internals;
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.RmQR;
 

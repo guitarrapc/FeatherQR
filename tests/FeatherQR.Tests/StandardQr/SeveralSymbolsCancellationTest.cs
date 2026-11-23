@@ -2,7 +2,6 @@ using System.Diagnostics;
 using FeatherQR.Internals.StandardQR;
 using FeatherQR.SkiaSharp;
 using FeatherQR.SkiaSharp.Internals;
-using SkiaSharp;
 
 namespace FeatherQR.Tests;
 

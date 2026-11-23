@@ -1,4 +1,3 @@
-using System.Text;
 using FeatherQR;
 using ZXingCpp;
 using CppBarcode = ZXingCpp.Barcode;
