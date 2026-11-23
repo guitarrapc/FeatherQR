@@ -6,7 +6,7 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The builder draws every module a whole number of pixels wide, so at a fractional scale the
+/// Filling the canvas, the builder draws every module a whole number of pixels wide, so at a fractional scale the
 /// modules are 2 or 3 px and a finder can land on 2 px modules alone: it measures 2.0 against a
 /// symbol averaging 2.13, and over the span between the finders that is two versions. The
 /// timing pattern between the finders counts the modules instead of measuring them.
@@ -25,7 +25,7 @@ public class TimingPatternDimensionTest
     public async Task Decode_SnappedModuleWidths_ReadsTheTrueVersion(int version, int sizePx)
     {
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version });
-        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).WithFillCanvas().ToBitmap();
 
         var success = QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
 
@@ -52,7 +52,7 @@ public class TimingPatternDimensionTest
     public async Task Decode_EstimatePastVersion40_ReadsByTheCount(int version, int sizePx)
     {
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version });
-        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).WithFillCanvas().ToBitmap();
         var luminance = Luminance(bitmap);
         PaintVersionInformation(luminance, qr, sizePx);
 
@@ -73,7 +73,7 @@ public class TimingPatternDimensionTest
     {
         const int sizePx = 540;
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
-        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).WithFillCanvas().ToBitmap();
         var luminance = Luminance(bitmap);
         // Modules 20-110 on both axes: data only, clear of the finders, timing lines and version blocks
         var pitch = sizePx / (float)qr.Size;
@@ -173,7 +173,7 @@ public class TimingPatternDimensionTest
     /// <summary>The symbol drawn by the image builder with the given light timing modules painted dark on both lines, at the average pitch (qr.Size includes the quiet zone).</summary>
     private static byte[] PaintLightTimingModules(QRCodeData qr, int sizePx, int[] modules)
     {
-        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).WithFillCanvas().ToBitmap();
         var luminance = Luminance(bitmap);
         var pitch = sizePx / (float)qr.Size;
         foreach (var module in modules)

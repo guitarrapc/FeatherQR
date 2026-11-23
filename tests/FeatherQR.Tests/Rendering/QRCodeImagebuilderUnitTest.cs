@@ -697,6 +697,7 @@ public class QRCodeImageBuilderTest
         var gradientOptions = new GradientOptions([SKColors.Purple, SKColors.Pink], GradientDirection.TopLeftToBottomRight);
         var builder = new QRCodeImageBuilder(TestContent)
             .WithSize(600, 600)
+            .WithFillCanvas()
             .WithErrorCorrection(QREccLevel.H)
             .WithEciMode(EciMode.Utf8)
             .WithQuietZone(3)
@@ -718,6 +719,7 @@ public class QRCodeImageBuilderTest
         // to combine: its two ends are different colors, so the dark modules are not one color.
         using var withoutGradient = new QRCodeImageBuilder(TestContent)
             .WithSize(600, 600)
+            .WithFillCanvas()
             .WithErrorCorrection(QREccLevel.H)
             .WithEciMode(EciMode.Utf8)
             .WithQuietZone(3)

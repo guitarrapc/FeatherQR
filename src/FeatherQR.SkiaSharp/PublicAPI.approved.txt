@@ -315,6 +315,7 @@ namespace FeatherQR.SkiaSharp
         public TSelf WithClearColor(SKColor? clearColor);
         public TSelf WithCodeColor(SKColor codeColor);
         public TSelf WithColors(SKColor codeColor, SKColor backgroundColor);
+        public TSelf WithFillCanvas(bool fillCanvas = true);
         public TSelf WithFinderPatternShape(FinderPatternShape finderPatternShape);
         public TSelf WithFinderPatternStyle(FinderPatternStyle style, int cornerRadiusPercent = 30);
         public TSelf WithFormat(SKEncodedImageFormat format, int quality = 100);

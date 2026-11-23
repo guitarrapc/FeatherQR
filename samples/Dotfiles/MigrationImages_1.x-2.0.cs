@@ -44,10 +44,10 @@ using (var bitmap = new SKBitmap(900, 450))
     }
 
     Save(bitmap, stretchedPath);
-    Report(stretchedPath, bitmap, featherQR: false, zxingNet: false, zxingCpp: true);
+    Report(stretchedPath, bitmap, featherQR: true, zxingNet: false, zxingCpp: true);
 }
 
-// After: fitted at one uniform module scale and centered.
+// After: fitted with equal whole-pixel modules and centered.
 var fittedPath = Path.Combine(outputDirectory, "withsize-fitted.png");
 using (var bitmap = new QRCodeImageBuilder(data).WithSize(900, 450).WithColors(SKColors.Black, SKColors.White).ToBitmap())
 {
@@ -71,7 +71,7 @@ using (var bitmap = Card(280, 380, canvas =>
 }))
 {
     Save(bitmap, rendererStretchedPath);
-    Report(rendererStretchedPath, bitmap, featherQR: false, zxingNet: true, zxingCpp: true);
+    Report(rendererStretchedPath, bitmap, featherQR: true, zxingNet: true, zxingCpp: true);
 }
 
 // After: the same call, given the slot, centers a square symbol and gives the rest of it the background.

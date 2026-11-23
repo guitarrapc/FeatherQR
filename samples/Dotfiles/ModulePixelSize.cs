@@ -6,7 +6,7 @@ using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 // Verification sample for WithModulePixelSize (+ optional WithSize canvas pad):
-// - Fixed image size can produce fractional module pixels.
+// - A fixed image size the symbol fills (WithFillCanvas) can produce fractional module pixels.
 // - Fixed module pixel size keeps each module aligned to exact pixels across versions.
 // - Module + larger WithSize centers content and pads with clearColor.
 // - Module-based icon sizing keeps logo body/border aligned to the same grid.
@@ -34,6 +34,7 @@ foreach (var (version, quietZone) in scenarios)
 
     using var fixedSizeBitmap = new QRCodeImageBuilder(qrData)
         .WithSize(fixedImageSize, fixedImageSize)
+        .WithFillCanvas()
         .WithColors(SKColors.Black, SKColors.White)
         .WithModuleShape(CircleModuleShape.Default, 0.92f)
         .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
@@ -52,7 +53,7 @@ foreach (var (version, quietZone) in scenarios)
     SaveBitmap(modulePixelBitmap, Path.Combine(outputDirectory, $"v{version}_module-pixel-{modulePixelSize}.png"));
 
     Console.WriteLine($"Version v{version} (matrix size: {qrData.Size} modules)");
-    Console.WriteLine($"  fixed-size         : {fixedImageSize}x{fixedImageSize}, effective module px = {(float)fixedImageSize / qrData.Size:F4}");
+    Console.WriteLine($"  fixed-size filled  : {fixedImageSize}x{fixedImageSize}, effective module px = {(float)fixedImageSize / qrData.Size:F4}");
     Console.WriteLine($"  with-module-pixel  : {contentSide}x{contentSide}, module px = {modulePixelSize}");
 
     if (paddedCanvasSize >= contentSide)

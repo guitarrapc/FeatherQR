@@ -490,7 +490,7 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     }
 
     /// <summary>
-    /// Configure the image width in pixels. The height follows the rMQR code aspect ratio (rounded to whole pixels), the background covers the whole image and the rMQR code is drawn at a uniform module scale inside it.
+    /// Configure the image width in pixels. The height follows the rMQR code aspect ratio, rounded up to whole pixels, and the symbol is laid out in that canvas as <see cref="SymbolImageBuilderBase{TSelf}.WithSize"/> lays it out, the same image <see cref="SymbolImageWriter"/> writes for that width alone.
     /// This is the static helpers' sizing rule and the default (512) when no size is configured.
     /// <see cref="SymbolImageBuilderBase{TSelf}.WithSize"/> (letterbox into an exact canvas) or <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize"/> (exact matrix) take precedence when also called.
     /// </summary>
@@ -532,10 +532,11 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     private protected override bool UseCrispEdgesCore() => _finderPatternShape?.RequiresAntialiasing != true;
 
     /// <summary>Default canvas: the configured (or 512) width, height from the rMQR code aspect ratio.</summary>
+    /// <remarks>The height rounds up as the core's does, so the width binds the fit and the canvas is the one the core writes for that width alone.</remarks>
     private protected override Vector2Slim GetDefaultCanvasSize(int matrixWidth, int matrixHeight)
     {
         var width = _widthOnly ?? DefaultWidth;
-        var height = Math.Max(1, (int)Math.Round((double)width * matrixHeight / matrixWidth));
+        var height = (int)(((long)width * matrixHeight + matrixWidth - 1) / matrixWidth);
         return new Vector2Slim(width, height);
     }
 }

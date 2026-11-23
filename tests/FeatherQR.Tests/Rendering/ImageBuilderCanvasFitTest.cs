@@ -13,7 +13,7 @@ namespace FeatherQR.Tests;
 /// A symbol stretched across a non-square canvas keeps its module centres correct and throws nothing. What breaks is detection: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio holds on one axis only once the cells stop being square. Where that starts is not a constant worth pinning, so these cases assert decodability well inside the range where a stretch fails rather than hunting for its edge.
 /// </para>
 /// <para>
-/// Aspect ratio, not size: <see cref="SymbolImageBuilderBase{TSelf}.WithSize(int, int)"/> has no lower bound, and a canvas too small for the symbol gives it sub-pixel modules that nothing reads. Every canvas here is large enough that the module scale is not the variable under test.
+/// Aspect ratio, not size: every canvas here is large enough that the module scale is not the variable under test. By default each module is the largest whole number of pixels both sides allow, so the symbol leaves a pad on both axes. <see cref="SymbolImageBuilderBase{TSelf}.WithFillCanvas(bool)"/> fits it at a fractional scale instead, and the cases about that fit's rounding ask for it.
 /// </para>
 /// <para>
 /// The leftover canvas takes <c>clearColor</c> when one is set and the background otherwise, so every accepted canvas is opaque by default: a transparent default becomes black bands the moment the image is encoded as JPEG.
@@ -157,6 +157,7 @@ public class ImageBuilderCanvasFitTest
         var data = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 4 });
         using var bitmap = new QRCodeImageBuilder(data)
             .WithSize(canvasSide, canvasSide)
+            .WithFillCanvas()
             .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red)
             .ToBitmap();
 
@@ -192,6 +193,7 @@ public class ImageBuilderCanvasFitTest
         var data = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 4 });
         using var bitmap = new QRCodeImageBuilder(data)
             .WithSize(width, height)
+            .WithFillCanvas()
             .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red)
             .ToBitmap();
 
@@ -228,6 +230,7 @@ public class ImageBuilderCanvasFitTest
 
         using var bitmap = new QRCodeImageBuilder(data)
             .WithSize(500, 333)
+            .WithFillCanvas()
             .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red)
             .ToBitmap();
 
@@ -302,7 +305,7 @@ public class ImageBuilderCanvasFitTest
     public async Task SquareCanvas_OpaqueBackgroundUnderATransparentClearColour_StaysOpaque()
     {
         var symbol = Symbol.Create("qr");
-        using var bitmap = symbol.Render(512, 512, styled: false, background: SKColors.White, clear: SKColors.Transparent);
+        using var bitmap = symbol.Render(symbol.MatrixWidth * 16, symbol.MatrixHeight * 16, styled: false, background: SKColors.White, clear: SKColors.Transparent);
 
         await Assert.That(bitmap.AlphaType).IsEqualTo(SKAlphaType.Opaque);
         foreach (var (x, y) in Corners(bitmap))
@@ -391,7 +394,7 @@ public class ImageBuilderCanvasFitTest
     /// <summary>
     /// The same single-coat rule where the pad has corners.
     /// </summary>
-    /// <remarks>A letterbox pad is two bands with no corner, so the non-square case cannot see a corner painted twice. A pinned module size inside a larger canvas has all four, and is what the side bands stop short for.</remarks>
+    /// <remarks>A filled canvas's pad is two bands with no corner, so it cannot see a corner painted twice. Whole-pixel modules inside a larger canvas can leave all four, and they are what the side bands stop short for.</remarks>
     [Test]
     public async Task TranslucentBackground_PadCornersTakeOneCoatToo()
     {
@@ -423,6 +426,7 @@ public class ImageBuilderCanvasFitTest
         var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
         using var bitmap = new RmQRCodeImageBuilder(data)
             .WithSize(width, height)
+            .WithFillCanvas()
             .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red)
             .ToBitmap();
 
@@ -442,10 +446,13 @@ public class ImageBuilderCanvasFitTest
 
         await Assert.That(svg).Contains("viewBox=\"0 0 900 450\"");
         // The renderer fills its area with the background before drawing modules, so the fitted
-        // content is a square rectangle offset by the pad, with a band of pad on either side.
-        await Assert.That(svg).Contains("<rect fill=\"white\" x=\"225\" width=\"450\" height=\"450\"/>");
-        await Assert.That(svg).Contains("<rect fill=\"white\" width=\"225\" height=\"450\"/>");
-        await Assert.That(svg).Contains("<rect fill=\"white\" x=\"675\" width=\"225\" height=\"450\"/>");
+        // content is a square rectangle offset by the pad: 29 modules of 15 pixels are 435, which
+        // leaves 465 columns, 232 on the left, and 15 rows, 7 above. A band of pad lies on each side.
+        await Assert.That(svg).Contains("<rect fill=\"white\" x=\"232\" y=\"7\" width=\"435\" height=\"435\"/>");
+        await Assert.That(svg).Contains("<rect fill=\"white\" width=\"900\" height=\"7\"/>");
+        await Assert.That(svg).Contains("<rect fill=\"white\" y=\"442\" width=\"900\" height=\"8\"/>");
+        await Assert.That(svg).Contains("<rect fill=\"white\" y=\"7\" width=\"232\" height=\"435\"/>");
+        await Assert.That(svg).Contains("<rect fill=\"white\" x=\"667\" y=\"7\" width=\"233\" height=\"435\"/>");
     }
 
     // ─── helpers ───
@@ -470,6 +477,58 @@ public class ImageBuilderCanvasFitTest
         await Assert.That(ex!.Message).Contains("smaller than QR content size");
     }
 
+    /// <summary>
+    /// Whole-pixel modules need a pixel each, so a canvas that gives less is refused, on one axis alone too. Filling keeps drawing below a
+    /// pixel a module, as it always has.
+    /// </summary>
+    [Test]
+    [Arguments(184, 184)]
+    [Arguments(1000, 184)]
+    [Arguments(184, 1000)]
+    public async Task WithSize_UnderAPixelAModule_Throws_UnlessFilling(int width, int height)
+    {
+        var data = QRCodeGenerator.Create("too small", QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
+        await Assert.That(data.Size).IsEqualTo(185);
+
+        var ex = await Assert.That(() => new QRCodeImageBuilder(data).WithSize(width, height).ToBitmap()).Throws<InvalidOperationException>();
+        await Assert.That(ex!.Message).Contains("less than a pixel");
+        await Assert.That(() => new QRCodeImageBuilder(data).WithSize(width, height).ToSvgString()).Throws<InvalidOperationException>();
+
+        using var filled = new QRCodeImageBuilder(data).WithSize(width, height).WithFillCanvas().ToBitmap();
+        await Assert.That((filled.Width, filled.Height)).IsEqualTo((width, height));
+
+        using var floor = new QRCodeImageBuilder(data).WithSize(185, 185).ToBitmap();
+        await Assert.That((floor.Width, floor.Height)).IsEqualTo((185, 185));
+    }
+
+    /// <summary>A pinned module size decides the modules, so filling changes nothing beside it.</summary>
+    [Test]
+    public async Task WithFillCanvas_BesideAPinnedModuleSize_ChangesNothing()
+    {
+        var data = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(3) });
+        var pinned = new QRCodeImageBuilder(data).WithSize(500, 333).WithModulePixelSize(7).ToByteArray();
+
+        await Assert.That(new QRCodeImageBuilder(data).WithSize(500, 333).WithModulePixelSize(7).WithFillCanvas().ToByteArray())
+            .IsEquivalentTo(pinned, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(new QRCodeImageBuilder(data).WithModulePixelSize(7).WithFillCanvas().ToByteArray())
+            .IsEquivalentTo(new QRCodeImageBuilder(data).WithModulePixelSize(7).ToByteArray(), TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+    /// <summary>Equal modules are the default, and <c>WithFillCanvas(false)</c> returns to them.</summary>
+    [Test]
+    public async Task WithFillCanvas_False_IsTheDefault()
+    {
+        var data = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(3) });
+        var equal = new QRCodeImageBuilder(data).WithSize(500, 340).ToByteArray();
+        var filled = new QRCodeImageBuilder(data).WithSize(500, 340).WithFillCanvas().ToByteArray();
+
+        await Assert.That(filled).IsNotEquivalentTo(equal, TUnit.Assertions.Enums.CollectionOrdering.Matching).Because("37 modules do not divide 340 pixels");
+        await Assert.That(new QRCodeImageBuilder(data).WithSize(500, 340).WithFillCanvas().WithFillCanvas(false).ToByteArray())
+            .IsEquivalentTo(equal, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(new QRCodeImageBuilder(data).WithSize(500, 340).ToSvgString())
+            .IsEqualTo(new QRCodeImageBuilder(data).WithSize(500, 340).WithModulePixelSize(340 / 37).ToSvgString());
+    }
+
     /// <summary>One pixel inside each corner, so an assertion reaches all four pad bands.</summary>
     private static IEnumerable<(int X, int Y)> Corners(SKBitmap bitmap)
     {
@@ -480,22 +539,16 @@ public class ImageBuilderCanvasFitTest
     }
 
     /// <summary>
-    /// The largest rectangle with the matrix aspect ratio that fits, centered on whole pixels.
+    /// The symbol's rectangle at the largest whole number of pixels a module that fits, the spare pixels halved and rounded down on the left and above.
     /// </summary>
-    /// <remarks>
-    /// The arithmetic mirrors the builder, double and all: a helper that computes the fit less
-    /// precisely stops describing the grid the builder actually draws on.
-    /// </remarks>
     private static SKRect Letterbox(int canvasWidth, int canvasHeight, int matrixWidth, int matrixHeight)
     {
-        var scale = Math.Min((double)canvasWidth / matrixWidth, (double)canvasHeight / matrixHeight);
-        var width = matrixWidth * scale;
-        var height = matrixHeight * scale;
+        var module = Math.Min(canvasWidth / matrixWidth, canvasHeight / matrixHeight);
         return SKRect.Create(
-            Math.Max(0f, (float)Math.Floor((canvasWidth - width) / 2 + 1e-6)),
-            Math.Max(0f, (float)Math.Floor((canvasHeight - height) / 2 + 1e-6)),
-            (float)width,
-            (float)height);
+            (canvasWidth - module * matrixWidth) / 2,
+            (canvasHeight - module * matrixHeight) / 2,
+            module * matrixWidth,
+            module * matrixHeight);
     }
 
     private static SKRectI DarkBoundingBox(SKBitmap bitmap)
