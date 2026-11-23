@@ -31,8 +31,9 @@ public record struct SymbolImageOptions
     private bool _fillCanvas;
     private ModuleStyle _moduleStyle;
     private int _moduleScaleOffset;
+    private int _moduleCornerRadiusOffset;
     private FinderPatternStyle _finderPatternStyle;
-    private int _cornerRadiusOffset;
+    private int _finderPatternCornerRadiusOffset;
     private int _iconSizeModules;
     private int _iconBorderOffset;
     private int _maxCoreOccupancyOffset;
@@ -170,6 +171,25 @@ public record struct SymbolImageOptions
     }
 
     /// <summary>
+    /// The corner radius of a <see cref="ModuleStyle.RoundedSquare"/> module as a percentage of its side, 0 to 100. Defaults to 30.
+    /// </summary>
+    /// <remarks>
+    /// From 50 up the square is a circle, since its corners meet. The finder patterns take <see cref="FinderPatternCornerRadiusPercent"/> instead,
+    /// as the image builders' <c>WithModuleStyle</c> and <c>WithFinderPatternStyle</c> take a radius each.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is outside 0 to 100.</exception>
+    public int ModuleCornerRadiusPercent
+    {
+        readonly get => DefaultCornerRadiusPercent + _moduleCornerRadiusOffset;
+        set
+        {
+            if (value is < 0 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(ModuleCornerRadiusPercent), $"Corner radius must be 0 to 100 percent, but was {value}");
+            _moduleCornerRadiusOffset = value - DefaultCornerRadiusPercent;
+        }
+    }
+
+    /// <summary>
     /// The shape of the finder patterns. Defaults to <see cref="FinderPatternStyle.Square"/>.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not one of the styles.</exception>
@@ -185,21 +205,22 @@ public record struct SymbolImageOptions
     }
 
     /// <summary>
-    /// The corner radius of a rounded square as a percentage of its side, 0 to 100. Defaults to 30.
+    /// The corner radius of the outer square of the <see cref="FinderPatternStyle.RoundedSquare"/> and <see cref="FinderPatternStyle.RoundedSquareCircle"/>
+    /// finder patterns as a percentage of its side, 0 to 100. Defaults to 30.
     /// </summary>
     /// <remarks>
-    /// It rounds <see cref="ModuleStyle.RoundedSquare"/> modules, and the outer square of the rounded finder pattern styles, by this share of their side.
-    /// The inner squares of a finder pattern take fixed shares of the outer radius, as the image builders draw them. From 50 up a square is a circle, since its corners meet.
+    /// The inner squares take fixed shares of the outer radius, as the image builders draw them. From 50 up each square is a circle, since its corners meet.
+    /// The modules take <see cref="ModuleCornerRadiusPercent"/> instead.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is outside 0 to 100.</exception>
-    public int CornerRadiusPercent
+    public int FinderPatternCornerRadiusPercent
     {
-        readonly get => DefaultCornerRadiusPercent + _cornerRadiusOffset;
+        readonly get => DefaultCornerRadiusPercent + _finderPatternCornerRadiusOffset;
         set
         {
             if (value is < 0 or > 100)
-                throw new ArgumentOutOfRangeException(nameof(CornerRadiusPercent), $"Corner radius must be 0 to 100 percent, but was {value}");
-            _cornerRadiusOffset = value - DefaultCornerRadiusPercent;
+                throw new ArgumentOutOfRangeException(nameof(FinderPatternCornerRadiusPercent), $"Corner radius must be 0 to 100 percent, but was {value}");
+            _finderPatternCornerRadiusOffset = value - DefaultCornerRadiusPercent;
         }
     }
 

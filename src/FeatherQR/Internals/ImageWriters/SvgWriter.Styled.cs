@@ -67,7 +67,7 @@ internal static partial class SvgWriter
         var radius = options.ModuleStyle switch
         {
             ModuleStyle.Circle => side / 2,
-            ModuleStyle.RoundedSquare => Math.Min(side * options.CornerRadiusPercent / 100, side / 2),
+            ModuleStyle.RoundedSquare => Math.Min(side * options.ModuleCornerRadiusPercent / 100, side / 2),
             _ => 0,
         };
         var joined = radius != 0 && radius != side / 2;
@@ -324,7 +324,7 @@ internal static partial class SvgWriter
     private static void WriteFinder(ref AsciiWriter w, int left, int top, in SymbolImageOptions options, SymbolColor dark)
     {
         long centreX = left * 1000L + 3500, centreY = top * 1000L + 3500;
-        var radius = options.CornerRadiusPercent;
+        var radius = options.FinderPatternCornerRadiusPercent;
         switch (options.FinderPatternStyle)
         {
             case FinderPatternStyle.Circle:

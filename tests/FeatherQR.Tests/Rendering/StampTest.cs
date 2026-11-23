@@ -69,23 +69,23 @@ public class StampTest
         {
             var width = random.Next(1, 49);
             var height = random.Next(3) == 0 ? Math.Max(1, width + random.Next(-1, 2)) : width;
-            var options = new SymbolImageOptions { ModuleStyle = (ModuleStyle)random.Next(3), ModuleScalePercent = random.Next(50, 101), CornerRadiusPercent = random.Next(0, 101) };
+            var options = new SymbolImageOptions { ModuleStyle = (ModuleStyle)random.Next(3), ModuleScalePercent = random.Next(50, 101), ModuleCornerRadiusPercent = random.Next(0, 101) };
             var actual = new byte[width * height];
             Stamp.Module(actual, width, height, in options, 16);
             Stamp.ModuleRegion(width, height, in options, out var outer);
             if (!actual.AsSpan().SequenceEqual(Reference(width, 0, height, outer, default, default)))
-                mismatches.Add($"module {options.ModuleStyle} {width} × {height} at {options.ModuleScalePercent} %, radius {options.CornerRadiusPercent}");
+                mismatches.Add($"module {options.ModuleStyle} {width} × {height} at {options.ModuleScalePercent} %, radius {options.ModuleCornerRadiusPercent}");
         }
         for (var k = 0; k < 160; k++)
         {
             var width = random.Next(7, 121);
             var height = random.Next(3) == 0 ? width + random.Next(-1, 2) : width;
-            var options = new SymbolImageOptions { FinderPatternStyle = (FinderPatternStyle)random.Next(1, 4), CornerRadiusPercent = random.Next(0, 101) };
+            var options = new SymbolImageOptions { FinderPatternStyle = (FinderPatternStyle)random.Next(1, 4), FinderPatternCornerRadiusPercent = random.Next(0, 101) };
             var actual = new byte[width * height];
             Stamp.Finder(actual, width, height, in options, 16);
             Stamp.FinderRegions(width, height, in options, out var outer, out var hole, out var centre);
             if (!actual.AsSpan().SequenceEqual(Reference(width, 0, height, outer, hole, centre)))
-                mismatches.Add($"finder {options.FinderPatternStyle} {width} × {height}, radius {options.CornerRadiusPercent}");
+                mismatches.Add($"finder {options.FinderPatternStyle} {width} × {height}, radius {options.FinderPatternCornerRadiusPercent}");
         }
         // From 256 pixels a row the counts are rented. At a power of two a rent one too small comes back exactly that size, so the slice to the
         // counts throws. The pool hands an array back as its last renter left it, so one is returned dirty first for the next rent to take.
@@ -178,7 +178,7 @@ public class StampTest
     [Arguments(100)]
     public async Task RoundedSquare_AtHalfTheSideOrMore_IsTheCircle(int radius)
     {
-        var rounded = new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, CornerRadiusPercent = radius, ModuleScalePercent = 90 };
+        var rounded = new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleCornerRadiusPercent = radius, ModuleScalePercent = 90 };
         var circle = rounded with { ModuleStyle = ModuleStyle.Circle };
         var a = new byte[40 * 40];
         var b = new byte[40 * 40];

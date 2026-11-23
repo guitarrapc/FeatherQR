@@ -63,7 +63,7 @@ internal static class Stamp
         outer = options.ModuleStyle switch
         {
             ModuleStyle.Circle => Region.Ellipse(insetX, insetY, w - insetX, h - insetY),
-            ModuleStyle.RoundedSquare => Region.RoundedRect(insetX, insetY, w - insetX, h - insetY, side * options.CornerRadiusPercent / 100),
+            ModuleStyle.RoundedSquare => Region.RoundedRect(insetX, insetY, w - insetX, h - insetY, side * options.ModuleCornerRadiusPercent / 100),
             _ => Region.RoundedRect(insetX, insetY, w - insetX, h - insetY, 0),
         };
     }
@@ -76,7 +76,7 @@ internal static class Stamp
         long moduleWidth = w / 7, moduleHeight = h / 7;
         // The inner squares take fixed shares of the outer radius rather than a share of their own sides, as the image builders draw
         // them, so one style looks the same from both packages.
-        var outerRadius = Math.Min(w, h) * options.CornerRadiusPercent / 100;
+        var outerRadius = Math.Min(w, h) * options.FinderPatternCornerRadiusPercent / 100;
         switch (options.FinderPatternStyle)
         {
             case FinderPatternStyle.Circle:

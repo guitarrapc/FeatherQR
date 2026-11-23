@@ -5,7 +5,7 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// A module is read by sampling its centre, so a shape that keeps the centre dark reads as a square does.
-/// <see cref="SymbolImageOptions.ModuleScalePercent"/> shrinks the shape inside its cell, and <see cref="SymbolImageOptions.CornerRadiusPercent"/> rounds the square.
+/// <see cref="SymbolImageOptions.ModuleScalePercent"/> shrinks the shape inside its cell, and <see cref="SymbolImageOptions.ModuleCornerRadiusPercent"/> rounds the square.
 /// </remarks>
 public enum ModuleStyle
 {
