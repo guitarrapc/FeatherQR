@@ -965,12 +965,15 @@ var (x, y, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(qrH, with
 
 #### Terminal Text
 
-`GetTerminalText` uses half-block characters to render two module rows per line.
+`GetTerminalText` uses half-block characters to render two module rows per line. The text includes the symbol's quiet zone, like every image format. For a narrower margin in a terminal, create the symbol with a smaller `QuietZoneSize`, or copy it with a new quiet zone.
 
 ```csharp
 Console.OutputEncoding = System.Text.Encoding.UTF8;                  // a CJK code page prints some half blocks as ?
 Console.Write(SymbolImageWriter.GetTerminalText(qr));                // dark modules drawn, for a light terminal
 Console.Write(SymbolImageWriter.GetTerminalText(qr, invert: true));  // light modules drawn, for a dark terminal
+
+var narrow = new QRCodeData(qr.GetRawData(), quietZoneSize: 2);      // the same symbol with a 2-module quiet zone
+Console.Write(SymbolImageWriter.GetTerminalText(narrow));
 ```
 
 #### Raw Pixels and Buffer Writers
@@ -1315,14 +1318,14 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.8" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.9" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
 Option 2: Without font dependencies. Use this for QR codes without advanced font operations.
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.8" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.9" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
@@ -1332,14 +1335,14 @@ Option 2: Without font dependencies. Use this for QR codes without advanced font
 #### Windows
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.8" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.9" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.8" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.9" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
