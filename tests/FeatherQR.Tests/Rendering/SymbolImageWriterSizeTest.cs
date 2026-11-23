@@ -52,17 +52,19 @@ public class SymbolImageWriterSizeTest
 
     /// <summary>
     /// By default a module is the largest whole number of pixels both sides allow, and the spare pixels are split as the rendering package
-    /// splits them, an odd one going right or down. That is the renderer's image with that module size pinned.
+    /// splits them, an odd one going right or down. The builders' <c>WithSize</c> draws that image, and so does pinning that module size.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(SymbolsAndCanvases))]
-    public async Task SetSize_WritesEqualWholePixelModules_AsTheRendererWithThatModuleSize(string symbol, int width, int height)
+    public async Task SetSize_WritesEqualWholePixelModules_AsTheBuildersWithSize(string symbol, int width, int height)
     {
         var data = Symbol(symbol);
         var (columns, rows, _) = Modules(data);
         var modulePixels = Math.Min(width / columns, height / rows);
         var rule = WholePixelRulePixels(data, width, height, new SymbolColor(0, 0, 0), new SymbolColor(255, 255, 255));
 
+        await Assert.That(RendererPixels(data, width, height)).IsEquivalentTo(rule, CollectionOrdering.Matching)
+            .Because("the builders' WithSize draws equal whole-pixel modules by default");
         await Assert.That(RendererPixels(data, width, height, modulePixels)).IsEquivalentTo(rule, CollectionOrdering.Matching)
             .Because("pinning that module size in the renderer draws the same image");
         await AssertEveryFormat(data, new SymbolImageOptions { Width = width, Height = height }, rule, width, height);
@@ -75,9 +77,79 @@ public class SymbolImageWriterSizeTest
         var data = Symbol(symbol);
         var rule = RulePixels(data, width, height, new SymbolColor(0, 0, 0), new SymbolColor(255, 255, 255));
 
-        await Assert.That(RendererPixels(data, width, height)).IsEquivalentTo(rule, CollectionOrdering.Matching)
+        await Assert.That(RendererPixels(data, width, height, fillCanvas: true)).IsEquivalentTo(rule, CollectionOrdering.Matching)
             .Because("the pixel-centre rule is what the renderer draws");
         await AssertEveryFormat(data, new SymbolImageOptions { Width = width, Height = height, FillCanvas = true }, rule, width, height);
+    }
+
+    /// <summary>
+    /// A builder given no size draws the core's image at 512 pixels: a 512-pixel square for the square symbologies, and for rMQR 512
+    /// pixels across with the height following at the core's rounding, up. The static helpers draw the same.
+    /// </summary>
+    [Test]
+    [Arguments("QR3", false)]
+    [Arguments("QR40", false)]
+    [Arguments("M4", false)]
+    [Arguments("R17x139", false)]
+    [Arguments("R7x59", false)]
+    [Arguments("QR3", true)]
+    [Arguments("QR40", true)]
+    [Arguments("M4", true)]
+    [Arguments("R17x139", true)]
+    [Arguments("R7x59", true)]
+    public async Task NoSize_TheBuildersImage_IsTheCoresAt512(string symbol, bool fillCanvas)
+    {
+        var data = Symbol(symbol);
+        var options = data is RmQRCodeData
+            ? new SymbolImageOptions { Width = 512, FillCanvas = fillCanvas }
+            : new SymbolImageOptions { Width = 512, Height = 512, FillCanvas = fillCanvas };
+        var core = DecodePng(GetPngBytes(data, options));
+
+        using var bitmap = data switch
+        {
+            QRCodeData qr => new QRCodeImageBuilder(qr).WithFillCanvas(fillCanvas).ToBitmap(),
+            MicroQRCodeData micro => new MicroQRCodeImageBuilder(micro).WithFillCanvas(fillCanvas).ToBitmap(),
+            RmQRCodeData rm => new RmQRCodeImageBuilder(rm).WithFillCanvas(fillCanvas).ToBitmap(),
+            _ => throw new ArgumentException(nameof(data)),
+        };
+        await Assert.That(PngSize(GetPngBytes(data, options))).IsEqualTo((bitmap.Width, bitmap.Height));
+        await Assert.That(Bgra(bitmap)).IsEquivalentTo(core, CollectionOrdering.Matching);
+
+        if (!fillCanvas)
+        {
+            var helper = data switch
+            {
+                QRCodeData qr => QRCodeImageBuilder.GetPngBytes(qr),
+                MicroQRCodeData micro => MicroQRCodeImageBuilder.GetPngBytes(micro),
+                RmQRCodeData rm => RmQRCodeImageBuilder.GetPngBytes(rm),
+                _ => throw new ArgumentException(nameof(data)),
+            };
+            await Assert.That(DecodePng(helper)).IsEquivalentTo(core, CollectionOrdering.Matching);
+        }
+    }
+
+    /// <summary>
+    /// rMQR's <c>WithWidth</c> is the core's width alone, in both modes. 512 × 15 / 63 is 121.9 and 400 × 11 / 63 is 69.8, which
+    /// round to the same side as up, but 512 × 11 / 63 is 89.4, where only rounding up gives the 90 rows the core's image has.
+    /// </summary>
+    [Test]
+    [Arguments(RmQRVersion.R7x59, 512, false)]
+    [Arguments(RmQRVersion.R7x59, 400, false)]
+    [Arguments(RmQRVersion.R11x59, 512, false)]
+    [Arguments(RmQRVersion.R17x139, 1000, false)]
+    [Arguments(RmQRVersion.R7x59, 512, true)]
+    [Arguments(RmQRVersion.R7x59, 400, true)]
+    [Arguments(RmQRVersion.R11x59, 512, true)]
+    [Arguments(RmQRVersion.R17x139, 1000, true)]
+    public async Task RmQRWithWidth_IsTheCoresWidthAlone(RmQRVersion version, int width, bool fillCanvas)
+    {
+        var rm = RmQRCodeGenerator.Create("WIDTH", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+        var options = new SymbolImageOptions { Width = width, FillCanvas = fillCanvas };
+        var core = SymbolImageWriter.GetPngBytes(rm, options);
+
+        using var bitmap = new RmQRCodeImageBuilder(rm).WithWidth(width).WithFillCanvas(fillCanvas).ToBitmap();
+        await Assert.That((bitmap.Width, bitmap.Height)).IsEqualTo(PngSize(core));
+        await Assert.That(Bgra(bitmap)).IsEquivalentTo(DecodePng(core), CollectionOrdering.Matching);
     }
 
     private static async Task AssertEveryFormat(object data, SymbolImageOptions options, byte[] rule, int width, int height)
@@ -477,13 +549,13 @@ public class SymbolImageWriterSizeTest
         return pixels;
     }
 
-    private static byte[] RendererPixels(object data, int width, int height, int? modulePixelSize = null)
+    private static byte[] RendererPixels(object data, int width, int height, int? modulePixelSize = null, bool fillCanvas = false)
     {
         using var bitmap = data switch
         {
-            QRCodeData qr => Pinned(new QRCodeImageBuilder(qr).WithSize(width, height), modulePixelSize).ToBitmap(),
-            MicroQRCodeData micro => Pinned(new MicroQRCodeImageBuilder(micro).WithSize(width, height), modulePixelSize).ToBitmap(),
-            RmQRCodeData rm => Pinned(new RmQRCodeImageBuilder(rm).WithSize(width, height), modulePixelSize).ToBitmap(),
+            QRCodeData qr => Pinned(new QRCodeImageBuilder(qr).WithSize(width, height).WithFillCanvas(fillCanvas), modulePixelSize).ToBitmap(),
+            MicroQRCodeData micro => Pinned(new MicroQRCodeImageBuilder(micro).WithSize(width, height).WithFillCanvas(fillCanvas), modulePixelSize).ToBitmap(),
+            RmQRCodeData rm => Pinned(new RmQRCodeImageBuilder(rm).WithSize(width, height).WithFillCanvas(fillCanvas), modulePixelSize).ToBitmap(),
             _ => throw new ArgumentException(nameof(data)),
         };
         return Bgra(bitmap);
@@ -529,6 +601,7 @@ public class SymbolImageWriterSizeTest
         "QR40" => QRCodeGenerator.Create(new string('a', 2000), QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 }),
         "M4" => MicroQRCodeGenerator.Create("HELLO123", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4 }),
         "R17x139" => RmQRCodeGenerator.Create("HELLO WORLD 1234567890", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }),
+        "R7x59" => RmQRCodeGenerator.Create("HELLO", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x59 }),
         _ => throw new ArgumentException(name),
     };
 

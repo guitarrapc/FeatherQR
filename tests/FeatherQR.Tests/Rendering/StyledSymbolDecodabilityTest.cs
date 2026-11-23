@@ -206,16 +206,14 @@ public class StyledSymbolDecodabilityTest
     /// <paramref name="skip"/> excludes modules a decorative shape is allowed to redraw.
     /// </summary>
     /// <remarks>
-    /// The builder fits the symbol into the canvas with one uniform module scale and centers it,
-    /// so the grid to sample is that fitted rectangle, not the canvas.
+    /// The builder gives every module the largest whole number of pixels both sides allow and centers
+    /// the symbol, so the grid to sample is that rectangle, not the canvas.
     /// </remarks>
     private static async Task AssertModuleCentres(SKBitmap bitmap, int matrixWidth, int matrixHeight, Func<int, int, bool> isDark, Func<int, int, bool>? skip = null)
     {
-        // Mirrors the builder's own arithmetic, double and epsilon included, since a grid computed less
-        // precisely drifts a pixel from the one the builder drew on.
-        var cell = Math.Min((double)bitmap.Width / matrixWidth, (double)bitmap.Height / matrixHeight);
-        var left = Math.Max(0d, Math.Floor((bitmap.Width - cell * matrixWidth) / 2 + 1e-6));
-        var top = Math.Max(0d, Math.Floor((bitmap.Height - cell * matrixHeight) / 2 + 1e-6));
+        var cell = Math.Min(bitmap.Width / matrixWidth, bitmap.Height / matrixHeight);
+        var left = (bitmap.Width - cell * matrixWidth) / 2;
+        var top = (bitmap.Height - cell * matrixHeight) / 2;
 
         for (var row = 0; row < matrixHeight; row++)
         {

@@ -139,7 +139,7 @@ Both `FeatherQR` and `FeatherQR.SkiaSharp` generate images from a QR code symbol
 using FeatherQR;
 
 var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
-var options = new SymbolImageOptions { Width = 512, Height = 512 }; // the builders' default size. FillCanvas = true gives their exact pixels.
+var options = new SymbolImageOptions { Width = 512, Height = 512 }; // the builders' default size and image.
 ```
 
 Choose an output method:
@@ -200,8 +200,8 @@ Both packages use the same units for image settings. In `FeatherQR`, configure `
 
 | What | `FeatherQR` | `FeatherQR.SkiaSharp` |
 | --- | --- | --- |
-| Size, equal modules | `Width = 512, Height = 512` | `.WithSize(512, 512).WithModulePixelSize(512 / qr.Size)` |
-| Size, filled | `Width = 512, Height = 512, FillCanvas = true` | `.WithSize(512, 512)` |
+| Size, equal modules | `Width = 512, Height = 512` | `.WithSize(512, 512)` |
+| Size, filled | `Width = 512, Height = 512, FillCanvas = true` | `.WithSize(512, 512).WithFillCanvas()` |
 | Modules | `ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92` | `.WithModuleStyle(ModuleStyle.Circle, scalePercent: 92)` |
 | Finder patterns | `FinderPatternStyle = FinderPatternStyle.Circle` | `.WithFinderPatternStyle(FinderPatternStyle.Circle)` |
 | Colors | `DarkColor = new SymbolColor(30, 58, 138), LightColor = new SymbolColor(255, 255, 255, 0)` | `.WithColors(new SKColor(30, 58, 138), SKColors.Transparent)` |
@@ -231,7 +231,7 @@ var skiaSvg = new QRCodeImageBuilder(qr)
     .ToSvgString();
 ```
 
-With `FillCanvas = true`, both packages produce identical pixels for a 512 × 512 image with default colors and square modules. `WithModuleStyle` and `WithFinderPatternStyle` use the core's enums, whole-percent values, and defaults. Use `WithModuleShape` and `WithFinderPatternShape` for custom shapes.
+Both packages produce identical pixels for the same size, with or without filling, with default colors and square modules. `WithModuleStyle` and `WithFinderPatternStyle` use the core's enums, whole-percent values, and defaults. Use `WithModuleShape` and `WithFinderPatternShape` for custom shapes.
 
 Use `QREccLevel.H` for symbols with icons. The core embeds icons in SVG output. For PNG and raw pixels, it leaves a light area for the icon and returns its bounds through `GetIconRectangle`. The builder draws the `logo` bitmap into the image.
 
@@ -887,16 +887,16 @@ var svgNoMargin = SymbolImageWriter.GetSvgString(noMargin);
 
 Use `ModulePixelSize` to set pixels per module. Alternatively, use `Width` and `Height` to set the image size. With a set size, every module gets the same whole number of pixels, the largest that fits. The writer centers the symbol and uses the light color for the rest of the image. Unstyled PNG output stays 1-bit.
 
-Set `FillCanvas = true` to fill the image like the builders' `WithSize`. The symbol then fills the image at a fractional scale, and neighboring modules can differ by one pixel. Use it when the symbol must keep the same size in a fixed area, for example when the content length changes. Equal modules make dense symbols smaller: in a 512 × 512 image, version 10 fills 89% of each side and version 40 fills 72%.
+Set `FillCanvas = true` to fill the image like the builders' `WithFillCanvas`. The symbol then fills the image at a fractional scale, and neighboring modules can differ by one pixel. Use it when the symbol must keep the same size in a fixed area, for example when the content length changes. Equal modules make dense symbols smaller: in a 512 × 512 image, version 10 fills 89% of each side and version 40 fills 72%.
 
 Fixed dimensions override `ModulePixelSize`. The writer calculates a dimension set to `0` from the symbol's aspect ratio.
 
 ```csharp
 // Use 10 pixels per module instead of the default 8.
 var png10 = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { ModulePixelSize = 10 });
-// 512 × 512 with equal modules. The space around the symbol is light.
+// 512 × 512 with equal modules, the image QRCodeImageBuilder.GetPngBytes(qr) writes. The space around the symbol is light.
 var png512 = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { Width = 512, Height = 512 });
-// 512 × 512 filled, pixel for pixel the image QRCodeImageBuilder.GetPngBytes(qr) writes.
+// 512 × 512 filled, pixel for pixel the image new QRCodeImageBuilder(qr).WithFillCanvas().ToByteArray() writes.
 var filled = SymbolImageWriter.GetPngBytes(qr, new SymbolImageOptions { Width = 512, Height = 512, FillCanvas = true });
 // Set the width to 300 pixels and preserve the symbol's aspect ratio.
 var svg300 = SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { Width = 300 });
@@ -1039,15 +1039,16 @@ File.WriteAllBytes("qrcode.png", pngBytes);
 
 | Goal | API | Notes |
 |---|---|---|
-| Keep module edges sharp / logo aligned | `WithModulePixelSize(n)` | Output side = `QR matrix size * n`. Best default when using logos. |
-| Also fit a fixed UI frame | `WithModulePixelSize(n)` + `WithSize(w, h)` | Canvas must be `>=` content size. Too-small canvas throws. |
-| Only need a fixed pixel box | `WithSize(w, h)` | Simple, but module size may become fractional when QR version changes. |
+| An exact module size | `WithModulePixelSize(n)` | Output side = `QR matrix size * n`. |
+| An exact module size in a fixed UI frame | `WithModulePixelSize(n)` + `WithSize(w, h)` | Canvas must be `>=` content size. Too-small canvas throws. |
+| A fixed pixel box | `WithSize(w, h)` | Equal modules, the largest whole number of pixels that fits. The symbol can be smaller than the box. |
+| A fixed pixel box the symbol fills | `WithSize(w, h)` + `WithFillCanvas()` | Neighboring modules can differ by one pixel. |
 
-The builder centers the symbol at a uniform scale, keeping modules square at any canvas aspect ratio. Allow enough pixels per module to keep the image readable. In tests with clean images, FeatherQR's decoder starts failing below about 1.5 pixels per module. Phone cameras need a larger margin.
+The builder centers the symbol and keeps modules square at any canvas aspect ratio. Allow enough pixels per module to keep the image readable. In tests with clean images, FeatherQR's decoder starts failing below about 1.5 pixels per module. Phone cameras need a larger margin.
 
 Unused canvas space uses the background color, or the clear color if specified. Use `WithClearColor(SKColors.Transparent)` for transparent space around an opaque symbol.
 
-Use module-based sizing when sharp edges and logo alignment matter:
+Use `WithModulePixelSize` when the module size itself matters:
 
 ```csharp
 using FeatherQR;
@@ -1063,7 +1064,7 @@ var pngBytes = qrCode.ToByteArray();
 
 #### Custom Colors
 
-The clear color fills canvas space outside the symbol. It is visible only when the canvas is larger than the content. With `WithSize` alone, a square symbol fills a square canvas.
+The clear color fills canvas space outside the symbol. It is visible only when the canvas is larger than the content. With `WithFillCanvas`, a square symbol fills a square canvas.
 
 ```csharp
 using SkiaSharp;

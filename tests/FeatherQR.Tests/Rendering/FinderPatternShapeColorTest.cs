@@ -425,10 +425,10 @@ public class FinderPatternShapeColorTest
 
         using (bitmap)
         {
-            var module = Math.Min((double)canvasWidth / matrixWidth, (double)canvasHeight / matrixHeight);
-            // Mirrors the builder's own arithmetic, double and epsilon included.
-            var left = Math.Max(0d, Math.Floor((canvasWidth - module * matrixWidth) / 2 + 1e-6));
-            var top = Math.Max(0d, Math.Floor((canvasHeight - module * matrixHeight) / 2 + 1e-6));
+            // The builder's whole-pixel modules, centered with the spare pixels halved and rounded down.
+            var module = Math.Min(canvasWidth / matrixWidth, canvasHeight / matrixHeight);
+            var left = (canvasWidth - module * matrixWidth) / 2;
+            var top = (canvasHeight - module * matrixHeight) / 2;
 
             SKColor At(double col, double row) => bitmap.GetPixel(
                 (int)Math.Round(left + col * module),

@@ -118,7 +118,7 @@ public sealed record class IconData
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Pair it with <c>WithModulePixelSize</c> so every module lands on a whole number of pixels. <c>WithSize</c> can then give a larger canvas, with the QR code centered and padded.
+    /// Every module is a whole number of pixels unless the builder is told <c>WithFillCanvas</c>, so the icon's edges land on pixel edges.
     /// </para>
     /// <para>
     /// The size is checked against the QR code when it is drawn, not here.

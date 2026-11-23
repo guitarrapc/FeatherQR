@@ -18,9 +18,10 @@ public class QRCodeImageBuilderClearBehaviorTest
     public async Task DefaultTransparentClear_FullCoverage_MatchesExtensionRender()
     {
         var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
-
-        var actual = BuilderPixels(new QRCodeImageBuilder(qr).WithSize(300, 300));
-        var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300), clearColor: null, backgroundColor: null);
+        // A whole number of pixels a module, so the symbol covers the canvas.
+        var side = qr.Size * 10;
+        var actual = BuilderPixels(new QRCodeImageBuilder(qr).WithSize(side, side));
+        var expected = ExtensionPixels(qr, side, side, SKRect.Create(0, 0, side, side), clearColor: null, backgroundColor: null);
 
         await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
@@ -57,12 +58,13 @@ public class QRCodeImageBuilderClearBehaviorTest
         // A translucent QR background lets the clear color show through, so the
         // clear must still happen even when the content covers the whole canvas.
         var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
+        var side = qr.Size * 10;
         var translucentWhite = new SKColor(0xFF, 0xFF, 0xFF, 0x80);
 
         var actual = BuilderPixels(new QRCodeImageBuilder(qr)
-            .WithSize(300, 300)
+            .WithSize(side, side)
             .WithBackgroundColor(translucentWhite).WithClearColor(SKColors.Red));
-        var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300),
+        var expected = ExtensionPixels(qr, side, side, SKRect.Create(0, 0, side, side),
             clearColor: SKColors.Red, backgroundColor: translucentWhite);
 
         await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
@@ -74,11 +76,12 @@ public class QRCodeImageBuilderClearBehaviorTest
         // Opaque background covering the whole canvas: the clear is skipped, and
         // the output must be identical to the always-clear render.
         var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
+        var side = qr.Size * 10;
 
         var actual = BuilderPixels(new QRCodeImageBuilder(qr)
-            .WithSize(300, 300)
+            .WithSize(side, side)
             .WithClearColor(SKColors.Red));
-        var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300),
+        var expected = ExtensionPixels(qr, side, side, SKRect.Create(0, 0, side, side),
             clearColor: SKColors.Red, backgroundColor: null);
 
         await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);

@@ -14,19 +14,27 @@ internal static class QRImageLayout
     /// Calculates a centered layout with square modules for square or rectangular symbols.
     /// </summary>
     /// <remarks>
-    /// A module pixel size fixes the content dimensions. An explicit canvas is fitted uniformly and centered on whole pixels.
-    /// With neither, defaultSize supplies the aspect-derived canvas and the content rectangle covers it.
+    /// A module pixel size fixes the content dimensions. Without one, the canvas is the explicit size or else defaultSize.
+    /// By default every module then takes the largest whole number of pixels both sides allow, centered as a pinned module size is.
+    /// Filling, the symbol is fitted uniformly at a fractional scale and centered on whole pixels.
     /// </remarks>
-    internal static (SKImageInfo info, SKRect contentRect) CreateLayout(int matrixWidth, int matrixHeight, Vector2Slim? explicitSize, int? modulePixelSize, Vector2Slim defaultSize)
+    internal static (SKImageInfo info, SKRect contentRect) CreateLayout(int matrixWidth, int matrixHeight, Vector2Slim? explicitSize, int? modulePixelSize, Vector2Slim defaultSize, bool fillCanvas)
     {
-        // The default canvas is already aspect-derived. Letterboxing it here again would turn rounding slack into padding.
-        // The renderer instead paints the full background and fits the modules uniformly inside it.
         if (modulePixelSize is null)
         {
             var size = explicitSize ?? defaultSize;
+            if (!fillCanvas)
+            {
+                var wholePixels = Math.Min(size.X / matrixWidth, size.Y / matrixHeight);
+                if (wholePixels == 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Canvas size {size.X}x{size.Y} gives the QR matrix size {matrixWidth}x{matrixHeight} less than a pixel a module. Use a larger canvas.");
+                }
+                return CreateLayout(matrixWidth, matrixHeight, size, wholePixels, defaultSize, fillCanvas);
+            }
+
             var info = new SKImageInfo(size.X, size.Y);
-            if (explicitSize is null)
-                return (info, SKRect.Create(0, 0, size.X, size.Y));
 
             // Uniform scale, centered on whole pixels. The builder paints the leftover pad.
             // The same fit as SymbolRenderer.GetLetterboxedArea, in double: placing on integer pixels needs precision that drawing does not.

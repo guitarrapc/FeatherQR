@@ -11,7 +11,7 @@ namespace FeatherQR.SkiaSharp;
 /// To place a code inside a larger drawing, wrap the call in <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>, or call <see cref="SymbolRenderer"/> directly, which draws only the code.
 /// </para>
 /// <para>
-/// Every symbology is fitted into the area at one uniform module scale and centered, using the same fit as the image builders (given an explicit canvas size, they also round the offset to whole pixels): a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only once the modules stop being square. The whole area gets the background color.
+/// Every symbology is fitted into the area at one uniform module scale and centered, using the same fit as the image builders when they fill the canvas (they also round the offset to whole pixels): a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only once the modules stop being square. The whole area gets the background color.
 /// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
 /// An inverted area is refused rather than read as a mirror. For a mirrored symbol, scale the canvas by -1 about the area.
 /// </para>

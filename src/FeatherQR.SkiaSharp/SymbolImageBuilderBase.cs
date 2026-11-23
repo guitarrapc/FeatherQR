@@ -24,6 +24,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     private SKEncodedImageFormat _format = SKEncodedImageFormat.Png;
     private int _quality = 100;
     private int? _modulePixelSize;
+    private bool _fillCanvas;
 
     private protected int _quietZoneSize;
     private protected SKColor _codeColor = SKColors.Black;
@@ -68,10 +69,13 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Sets the output image size in pixels.
     /// </summary>
     /// <remarks>
-    /// On its own, the symbol is fitted into the canvas with one uniform module scale and centered, whatever the canvas aspect ratio: modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The module size follows from the canvas, so it can be fractional and shifts when the version changes.
+    /// The image is exactly this size. On its own, every module takes the largest whole number of pixels both sides allow, whatever the canvas aspect ratio: modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn.
+    /// The module size follows from the canvas and the version, so the symbol can come out smaller than the canvas, to just over half its side where the fit is just under two pixels a module.
+    /// This is the image <see cref="SymbolImageWriter"/> writes with the same width and height.
+    /// <see cref="WithFillCanvas(bool)"/> fills the canvas at a fractional module scale instead.
     /// Combined with <see cref="WithModulePixelSize(int)"/> this is the canvas alone and the modules decide the content size.
     /// Either way the content is centered and the leftover canvas is padded, in the clear color when one is set and the background color otherwise.
-    /// A canvas smaller than the content on either side is an error, but only when the module size is pinned. On its own this method has no size it cannot fit.
+    /// A canvas that cannot give every module a pixel, or that is smaller than a pinned module size needs, is an error when the image is rendered.
     /// </remarks>
     /// <param name="width">Width in pixels.</param>
     /// <param name="height">Height in pixels.</param>
@@ -102,6 +106,21 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
             throw new ArgumentOutOfRangeException(nameof(modulePixelSize), "Module pixel size must be positive");
 
         _modulePixelSize = modulePixelSize;
+        return (TSelf)this;
+    }
+
+    /// <summary>
+    /// Fills the canvas at a fractional module scale instead of giving every module one whole number of pixels.
+    /// </summary>
+    /// <remarks>
+    /// It applies to the canvas <see cref="WithSize(int, int)"/> gives, or the default one, and changes nothing beside <see cref="WithModulePixelSize(int)"/>.
+    /// Filling, the symbol takes one scale, the smaller the two sides allow, and is centered on whole pixels, so it is as large as the canvas allows whatever its version.
+    /// Plain square modules still land on whole pixels, and adjacent ones differ by at most one. This is the image <see cref="SymbolImageWriter"/> writes with <c>FillCanvas</c> set.
+    /// </remarks>
+    /// <param name="fillCanvas"><see langword="true"/> to fill the canvas, <see langword="false"/> for the default, equal whole-pixel modules.</param>
+    public TSelf WithFillCanvas(bool fillCanvas = true)
+    {
+        _fillCanvas = fillCanvas;
         return (TSelf)this;
     }
 
@@ -519,7 +538,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     private void RenderSvg(Stream output)
     {
         var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
-        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, GetDefaultCanvasSize(matrixWidth, matrixHeight));
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, GetDefaultCanvasSize(matrixWidth, matrixHeight), _fillCanvas);
 
         var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
         var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
@@ -664,7 +683,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     {
         var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
 
-        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, GetDefaultCanvasSize(matrixWidth, matrixHeight));
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, GetDefaultCanvasSize(matrixWidth, matrixHeight), _fillCanvas);
 
         var contentCoversCanvas = QRImageLayout.ContentCoversCanvas(contentRect, info);
         var backgroundIsOpaque = _backgroundColor.Alpha == byte.MaxValue;

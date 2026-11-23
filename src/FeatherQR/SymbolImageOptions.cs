@@ -70,7 +70,7 @@ public record struct SymbolImageOptions
     /// <para>
     /// With a width or a height set, the image is that size and the symbol, with its quiet zone, is centred in it. Every module is the same whole
     /// number of pixels, the largest the canvas allows, and the rest of the canvas is the light colour. This is the image the FeatherQR.SkiaSharp
-    /// builders write for the same size with that module size given to <c>WithModulePixelSize</c>. <see cref="FillCanvas"/> fills the canvas instead.
+    /// builders write for the same size with <c>WithSize</c>. <see cref="FillCanvas"/> fills the canvas instead.
     /// </para>
     /// <para>
     /// A side left at 0 follows the symbol's aspect at the scale that fills the other side, rounded up to whole pixels, so the image is the one
@@ -114,7 +114,7 @@ public record struct SymbolImageOptions
     /// <para>
     /// It applies only with <see cref="Width"/> or <see cref="Height"/> set. Filling, the symbol takes one scale, the smaller the two sides allow, and each
     /// pixel belongs to the module its centre falls in. Every module is still whole pixels, so the PNG stays one bit a pixel, and adjacent modules differ
-    /// by at most one pixel. This is the image the FeatherQR.SkiaSharp builders' <c>WithSize</c> writes with no module size given.
+    /// by at most one pixel. This is the image the FeatherQR.SkiaSharp builders' <c>WithSize</c> writes with <c>WithFillCanvas</c>.
     /// </para>
     /// <para>
     /// The image's size is the same either way. Filling keeps the symbol as large as the canvas allows whatever its version. Whole pixels shrink a

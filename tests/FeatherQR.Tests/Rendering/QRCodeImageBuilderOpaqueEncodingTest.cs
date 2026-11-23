@@ -128,10 +128,13 @@ public class QRCodeImageBuilderOpaqueEncodingTest
         var png = QRCodeImageBuilder.GetPngBytes(qr, size);
         using var decoded = SKBitmap.Decode(png);
 
+        // Whole-pixel modules centered in the canvas, with the pad in the background.
+        var module = size / qr.Size;
+        var offset = (size - module * qr.Size) / 2;
         using var reference = new SKBitmap(size, size);
         using (var canvas = new SKCanvas(reference))
         {
-            canvas.Render(qr, SKRect.Create(0, 0, size, size));
+            canvas.Render(qr, SKRect.Create(offset, offset, module * qr.Size, module * qr.Size), clearColor: SKColors.White);
         }
 
         await Assert.That(decoded.Width).IsEqualTo(size);

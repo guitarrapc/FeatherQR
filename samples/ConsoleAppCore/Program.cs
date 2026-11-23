@@ -59,7 +59,7 @@ SaveText("qr-navy-transparent.svg", SymbolImageWriter.GetSvgString(qr, navyOnCle
 SaveBytes("qr-navy-transparent.png", SymbolImageWriter.GetPngBytes(qr, navyOnClear));
 
 // An image of a set size. Every module is the same whole number of pixels, the largest that fits, with the rest light,
-// and a side left at 0 follows the symbol's aspect. FillCanvas fills the canvas instead, as the image builders' WithSize does.
+// and a side left at 0 follows the symbol's aspect. FillCanvas fills the canvas instead, as the image builders' WithFillCanvas does.
 var fit = new SymbolImageOptions { Width = 512, Height = 512 };
 SaveBytes("qr-512.png", SymbolImageWriter.GetPngBytes(qr, fit));
 SaveBytes("qr-512-fill.png", SymbolImageWriter.GetPngBytes(qr, fit with { FillCanvas = true }));

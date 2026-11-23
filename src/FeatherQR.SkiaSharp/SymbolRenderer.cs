@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// Use it when the image builders do not give you the control you need.
 /// </summary>
 /// <remarks>
-/// The symbol is fitted into the area at one uniform module scale and centered, whatever the area's aspect ratio, using the same fit as the image builders (given an explicit canvas size, they also round the offset to whole pixels): modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The background covers the whole area.
+/// The symbol is fitted into the area at one uniform module scale and centered, whatever the area's aspect ratio, using the same fit as the image builders when they fill the canvas (they also round the offset to whole pixels): modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The background covers the whole area.
 /// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
 /// An inverted area is refused rather than read as a mirror. For a mirrored symbol (a transfer print, a sticker read through glass), scale the canvas by -1 about the area.
 /// </remarks>
