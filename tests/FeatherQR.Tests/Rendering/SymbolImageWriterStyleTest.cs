@@ -26,9 +26,10 @@ public class SymbolImageWriterStyleTest
         await Assert.That(options.ModuleStyle).IsEqualTo(ModuleStyle.Square);
         await Assert.That(options.ModuleScalePercent).IsEqualTo(100);
         await Assert.That(options.FinderPatternStyle).IsEqualTo(FinderPatternStyle.Square);
-        await Assert.That(options.CornerRadiusPercent).IsEqualTo(30);
+        await Assert.That(options.ModuleCornerRadiusPercent).IsEqualTo(30);
+        await Assert.That(options.FinderPatternCornerRadiusPercent).IsEqualTo(30);
 
-        var explicitDefaults = new SymbolImageOptions { ModuleStyle = ModuleStyle.Square, ModuleScalePercent = 100, FinderPatternStyle = FinderPatternStyle.Square, CornerRadiusPercent = 30 };
+        var explicitDefaults = new SymbolImageOptions { ModuleStyle = ModuleStyle.Square, ModuleScalePercent = 100, FinderPatternStyle = FinderPatternStyle.Square, ModuleCornerRadiusPercent = 30, FinderPatternCornerRadiusPercent = 30 };
         await Assert.That(explicitDefaults).IsEqualTo(options);
     }
 
@@ -40,8 +41,10 @@ public class SymbolImageWriterStyleTest
         await Assert.That(() => new SymbolImageOptions { ModuleScalePercent = 49 }).Throws<ArgumentOutOfRangeException>();
         await Assert.That(new SymbolImageOptions { ModuleScalePercent = 50 }.ModuleScalePercent).IsEqualTo(50);
         await Assert.That(() => new SymbolImageOptions { ModuleScalePercent = 101 }).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => new SymbolImageOptions { CornerRadiusPercent = -1 }).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => new SymbolImageOptions { CornerRadiusPercent = 101 }).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new SymbolImageOptions { ModuleCornerRadiusPercent = -1 }).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new SymbolImageOptions { FinderPatternCornerRadiusPercent = -1 }).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new SymbolImageOptions { ModuleCornerRadiusPercent = 101 }).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new SymbolImageOptions { FinderPatternCornerRadiusPercent = 101 }).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => new SymbolImageOptions { ModuleStyle = (ModuleStyle)3 }).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => new SymbolImageOptions { ModuleStyle = (ModuleStyle)(-1) }).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => new SymbolImageOptions { FinderPatternStyle = (FinderPatternStyle)4 }).Throws<ArgumentOutOfRangeException>();
@@ -57,7 +60,7 @@ public class SymbolImageWriterStyleTest
     public async Task UnstyledOptions_WriteTheOneBitImage()
     {
         var qr = QRCodeGenerator.Create("unstyled", QREccLevel.M);
-        var options = new SymbolImageOptions { ModuleStyle = ModuleStyle.Square, ModuleScalePercent = 100, FinderPatternStyle = FinderPatternStyle.Square, CornerRadiusPercent = 45 };
+        var options = new SymbolImageOptions { ModuleStyle = ModuleStyle.Square, ModuleScalePercent = 100, FinderPatternStyle = FinderPatternStyle.Square, ModuleCornerRadiusPercent = 45, FinderPatternCornerRadiusPercent = 45 };
 
         await Assert.That(SymbolImageWriter.GetPngBytes(qr, options)).IsEquivalentTo(SymbolImageWriter.GetPngBytes(qr), CollectionOrdering.Matching);
         await Assert.That(SymbolImageWriter.GetSvgString(qr, options)).IsEqualTo(SymbolImageWriter.GetSvgString(qr));
@@ -169,7 +172,7 @@ public class SymbolImageWriterStyleTest
     public async Task CornerRadius_PastHalfTheSide_StaysACircle(int radius)
     {
         var qr = QRCodeGenerator.Create("corners", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
-        var rounded = new SymbolImageOptions { ModulePixelSize = 32, ModuleStyle = ModuleStyle.RoundedSquare, CornerRadiusPercent = radius, FinderPatternStyle = FinderPatternStyle.RoundedSquare };
+        var rounded = new SymbolImageOptions { ModulePixelSize = 32, ModuleStyle = ModuleStyle.RoundedSquare, ModuleCornerRadiusPercent = radius, FinderPatternStyle = FinderPatternStyle.RoundedSquare, FinderPatternCornerRadiusPercent = radius };
         var gray = Pixels(qr, rounded, PixelLayout.Gray8);
         var width = qr.Size * 32;
         var (row, column) = FirstDarkModuleOutsideTheFinders(qr);
@@ -527,10 +530,10 @@ public class SymbolImageWriterStyleTest
 
         await Check(new SymbolImageOptions { ModuleScalePercent = 80 }, "0.8", "square", null, "h0", 0.5m);
         // Below the clamp the radius follows the option: 30 percent of the 0.9 side is 0.27, so the inner square is 0.36 at 0.05 + 0.27.
-        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 30 }, "0.54", null, "round", "h.36v.36h-.36z", 0.32m);
+        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, ModuleCornerRadiusPercent = 30 }, "0.54", null, "round", "h.36v.36h-.36z", 0.32m);
         // At half the side the corners meet, and past it the writer stops at the circle, as the raster does.
-        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 50 }, "0.9", "round", null, "h0", 0.5m);
-        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 80 }, "0.9", "round", null, "h0", 0.5m);
+        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, ModuleCornerRadiusPercent = 50 }, "0.9", "round", null, "h0", 0.5m);
+        await Check(new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, ModuleCornerRadiusPercent = 80 }, "0.9", "round", null, "h0", 0.5m);
     }
 
     public static IEnumerable<(string Symbol, string Shape)> ShapedPathCases()
@@ -554,7 +557,7 @@ public class SymbolImageWriterStyleTest
         {
             "circle92" => (new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle }, "h0", 0.5m),
             "square80" => (new SymbolImageOptions { ModuleScalePercent = 80 }, "h0", 0.5m),
-            _ => (new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 30, FinderPatternStyle = FinderPatternStyle.RoundedSquare }, "h.36v.36h-.36z", 0.32m),
+            _ => (new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, ModuleCornerRadiusPercent = 30, FinderPatternStyle = FinderPatternStyle.RoundedSquare }, "h.36v.36h-.36z", 0.32m),
         };
         if (symbol.EndsWith("-icon"))
             options = options with { IconSizeModules = 5 };
@@ -687,7 +690,7 @@ public class SymbolImageWriterStyleTest
     public async Task Svg_SquareModulesWithAStyledFinder_KeepTheRunPath_WithoutTheFinderPatterns()
     {
         var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
-        var options = new SymbolImageOptions { FinderPatternStyle = FinderPatternStyle.RoundedSquare, CornerRadiusPercent = 20 };
+        var options = new SymbolImageOptions { FinderPatternStyle = FinderPatternStyle.RoundedSquare, FinderPatternCornerRadiusPercent = 20 };
         var root = XDocument.Parse(SymbolImageWriter.GetSvgString(qr, options)).Root!;
         var (columns, rows, quietZone, finders) = Geometry(qr);
         var group = root.Element(Svg + "g")!;
@@ -757,7 +760,7 @@ public class SymbolImageWriterStyleTest
     public async Task Svg_RoundedFinder_PastHalfTheSide_IsNestedCircles()
     {
         var qr = QRCodeGenerator.Create("svg", QREccLevel.M);
-        string FinderPath(FinderPatternStyle style) => XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { FinderPatternStyle = style, CornerRadiusPercent = 60 })).Root!
+        string FinderPath(FinderPatternStyle style) => XDocument.Parse(SymbolImageWriter.GetSvgString(qr, new SymbolImageOptions { FinderPatternStyle = style, FinderPatternCornerRadiusPercent = 60 })).Root!
             .Element(Svg + "g")!.Elements(Svg + "path").First(p => p.Attribute("fill-rule") is not null).Attribute("d")!.Value;
 
         var rounded = FinderPath(FinderPatternStyle.RoundedSquare);
@@ -774,7 +777,7 @@ public class SymbolImageWriterStyleTest
     public async Task CornerRadius_Zero_IsTheSquare()
     {
         var qr = QRCodeGenerator.Create("zero", QREccLevel.M);
-        var rounded = new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, CornerRadiusPercent = 0 };
+        var rounded = new SymbolImageOptions { ModuleStyle = ModuleStyle.RoundedSquare, ModuleScalePercent = 90, ModuleCornerRadiusPercent = 0 };
         var square = rounded with { ModuleStyle = ModuleStyle.Square };
 
         await Assert.That(Pixels(qr, rounded, PixelLayout.Gray8)).IsEquivalentTo(Pixels(qr, square, PixelLayout.Gray8), CollectionOrdering.Matching);
@@ -782,6 +785,47 @@ public class SymbolImageWriterStyleTest
         await Assert.That(path.Attribute("stroke-linecap")?.Value).IsEqualTo("square");
         await Assert.That(path.Attribute("stroke-linejoin")).IsNull();
         await Assert.That(path.Attribute("d")!.Value).IsEqualTo(ModulePath(XDocument.Parse(SymbolImageWriter.GetSvgString(qr, square)).Root!).Attribute("d")!.Value);
+    }
+
+    /// <summary>
+    /// Modules and finder patterns take a radius each, as the builders' <c>WithModuleStyle</c> and <c>WithFinderPatternStyle</c> do, so rounded
+    /// modules at 30 percent with rounded finder patterns at 20 percent, the rendering package's shape class defaults, are one image.
+    /// Each radius leaves the other part's pixels and path alone.
+    /// </summary>
+    [Test]
+    public async Task CornerRadii_ModuleAndFinderPattern_AreIndependent()
+    {
+        const int pixels = 32;
+        var qr = QRCodeGenerator.Create("radii", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var pair = new SymbolImageOptions
+        {
+            ModulePixelSize = pixels,
+            ModuleStyle = ModuleStyle.RoundedSquare,
+            ModuleCornerRadiusPercent = 30,
+            FinderPatternStyle = FinderPatternStyle.RoundedSquare,
+            FinderPatternCornerRadiusPercent = 20,
+        };
+        var otherModules = pair with { ModuleCornerRadiusPercent = 45 };
+        var otherFinders = pair with { FinderPatternCornerRadiusPercent = 45 };
+        var width = qr.Size * pixels;
+        var (row, column) = FirstDarkModuleOutsideTheFinders(qr);
+        byte[] Finder(SymbolImageOptions o) => Block(Pixels(qr, o, PixelLayout.Gray8), width, 0, 0, 7 * pixels, 7 * pixels);
+        byte[] Cell(SymbolImageOptions o) => Block(Pixels(qr, o, PixelLayout.Gray8), width, column * pixels, row * pixels, pixels, pixels);
+
+        await Assert.That(Finder(otherModules)).IsEquivalentTo(Finder(pair), CollectionOrdering.Matching).Because("the module radius leaves the finder patterns alone");
+        await Assert.That(Cell(otherFinders)).IsEquivalentTo(Cell(pair), CollectionOrdering.Matching).Because("the finder radius leaves the modules alone");
+        await Assert.That(Finder(otherFinders)).IsNotEquivalentTo(Finder(pair)).Because("the finder radius is drawn");
+        await Assert.That(Cell(otherModules)).IsNotEquivalentTo(Cell(pair)).Because("the module radius is drawn");
+
+        XElement Root(SymbolImageOptions o) => XDocument.Parse(SymbolImageWriter.GetSvgString(qr, o)).Root!;
+        string FinderPath(SymbolImageOptions o) => Root(o).Element(Svg + "g")!.Elements(Svg + "path").First(p => p.Attribute("fill-rule") is not null).Attribute("d")!.Value;
+        string Modules(SymbolImageOptions o) => ModulePath(Root(o)).ToString();
+
+        // The outer square of a finder pattern is 7 modules, so 20 percent is a radius of 1.4 modules.
+        await Assert.That(FinderPath(pair)).Contains("a1.4 1.4 0 0 1 1.4 1.4");
+        await Assert.That(FinderPath(otherModules)).IsEqualTo(FinderPath(pair));
+        await Assert.That(Modules(otherFinders)).IsEqualTo(Modules(pair));
+        await Assert.That(Modules(otherModules)).IsNotEqualTo(Modules(pair));
     }
 
     /// <summary>

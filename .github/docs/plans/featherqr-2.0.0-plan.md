@@ -1407,3 +1407,13 @@ Lessons:
 - The tests that compare one writer or format with another moved to the new default without failing. The fractional path dropped out of the style, stride, three-byte, allocation, parity and decodability tests until each case named its mode.
 - Canvases meant to be fractional were whole for some symbols, since 777 is 21 × 37 and 333 is 9 × 37. The review replaced them with 778 and 334.
 - Equal modules cost most where a small symbol is drawn into a small area: the sample's Micro QR icon, 19 modules in 35 pixels, fell to 1 pixel a module, so the sample draws it with `FillCanvas`.
+
+### The core's corner radius, one for the modules and one for the finder patterns (2026-11-23)
+
+Done: `SymbolImageOptions.CornerRadiusPercent` became `ModuleCornerRadiusPercent` and `FinderPatternCornerRadiusPercent`, both 30 by default, as the builders' `WithModuleStyle` and `WithFinderPatternStyle` take a radius each. The type is new since `2.0.0-preview.8`, so no release breaks. The README, the migration notes, the spec, the API listing and the API page followed.
+
+Checks: `CornerRadii_ModuleAndFinderPattern_AreIndependent` holds each radius off the other part's pixels and SVG path, and failed with either writer reading the module radius for the finder patterns. `TwoRadii_AreTheBuildersShape` holds 30 with 20, and 15 with 45 around a circle, to the builders' shape over the whole image.
+
+Lesson: one radius looked enough because a circle or a square has none, but the rendering package's own shape class defaults, rounded modules at 30 percent with rounded finder patterns at 20, had no equal in the core, nor had the Playground's "instagram" and "sunset" presets.
+
+No hot path moved: each writer reads the same value from another field.

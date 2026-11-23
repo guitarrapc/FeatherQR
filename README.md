@@ -930,7 +930,7 @@ var png = SymbolImageWriter.GetPngBytes(qr, navyOnClear);
 
 #### Module and Finder Pattern Styles
 
-`ModuleStyle` draws dark modules as circles or rounded squares. `ModuleScalePercent` shrinks modules within their cells. `FinderPatternStyle` sets finder patterns to circles or rounded squares independently of the module style, preserving their recognizable shape. Styled PNG and raw pixel output use antialiased edges with sixteen levels between the two colors. Styled PNG output is 4-bit.
+`ModuleStyle` draws dark modules as circles or rounded squares. `ModuleScalePercent` shrinks modules within their cells. `FinderPatternStyle` sets finder patterns to circles or rounded squares independently of the module style, preserving their recognizable shape. `ModuleCornerRadiusPercent` and `FinderPatternCornerRadiusPercent` set the corner radius of each rounded square, 30 percent by default. Styled PNG and raw pixel output use antialiased edges with sixteen levels between the two colors. Styled PNG output is 4-bit.
 
 ```csharp
 var styled = new SymbolImageOptions

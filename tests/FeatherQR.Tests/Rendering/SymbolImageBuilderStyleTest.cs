@@ -154,7 +154,7 @@ public class SymbolImageBuilderStyleTest
     {
         const int pixels = 40;
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M);
-        var options = new SymbolImageOptions { ModulePixelSize = pixels, FinderPatternStyle = style, CornerRadiusPercent = cornerRadiusPercent };
+        var options = new SymbolImageOptions { ModulePixelSize = pixels, FinderPatternStyle = style, FinderPatternCornerRadiusPercent = cornerRadiusPercent };
         var core = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, options)];
         SymbolImageWriter.TryWritePixels(qr, core, PixelLayout.Gray8, out var width, out var height, options);
         using var skia = new QRCodeImageBuilder(qr).WithModulePixelSize(pixels).WithFinderPatternStyle(style, cornerRadiusPercent).ToBitmap();
@@ -164,6 +164,44 @@ public class SymbolImageBuilderStyleTest
         var differing = 0;
         for (var y = origin; y < origin + 7 * pixels; y++)
             for (var x = origin; x < origin + 7 * pixels; x++)
+            {
+                int a = core[y * width + x], b = skia.GetPixel(x, y).Red;
+                if ((a < 64 && b > 192) || (a > 192 && b < 64))
+                    differing++;
+            }
+        await Assert.That(differing).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// A style with one radius for the modules and another for the finder patterns moves between the packages: rounded modules at 30 percent
+    /// with rounded finder patterns at 20 percent, the rendering package's shape class defaults, are one shape in both, held as above over the whole image.
+    /// </summary>
+    [Test]
+    [Arguments(FinderPatternStyle.RoundedSquare, 30, 20)]
+    [Arguments(FinderPatternStyle.RoundedSquareCircle, 15, 45)]
+    public async Task TwoRadii_AreTheBuildersShape(FinderPatternStyle finderStyle, int moduleRadius, int finderRadius)
+    {
+        const int pixels = 40;
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M);
+        var options = new SymbolImageOptions
+        {
+            ModulePixelSize = pixels,
+            ModuleStyle = ModuleStyle.RoundedSquare,
+            ModuleCornerRadiusPercent = moduleRadius,
+            FinderPatternStyle = finderStyle,
+            FinderPatternCornerRadiusPercent = finderRadius,
+        };
+        var core = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, options)];
+        SymbolImageWriter.TryWritePixels(qr, core, PixelLayout.Gray8, out var width, out var height, options);
+        using var skia = new QRCodeImageBuilder(qr).WithModulePixelSize(pixels)
+            .WithModuleStyle(ModuleStyle.RoundedSquare, cornerRadiusPercent: moduleRadius)
+            .WithFinderPatternStyle(finderStyle, finderRadius)
+            .ToBitmap();
+        await Assert.That((skia.Width, skia.Height)).IsEqualTo((width, height));
+
+        var differing = 0;
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
             {
                 int a = core[y * width + x], b = skia.GetPixel(x, y).Red;
                 if ((a < 64 && b > 192) || (a > 192 && b < 64))
