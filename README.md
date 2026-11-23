@@ -62,7 +62,7 @@ dotnet add package FeatherQR.SkiaSharp
 dotnet add package FeatherQR.Gs1
 ```
 
-`FeatherQR.SkiaSharp` needs SkiaSharp native assets on Linux and with NativeAOT. See [SkiaSharp native assets](#skiasharp-native-assets).
+`FeatherQR.SkiaSharp` needs SkiaSharp native assets on Linux, with NativeAOT, and in WebAssembly. See [SkiaSharp native assets](#skiasharp-native-assets).
 
 > [!IMPORTANT]
 > 2.0.0 renames `SkiaSharp.QrCode` to `FeatherQR` and `SkiaSharp.QrCode.Image` to `FeatherQR.SkiaSharp`, with new namespaces. See the [Migration Guide](docs/migration.md).
@@ -87,6 +87,8 @@ if (QRCodeDecoder.TryDecode(qr, out var text))
 With `FeatherQR.SkiaSharp`:
 
 ```csharp
+using SkiaSharp;
+using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 File.WriteAllBytes("qrcode.png", QRCodeImageBuilder.GetPngBytes("https://example.com"));
@@ -182,7 +184,7 @@ Default square modules scan best. Circles, rounded squares, and smaller modules 
 
 ### Generator Options
 
-Each generator has an overload that takes options. The options are record structs. `default` is the same as `Options.Default`, and `with` makes a changed copy.
+Each generator has an overload that takes options. The options are record structs. `default(QRCodeGeneratorOptions)` is the same as `QRCodeGeneratorOptions.Default`, and the same holds for the other two. `with` makes a changed copy.
 
 ```csharp
 var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, QuietZoneSize = 0 };
@@ -230,9 +232,11 @@ rMQR versions have no single size order. R7x43, R9x43, and R7x59 differ in width
 The generator scores each mask pattern and applies the best one. Set `MaskPattern` to reproduce a symbol byte for byte, or to test a scanner with each pattern. `QRCodeData` and `MicroQRCodeData` report the final `EccLevel` and `MaskPattern`, including a boost. rMQR has one fixed mask.
 
 ```csharp
-// Encode again with the mask that the decoder read
-QRCodeDecoder.TryDecode(scanned, out var text, out var info);
-var identical = QRCodeGenerator.Create(text, info.EccLevel, new QRCodeGeneratorOptions { MaskPattern = info.MaskPattern });
+// Encode again with the level and mask that the decoder read
+if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
+{
+    var identical = QRCodeGenerator.Create(text, info.EccLevel, new QRCodeGeneratorOptions { MaskPattern = info.MaskPattern });
+}
 
 var png = new QRCodeImageBuilder("content").WithMaskPattern(3).ToByteArray();
 ```
@@ -390,6 +394,10 @@ For rMQR, pass the resolved `Version` from `TryGetRequiredBufferSize` back to `C
 The coordinates are in modules, include the quiet zone, and match the `qr[row, col]` indexer. Multiply them by the pixels per module, or scale them in a shader or an SVG `viewBox`. The rectangles cover exactly the dark modules and do not overlap, so a translucent color stays even.
 
 ```csharp
+using System.Globalization;
+using System.Text;
+using FeatherQR;
+
 var qr = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
 
 // GPU: one quad per rectangle, in pixels
@@ -508,6 +516,7 @@ Console.Write(SymbolImageWriter.GetTerminalText(qr, invert: true)); // for a dar
 The builder centers the symbol and keeps modules square. Give each module enough pixels. On clean images, FeatherQR's decoder starts to fail below about 1.5 pixels per module, and phone cameras need more. Space outside the symbol uses the background color, or the clear color if you set one.
 
 ```csharp
+using SkiaSharp;
 using FeatherQR.SkiaSharp;
 
 var colors = new QRCodeImageBuilder("https://example.com")
@@ -639,7 +648,7 @@ A failed decode reports a status that names the failed stage. A successful image
 
 ### Several Symbols in One Image
 
-`DecodeSymbols` reads an `SKBitmap` or a stream, and `DecodeImageSymbols` reads luminance data. Each returns every decodable symbol once, with its corners, and skips symbols inside a decoded symbol. The span overload of `DecodeImageSymbols` stops when your buffer is full. `SymbolDecoder` decodes Standard QR first, and then reads the remaining finder patterns as Micro QR and rMQR. Each result has `Symbology`, `Text`, `Corners`, and the detailed result in its `StandardQR`, `MicroQR`, or `RmQR` property.
+`DecodeSymbols` reads an `SKBitmap` or a stream with `FeatherQR.SkiaSharp`, and `DecodeImageSymbols` reads luminance data with the core. Each returns every decodable symbol once, with its corners, and skips symbols inside a decoded symbol. The span overload of `DecodeImageSymbols` stops when your buffer is full. `SymbolDecoder` decodes Standard QR first, and then reads the remaining finder patterns as Micro QR and rMQR. Each result has `Symbology`, `Text`, `Corners`, and the detailed result in its `StandardQR`, `MicroQR`, or `RmQR` property.
 
 ```csharp
 using var sheet = SKBitmap.Decode("sheet.jpg");
@@ -654,7 +663,7 @@ A search for every symbol takes longer than a decode of one, even with one symbo
 
 ## Async and Stream I/O
 
-Each builder method that writes an image to a `Stream` has an async version: `SaveToAsync`, `SaveToSvgAsync`, `SavePngAsync`, and `SaveSvgAsync`. The image decoders read a stream with `Decode` or `DecodeAsync` for one symbol, and `DecodeSymbols` or `DecodeSymbolsAsync` for all. Methods that work in memory, such as `ToByteArray`, `TryDecode(bitmap)`, and every `SymbolImageWriter` method, have no async version because they do no I/O.
+Each builder method that writes an image to a `Stream` has an async version: `SaveToAsync`, `SaveToSvgAsync`, `SavePngAsync`, and `SaveSvgAsync`. With `FeatherQR.SkiaSharp`, the decoders read an encoded image from a stream with `Decode` or `DecodeAsync` for one symbol, and `DecodeSymbols` or `DecodeSymbolsAsync` for all. The core has no stream overloads, because it reads pixels, not image files. Methods that work in memory, such as `ToByteArray`, `TryDecode(bitmap)`, and every `SymbolImageWriter` method, have no async version because they do no I/O.
 
 - An async write renders the whole image first, so a rendering failure leaves the stream unchanged. It does not flush the stream.
 - A stream read starts at the current position, reads to the end, and leaves the stream open. It does not apply EXIF orientation.
@@ -701,7 +710,7 @@ app.MapPost("/scan", async (HttpRequest request, CancellationToken cancellationT
 
 In UI apps, the async methods render and decode on the thread pool, so the UI thread stays free. Without a synchronization context, as in ASP.NET Core, the work stays on the calling thread. `SymbolImageWriter` renders even a version 40 symbol in well under one frame at 8 pixels per module. A UI app can render on the UI thread and await only the file write.
 
-A stream read rejects input over 64 MiB, or an image over 16,777,216 pixels (4,096 × 4,096), with `InvalidDataException` before it allocates pixels. The message names the limit. The defaults allow a 12-megapixel photo. At these limits, an interlaced PNG with 16 bits per channel used 192 MiB to decode. For larger images, pass `ImageStreamReadLimits`.
+A stream read rejects input over 64 MiB, or an image over 16,777,216 pixels (4,096 × 4,096), with `InvalidDataException` before it allocates pixels. The message names the limit. The defaults allow a 12-megapixel photo, but not a 24- or 48-megapixel photo from a recent phone. At these limits, an interlaced PNG with 16 bits per channel used 192 MiB to decode. For larger images, pass `ImageStreamReadLimits`.
 
 ```csharp
 // A 200-megapixel photo. The same kind of PNG used 3,078 MiB at 16,384 × 16,384.
@@ -800,7 +809,11 @@ var png = SymbolImageWriter.GetPngBytes(rmqr, new SymbolImageOptions { Width = f
 
 ### SkiaSharp Native Assets
 
-`FeatherQR.SkiaSharp` needs the SkiaSharp native assets for your platform. Add one of these packages.
+SkiaSharp brings its native assets for Windows, macOS, iOS, and Android by itself. Add a native asset package in these cases:
+
+- Linux: add one of the two Linux packages below.
+- NativeAOT: add the package for each runtime you publish, as [tests/FeatherQR.AotAnalysis](tests/FeatherQR.AotAnalysis) does.
+- WebAssembly: add `SkiaSharp.NativeAssets.WebAssembly`, as the [Playground](src/FeatherQR.Playground) does.
 
 ```xml
 <PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.9" />
@@ -809,9 +822,8 @@ var png = SymbolImageWriter.GetPngBytes(rmqr, new SymbolImageOptions { Width = f
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 <!-- Linux without font dependencies -->
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
-<!-- Windows -->
+<!-- NativeAOT on Windows or macOS -->
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
-<!-- macOS -->
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
@@ -849,7 +861,7 @@ FeatherQR runs in Blazor WebAssembly and standalone WebAssembly. See [samples/Bl
 
 ### LINQPad
 
-Call `Dump()` to show a QR code in the Results pane.
+Call `Dump()` to show a QR code in the Results pane. This example uses System.Drawing on Windows only to display the image. FeatherQR does not use it.
 
 ```csharp
 Bitmap.FromStream(new MemoryStream(QRCodeImageBuilder.GetPngBytes("WIFI:T:WPA;S:mynetwork;P:mypass;;"))).Dump();

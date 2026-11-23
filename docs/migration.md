@@ -15,10 +15,10 @@ Each section covers one release, newest first. Read every section between your c
 
 The single `SkiaSharp.QrCode` package is now a core package with no dependencies and a SkiaSharp rendering package. Most of the upgrade is mechanical. Some changes alter your output without a compiler error, so check the behavior changes too.
 
-1. Optional: change the package reference ([Packages](#packages)).
+1. Update the package to 2.0.0. You can also switch it to `FeatherQR.SkiaSharp` ([Packages](#packages)).
 2. Replace the namespaces ([Namespaces](#namespaces)).
 3. Run the rename script ([Renames](#renames)).
-4. Build, and fix each error ([Compile errors](#compile-errors)).
+4. Build, and fix each error ([Compile errors](#compile-errors)). On C# 13 or earlier, also read [Older C# versions](#older-c-versions).
 5. Check the output that matters to you ([Behavior changes](#behavior-changes)).
 
 This guide compares 2.0.0 with 1.2.0. If you used a 2.0.0 preview, also read [Upgrading from a 2.0.0 preview](#upgrading-from-a-200-preview).
@@ -49,7 +49,7 @@ If your own code is in a `namespace FeatherQR.Something`, a bare `SkiaSharp` res
 
 ### Renames
 
-A prefix names one symbology (`QR`, `MicroQR`, `RmQR`). No prefix means all three. Names that denote a code keep their form, so `QRCodeData`, `QRCodeGenerator`, `QRCodeDecoder`, `QRCodeImageBuilder` and their Micro QR and rMQR versions do not change.
+A prefix names one symbology (`QR`, `MicroQR`, `RmQR`). No prefix means all three. Type names that contain `Code` do not change: `QRCodeData`, `QRCodeGenerator`, `QRCodeDecoder`, `QRCodeImageBuilder` and their Micro QR and rMQR versions keep their names.
 
 | 1.x | 2.0.0 |
 |---|---|
@@ -87,6 +87,7 @@ grep -rlZ --include='*.cs' -e ECCLevel -e QRCode -e CreateQrCode -e CreateMicroQ
 ```
 
 - Review the diff before you commit. Other QR libraries also use `ECCLevel` and `CreateQrCode`, and `QrSize` and `Utf8BOM` can match your own code.
+- On Windows, run it in Git Bash or WSL.
 - On macOS and BSD, write `sed -i ''` or use `gsed`.
 - The script does not change the namespaces or the removed overloads.
 
@@ -97,24 +98,42 @@ grep -rlZ --include='*.cs' -e ECCLevel -e QRCode -e CreateQrCode -e CreateMicroQ
 | `CreateQrCode(text, ecc, utf8BOM, eciMode, requestedVersion, quietZoneSize)` | `Create(text, ecc, new QRCodeGeneratorOptions { ... })` ([Generator options](#generator-options)) |
 | `CreateMicroQRCode(text, ecc, requestedVersion, quietZoneSize)` | `Create(text, ecc, new MicroQRCodeGeneratorOptions { ... })` |
 | `GetRequiredBufferSize(...)` | `TryGetRequiredBufferSize(..., out var size)` ([Buffer sizing](#buffer-sizing)) |
+| `CreateQrCode("text", ...)` on .NET Framework or netstandard2.0 | The `string` overloads are removed. On C# 13 or earlier, write `Create("text".AsSpan(), ...)` with `using System;` ([Older C# versions](#older-c-versions)) |
 | `Create(plainText: ...)` | `Create(textSpan: ...)` |
 | `Compression` | Removed. Compress the bytes from `GetRawData()` yourself |
-| `QRCodeDecoder.TryDecode(bitmap, ...)` below C# 14 | `QRCodeDecoderExtensions.TryDecode(bitmap, ...)` ([Decoding an SKBitmap](#decoding-an-skbitmap)) |
-| `icon.IconSizePercent = 20;` | `icon = icon with { IconSizePercent = 20 };` |
+| `QRCodeDecoder.TryDecode(bitmap, ...)` on C# 13 or earlier (the net8.0 and net9.0 default) | `QRCodeDecoderExtensions.TryDecode(bitmap, ...)` ([Decoding an SKBitmap](#decoding-an-skbitmap)) |
+| `icon.IconSizePercent = 20;` | `icon = icon with { IconSizePercent = 20 };`. Below C# 9, create a new `IconData` with the constructor and pass every setting again |
 | `gradient.Colors` as an `SKColor[]` | `gradient.Colors.ToArray()` ([GradientOptions](#gradientoptions)) |
-| `.WithColors(codeColor: c)` | `.WithCodeColor(c)` |
-| `.WithColors(backgroundColor: b, clearColor: c)` | `.WithBackgroundColor(b).WithClearColor(c)` |
+| `WithColors(...)` with one or three colors, or with only some named | `WithCodeColor(c)`, `WithBackgroundColor(b)`, `WithClearColor(x)`. `WithColors(c, b)` still sets both |
 | `QRCodeRenderer.Render(canvas, area, data, null, null)` | `SymbolRenderer.Render(canvas, area, data, SKColors.Black, SKColors.White)` |
 | A finder shape that overrides `Draw(..., backgroundPaint)` | Override `Draw(canvas, rect, paint)` and `RequiresAntialiasing` ([Custom finder shapes](#custom-finder-shapes)) |
-| `new QRCodeData(version, quietZoneSize)`, and the same for Micro QR and rMQR | Removed. A Standard QR symbol is `17 + 4 × version` modules a side, plus twice the quiet zone |
+| `new QRCodeData(version, quietZoneSize)`, and the same for Micro QR and rMQR | Removed. Create the data with a generator. For the side length of a Standard QR symbol, use `17 + 4 × version + 2 × quietZoneSize` |
 | A class that derives from `QRCodeData`, `MicroQRCodeData`, `RmQRCodeData`, an image builder, `IconData` or `GradientOptions` | These types are sealed. `ModuleShape`, `FinderPatternShape` and `IconShape` stay open for custom drawing |
 | `Vector2Slim` | Removed |
 
-`WithColors(codeColor, backgroundColor)` with both colors still compiles.
+#### Older C# versions
+
+`Create` and `TryGetRequiredBufferSize` take `ReadOnlySpan<char>` instead of `string`. `IconData` properties are `init`. Older compilers report these errors:
+
+| Error | When | Fix |
+|---|---|---|
+| CS1503 on `Create("text", ...)` | .NET Framework or netstandard2.0, on C# 13 or earlier | `"text".AsSpan()` (with `using System;`) |
+| CS0121 on `Create(default, ...)` or `Create(null, ...)` | On C# 12 or earlier, without options (Micro QR: with options too) | `""` for empty text, `ReadOnlySpan<byte>.Empty` for empty bytes |
+| CS8370 or CS8400 on `new IconData { ... }` or `icon with { ... }` | Below C# 9 | `new IconData(shape, iconSizePercent: 15)` |
+| CS0619 on `new IconData { ... }` | A compiler older than Roslyn 4.3 (.NET SDK 6.0.4xx, Visual Studio 2022 17.3) | Update the SDK, or use the constructor |
+| An error on `options with { ... }` | Below C# 10 | Copy and assign: `var o = options; o.QuietZoneSize = 0;` |
+
+You can also raise the language version. C# 14 needs the .NET 10 SDK.
+
+```xml
+<LangVersion>14</LangVersion>
+```
+
+The generator options use `set` accessors, so `new QRCodeGeneratorOptions { QuietZoneSize = 0 }` compiles on every version.
 
 #### Generator options
 
-The parameter list overloads are removed. Each argument is now a property of the options struct with the same name:
+The parameter list overloads are removed. Each argument is now a property of the options struct: `utf8BOM` is `Utf8Bom`, `eciMode` is `EciMode`, `requestedVersion` is `Version`, and `quietZoneSize` is `QuietZoneSize`.
 
 ```csharp
 // 1.x
@@ -144,10 +163,11 @@ var (bufferSize, qrSize, version) = QRCodeGenerator.GetRequiredBufferSize(text, 
 // 2.0.0
 if (!QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var size))
     return; // the content does not fit
-var written = QRCodeGenerator.Create(text, QREccLevel.M, destination.Slice(0, size.BufferSize));
+var buffer = new byte[size.BufferSize];
+var written = QRCodeGenerator.Create(text, QREccLevel.M, buffer);
 ```
 
-`bufferSize`, `qrSize` and `version` are now `size.BufferSize`, `size.Size` and `size.Version`.
+`bufferSize`, `qrSize` and `version` are now `size.BufferSize`, `size.Size` and `size.Version`. Pass the same options to `TryGetRequiredBufferSize` and `Create`.
 
 #### Decoding an SKBitmap
 
@@ -166,26 +186,6 @@ QRCodeDecoderExtensions.TryDecode(bitmap, out text, out info);
 
 The classes are `QRCodeDecoderExtensions`, `MicroQRCodeDecoderExtensions` and `RmQRCodeDecoderExtensions`. The luminance overloads, `TryDecodeImage(luminance, width, height, ...)`, stay on the decoders.
 
-#### Older C# versions
-
-`Create` and `TryGetRequiredBufferSize` take `ReadOnlySpan<char>` instead of `string`. `IconData` properties are `init`. Older compilers report these errors:
-
-| Error | When | Fix |
-|---|---|---|
-| CS1503 on `Create("text", ...)` | .NET Framework or netstandard2.0, below C# 14 | `"text".AsSpan()` (with `using System;`) |
-| CS0121 on `Create(default, ...)` or `Create(null, ...)` | Below C# 13, without options (Micro QR: with options too) | `""` for empty text, `ReadOnlySpan<byte>.Empty` for empty bytes |
-| CS8370 or CS8400 on `new IconData { ... }` | Below C# 9 | `new IconData(shape, iconSizePercent: 15)` |
-| CS0619 on `new IconData { ... }` | A compiler older than Roslyn 4.3 (.NET SDK 6.0.4xx, Visual Studio 2022 17.3) | Update the SDK, or use the constructor |
-| An error on `options with { ... }` | Below C# 10 | Copy and assign: `var o = options; o.QuietZoneSize = 0;` |
-
-You can also raise the language version. C# 14 needs the .NET 10 SDK.
-
-```xml
-<LangVersion>14</LangVersion>
-```
-
-The generator options use `set` accessors, so `new QRCodeGeneratorOptions { QuietZoneSize = 0 }` compiles on every version.
-
 #### GradientOptions
 
 `GradientOptions` is immutable. The constructor copies the colors, `Colors` and `ColorPositions` are `ReadOnlySpan<T>`, and equal colors compare equal.
@@ -202,7 +202,7 @@ var evenly = gradient.ColorPositions.IsEmpty;
 var recolored = new GradientOptions([SKColors.Red, SKColors.Blue], gradient.Direction);
 ```
 
-`with { Direction = ... }` still works. To distribute colors evenly, omit `colorPositions` or pass an empty span. `null` is not accepted.
+`with { Direction = ... }` still works. `ColorPositions` is never `null`. Test `IsEmpty` instead. To distribute colors evenly, omit `colorPositions`.
 
 #### Custom finder shapes
 
@@ -229,21 +229,60 @@ public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
 
 ### Behavior changes
 
-The code in this section compiles without change, but the output is different or the call throws.
+The code in this section compiles without change, but the output is different or the call throws. The first three groups affect most users. [Less common changes](#less-common-changes) lists the rest.
+
+#### Images
+
+- Every builder image changes. Each module is now the same whole number of pixels, and the symbol is centered with padding around it. The image keeps its size.
+  - This applies to `WithSize`, rMQR's `WithWidth`, the `size` of the static helpers, and the default 512.
+  - At 512 pixels, a Standard QR symbol keeps 68 to 100 % of the side. At 256 pixels, versions 26 to 40 keep only 50 to 72 %.
+  - `WithFillCanvas()` restores the 1.x fill.
+  - Without `WithFillCanvas()`, a canvas too small for one pixel per module throws `InvalidOperationException`.
+  - When rMQR's height follows from a width, it rounds up, so some rMQR images are one pixel taller.
+- The padding around the symbol is the background color. It used to be transparent, which showed as black in JPEG. For transparent padding, call `.WithClearColor(SKColors.Transparent)`. The clear color is also painted under the symbol, so it shows through a translucent background.
+
+  | 1.x | 2.0.0 |
+  |---|---|
+  | <img src="images/padding-transparent.jpg" width="240" alt="A QR code with black padding"/> | <img src="images/padding-background.jpg" width="240" alt="A QR code with white padding"/> |
+
+- `WithModuleShape` styles the data modules only. The finder patterns stay solid. In 1.x a shrunk or round module also redrew the finder patterns, and no reader could find those symbols. To style the finders, call `WithFinderPatternShape`, now on all three builders.
+- A non-square canvas fits the symbol instead of stretching it. Stretched symbols often fail to scan from about 1.25:1.
+
+  | 1.x | 2.0.0 |
+  |---|---|
+  | <img src="images/withsize-stretched.png" width="380" alt="A QR code stretched to 900x450"/> | <img src="images/withsize-fitted.png" width="380" alt="The same QR code fitted into 900x450"/> |
+  | `WithSize(900, 450)`: stretched | 429 × 429, centered |
+
+- `SymbolRenderer.Render` and the `SKCanvas.Render` extensions also fit the symbol into the area, centered, and paint the whole area with the background color. They do not round modules to whole pixels. `GetFinderPatternRect` and `GetIconRects` fit the same way. To stretch on purpose, scale the canvas: `canvas.Scale(2f, 1f)`, then render into a square.
 
 #### Encoding
 
-- `Optimal` segmentation is the default for all three generators. Mixed content, such as a URL with a long number, is split into Numeric, Alphanumeric and Byte runs. The symbol can be smaller and the bit stream can differ from 1.x. It is never larger. Content that overflowed in one mode can now fit. An rMQR symbol can get a different shape. To keep the 1.x output, set `Segmentation = QRSegmentation.Single` (or the Micro QR or rMQR equivalent), or call `.WithSegmentation(QRSegmentation.Single)` on a builder.
-- The segmentation enums changed values: `Optimal` is 0 and `Single` is 1. A stored integer from 1.x now reads as the other value.
-- Standard QR checks its arguments first. An undefined `QREccLevel`, an `EciMode` other than `Default`, `Iso8859_1` and `Utf8`, or a quiet zone above 10,000 modules throws `ArgumentOutOfRangeException`.
+- `Optimal` segmentation is the default for all three generators. Mixed content, such as a URL with a long number, is split into Numeric, Alphanumeric and Byte runs.
+  - The symbol can be smaller, and the bit stream can differ from 1.x. The symbol is never larger.
+  - Content that overflowed in one mode can now fit.
+  - An rMQR symbol can get a different shape.
+  - To keep the 1.x output, set `Segmentation = QRSegmentation.Single` (or the Micro QR or rMQR equivalent), or call `.WithSegmentation(QRSegmentation.Single)` on a builder.
 - `EciMode.Iso8859_1` with a character above U+00FF throws `ArgumentException`. Standard QR used to write a look-alike character, `?` or the low byte. Use `EciMode.Utf8` or `EciMode.Default`.
-- Micro QR writes UTF-8 when its ISO-8859-1 bytes would decode as UTF-8 or Shift_JIS. For example, `Ã©` used to decode as `é`. Such text needs more bytes and can stop fitting M4.
-- Under `Optimal`, content with a U+FEFF after the first character can get a smaller symbol. 1.2.0 fell back to one mode for it, or reported that it did not fit.
 
 #### Decoding
 
 - Structured Append symbols, FNC1 symbols and Shift_JIS Byte segments under ECI 20 now decode. They used to fail with `UnsupportedContent` (FNC1 on rMQR with `InvalidBitstream`). If your code sends those statuses to another reader, these symbols no longer reach it. `QRCodeDecodeInfo.StructuredAppend` and `Fnc1` describe them.
-- A Byte segment with no ECI header is read as Shift_JIS when its bytes are not valid UTF-8, are well-formed Shift_JIS, and hold three half-width katakana in a row or a byte from 0x80 to 0x9F. 1.x read them as ISO-8859-1. Some Western text reads differently as a result. Three characters from U+00A1 to U+00DF in a row (`ÄÖÜ`) read as half-width katakana. Windows-1252 text with a typographic apostrophe before a letter (`l’option`) can read as Japanese or fail with `UnmappedCharacter`.
+- A Byte segment with no ECI header can now decode as Japanese. 1.x read such bytes as ISO-8859-1.
+  - This happens when the bytes are not valid UTF-8, are well-formed Shift_JIS, and hold three half-width katakana in a row or a byte from 0x80 to 0x9F.
+  - Three characters from U+00A1 to U+00DF in a row (`ÄÖÜ`) read as half-width katakana.
+  - Windows-1252 text with a typographic apostrophe before a letter (`l’option`) can read as Japanese or fail with `UnmappedCharacter`.
+
+#### Less common changes
+
+Encoding:
+
+- The segmentation enums changed values: `Optimal` is 0 and `Single` is 1. A stored integer from 1.x now reads as the other value.
+- Standard QR checks its arguments first. An undefined `QREccLevel`, an `EciMode` other than `Default`, `Iso8859_1` and `Utf8`, or a quiet zone above 10,000 modules throws `ArgumentOutOfRangeException`.
+- Micro QR writes some ISO-8859-1 text as UTF-8. This happens when the ISO-8859-1 bytes of the text would decode as UTF-8 or Shift_JIS. For example, 1.x wrote `Ã©` as bytes that decode as `é`. Such text needs more bytes and can stop fitting M4.
+- Under `Optimal`, content with a U+FEFF after the first character can get a smaller symbol. 1.2.0 fell back to one mode for it, or reported that it did not fit.
+
+Decoding:
+
 - The matrix span overloads of `TryDecode` set `charsWritten` to 0 when they return `false`. They used to report the characters read before the failure. To decode a symbol that is too long for your buffer, resize the buffer and decode again:
 
   ```csharp
@@ -257,27 +296,11 @@ The code in this section compiles without change, but the output is different or
 
 - `TryDecodeImage` with a width or height below one throws `ArgumentOutOfRangeException` naming `width` or `height`. It used to name `luminance`.
 
-#### Images
-
-- `WithModuleShape` styles the data modules only. The finder patterns stay solid. In 1.x a shrunk or round module also redrew the finder patterns, and no reader could find those symbols. To style the finders, call `WithFinderPatternShape`, now on all three builders.
-- The builders give every module the same whole number of pixels. This applies to `WithSize`, rMQR's `WithWidth`, the `size` of the static helpers, and the default 512. The image keeps its size, and the symbol is centered with padding around it. A Standard QR symbol at 256 or 512 pixels keeps 72 to 96 % of the side, and 56 % in the worst case. `WithFillCanvas()` restores the 1.x fill. Without it, a canvas too small for one pixel per module throws `InvalidOperationException`. When rMQR's height follows from a width, it rounds up, so some rMQR images are one pixel taller.
-- A non-square canvas fits the symbol instead of stretching it. Stretched symbols often fail to scan from about 1.25:1.
-
-  | 1.x | 2.0.0 |
-  |---|---|
-  | <img src="images/withsize-stretched.png" width="380" alt="A QR code stretched to 900x450"/> | <img src="images/withsize-fitted.png" width="380" alt="The same QR code fitted into 900x450"/> |
-  | `WithSize(900, 450)`: stretched | 429 × 429, centered |
-
-- `SymbolRenderer.Render` and the `SKCanvas.Render` extensions also fit the symbol into the area, centered, and paint the whole area with the background color. They do not round modules to whole pixels. `GetFinderPatternRect` and `GetIconRects` fit the same way. To stretch on purpose, scale the canvas: `canvas.Scale(2f, 1f)`, then render into a square.
-- The padding around the symbol is the background color. It used to be transparent, which showed as black in JPEG. For transparent padding, call `.WithClearColor(SKColors.Transparent)`. The clear color is also painted under the symbol, so it shows through a translucent background.
-
-  | 1.x | 2.0.0 |
-  |---|---|
-  | <img src="images/padding-transparent.jpg" width="240" alt="A QR code with black padding"/> | <img src="images/padding-background.jpg" width="240" alt="A QR code with white padding"/> |
+Rendering:
 
 - `SymbolRenderer.Render(canvas, area, data, default, default)` draws nothing visible. `default` was a `null` `SKColor?`, which meant black on white. It is now a transparent `SKColor`. Search for `default` in the color arguments and write the colors.
 - `WithModuleShape(null)` and `WithFinderPatternShape(null)` throw `ArgumentNullException`. The compiler reports at most a nullable warning. To keep the default shape, do not call the setter.
-- Finder shapes leave the light ring transparent. A Standard QR SVG with a finder shape on a transparent or translucent background used to have empty corners, and it now scans. Styled raster images differ by about 1 % of pixels on the finder edges.
+- Finder shapes now leave the light ring transparent. A styled SVG on a transparent or translucent background used to lose its finder patterns, and it now scans. Styled raster images differ by about 1 % of pixels on the finder edges.
 - `QRCodeImageBuilder` created from a `QRCodeData` throws `InvalidOperationException` on `WithErrorCorrection` and `WithEciMode`. 1.x ignored them. `QRCodeData.EccLevel` tells you the level of the data.
 - The renderer and the shapes reject arguments that used to draw something wrong:
 
@@ -291,10 +314,10 @@ The code in this section compiles without change, but the output is different or
 
   An inverted area used to draw a mirrored symbol. To mirror on purpose, flip the canvas: `canvas.Translate(area.Left + area.Right, 0); canvas.Scale(-1f, 1f);`.
 
-#### Data types
+Data types:
 
 - The `QRCodeData`, `MicroQRCodeData` and `RmQRCodeData` restore constructors throw `InvalidDataException` when the format information is not what a generator writes. Bytes from `GetRawData` of a generated symbol always restore.
-- `GetRawData(IBufferWriter<byte>)` throws `ArgumentNullException` for a null writer and `InvalidOperationException` for a span shorter than `GetRawDataSize()`.
+- `GetRawData(IBufferWriter<byte>)` throws `ArgumentNullException` for a null writer. It throws `InvalidOperationException` when the writer returns a span shorter than `GetRawDataSize()`.
 - `new GradientOptions(null, ...)` throws `ArgumentException`. It used to throw `ArgumentNullException`.
 
 ### New in 2.0.0
@@ -328,7 +351,7 @@ The decoders read Kanji mode segments. A symbol with a Kanji segment used to fai
 - A character that exists only in CP932, such as a circled digit, fails the symbol with the new `UnmappedCharacter` status.
 - Shift_JIS Byte segments under ECI 20 still fail with `UnsupportedContent`. 2.0.0 decodes them.
 
-### Buffer sizing
+### Try-only buffer sizing
 
 `GetRequiredBufferSize` is `[Obsolete]` on `QRCodeGenerator` and `MicroQRCodeGenerator`. Use `TryGetRequiredBufferSize` on all three generators.
 
@@ -344,7 +367,7 @@ if (!MicroQRCodeGenerator.TryGetRequiredBufferSize(userInput, MicroQREccLevel.L,
 - `false` means only that the content does not fit. Invalid arguments still throw.
 - Pass the same `Segmentation` that you encode with. The two modes can select different versions.
 
-### Generator options
+### Options overloads
 
 `QRCodeGenerator` and `MicroQRCodeGenerator` have overloads that take an options struct. The parameter list overloads do not change. New options are added only to the struct.
 
