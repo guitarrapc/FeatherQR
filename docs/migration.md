@@ -663,7 +663,7 @@ new QRCodeImageBuilder("https://example.com")
 | 1.x through 2.0.0-preview.2 | 2.0.0 |
 |---|---|
 | <img src="images/withsize-stretched.png" width="380" alt="A QR code stretched to 900x450"/> | <img src="images/withsize-fitted.png" width="380" alt="The same QR code fitted into 900x450"/> |
-| Stretched to 900x450. ZXing.Net misses it; FeatherQR and zxing-cpp read it | 435x435 at (232, 7): 29 modules of 15 px, centered. Scans |
+| Stretched to 900x450. ZXing.Net misses it; FeatherQR and zxing-cpp read it | 429x429 at (235, 10): 33 modules of 13 px, centered. Scans |
 
 Module centres stayed correct and nothing threw, which is what made it hard to notice: the data was intact and the image looked like a QR code. What broke was detection. A decoder finds the symbol by scanning for the 1:1:3:1:1 run of dark and light through a finder pattern, and that ratio only survives on one axis once the cells are rectangular.
 
