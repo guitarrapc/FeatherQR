@@ -261,6 +261,7 @@ public class SymbolImageWriterPixelsTest
             foreach (var options in new[] { "translucent", "transparent white", "styled", "styled fraction" })
                 yield return (symbol, options);
         }
+        yield return ("QR5 H", "icon");
         yield return ("QR5 H", "icon styled");
     }
 
@@ -282,6 +283,7 @@ public class SymbolImageWriterPixelsTest
             "transparent white" => new SymbolImageOptions { ModulePixelSize = 2, LightColor = new SymbolColor(255, 255, 255, 0) },
             "styled" => shaped with { DarkColor = navy, LightColor = ivory },
             "styled fraction" => shaped with { Width = 500, Height = 334, DarkColor = navy, LightColor = ivory, FillCanvas = true },
+            "icon" => new SymbolImageOptions { ModulePixelSize = 3, IconSizeModules = 7, DarkColor = navy, LightColor = ivory },
             "icon styled" => shaped with { IconSizeModules = 7, Width = 333, DarkColor = navy, LightColor = ivory },
             _ => throw new ArgumentException(optionsName),
         };
@@ -342,18 +344,28 @@ public class SymbolImageWriterPixelsTest
     }
 
     /// <summary>
-    /// The stride overload takes the flag too: its rows are those of the packed premultiplied buffer, and the padding is left as it was.
+    /// Each symbology's stride overload takes the flag too: its rows are those of the packed premultiplied buffer, and the padding is left as it was.
     /// </summary>
     [Test]
-    public async Task Premultiplied_AtAStride_IsThePackedRows()
+    [Arguments("QR3")]
+    [Arguments("M4")]
+    [Arguments("R17x139")]
+    public async Task Premultiplied_AtAStride_IsThePackedRows(string symbol)
     {
-        var rm = RmQRCodeGenerator.Create("stride", RmQREccLevel.M);
+        var data = PixelSymbol(symbol);
         var options = new SymbolImageOptions { ModulePixelSize = 3, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A, 200), LightColor = new SymbolColor(0xFF, 0xF8, 0xE7, 51) };
-        var packed = WritePacked(rm, PixelLayout.Bgra8888, premultipliedAlpha: true, options, out var width, out var height);
+        var packed = WritePacked(data, PixelLayout.Bgra8888, premultipliedAlpha: true, options, out var width, out var height);
         var stride = width * 4 + 12;
         var strided = new byte[stride * height];
         strided.AsSpan().Fill(0xCD);
-        await Assert.That(SymbolImageWriter.TryWritePixels(rm, strided, stride, PixelLayout.Bgra8888, premultipliedAlpha: true, out _, out _, options)).IsTrue();
+        var written = data switch
+        {
+            QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, strided, stride, PixelLayout.Bgra8888, premultipliedAlpha: true, out _, out _, options),
+            MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, strided, stride, PixelLayout.Bgra8888, premultipliedAlpha: true, out _, out _, options),
+            RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, strided, stride, PixelLayout.Bgra8888, premultipliedAlpha: true, out _, out _, options),
+            _ => throw new ArgumentException(symbol),
+        };
+        await Assert.That(written).IsTrue();
         int wrong = 0, padding = 0;
         for (var y = 0; y < height; y++)
         {

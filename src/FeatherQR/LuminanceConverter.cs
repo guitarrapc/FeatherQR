@@ -29,7 +29,7 @@ public static partial class LuminanceConverter
     /// <param name="height">Image height in pixels.</param>
     /// <param name="rowBytes">The stride: the bytes from the start of one row to the start of the next. At least <paramref name="width"/> × bytes per pixel, and more where the source pads its rows. The padding is never read.</param>
     /// <param name="layout">Channel order and depth of <paramref name="pixels"/>: one byte a pixel for <see cref="PixelLayout.Gray8"/>, three for <see cref="PixelLayout.Rgb24"/> and <see cref="PixelLayout.Bgr24"/>, four for the others.</param>
-    /// <param name="premultipliedAlpha">Whether the color channels are already multiplied by alpha, as a browser canvas or a GPU texture often holds them. Ignored for layouts without alpha.</param>
+    /// <param name="premultipliedAlpha">Whether the color channels are already multiplied by alpha, as many drawing surfaces and GPU textures hold them. A browser canvas's image data is straight. Ignored for layouts without alpha.</param>
     /// <param name="luminance">Destination, at least width × height bytes. Each pixel's ITU-R BT.601 luminance, the pixel composited against white first where its alpha is below 255.</param>
     /// <remarks>A zero width or height converts nothing and does not touch either buffer.</remarks>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="layout"/> is not a defined value, a dimension is negative, or <paramref name="rowBytes"/> is negative, or shorter than one row when there is a row to read.</exception>

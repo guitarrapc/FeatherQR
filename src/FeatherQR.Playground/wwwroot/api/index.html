@@ -1432,7 +1432,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.PixelLayout" data-name="featherqr.pixellayout" data-text="featherqr.pixellayout public enum pixellayout : int the channel order and depth of a raw pixel buffer: one byte a pixel for gray8 , three for rgb24 and bgr24 , four for the others. these are the layouts phone cameras, graphics libraries, image files and gpu textures commonly hand over or take. a buffer may have a stride wider than its rows, both where symbolimagewriter writes it and where luminanceconverter reads it. value gray8 = 0, one byte a pixel: luminance, 0 black to 255 white.  value rgba8888 = 1, four bytes a pixel: red, green, blue, alpha, alpha not premultiplied.  value bgra8888 = 2, four bytes a pixel: blue, green, red, alpha, alpha not premultiplied.  value rgb888x = 3, four bytes a pixel: red, green, blue, and a fourth byte that carries no colour.  value rgb24 = 4, three bytes a pixel: red, green, blue.  value bgr24 = 5, three bytes a pixel: blue, green, red.  value bgr888x = 6, four bytes a pixel: blue, green, red, and a fourth byte that carries no colour. ">
+        <article class="type" id="FeatherQR.PixelLayout" data-name="featherqr.pixellayout" data-text="featherqr.pixellayout public enum pixellayout : int the channel order and depth of a raw pixel buffer: one byte a pixel for gray8 , three for rgb24 and bgr24 , four for the others. these are the layouts phone cameras, graphics libraries, image files and gpu textures commonly hand over or take. a buffer may have a stride wider than its rows, both where symbolimagewriter writes it and where luminanceconverter reads it. value gray8 = 0, one byte a pixel: luminance, 0 black to 255 white.  value rgba8888 = 1, four bytes a pixel: red, green, blue, alpha. alpha is straight, or premultiplied where the call that writes or reads the buffer says so.  value bgra8888 = 2, four bytes a pixel: blue, green, red, alpha. alpha is straight, or premultiplied where the call that writes or reads the buffer says so.  value rgb888x = 3, four bytes a pixel: red, green, blue, and a fourth byte that carries no colour.  value rgb24 = 4, three bytes a pixel: red, green, blue.  value bgr24 = 5, three bytes a pixel: blue, green, red.  value bgr888x = 6, four bytes a pixel: blue, green, red, and a fourth byte that carries no colour. ">
           <h3><a class="anchor" href="#FeatherQR.PixelLayout" aria-label="Link to FeatherQR.PixelLayout">#</a><span class="kind">enum</span> <span class="name">PixelLayout</span></h3>
           <pre class="sig"><code>public enum PixelLayout : int</code></pre>
           <p class="doc">The channel order and depth of a raw pixel buffer: one byte a pixel for Gray8 , three for Rgb24 and Bgr24 , four for the others.</p>
@@ -1445,13 +1445,13 @@
               <pre class="sig"><code>Gray8 = 0,</code></pre>
               <p class="doc">One byte a pixel: luminance, 0 black to 255 white.</p>
             </div>
-            <div class="member" data-text="value rgba8888 = 1, four bytes a pixel: red, green, blue, alpha, alpha not premultiplied. ">
+            <div class="member" data-text="value rgba8888 = 1, four bytes a pixel: red, green, blue, alpha. alpha is straight, or premultiplied where the call that writes or reads the buffer says so. ">
               <pre class="sig"><code>Rgba8888 = 1,</code></pre>
-              <p class="doc">Four bytes a pixel: red, green, blue, alpha, alpha not premultiplied.</p>
+              <p class="doc">Four bytes a pixel: red, green, blue, alpha. Alpha is straight, or premultiplied where the call that writes or reads the buffer says so.</p>
             </div>
-            <div class="member" data-text="value bgra8888 = 2, four bytes a pixel: blue, green, red, alpha, alpha not premultiplied. ">
+            <div class="member" data-text="value bgra8888 = 2, four bytes a pixel: blue, green, red, alpha. alpha is straight, or premultiplied where the call that writes or reads the buffer says so. ">
               <pre class="sig"><code>Bgra8888 = 2,</code></pre>
-              <p class="doc">Four bytes a pixel: blue, green, red, alpha, alpha not premultiplied.</p>
+              <p class="doc">Four bytes a pixel: blue, green, red, alpha. Alpha is straight, or premultiplied where the call that writes or reads the buffer says so.</p>
             </div>
             <div class="member" data-text="value rgb888x = 3, four bytes a pixel: red, green, blue, and a fourth byte that carries no colour. ">
               <pre class="sig"><code>Rgb888x = 3,</code></pre>

@@ -240,7 +240,6 @@ internal static class PixelWriter
         };
     }
 
-    // Rounded to the nearest, so a channel never passes its alpha.
     private static SymbolColor Premultiplied(SymbolColor color)
     {
         int a = color.A;

@@ -12,10 +12,10 @@ public enum PixelLayout
     /// <summary>One byte a pixel: luminance, 0 black to 255 white.</summary>
     Gray8 = 0,
 
-    /// <summary>Four bytes a pixel: red, green, blue, alpha, alpha not premultiplied.</summary>
+    /// <summary>Four bytes a pixel: red, green, blue, alpha. Alpha is straight, or premultiplied where the call that writes or reads the buffer says so.</summary>
     Rgba8888 = 1,
 
-    /// <summary>Four bytes a pixel: blue, green, red, alpha, alpha not premultiplied.</summary>
+    /// <summary>Four bytes a pixel: blue, green, red, alpha. Alpha is straight, or premultiplied where the call that writes or reads the buffer says so.</summary>
     Bgra8888 = 2,
 
     /// <summary>Four bytes a pixel: red, green, blue, and a fourth byte that carries no colour.</summary>
