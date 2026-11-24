@@ -147,7 +147,7 @@ Both packages use the same image settings. The core takes them in `SymbolImageOp
 | Icon | `IconSizeModules = 7, IconImage = File.ReadAllBytes("logo.png")` | `.WithIcon(IconData.FromImageByModules(logo, 7))` |
 | SVG | `SymbolImageWriter.GetSvgString(qr, options)` | `.ToSvgString()` |
 | PNG | `SymbolImageWriter.GetPngBytes(qr, options)` | `.ToByteArray()` |
-| Raw pixels | `SymbolImageWriter.TryWritePixels(qr, buffer, PixelLayout.Rgba8888, out var width, out var height, options)` | `.ToBitmap()` |
+| Raw pixels | `SymbolImageWriter.TryWritePixels(qr, buffer, PixelLayout.Rgba8888, premultipliedAlpha: false, out var width, out var height, options)` | `.ToBitmap()` |
 | Read an image | `QRCodeDecoder.TryDecodeImage(gray, width, height, out string text, out _)` | `QRCodeDecoder.TryDecode(bitmap, out string text)` |
 
 For small PNG files, use the core. It writes a plain symbol as a 1-bit PNG, and `FeatherQR.SkiaSharp` writes 8-bit RGB. For the same 512 × 512 image, the core's file is about a quarter to half the size. A styled symbol needs antialiased edges, so the core writes it as a 4-bit PNG, which is larger than the 1-bit file.
@@ -482,16 +482,16 @@ var (x, y, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(qrH, with
 
 #### Raw Pixels, Buffer Writers, and Terminal Text
 
-`WriteSvg` and `WritePng` write to an `IBufferWriter<byte>` without allocations after warmup. `TryWritePixels` writes to your buffer in `Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`, `Bgr888x`, `Rgb24`, or `Bgr24`. Pass a `Gray8` buffer directly to `TryDecodeImage`.
+`WriteSvg` and `WritePng` write to an `IBufferWriter<byte>` without allocations after warmup. `TryWritePixels` writes to your buffer in `Gray8`, `Rgba8888`, `Bgra8888`, `Rgb888x`, `Bgr888x`, `Rgb24`, or `Bgr24`. Pass a `Gray8` buffer directly to `TryDecodeImage`. Pass `premultipliedAlpha: true` when the target surface expects premultiplied alpha. It changes only colors with an alpha below 255.
 
 To write into memory that another image type owns, get the size with `GetImageSize` and pass that image's row stride. The bytes between rows stay untouched. To write into a region of a larger image, slice the buffer at the region's first pixel and pass the larger image's stride.
 
 ```csharp
 var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Bgra8888)];
-SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, out var width, out var height);
+SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgra8888, premultipliedAlpha: false, out var width, out var height);
 
 var at = (top * canvasWidth + left) * 4; // a region of a larger RGBA canvas
-SymbolImageWriter.TryWritePixels(micro, canvas.AsSpan(at), canvasWidth * 4, PixelLayout.Rgba8888, out _, out _);
+SymbolImageWriter.TryWritePixels(qr, canvas.AsSpan(at), canvasWidth * 4, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _);
 ```
 
 `GetTerminalText` draws two module rows per line with half-block characters, including the quiet zone.
@@ -606,14 +606,17 @@ Pattern 15 in [samples/ConsoleApp](samples/ConsoleApp) uses it to draw a symbol 
 | Library | Pixel format | `PixelLayout` |
 |---|---|---|
 | System.Drawing | `Format32bppArgb` | `Bgra8888` |
+| System.Drawing | `Format32bppPArgb` | `Bgra8888`, premultiplied |
 | System.Drawing | `Format32bppRgb` | `Bgr888x` |
 | System.Drawing | `Format24bppRgb` | `Bgr24` |
 | WPF | `PixelFormats.Bgra32` | `Bgra8888` |
+| WPF | `PixelFormats.Pbgra32` | `Bgra8888`, premultiplied |
 | WPF | `PixelFormats.Bgr32` | `Bgr888x` |
 | WPF | `PixelFormats.Bgr24`, `PixelFormats.Rgb24` | `Bgr24`, `Rgb24` |
 | ImageSharp | `Rgba32`, `Bgra32` | `Rgba8888`, `Bgra8888` |
 | ImageSharp | `Rgb24`, `Bgr24` | `Rgb24`, `Bgr24` |
 
+- For a premultiplied format, pass `premultipliedAlpha: true` to both `TryWritePixels` and `LuminanceConverter.Convert`.
 - A 24-bit row is often padded to a multiple of four bytes. Pass the row stride that the library reports, not width × 3.
 - The fourth byte of `Format32bppRgb` and `Bgr32` is not alpha, and files from other tools may hold 0 there. Read as `Bgra8888`, a 0 is a transparent pixel and the image turns white. Use `Bgr888x`.
 

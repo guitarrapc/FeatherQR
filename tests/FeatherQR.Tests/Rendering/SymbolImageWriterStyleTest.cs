@@ -932,15 +932,15 @@ public class SymbolImageWriterStyleTest
         {
             case QRCodeData qr:
                 buffer = new byte[SymbolImageWriter.GetPixelBufferSize(qr, layout, options)];
-                written = SymbolImageWriter.TryWritePixels(qr, buffer, layout, out _, out _, options);
+                written = SymbolImageWriter.TryWritePixels(qr, buffer, layout, premultipliedAlpha: false, out _, out _, options);
                 break;
             case MicroQRCodeData micro:
                 buffer = new byte[SymbolImageWriter.GetPixelBufferSize(micro, layout, options)];
-                written = SymbolImageWriter.TryWritePixels(micro, buffer, layout, out _, out _, options);
+                written = SymbolImageWriter.TryWritePixels(micro, buffer, layout, premultipliedAlpha: false, out _, out _, options);
                 break;
             case RmQRCodeData rm:
                 buffer = new byte[SymbolImageWriter.GetPixelBufferSize(rm, layout, options)];
-                written = SymbolImageWriter.TryWritePixels(rm, buffer, layout, out _, out _, options);
+                written = SymbolImageWriter.TryWritePixels(rm, buffer, layout, premultipliedAlpha: false, out _, out _, options);
                 break;
             default:
                 throw new ArgumentException(nameof(data));

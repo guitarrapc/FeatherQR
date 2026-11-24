@@ -1058,7 +1058,7 @@ public class NetStandardBuildParityTest
 
             // The pixel buffer's span call is reached through a bridge that wraps an array.
             var layoutType = build.GetType("FeatherQR.PixelLayout", throwOnError: true)!;
-            var tryWrite = writer.GetMethod("TryWritePixels", [dataType, typeof(Span<byte>), layoutType, typeof(int).MakeByRefType(), typeof(int).MakeByRefType(), optionsType.MakeByRefType()])!;
+            var tryWrite = writer.GetMethod("TryWritePixels", [dataType, typeof(Span<byte>), layoutType, typeof(bool), typeof(int).MakeByRefType(), typeof(int).MakeByRefType(), optionsType.MakeByRefType()])!;
             var bridge = new DynamicMethod("TryWritePixels", typeof(bool), [typeof(object), typeof(byte[]), typeof(int), typeof(object)], typeof(NetStandardBuildParityTest).Module);
             var il = bridge.GetILGenerator();
             var width = il.DeclareLocal(typeof(int));
@@ -1072,6 +1072,8 @@ public class NetStandardBuildParityTest
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Newobj, typeof(Span<byte>).GetConstructor([typeof(byte[])])!);
             il.Emit(OpCodes.Ldarg_2);
+            // Straight alpha, as the host writes below.
+            il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloca, width);
             il.Emit(OpCodes.Ldloca, height);
             il.Emit(OpCodes.Ldloca, options);
@@ -1080,7 +1082,7 @@ public class NetStandardBuildParityTest
             var loadedTryWrite = bridge.CreateDelegate<Func<object, byte[], int, object, bool>>();
 
             // The same bridge for the overload that takes a row stride.
-            var tryWriteStride = writer.GetMethod("TryWritePixels", [dataType, typeof(Span<byte>), typeof(int), layoutType, typeof(int).MakeByRefType(), typeof(int).MakeByRefType(), optionsType.MakeByRefType()])!;
+            var tryWriteStride = writer.GetMethod("TryWritePixels", [dataType, typeof(Span<byte>), typeof(int), layoutType, typeof(bool), typeof(int).MakeByRefType(), typeof(int).MakeByRefType(), optionsType.MakeByRefType()])!;
             var strideBridge = new DynamicMethod("TryWritePixelsWithAStride", typeof(bool), [typeof(object), typeof(byte[]), typeof(int), typeof(int), typeof(object)], typeof(NetStandardBuildParityTest).Module);
             il = strideBridge.GetILGenerator();
             width = il.DeclareLocal(typeof(int));
@@ -1095,6 +1097,7 @@ public class NetStandardBuildParityTest
             il.Emit(OpCodes.Newobj, typeof(Span<byte>).GetConstructor([typeof(byte[])])!);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldloca, width);
             il.Emit(OpCodes.Ldloca, height);
             il.Emit(OpCodes.Ldloca, options);
@@ -1128,9 +1131,9 @@ public class NetStandardBuildParityTest
                 }];
                 _ = host switch
                 {
-                    QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, hostPixels, layout, out _, out _, hostOptions),
-                    MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, hostPixels, layout, out _, out _, hostOptions),
-                    RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, hostPixels, layout, out _, out _, hostOptions),
+                    QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, hostPixels, layout, premultipliedAlpha: false, out _, out _, hostOptions),
+                    MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, hostPixels, layout, premultipliedAlpha: false, out _, out _, hostOptions),
+                    RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, hostPixels, layout, premultipliedAlpha: false, out _, out _, hostOptions),
                     _ => throw new ArgumentException(symbology),
                 };
                 var loadedPixels = new byte[hostPixels.Length];
@@ -1144,9 +1147,9 @@ public class NetStandardBuildParityTest
                 hostPadded.AsSpan().Fill(0xCD);
                 _ = host switch
                 {
-                    QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, hostPadded, stride, layout, out _, out _, hostOptions),
-                    MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, hostPadded, stride, layout, out _, out _, hostOptions),
-                    RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, hostPadded, stride, layout, out _, out _, hostOptions),
+                    QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, hostPadded, stride, layout, premultipliedAlpha: false, out _, out _, hostOptions),
+                    MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, hostPadded, stride, layout, premultipliedAlpha: false, out _, out _, hostOptions),
+                    RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, hostPadded, stride, layout, premultipliedAlpha: false, out _, out _, hostOptions),
                     _ => throw new ArgumentException(symbology),
                 };
                 var loadedPadded = new byte[hostPadded.Length];

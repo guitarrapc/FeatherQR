@@ -165,9 +165,9 @@ public class PngStartMarksParityTest
         yield return ("R17x139", Modules(RmQRCodeGenerator.Create(new string('r', 100), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 })));
     }
 
-    private static bool[][] Modules(QRCodeData data) => Modules(SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Gray8, OneModule), (span, out w, out h) => SymbolImageWriter.TryWritePixels(data, span, PixelLayout.Gray8, out w, out h, OneModule));
-    private static bool[][] Modules(MicroQRCodeData data) => Modules(SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Gray8, OneModule), (span, out w, out h) => SymbolImageWriter.TryWritePixels(data, span, PixelLayout.Gray8, out w, out h, OneModule));
-    private static bool[][] Modules(RmQRCodeData data) => Modules(SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Gray8, OneModule), (span, out w, out h) => SymbolImageWriter.TryWritePixels(data, span, PixelLayout.Gray8, out w, out h, OneModule));
+    private static bool[][] Modules(QRCodeData data) => Modules(SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Gray8, OneModule), (span, out w, out h) => SymbolImageWriter.TryWritePixels(data, span, PixelLayout.Gray8, premultipliedAlpha: false, out w, out h, OneModule));
+    private static bool[][] Modules(MicroQRCodeData data) => Modules(SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Gray8, OneModule), (span, out w, out h) => SymbolImageWriter.TryWritePixels(data, span, PixelLayout.Gray8, premultipliedAlpha: false, out w, out h, OneModule));
+    private static bool[][] Modules(RmQRCodeData data) => Modules(SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Gray8, OneModule), (span, out w, out h) => SymbolImageWriter.TryWritePixels(data, span, PixelLayout.Gray8, premultipliedAlpha: false, out w, out h, OneModule));
 
     private static readonly SymbolImageOptions OneModule = new() { ModulePixelSize = 1 };
 

@@ -181,7 +181,7 @@ public class SymbolImageWriterSizeTest
         var qr = QRCodeGenerator.Create(new string('a', 2000), QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
         var options = new SymbolImageOptions { Width = side, Height = side, FillCanvas = fillCanvas };
         var gray = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, options)];
-        await Assert.That(SymbolImageWriter.TryWritePixels(qr, gray, PixelLayout.Gray8, out var w, out var h, options)).IsTrue();
+        await Assert.That(SymbolImageWriter.TryWritePixels(qr, gray, PixelLayout.Gray8, premultipliedAlpha: false, out var w, out var h, options)).IsTrue();
 
         await Assert.That(QRCodeDecoder.TryDecodeImage(gray, w, h, out string text, out _)).IsTrue();
         await Assert.That(text).IsEqualTo(new string('a', 2000));
@@ -265,7 +265,7 @@ public class SymbolImageWriterSizeTest
         // The image with one side given is the one with both, so its pixels follow the same rule.
         var options = mode with { Width = 1000 };
         var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(rm, PixelLayout.Rgba8888, options)];
-        await Assert.That(SymbolImageWriter.TryWritePixels(rm, pixels, PixelLayout.Rgba8888, out _, out _, options)).IsTrue();
+        await Assert.That(SymbolImageWriter.TryWritePixels(rm, pixels, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, options)).IsTrue();
         var rule = fillCanvas
             ? RulePixels(rm, 1000, 147, new SymbolColor(0, 0, 0), new SymbolColor(255, 255, 255), PixelLayout.Rgba8888)
             : WholePixelRulePixels(rm, 1000, 147, new SymbolColor(0, 0, 0), new SymbolColor(255, 255, 255), PixelLayout.Rgba8888);
@@ -278,9 +278,9 @@ public class SymbolImageWriterSizeTest
         foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888 })
         {
             var oneSide = new byte[SymbolImageWriter.GetPixelBufferSize(narrow, layout, mode with { Width = 419 })];
-            await Assert.That(SymbolImageWriter.TryWritePixels(narrow, oneSide, layout, out _, out _, mode with { Width = 419 })).IsTrue();
+            await Assert.That(SymbolImageWriter.TryWritePixels(narrow, oneSide, layout, premultipliedAlpha: false, out _, out _, mode with { Width = 419 })).IsTrue();
             var bothSides = new byte[SymbolImageWriter.GetPixelBufferSize(narrow, layout, mode with { Width = 419, Height = 22 })];
-            await Assert.That(SymbolImageWriter.TryWritePixels(narrow, bothSides, layout, out _, out _, mode with { Width = 419, Height = 22 })).IsTrue();
+            await Assert.That(SymbolImageWriter.TryWritePixels(narrow, bothSides, layout, premultipliedAlpha: false, out _, out _, mode with { Width = 419, Height = 22 })).IsTrue();
             await Assert.That(oneSide).IsEquivalentTo(bothSides, CollectionOrdering.Matching);
         }
         await Assert.That(SymbolImageWriter.GetSvgString(narrow, mode with { Width = 419 })).IsEqualTo(SymbolImageWriter.GetSvgString(narrow, mode with { Width = 419, Height = 22 }));
@@ -311,7 +311,7 @@ public class SymbolImageWriterSizeTest
         await Assert.That(() => SymbolImageWriter.GetPngBytes(qr, options)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => SymbolImageWriter.WritePng(qr, writer, options)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, options)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => SymbolImageWriter.TryWritePixels(qr, new byte[1 << 20], PixelLayout.Gray8, out _, out _, options)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => SymbolImageWriter.TryWritePixels(qr, new byte[1 << 20], PixelLayout.Gray8, premultipliedAlpha: false, out _, out _, options)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(writer.WrittenCount).IsEqualTo(0);
 
         // One pixel a module is the floor, and 185 pixels give exactly that.
@@ -337,7 +337,7 @@ public class SymbolImageWriterSizeTest
         var top = 127;
 
         var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(rm, PixelLayout.Bgra8888, options)];
-        await Assert.That(SymbolImageWriter.TryWritePixels(rm, pixels, PixelLayout.Bgra8888, out _, out _, options)).IsTrue();
+        await Assert.That(SymbolImageWriter.TryWritePixels(rm, pixels, PixelLayout.Bgra8888, premultipliedAlpha: false, out _, out _, options)).IsTrue();
         await Assert.That(pixels).IsEquivalentTo(rule, CollectionOrdering.Matching);
         var padAbove = Enumerable.Range(0, top * 300).Select(p => pixels.AsSpan(p * 4, 4).ToArray());
         await Assert.That(padAbove.All(pixel => pixel.SequenceEqual(new byte[] { 0xF0, 0xFF, 0xFF, 51 }))).IsTrue().Because("the pad above is the light colour with its alpha");
@@ -366,7 +366,7 @@ public class SymbolImageWriterSizeTest
         await Assert.That(Tuple(SymbolImageWriter.GetSymbolRectangle(rm, options))).IsEqualTo((7 + 2 * 2, 129 + 2 * 2, 139 * 2, 17 * 2));
 
         var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(rm, PixelLayout.Bgra8888, options)];
-        await Assert.That(SymbolImageWriter.TryWritePixels(rm, pixels, PixelLayout.Bgra8888, out _, out _, options)).IsTrue();
+        await Assert.That(SymbolImageWriter.TryWritePixels(rm, pixels, PixelLayout.Bgra8888, premultipliedAlpha: false, out _, out _, options)).IsTrue();
         await Assert.That(pixels).IsEquivalentTo(rule, CollectionOrdering.Matching);
         var outsideNotLight = 0;
         for (var y = 0; y < 300; y++)
@@ -627,9 +627,9 @@ public class SymbolImageWriterSizeTest
         int w, h;
         switch (data)
         {
-            case QRCodeData qr: written = SymbolImageWriter.TryWritePixels(qr, destination, layout, out w, out h, options); break;
-            case MicroQRCodeData micro: written = SymbolImageWriter.TryWritePixels(micro, destination, layout, out w, out h, options); break;
-            case RmQRCodeData rm: written = SymbolImageWriter.TryWritePixels(rm, destination, layout, out w, out h, options); break;
+            case QRCodeData qr: written = SymbolImageWriter.TryWritePixels(qr, destination, layout, premultipliedAlpha: false, out w, out h, options); break;
+            case MicroQRCodeData micro: written = SymbolImageWriter.TryWritePixels(micro, destination, layout, premultipliedAlpha: false, out w, out h, options); break;
+            case RmQRCodeData rm: written = SymbolImageWriter.TryWritePixels(rm, destination, layout, premultipliedAlpha: false, out w, out h, options); break;
             default: throw new ArgumentException(nameof(data));
         }
         return (written, w, h);
