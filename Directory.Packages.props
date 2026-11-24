@@ -7,7 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Core -->
-    <PackageVersion Include="PolySharp" Version="1.17.0" />
+    <PackageVersion Include="PolySharp" Version="1.16.0" />
     <PackageVersion Include="SkiaSharp" Version="4.148.0" />
     <!-- BCL shims for the netstandard targets of the core (Span, ArrayPool, Unsafe). -->
     <PackageVersion Include="System.Memory" Version="4.6.3" />
