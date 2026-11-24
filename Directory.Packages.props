@@ -8,11 +8,11 @@
   <ItemGroup>
     <!-- Core -->
     <PackageVersion Include="PolySharp" Version="1.17.0" />
-    <PackageVersion Include="SkiaSharp" Version="4.155.0" />
+    <PackageVersion Include="SkiaSharp" Version="4.148.0" />
     <!-- BCL shims for the netstandard targets of the core (Span, ArrayPool, Unsafe). -->
     <PackageVersion Include="System.Memory" Version="4.6.3" />
     <PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.155.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
     <!-- Benchmark -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="CodeGlyphX" Version="3.1.0" />
@@ -27,10 +27,10 @@
     <PackageVersion Include="NativeCompressions" Version="1.3.0" />
     <PackageVersion Include="SixLabors.ImageSharp" Version="4.1.3" />
     <PackageVersion Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.NanoServer" Version="4.155.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.NanoServer" Version="4.148.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.WebAssembly" Version="4.148.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
-    <PackageVersion Include="SkiaSharp.Views.Blazor" Version="4.155.0" />
+    <PackageVersion Include="SkiaSharp.Views.Blazor" Version="4.148.0" />
     <PackageVersion Include="System.Drawing.Common" Version="10.0.14" />
     <!-- Supply chain -->
     <PackageVersion Include="Microsoft.Sbom.Targets" Version="4.1.5" />
