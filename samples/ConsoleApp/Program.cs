@@ -647,10 +647,10 @@ Console.WriteLine("""
 
     var maxSize = NativeCompressions.Zstandard.GetMaxCompressedLength(size);
     var compressed = new byte[maxSize];
-    NativeCompressions.Zstandard.Compress(src, compressed, NativeCompressions.ZstandardCompressionOptions.Default);
+    var written = NativeCompressions.Zstandard.Compress(src, compressed, NativeCompressions.ZstandardCompressionOptions.Default);
 
     // decompression from zstandard ...
-    var decompressed = NativeCompressions.Zstandard.Decompress(compressed);
+    var decompressed = NativeCompressions.Zstandard.Decompress(compressed.AsSpan(0, written));
 
     var qr = new QRCodeData(decompressed, 4);
     var pngBytes = new QRCodeImageBuilder(qr)
