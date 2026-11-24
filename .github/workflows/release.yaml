@@ -99,8 +99,9 @@ jobs:
           ref: ${{ needs.validate.outputs.tag }}
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
-          restore-wasm-workload: true
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools
       # Build separately, so the documentation is trimmed before pack picks it up. Fails the release if it cannot.
       - run: dotnet build -c Release
       - name: Trim XML documentation to the public surface
