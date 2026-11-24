@@ -91,11 +91,11 @@ SaveBytes("qr-icon-area.png", SymbolImageWriter.GetPngBytes(qrH, withIcon));
 var (iconX, iconY, iconWidth, iconHeight) = SymbolImageWriter.GetIconRectangle(qrH, withIcon);
 Console.WriteLine($"The icon goes at ({iconX}, {iconY}), {iconWidth} by {iconHeight} pixels");
 var composed = new byte[SymbolImageWriter.GetPixelBufferSize(qrH, PixelLayout.Rgba8888, withIcon)];
-SymbolImageWriter.TryWritePixels(qrH, composed, PixelLayout.Rgba8888, out var composedWidth, out var composedHeight, withIcon);
+SymbolImageWriter.TryWritePixels(qrH, composed, PixelLayout.Rgba8888, premultipliedAlpha: false, out var composedWidth, out var composedHeight, withIcon);
 // The icon fills its area. With equal whole-pixel modules, 19 modules in 35 pixels would be 1 pixel each, 19 of the 35 pixels across.
 var iconOptions = new SymbolImageOptions { Width = iconWidth, Height = iconHeight, DarkColor = navy, FillCanvas = true };
 var iconStart = (iconY * composedWidth + iconX) * 4;
-SymbolImageWriter.TryWritePixels(micro, composed.AsSpan(iconStart), composedWidth * 4, PixelLayout.Rgba8888, out _, out _, iconOptions);
+SymbolImageWriter.TryWritePixels(micro, composed.AsSpan(iconStart), composedWidth * 4, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, iconOptions);
 SaveBytes("qr-icon.png", EncodeRgbaPng(composed, composedWidth, composedHeight));
 
 // Into an IBufferWriter<byte>, such as a pipe or a pooled buffer, with no allocation of its own.
@@ -106,7 +106,7 @@ Console.WriteLine($"WritePng wrote {written} bytes into the buffer writer");
 
 // Raw pixels into a buffer you own. Gray8 is the luminance the decoders read, so it decodes as it is.
 var gray = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8)];
-SymbolImageWriter.TryWritePixels(qr, gray, PixelLayout.Gray8, out var width, out var height);
+SymbolImageWriter.TryWritePixels(qr, gray, PixelLayout.Gray8, premultipliedAlpha: false, out var width, out var height);
 QRCodeDecoder.TryDecodeImage(gray, width, height, out var text, out _);
 Console.WriteLine($"Gray8 pixels, {width} x {height}, decode as: {text}");
 
@@ -123,7 +123,7 @@ Console.WriteLine($"Y plane of an NV12 frame, row stride {rowStride}, decode as:
 
 // BGRA for a GPU texture or a platform bitmap: 4 bytes a pixel, rows packed.
 var bgra = new byte[SymbolImageWriter.GetPixelBufferSize(micro, PixelLayout.Bgra8888)];
-SymbolImageWriter.TryWritePixels(micro, bgra, PixelLayout.Bgra8888, out width, out height);
+SymbolImageWriter.TryWritePixels(micro, bgra, PixelLayout.Bgra8888, premultipliedAlpha: false, out width, out height);
 Console.WriteLine($"Bgra8888 pixels, {width} x {height}, {bgra.Length} bytes");
 
 // Text for a terminal: dark modules drawn for a light background, light modules drawn for a dark one.

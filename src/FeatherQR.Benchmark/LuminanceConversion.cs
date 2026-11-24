@@ -31,9 +31,9 @@ public class LuminanceConversion
         _bgrx = new byte[_width * _height * 4];
         _bgr24 = new byte[_rowBytes24 * _height];
         _luminance = new byte[_width * _height];
-        SymbolImageWriter.TryWritePixels(qr, _bgra, PixelLayout.Bgra8888, out _, out _, options);
-        SymbolImageWriter.TryWritePixels(qr, _bgrx, PixelLayout.Bgr888x, out _, out _, options);
-        SymbolImageWriter.TryWritePixels(qr, _bgr24, _rowBytes24, PixelLayout.Bgr24, out _, out _, options);
+        SymbolImageWriter.TryWritePixels(qr, _bgra, PixelLayout.Bgra8888, premultipliedAlpha: false, out _, out _, options);
+        SymbolImageWriter.TryWritePixels(qr, _bgrx, PixelLayout.Bgr888x, premultipliedAlpha: false, out _, out _, options);
+        SymbolImageWriter.TryWritePixels(qr, _bgr24, _rowBytes24, PixelLayout.Bgr24, premultipliedAlpha: false, out _, out _, options);
     }
 
     [Benchmark(Baseline = true)]

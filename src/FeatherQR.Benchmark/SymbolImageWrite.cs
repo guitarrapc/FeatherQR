@@ -110,32 +110,32 @@ public class SymbolImageWrite
     private readonly byte[] _pixels = new byte[1480 * (1480 * 4 + 64)];
 
     [Benchmark]
-    public bool Small_PixelsRgba() => SymbolImageWriter.TryWritePixels(_small, _pixels, PixelLayout.Rgba8888, out _, out _);
+    public bool Small_PixelsRgba() => SymbolImageWriter.TryWritePixels(_small, _pixels, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _);
 
     [Benchmark]
-    public bool Large_PixelsRgba() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _);
+    public bool Large_PixelsRgba() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _);
 
     [Benchmark]
-    public bool Large_PixelsGray8() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Gray8, out _, out _);
+    public bool Large_PixelsGray8() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _);
 
     [Benchmark]
-    public bool Large_PixelsRgba_512() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Whole512);
+    public bool Large_PixelsRgba_512() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, Whole512);
 
     [Benchmark]
-    public bool Large_PixelsRgba_512_Fill() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Fill512);
+    public bool Large_PixelsRgba_512_Fill() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, Fill512);
 
     [Benchmark]
-    public bool Large_PixelsRgba_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, out _, out _, Styled);
+    public bool Large_PixelsRgba_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, Styled);
 
     // Rows 64 bytes further apart than they are long, as an image with padded rows takes them.
     [Benchmark]
-    public bool Large_PixelsRgba_Stride() => SymbolImageWriter.TryWritePixels(_large, _pixels, 1480 * 4 + 64, PixelLayout.Rgba8888, out _, out _);
+    public bool Large_PixelsRgba_Stride() => SymbolImageWriter.TryWritePixels(_large, _pixels, 1480 * 4 + 64, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _);
 
     [Benchmark]
-    public bool Large_PixelsRgb24() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgb24, out _, out _);
+    public bool Large_PixelsRgb24() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgb24, premultipliedAlpha: false, out _, out _);
 
     [Benchmark]
-    public bool Large_PixelsRgb24_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgb24, out _, out _, Styled);
+    public bool Large_PixelsRgb24_Styled() => SymbolImageWriter.TryWritePixels(_large, _pixels, PixelLayout.Rgb24, premultipliedAlpha: false, out _, out _, Styled);
 
     [Benchmark]
     public string Small_Text() => SymbolImageWriter.GetTerminalText(_small);

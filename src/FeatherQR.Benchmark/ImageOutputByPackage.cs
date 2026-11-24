@@ -48,7 +48,7 @@ public class ImageOutputByPackage
         {
             var (width, height) = SymbolImageWriter.GetImageSize(data, Plain);
             using var core = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul));
-            SymbolImageWriter.TryWritePixels(data, core.GetPixelSpan(), core.RowBytes, PixelLayout.Bgra8888, out _, out _, Plain);
+            SymbolImageWriter.TryWritePixels(data, core.GetPixelSpan(), core.RowBytes, PixelLayout.Bgra8888, premultipliedAlpha: false, out _, out _, Plain);
             using var skia = new QRCodeImageBuilder(data).ToBitmap();
             for (var y = 0; y < height; y++)
             {
@@ -159,14 +159,14 @@ public class ImageOutputByPackage
     {
         var (width, height) = SymbolImageWriter.GetImageSize(data, Plain);
         using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul));
-        SymbolImageWriter.TryWritePixels(data, bitmap.GetPixelSpan(), bitmap.RowBytes, PixelLayout.Bgra8888, out _, out _, Plain);
+        SymbolImageWriter.TryWritePixels(data, bitmap.GetPixelSpan(), bitmap.RowBytes, PixelLayout.Bgra8888, premultipliedAlpha: false, out _, out _, Plain);
         return bitmap.RowBytes;
     }
 
     private static int CoreViaBuffer(QRCodeData data)
     {
         var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Bgra8888, Plain)];
-        SymbolImageWriter.TryWritePixels(data, pixels, PixelLayout.Bgra8888, out var width, out var height, Plain);
+        SymbolImageWriter.TryWritePixels(data, pixels, PixelLayout.Bgra8888, premultipliedAlpha: false, out var width, out var height, Plain);
         using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul));
         var memory = bitmap.GetPixelSpan();
         for (var row = 0; row < height; row++)

@@ -99,9 +99,9 @@ public class SymbolImageWriterAllocationTest
         var shaped = new SymbolImageOptions { ModuleStyle = ModuleStyle.Circle, ModuleScalePercent = 92, FinderPatternStyle = FinderPatternStyle.Circle, IconSizeModules = 9 };
         var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Rgba8888, shaped)];
 
-        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Rgba8888, out _, out _, shaped))).IsEqualTo(0);
-        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Gray8, out _, out _, shaped with { Width = 500, Height = 400 }))).IsEqualTo(0);
-        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Gray8, out _, out _, shaped with { Width = 500, Height = 400, FillCanvas = true }))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, shaped))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _, shaped with { Width = 500, Height = 400 }))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _, shaped with { Width = 500, Height = 400, FillCanvas = true }))).IsEqualTo(0);
     }
 
     [Test]
@@ -126,9 +126,9 @@ public class SymbolImageWriterAllocationTest
 
         foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Bgra8888, PixelLayout.Rgb888x, PixelLayout.Bgr888x, PixelLayout.Rgb24, PixelLayout.Bgr24 })
         {
-            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, buffer, layout, out _, out _, options))).IsEqualTo(0);
-            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(micro, buffer, layout, out _, out _))).IsEqualTo(0);
-            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(rm, buffer, layout, out _, out _, options))).IsEqualTo(0);
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, buffer, layout, premultipliedAlpha: false, out _, out _, options))).IsEqualTo(0);
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(micro, buffer, layout, premultipliedAlpha: false, out _, out _))).IsEqualTo(0);
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(rm, buffer, layout, premultipliedAlpha: false, out _, out _, options))).IsEqualTo(0);
             await Assert.That(SteadyStateBytes(() => SymbolImageWriter.GetPixelBufferSize(qr, layout, options))).IsEqualTo(0);
         }
     }
@@ -152,11 +152,11 @@ public class SymbolImageWriterAllocationTest
         foreach (var layout in new[] { PixelLayout.Gray8, PixelLayout.Rgba8888, PixelLayout.Rgb24, PixelLayout.Bgr24 })
         {
             // 2,006 bytes a row is past every image here at four bytes a pixel, the widest 2,000, and is no multiple of three.
-            await Assert.That(SymbolImageWriter.TryWritePixels(qr, buffer, 2006, layout, out _, out _, options)).IsTrue();
-            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, buffer, 2006, layout, out _, out _, options))).IsEqualTo(0);
-            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(micro, buffer, 2006, layout, out _, out _))).IsEqualTo(0);
-            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(rm, buffer, 2006, layout, out _, out _, options))).IsEqualTo(0);
-            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, buffer, 2006, layout, out _, out _, shaped))).IsEqualTo(0);
+            await Assert.That(SymbolImageWriter.TryWritePixels(qr, buffer, 2006, layout, premultipliedAlpha: false, out _, out _, options)).IsTrue();
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, buffer, 2006, layout, premultipliedAlpha: false, out _, out _, options))).IsEqualTo(0);
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(micro, buffer, 2006, layout, premultipliedAlpha: false, out _, out _))).IsEqualTo(0);
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(rm, buffer, 2006, layout, premultipliedAlpha: false, out _, out _, options))).IsEqualTo(0);
+            await Assert.That(SteadyStateBytes(() => SymbolImageWriter.TryWritePixels(qr, buffer, 2006, layout, premultipliedAlpha: false, out _, out _, shaped))).IsEqualTo(0);
         }
     }
 

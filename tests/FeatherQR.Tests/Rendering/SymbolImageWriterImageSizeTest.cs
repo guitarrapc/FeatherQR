@@ -238,9 +238,9 @@ public class SymbolImageWriterImageSizeTest
         int w, h;
         switch (data)
         {
-            case QRCodeData qr: written = SymbolImageWriter.TryWritePixels(qr, destination, PixelLayout.Gray8, out w, out h, options); break;
-            case MicroQRCodeData micro: written = SymbolImageWriter.TryWritePixels(micro, destination, PixelLayout.Gray8, out w, out h, options); break;
-            case RmQRCodeData rm: written = SymbolImageWriter.TryWritePixels(rm, destination, PixelLayout.Gray8, out w, out h, options); break;
+            case QRCodeData qr: written = SymbolImageWriter.TryWritePixels(qr, destination, PixelLayout.Gray8, premultipliedAlpha: false, out w, out h, options); break;
+            case MicroQRCodeData micro: written = SymbolImageWriter.TryWritePixels(micro, destination, PixelLayout.Gray8, premultipliedAlpha: false, out w, out h, options); break;
+            case RmQRCodeData rm: written = SymbolImageWriter.TryWritePixels(rm, destination, PixelLayout.Gray8, premultipliedAlpha: false, out w, out h, options); break;
             default: throw new ArgumentException(nameof(data));
         }
         return (written, w, h);

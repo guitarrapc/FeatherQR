@@ -74,7 +74,7 @@ static unsafe Bitmap ToBitmap(QRCodeData data, SymbolImageOptions options)
     {
         // The bitmap's rows start Stride bytes apart.
         var memory = new Span<byte>((void*)locked.Scan0, locked.Stride * height);
-        SymbolImageWriter.TryWritePixels(data, memory, locked.Stride, PixelLayout.Bgra8888, out _, out _, options);
+        SymbolImageWriter.TryWritePixels(data, memory, locked.Stride, PixelLayout.Bgra8888, premultipliedAlpha: false, out _, out _, options);
     }
     finally
     {

@@ -85,7 +85,7 @@ public class SymbolImageWriterIconTest
         await Assert.That(() => SymbolImageWriter.GetSvgString(v1, tooLarge)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => SymbolImageWriter.WriteSvg(v1, writer, tooLarge)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => SymbolImageWriter.GetPixelBufferSize(v1, PixelLayout.Gray8, tooLarge)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => SymbolImageWriter.TryWritePixels(v1, new byte[1 << 16], PixelLayout.Gray8, out _, out _, tooLarge)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => SymbolImageWriter.TryWritePixels(v1, new byte[1 << 16], PixelLayout.Gray8, premultipliedAlpha: false, out _, out _, tooLarge)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => SymbolImageWriter.GetIconRectangle(v1, tooLarge)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(writer.WrittenCount).IsEqualTo(0);
 
@@ -289,7 +289,7 @@ public class SymbolImageWriterIconTest
     private static byte[] Pixels(QRCodeData qr, SymbolImageOptions options, PixelLayout layout)
     {
         var buffer = new byte[SymbolImageWriter.GetPixelBufferSize(qr, layout, options)];
-        if (!SymbolImageWriter.TryWritePixels(qr, buffer, layout, out _, out _, options))
+        if (!SymbolImageWriter.TryWritePixels(qr, buffer, layout, premultipliedAlpha: false, out _, out _, options))
             throw new InvalidOperationException("the buffer was sized by the writer");
         return buffer;
     }
