@@ -365,9 +365,9 @@ public class SymbolImageWriterSymbolRectangleTest
 
     private static bool TryWriteGray8(object data, byte[] destination, SymbolImageOptions options) => data switch
     {
-        QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, destination, PixelLayout.Gray8, out _, out _, options),
-        MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, destination, PixelLayout.Gray8, out _, out _, options),
-        RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, destination, PixelLayout.Gray8, out _, out _, options),
+        QRCodeData qr => SymbolImageWriter.TryWritePixels(qr, destination, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _, options),
+        MicroQRCodeData micro => SymbolImageWriter.TryWritePixels(micro, destination, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _, options),
+        RmQRCodeData rm => SymbolImageWriter.TryWritePixels(rm, destination, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _, options),
         _ => throw new ArgumentException(nameof(data)),
     };
 }

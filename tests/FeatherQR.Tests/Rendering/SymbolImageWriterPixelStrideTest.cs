@@ -120,7 +120,7 @@ public class SymbolImageWriterPixelStrideTest
         var destination = new byte[232 * 232 * 4];
         destination.AsSpan().Fill(Sentinel);
 
-        await Assert.That(SymbolImageWriter.TryWritePixels(qr, destination, int.MaxValue, PixelLayout.Rgba8888, out var width, out var height)).IsFalse();
+        await Assert.That(SymbolImageWriter.TryWritePixels(qr, destination, int.MaxValue, PixelLayout.Rgba8888, premultipliedAlpha: false, out var width, out var height)).IsFalse();
         await Assert.That((width, height)).IsEqualTo((0, 0));
         await Assert.That(destination.AsSpan().Count(Sentinel)).IsEqualTo(destination.Length);
     }
@@ -144,18 +144,18 @@ public class SymbolImageWriterPixelStrideTest
             var bytesPerPixel = BytesPerPixel(layout);
             foreach (var stride in new[] { 296 * bytesPerPixel - 1, 1, 0, -1, int.MinValue })
             {
-                var thrown = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, buffer, stride, layout, out _, out _));
+                var thrown = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, buffer, stride, layout, premultipliedAlpha: false, out _, out _));
                 await Assert.That(thrown.ParamName).IsEqualTo("rowBytes").Because($"{layout}, stride {stride}");
                 // The argument is wrong whatever the destination holds.
-                thrown = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, Span<byte>.Empty, stride, layout, out _, out _));
+                thrown = Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, Span<byte>.Empty, stride, layout, premultipliedAlpha: false, out _, out _));
                 await Assert.That(thrown.ParamName).IsEqualTo("rowBytes").Because($"{layout}, stride {stride}, an empty destination");
             }
-            await Assert.That(SymbolImageWriter.TryWritePixels(qr, buffer, 296 * bytesPerPixel, layout, out _, out _)).IsTrue();
+            await Assert.That(SymbolImageWriter.TryWritePixels(qr, buffer, 296 * bytesPerPixel, layout, premultipliedAlpha: false, out _, out _)).IsTrue();
 
-            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(micro, buffer, 168 * bytesPerPixel - 1, layout, out _, out _)).ParamName).IsEqualTo("rowBytes");
-            await Assert.That(SymbolImageWriter.TryWritePixels(micro, buffer, 168 * bytesPerPixel, layout, out _, out _)).IsTrue();
-            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(rm, buffer, 1144 * bytesPerPixel - 1, layout, out _, out _)).ParamName).IsEqualTo("rowBytes");
-            await Assert.That(SymbolImageWriter.TryWritePixels(rm, buffer, 1144 * bytesPerPixel, layout, out _, out _)).IsTrue();
+            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(micro, buffer, 168 * bytesPerPixel - 1, layout, premultipliedAlpha: false, out _, out _)).ParamName).IsEqualTo("rowBytes");
+            await Assert.That(SymbolImageWriter.TryWritePixels(micro, buffer, 168 * bytesPerPixel, layout, premultipliedAlpha: false, out _, out _)).IsTrue();
+            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(rm, buffer, 1144 * bytesPerPixel - 1, layout, premultipliedAlpha: false, out _, out _)).ParamName).IsEqualTo("rowBytes");
+            await Assert.That(SymbolImageWriter.TryWritePixels(rm, buffer, 1144 * bytesPerPixel, layout, premultipliedAlpha: false, out _, out _)).IsTrue();
         }
     }
 
@@ -167,10 +167,10 @@ public class SymbolImageWriterPixelStrideTest
         var buffer = new byte[1 << 20];
         var stride = 21 * 3 * 4;
 
-        await Assert.That(SymbolImageWriter.TryWritePixels(micro, buffer, stride, PixelLayout.Rgba8888, out _, out _, new SymbolImageOptions { ModulePixelSize = 3 })).IsTrue();
-        await Assert.That(() => SymbolImageWriter.TryWritePixels(micro, buffer, stride, PixelLayout.Rgba8888, out _, out _, new SymbolImageOptions { ModulePixelSize = 4 })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => SymbolImageWriter.TryWritePixels(micro, buffer, stride, PixelLayout.Rgba8888, out _, out _, new SymbolImageOptions { Width = 64, Height = 40 })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(SymbolImageWriter.TryWritePixels(micro, buffer, stride, PixelLayout.Rgba8888, out _, out _, new SymbolImageOptions { Width = 63, Height = 40 })).IsTrue();
+        await Assert.That(SymbolImageWriter.TryWritePixels(micro, buffer, stride, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, new SymbolImageOptions { ModulePixelSize = 3 })).IsTrue();
+        await Assert.That(() => SymbolImageWriter.TryWritePixels(micro, buffer, stride, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, new SymbolImageOptions { ModulePixelSize = 4 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => SymbolImageWriter.TryWritePixels(micro, buffer, stride, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, new SymbolImageOptions { Width = 64, Height = 40 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(SymbolImageWriter.TryWritePixels(micro, buffer, stride, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, new SymbolImageOptions { Width = 63, Height = 40 })).IsTrue();
     }
 
     [Test]
@@ -181,22 +181,22 @@ public class SymbolImageWriterPixelStrideTest
         var rm = (RmQRCodeData)Symbol("R17x139");
         var buffer = new byte[1 << 22];
 
-        await Assert.That(() => SymbolImageWriter.TryWritePixels((QRCodeData)null!, buffer, 4096, PixelLayout.Gray8, out _, out _)).Throws<ArgumentNullException>();
-        await Assert.That(() => SymbolImageWriter.TryWritePixels((MicroQRCodeData)null!, buffer, 4096, PixelLayout.Gray8, out _, out _)).Throws<ArgumentNullException>();
-        await Assert.That(() => SymbolImageWriter.TryWritePixels((RmQRCodeData)null!, buffer, 4096, PixelLayout.Gray8, out _, out _)).Throws<ArgumentNullException>();
+        await Assert.That(() => SymbolImageWriter.TryWritePixels((QRCodeData)null!, buffer, 4096, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _)).Throws<ArgumentNullException>();
+        await Assert.That(() => SymbolImageWriter.TryWritePixels((MicroQRCodeData)null!, buffer, 4096, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _)).Throws<ArgumentNullException>();
+        await Assert.That(() => SymbolImageWriter.TryWritePixels((RmQRCodeData)null!, buffer, 4096, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _)).Throws<ArgumentNullException>();
 
         foreach (var layout in new[] { (PixelLayout)(-1), (PixelLayout)99 })
         {
             // The layout is named even with a stride that is wrong too, since a row's length is not known without it.
-            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, buffer, -1, layout, out _, out _)).ParamName).IsEqualTo("layout");
-            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(micro, buffer, 4096, layout, out _, out _)).ParamName).IsEqualTo("layout");
-            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(rm, buffer, 4096, layout, out _, out _)).ParamName).IsEqualTo("layout");
+            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, buffer, -1, layout, premultipliedAlpha: false, out _, out _)).ParamName).IsEqualTo("layout");
+            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(micro, buffer, 4096, layout, premultipliedAlpha: false, out _, out _)).ParamName).IsEqualTo("layout");
+            await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(rm, buffer, 4096, layout, premultipliedAlpha: false, out _, out _)).ParamName).IsEqualTo("layout");
         }
 
         var underOnePixel = new SymbolImageOptions { Width = 20, Height = 20 };
-        await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, buffer, 4096, PixelLayout.Gray8, out _, out _, underOnePixel)).ParamName).IsEqualTo("options");
+        await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(qr, buffer, 4096, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _, underOnePixel)).ParamName).IsEqualTo("options");
         var iconOnMicro = new SymbolImageOptions { IconSizeModules = 1, IconBorderModules = 0 };
-        await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(micro, buffer, 4096, PixelLayout.Gray8, out _, out _, iconOnMicro)).ParamName).IsEqualTo("options");
+        await Assert.That(Assert.Throws<ArgumentOutOfRangeException>(() => SymbolImageWriter.TryWritePixels(micro, buffer, 4096, PixelLayout.Gray8, premultipliedAlpha: false, out _, out _, iconOnMicro)).ParamName).IsEqualTo("options");
     }
 
     // ---- a region of a larger buffer ------------------------------------------------------
@@ -276,7 +276,7 @@ public class SymbolImageWriterPixelStrideTest
 
         // 168 rows from row 233 end on row 400, one past the last.
         var at = (233 * canvasWidth + 232) * 4;
-        await Assert.That(SymbolImageWriter.TryWritePixels(micro, canvas.AsSpan(at), canvasWidth * 4, PixelLayout.Bgra8888, out var width, out var height)).IsFalse();
+        await Assert.That(SymbolImageWriter.TryWritePixels(micro, canvas.AsSpan(at), canvasWidth * 4, PixelLayout.Bgra8888, premultipliedAlpha: false, out var width, out var height)).IsFalse();
         await Assert.That((width, height)).IsEqualTo((0, 0));
         await Assert.That(canvas.AsSpan().Count(Sentinel)).IsEqualTo(canvas.Length);
     }
@@ -326,15 +326,15 @@ public class SymbolImageWriterPixelStrideTest
         {
             case QRCodeData qr:
                 pixels = new byte[SymbolImageWriter.GetPixelBufferSize(qr, layout, options)];
-                written = SymbolImageWriter.TryWritePixels(qr, pixels, layout, out w, out h, options);
+                written = SymbolImageWriter.TryWritePixels(qr, pixels, layout, premultipliedAlpha: false, out w, out h, options);
                 break;
             case MicroQRCodeData micro:
                 pixels = new byte[SymbolImageWriter.GetPixelBufferSize(micro, layout, options)];
-                written = SymbolImageWriter.TryWritePixels(micro, pixels, layout, out w, out h, options);
+                written = SymbolImageWriter.TryWritePixels(micro, pixels, layout, premultipliedAlpha: false, out w, out h, options);
                 break;
             case RmQRCodeData rm:
                 pixels = new byte[SymbolImageWriter.GetPixelBufferSize(rm, layout, options)];
-                written = SymbolImageWriter.TryWritePixels(rm, pixels, layout, out w, out h, options);
+                written = SymbolImageWriter.TryWritePixels(rm, pixels, layout, premultipliedAlpha: false, out w, out h, options);
                 break;
             default: throw new ArgumentException(nameof(data));
         }
@@ -350,9 +350,9 @@ public class SymbolImageWriterPixelStrideTest
         int w, h;
         switch (data)
         {
-            case QRCodeData qr: written = SymbolImageWriter.TryWritePixels(qr, destination, rowBytes, layout, out w, out h, options); break;
-            case MicroQRCodeData micro: written = SymbolImageWriter.TryWritePixels(micro, destination, rowBytes, layout, out w, out h, options); break;
-            case RmQRCodeData rm: written = SymbolImageWriter.TryWritePixels(rm, destination, rowBytes, layout, out w, out h, options); break;
+            case QRCodeData qr: written = SymbolImageWriter.TryWritePixels(qr, destination, rowBytes, layout, premultipliedAlpha: false, out w, out h, options); break;
+            case MicroQRCodeData micro: written = SymbolImageWriter.TryWritePixels(micro, destination, rowBytes, layout, premultipliedAlpha: false, out w, out h, options); break;
+            case RmQRCodeData rm: written = SymbolImageWriter.TryWritePixels(rm, destination, rowBytes, layout, premultipliedAlpha: false, out w, out h, options); break;
             default: throw new ArgumentException(nameof(data));
         }
         return (written, w, h);

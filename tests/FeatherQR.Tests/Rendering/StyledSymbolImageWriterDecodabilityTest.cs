@@ -112,19 +112,19 @@ public class StyledSymbolImageWriterDecodabilityTest
         {
             case QRCodeData qr:
                 gray = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, options)];
-                await Assert.That(SymbolImageWriter.TryWritePixels(qr, gray, PixelLayout.Gray8, out w, out h, options)).IsTrue();
+                await Assert.That(SymbolImageWriter.TryWritePixels(qr, gray, PixelLayout.Gray8, premultipliedAlpha: false, out w, out h, options)).IsTrue();
                 ok = QRCodeDecoder.TryDecodeImage(gray, w, h, out text, out var qrInfo);
                 status = qrInfo.Status;
                 break;
             case MicroQRCodeData micro:
                 gray = new byte[SymbolImageWriter.GetPixelBufferSize(micro, PixelLayout.Gray8, options)];
-                await Assert.That(SymbolImageWriter.TryWritePixels(micro, gray, PixelLayout.Gray8, out w, out h, options)).IsTrue();
+                await Assert.That(SymbolImageWriter.TryWritePixels(micro, gray, PixelLayout.Gray8, premultipliedAlpha: false, out w, out h, options)).IsTrue();
                 ok = MicroQRCodeDecoder.TryDecodeImage(gray, w, h, out text, out var microInfo);
                 status = microInfo.Status;
                 break;
             case RmQRCodeData rm:
                 gray = new byte[SymbolImageWriter.GetPixelBufferSize(rm, PixelLayout.Gray8, options)];
-                await Assert.That(SymbolImageWriter.TryWritePixels(rm, gray, PixelLayout.Gray8, out w, out h, options)).IsTrue();
+                await Assert.That(SymbolImageWriter.TryWritePixels(rm, gray, PixelLayout.Gray8, premultipliedAlpha: false, out w, out h, options)).IsTrue();
                 ok = RmQRCodeDecoder.TryDecodeImage(gray, w, h, out text, out var rmInfo);
                 status = rmInfo.Status;
                 break;

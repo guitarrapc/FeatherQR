@@ -156,7 +156,7 @@ public class SymbolImageBuilderStyleTest
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M);
         var options = new SymbolImageOptions { ModulePixelSize = pixels, FinderPatternStyle = style, FinderPatternCornerRadiusPercent = cornerRadiusPercent };
         var core = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, options)];
-        SymbolImageWriter.TryWritePixels(qr, core, PixelLayout.Gray8, out var width, out var height, options);
+        SymbolImageWriter.TryWritePixels(qr, core, PixelLayout.Gray8, premultipliedAlpha: false, out var width, out var height, options);
         using var skia = new QRCodeImageBuilder(qr).WithModulePixelSize(pixels).WithFinderPatternStyle(style, cornerRadiusPercent).ToBitmap();
         await Assert.That((skia.Width, skia.Height)).IsEqualTo((width, height));
 
@@ -192,7 +192,7 @@ public class SymbolImageBuilderStyleTest
             FinderPatternCornerRadiusPercent = finderRadius,
         };
         var core = new byte[SymbolImageWriter.GetPixelBufferSize(qr, PixelLayout.Gray8, options)];
-        SymbolImageWriter.TryWritePixels(qr, core, PixelLayout.Gray8, out var width, out var height, options);
+        SymbolImageWriter.TryWritePixels(qr, core, PixelLayout.Gray8, premultipliedAlpha: false, out var width, out var height, options);
         using var skia = new QRCodeImageBuilder(qr).WithModulePixelSize(pixels)
             .WithModuleStyle(ModuleStyle.RoundedSquare, cornerRadiusPercent: moduleRadius)
             .WithFinderPatternStyle(finderStyle, finderRadius)

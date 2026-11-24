@@ -11,7 +11,8 @@ namespace FeatherQR.Internals.ImageWriters;
 /// <remarks>
 /// <para>
 /// A dark pixel is the dark colour painted over the light one, as the SVG paints its path over its background.
-/// <see cref="PixelLayout.Rgba8888"/> and <see cref="PixelLayout.Bgra8888"/> carry each colour straight, alpha not premultiplied.
+/// <see cref="PixelLayout.Rgba8888"/> and <see cref="PixelLayout.Bgra8888"/> carry each colour straight, or premultiplied by its alpha when asked,
+/// each channel times alpha over 255 rounded to the nearest.
 /// <see cref="PixelLayout.Gray8"/>, <see cref="PixelLayout.Rgb888x"/>, <see cref="PixelLayout.Bgr888x"/>, <see cref="PixelLayout.Rgb24"/> and
 /// <see cref="PixelLayout.Bgr24"/> have no alpha, so they hold each colour composited over white, as the decoders read a transparent pixel,
 /// and the fourth byte of Rgb888x and Bgr888x is 255.
@@ -45,7 +46,7 @@ internal static class PixelWriter
     }
 
     /// <summary>Rows packed: each starts where the one before ends.</summary>
-    public static bool TryWrite<TView>(in TView view, Span<byte> destination, PixelLayout layout, out int width, out int height, in SymbolImageOptions options)
+    public static bool TryWrite<TView>(in TView view, Span<byte> destination, PixelLayout layout, bool premultipliedAlpha, out int width, out int height, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
         var bytesPerPixel = BytesPerPixel(layout);
@@ -61,12 +62,12 @@ internal static class PixelWriter
 
         width = image.Width;
         height = image.Height;
-        Write(in view, destination, in image, in icon, layout, bytesPerPixel, width * bytesPerPixel, in options);
+        Write(in view, destination, in image, in icon, layout, premultipliedAlpha, bytesPerPixel, width * bytesPerPixel, in options);
         return true;
     }
 
     /// <summary>Rows <paramref name="rowBytes"/> apart. The bytes between a row's last pixel and the next row are not written.</summary>
-    public static bool TryWrite<TView>(in TView view, Span<byte> destination, int rowBytes, PixelLayout layout, out int width, out int height, in SymbolImageOptions options)
+    public static bool TryWrite<TView>(in TView view, Span<byte> destination, int rowBytes, PixelLayout layout, bool premultipliedAlpha, out int width, out int height, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
         var bytesPerPixel = BytesPerPixel(layout);
@@ -87,7 +88,7 @@ internal static class PixelWriter
 
         width = image.Width;
         height = image.Height;
-        Write(in view, destination, in image, in icon, layout, bytesPerPixel, rowBytes, in options);
+        Write(in view, destination, in image, in icon, layout, premultipliedAlpha, bytesPerPixel, rowBytes, in options);
         return true;
     }
 
@@ -101,17 +102,17 @@ internal static class PixelWriter
     /// have run enough to count, and the plain image is then written far slower.
     /// </remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void Write<TView>(in TView view, Span<byte> destination, in ImageLayout image, in IconArea icon, PixelLayout layout, int bytesPerPixel, int rowBytes, in SymbolImageOptions options)
+    private static void Write<TView>(in TView view, Span<byte> destination, in ImageLayout image, in IconArea icon, PixelLayout layout, bool premultipliedAlpha, int bytesPerPixel, int rowBytes, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
         if (options.IsStyled)
         {
-            WriteStyled(in view, destination, in image, in icon, layout, bytesPerPixel, rowBytes, in options);
+            WriteStyled(in view, destination, in image, in icon, layout, premultipliedAlpha, bytesPerPixel, rowBytes, in options);
             return;
         }
         var rowLength = image.Width * bytesPerPixel;
-        var dark = Pixel(options.DarkColor.Over(options.LightColor), layout);
-        var light = Pixel(options.LightColor, layout);
+        var dark = Pixel(options.DarkColor.Over(options.LightColor), layout, premultipliedAlpha);
+        var light = Pixel(options.LightColor, layout, premultipliedAlpha);
         var quietZone = (view.Width - view.CoreWidth) / 2;
         var coreWidth = view.CoreWidth;
         var core = view.CoreBits;
@@ -160,7 +161,7 @@ internal static class PixelWriter
     /// <summary>
     /// A styled image row by row: each row's levels, then each level's pixel from a table, so the pixels are the colours the PNG's palette holds.
     /// </summary>
-    private static void WriteStyled<TView>(in TView view, Span<byte> destination, in ImageLayout image, in IconArea icon, PixelLayout layout, int bytesPerPixel, int rowBytes, in SymbolImageOptions options)
+    private static void WriteStyled<TView>(in TView view, Span<byte> destination, in ImageLayout image, in IconArea icon, PixelLayout layout, bool premultipliedAlpha, int bytesPerPixel, int rowBytes, in SymbolImageOptions options)
         where TView : struct, IModuleMatrixView
     {
         const int levels = 1 << PngEncoder.StyledBitDepth;
@@ -171,7 +172,7 @@ internal static class PixelWriter
             raster.Prepare(in view, in image, in options, in icon, levels);
             Span<uint> pixels = stackalloc uint[levels];
             for (var k = 0; k < levels; k++)
-                pixels[k] = Pixel(StyledRaster.LevelColor(options.DarkColor, options.LightColor, k, levels), layout);
+                pixels[k] = Pixel(StyledRaster.LevelColor(options.DarkColor, options.LightColor, k, levels), layout, premultipliedAlpha);
             var row = levelRow.AsSpan(0, image.Width);
             for (var y = 0; y < image.Height; y++)
             {
@@ -223,15 +224,28 @@ internal static class PixelWriter
     /// One pixel's bytes as they lie in memory, read as a native word. Gray8's one byte is the low byte, and a three-byte pixel
     /// is the word's first three bytes in memory.
     /// </summary>
-    private static uint Pixel(SymbolColor color, PixelLayout layout) => layout switch
+    private static uint Pixel(SymbolColor color, PixelLayout layout, bool premultipliedAlpha)
     {
-        PixelLayout.Gray8 => Luminance(OverWhite(color)),
-        PixelLayout.Rgba8888 => InMemoryOrder(color.R, color.G, color.B, color.A),
-        PixelLayout.Bgra8888 => InMemoryOrder(color.B, color.G, color.R, color.A),
-        // A three-byte layout takes the word of its four-byte twin, and stores its first three bytes.
-        PixelLayout.Bgr888x or PixelLayout.Bgr24 => Bgr888x(OverWhite(color)),
-        _ => Rgb888x(OverWhite(color)),
-    };
+        // The layouts with no alpha hold the colour composited over white, which does not depend on how alpha is stored.
+        if (premultipliedAlpha && layout is PixelLayout.Rgba8888 or PixelLayout.Bgra8888)
+            color = Premultiplied(color);
+        return layout switch
+        {
+            PixelLayout.Gray8 => Luminance(OverWhite(color)),
+            PixelLayout.Rgba8888 => InMemoryOrder(color.R, color.G, color.B, color.A),
+            PixelLayout.Bgra8888 => InMemoryOrder(color.B, color.G, color.R, color.A),
+            // A three-byte layout takes the word of its four-byte twin, and stores its first three bytes.
+            PixelLayout.Bgr888x or PixelLayout.Bgr24 => Bgr888x(OverWhite(color)),
+            _ => Rgb888x(OverWhite(color)),
+        };
+    }
+
+    // Rounded to the nearest, so a channel never passes its alpha.
+    private static SymbolColor Premultiplied(SymbolColor color)
+    {
+        int a = color.A;
+        return new SymbolColor((byte)((color.R * a + 127) / 255), (byte)((color.G * a + 127) / 255), (byte)((color.B * a + 127) / 255), color.A);
+    }
 
     private static uint Rgb888x(SymbolColor color) => InMemoryOrder(color.R, color.G, color.B, 255);
 

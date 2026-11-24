@@ -59,14 +59,14 @@ static Image<Rgba32> ToImage(QRCodeData data, SymbolImageOptions options)
     var image = new Image<Rgba32>(width, height);
     if (image.DangerousTryGetSinglePixelMemory(out var memory))
     {
-        SymbolImageWriter.TryWritePixels(data, MemoryMarshal.AsBytes(memory.Span), PixelLayout.Rgba8888, out _, out _, options);
+        SymbolImageWriter.TryWritePixels(data, MemoryMarshal.AsBytes(memory.Span), PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, options);
         return image;
     }
 
     // ImageSharp holds a large image in several blocks of memory. For that one the symbol is written into a buffer, which the image wraps.
     image.Dispose();
     var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Rgba8888, options)];
-    SymbolImageWriter.TryWritePixels(data, pixels, PixelLayout.Rgba8888, out _, out _, options);
+    SymbolImageWriter.TryWritePixels(data, pixels, PixelLayout.Rgba8888, premultipliedAlpha: false, out _, out _, options);
     return Image.WrapMemory<Rgba32>(pixels.AsMemory(), width, height);
 }
 

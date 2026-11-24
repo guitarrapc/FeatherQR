@@ -247,7 +247,7 @@ static class WpfSymbolExtensions
     {
         // PixelFormats.Bgra32 is PixelLayout.Bgra8888: blue, green, red, alpha, not premultiplied.
         var pixels = new byte[SymbolImageWriter.GetPixelBufferSize(data, PixelLayout.Bgra8888, options)];
-        SymbolImageWriter.TryWritePixels(data, pixels, PixelLayout.Bgra8888, out var width, out var height, options);
+        SymbolImageWriter.TryWritePixels(data, pixels, PixelLayout.Bgra8888, premultipliedAlpha: false, out var width, out var height, options);
         var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4);
         bitmap.Freeze();
         return bitmap;

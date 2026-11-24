@@ -264,7 +264,7 @@ public class LuminanceConverterPublicContractTest
         var navy = new SymbolImageOptions { ModulePixelSize = 4, DarkColor = new SymbolColor(0x1E, 0x3A, 0x8A) };
         var (width, height) = SymbolImageWriter.GetImageSize(qr, navy);
         var pixels = new byte[width * height * 4];
-        await Assert.That(SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgr888x, out _, out _, navy)).IsTrue();
+        await Assert.That(SymbolImageWriter.TryWritePixels(qr, pixels, PixelLayout.Bgr888x, premultipliedAlpha: false, out _, out _, navy)).IsTrue();
         await Assert.That(pixels[3]).IsEqualTo((byte)255).Because("the writer sets the fourth byte");
         for (var i = 3; i < pixels.Length; i += 4)
             pixels[i] = 0;
