@@ -89,26 +89,75 @@ public class MicroQRCodeDecoderRoundTripTest
     }
 
     [Test]
-    public async Task TryDecode_AsymmetricBorder_ReportsInvalidMatrix()
+    [MethodDataSource(nameof(RoundTripCases))]
+    public async Task TryDecode_AsymmetricBorder_IsLocatedByTheDarkBoundingBox(string text, MicroQREccLevel ecc, MicroQRVersion version, bool allowKanji)
     {
-        // A valid M1 core placed at row 1, column 0 of a 13×13 buffer: the first
-        // dark row (1) and the minimum dark column (0) disagree, so this is not a
-        // uniform quiet zone and must be rejected rather than misread.
-        var calculated = Sizing.Required("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, quietZoneSize: 0);
-        var core = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.Create("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, core, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
-
-        const int size = 13;
-        var modules = new byte[size * size];
-        for (var row = 0; row < calculated.Size; row++)
+        // The timing patterns end dark at (0, n-1) and (n-1, 0), so the dark bounding box is the core under any light border.
+        var core = MicroQRCodeGenerator.Create(text, ecc, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0, AllowKanji = allowKanji });
+        foreach (var (top, left, bottom, right) in ((int, int, int, int)[])[(1, 0, 1, 2), (0, 3, 3, 0), (4, 1, 0, 3), (0, 0, 2, 2)])
         {
-            core.AsSpan(row * calculated.Size, calculated.Size).CopyTo(modules.AsSpan((row + 1) * size));
+            var size = core.Size + left + right;
+            await Assert.That(core.Size + top + bottom).IsEqualTo(size);
+            var modules = Place(core, size, top, left);
+
+            await Assert.That(MicroQRCodeDecoder.TryDecode(modules, size, out var decoded, out var info)).IsTrue();
+            await Assert.That(decoded).IsEqualTo(text);
+            await Assert.That(info.Version).IsEqualTo(version);
+
+            var destination = new char[MicroQRCodeDecoder.GetMaxDecodedLength(version)];
+            await Assert.That(MicroQRCodeDecoder.TryDecode(modules, size, destination, out var charsWritten, out _)).IsTrue();
+            await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo(text);
         }
+    }
 
-        var success = MicroQRCodeDecoder.TryDecode(modules, size, out _, out var info);
+    [Test]
+    public async Task TryDecode_DarkBoundingBoxNotSquare_ReportsInvalidMatrix()
+    {
+        // An M1 core at the top-left of a 13×13 buffer with one dark module below it: the box is 11 wide and 13 tall.
+        var core = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        const int size = 13;
+        var modules = Place(core, size, 0, 0);
+        modules[12 * size] = 1;
 
-        await Assert.That(success).IsFalse();
+        await Assert.That(MicroQRCodeDecoder.TryDecode(modules, size, out _, out var info)).IsFalse();
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
+        await Assert.That(MicroQRCodeDecoder.TryDecode(modules, size, new char[16], out var charsWritten, out info)).IsFalse();
+        await Assert.That(charsWritten).IsEqualTo(0);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
+    }
+
+    [Test]
+    public async Task TryDecode_DarkModuleInTheBorder_DoesNotDecode()
+    {
+        // An M1 core at (1, 1) of a 15×15 buffer and a dark module at (13, 13): the square box is 13, an M2 size, and holds no M2 symbol.
+        var core = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        const int size = 15;
+        var modules = Place(core, size, 1, 1);
+        modules[13 * size + 13] = 1;
+
+        await Assert.That(MicroQRCodeDecoder.TryDecode(modules, size, out var text, out var info)).IsFalse();
+        await Assert.That(text).IsEqualTo("");
+        await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.Success);
+    }
+
+    [Test]
+    public async Task TryDecode_StandardQRMatrix_ReportsInvalidMatrix()
+    {
+        // A version 1 Standard QR core is a square 21 modules wide, not a Micro QR size.
+        var standard = new byte[21 * 21];
+        QRCodeGenerator.Create("hello".AsSpan(), QREccLevel.M, standard, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+
+        await Assert.That(MicroQRCodeDecoder.TryDecode(standard, 21, out _, out var info)).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
+    }
+
+    private static byte[] Place(MicroQRCodeData core, int size, int top, int left)
+    {
+        var modules = new byte[size * size];
+        for (var r = 0; r < core.Size; r++)
+            for (var c = 0; c < core.Size; c++)
+                modules[(r + top) * size + c + left] = core[r, c] ? (byte)1 : (byte)0;
+        return modules;
     }
 
     [Test]

@@ -69,21 +69,21 @@ public static class MicroQRCodeDecoder
         if (size < 1 || modules.Length < (long)size * size)
             throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
 
-        if (!TryLocateCore(modules, size, out var origin, out var coreSize))
+        if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
         {
             text = string.Empty;
             info = new MicroQRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
             return false;
         }
 
-        if (origin == 0 && coreSize == size)
+        if (coreSize == size)
             return TryDecodeCore(modules.Slice(0, size * size), coreSize, out text, out info);
 
         var rented = ArrayPool<byte>.Shared.Rent(coreSize * coreSize);
         try
         {
             var core = rented.AsSpan(0, coreSize * coreSize);
-            CopyCoreWindow(modules, size, origin, coreSize, core);
+            CopyCoreWindow(modules, size, top, left, coreSize, core);
             return TryDecodeCore(core, coreSize, out text, out info);
         }
         finally
@@ -108,19 +108,19 @@ public static class MicroQRCodeDecoder
         if (size < 1 || modules.Length < (long)size * size)
             throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
 
-        if (!TryLocateCore(modules, size, out var origin, out var coreSize))
+        if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
         {
             charsWritten = 0;
             info = new MicroQRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
             return false;
         }
 
-        if (origin == 0 && coreSize == size)
+        if (coreSize == size)
             return MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), coreSize, destination, out charsWritten, out info) == DecodeStatus.Success;
 
         // Micro QR cores are at most 17×17 = 289 modules, small enough for the stack.
         Span<byte> core = stackalloc byte[17 * 17].Slice(0, coreSize * coreSize);
-        CopyCoreWindow(modules, size, origin, coreSize, core);
+        CopyCoreWindow(modules, size, top, left, coreSize, core);
         return MicroQRMatrixDecoder.DecodeMatrix(core, coreSize, destination, out charsWritten, out info) == DecodeStatus.Success;
     }
 
@@ -441,62 +441,66 @@ public static class MicroQRCodeDecoder
     }
 
     /// <summary>
-    /// Locates the core matrix inside an input that may carry a light quiet zone border.
-    /// Micro QR has a single finder pattern, so unlike Standard QR the right/bottom edges carry data and are not guaranteed dark, the dark bounding box cannot size the core.
-    /// Instead the top-left dark module is the finder corner (core origin), and a uniform border implies <c>coreSize = size − 2·origin</c>.
+    /// Locates the core inside an input that may carry a light border, uniform or not.
+    /// The timing patterns run along core row 0 and column 0 with dark modules at even positions, and a core's side is odd,
+    /// so they end dark at both far corners. With the finder at the origin, the dark bounding box is the core, and it must be a Micro QR size.
     /// </summary>
-    private static bool TryLocateCore(ReadOnlySpan<byte> modules, int size, out int origin, out int coreSize)
+    private static bool TryLocateCore(ReadOnlySpan<byte> modules, int size, out int top, out int left, out int coreSize)
     {
-        origin = -1;
+        top = -1;
+        left = size;
         coreSize = 0;
-
-        // First row containing a dark module, and the minimum dark column.
-        // Until the first dark module is found, left == size, so the full row is
-        // scanned. Afterwards only columns left of the current minimum matter.
-        var top = -1;
-        var left = size;
+        var right = -1;
+        var bottom = -1;
         for (var y = 0; y < size; y++)
         {
             var row = modules.Slice(y * size, size);
-            for (var x = 0; x < left; x++)
+            // First dark module in the row (netstandard2.0 has no IndexOfAnyExcept).
+            var first = -1;
+            for (var x = 0; x < size; x++)
             {
                 if (row[x] != 0)
                 {
-                    if (top < 0)
-                        top = y;
-                    left = x;
+                    first = x;
                     break;
                 }
             }
-            if (left == 0 && top >= 0)
-                break; // origin cannot get smaller
+            if (first < 0)
+                continue;
+            if (top < 0)
+                top = y;
+            bottom = y;
+            if (first < left)
+                left = first;
+            for (var x = size - 1; x > right; x--)
+            {
+                if (row[x] != 0)
+                {
+                    right = x;
+                    break;
+                }
+            }
         }
 
         if (top < 0)
             return false; // all light
 
-        // Core row 0 / column 0 are timing patterns starting dark at the finder
-        // corner, so the first dark row and column meet at the core origin.
-        if (top != left)
+        var width = right - left + 1;
+        if (width != bottom - top + 1 || MicroQRConstants.VersionFromSize(width) == 0)
             return false;
 
-        var candidate = size - 2 * top;
-        if (MicroQRConstants.VersionFromSize(candidate) == 0)
-            return false;
-
-        origin = top;
-        coreSize = candidate;
+        coreSize = width;
         return true;
     }
 
     /// <summary>
     /// Copies the core window (rows are not contiguous inside the bordered input) into a contiguous buffer the matrix decoder can walk.
     /// </summary>
-    private static void CopyCoreWindow(ReadOnlySpan<byte> modules, int size, int origin, int coreSize, Span<byte> destination)
+    private static void CopyCoreWindow(ReadOnlySpan<byte> modules, int size, int top, int left, int coreSize, Span<byte> destination)
     {
         for (var y = 0; y < coreSize; y++)
         {
-            modules.Slice((origin + y) * size + origin, coreSize).CopyTo(destination.Slice(y * coreSize, coreSize));
+            modules.Slice((top + y) * size + left, coreSize).CopyTo(destination.Slice(y * coreSize, coreSize));
         }
     }
 }
