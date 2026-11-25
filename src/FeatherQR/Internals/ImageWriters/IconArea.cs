@@ -7,7 +7,8 @@ namespace FeatherQR.Internals.ImageWriters;
 /// <remarks>
 /// The symbol relies on its error correction to stay readable, as it does under the rendering package's icons, and the same limit holds:
 /// the icon with its border takes at most <see cref="SymbolImageOptions.MaxCoreOccupancyPercent"/> of the core's side. An area that reaches
-/// a finder pattern is refused, since nothing could read the result.
+/// a finder pattern is refused, since nothing could read the result. The area may cover format information and the dark module,
+/// since a reader takes the closer of the two format copies and ignores the dark module.
 /// </remarks>
 internal readonly struct IconArea
 {
