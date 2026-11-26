@@ -377,9 +377,11 @@ internal static class FinderAxisEstimator
         var phase = 0;
         for (var step = 1f; step <= maxRunLength; step += 1f)
         {
-            var x = (int)(startX + dirX * step);
-            var y = (int)(startY + dirY * step);
-            if (x < 0 || x >= width || y < 0 || y >= height)
+            var pointX = startX + dirX * step;
+            var pointY = startY + dirY * step;
+            // Bounds on the float: the cast truncates toward zero, so a point just left of or above the image would read column or row 0.
+            // Negated so a NaN point is outside.
+            if (!(pointX >= 0f && pointX < width && pointY >= 0f && pointY < height))
             {
                 // The outer dark ring may end exactly at the image edge (zero or
                 // cropped quiet zone): the run is complete, not clipped.
@@ -389,7 +391,7 @@ internal static class FinderAxisEstimator
                 return true;
             }
 
-            var dark = luminance[y * width + x] < threshold;
+            var dark = luminance[(int)pointY * width + (int)pointX] < threshold;
             switch (phase)
             {
                 case 0: // inside the 3-module center square

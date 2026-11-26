@@ -752,16 +752,13 @@ internal static partial class MicroQRImageDecoder
     }
 
     /// <summary>Whether the pixel containing the point is dark. False (and not dark) outside the image.</summary>
-    private static bool IsDarkAt(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float x, float y, out bool dark)
+    internal static bool IsDarkAt(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float x, float y, out bool dark)
     {
         dark = false;
-        if (x < 0f || y < 0f)
+        // Negated so a NaN point is outside, as in the quiet-zone check
+        if (!(x >= 0f && y >= 0f && x < width && y < height))
             return false;
-        var px = (int)x;
-        var py = (int)y;
-        if (px >= width || py >= height)
-            return false;
-        dark = luminance[py * width + px] < threshold;
+        dark = luminance[(int)y * width + (int)x] < threshold;
         return true;
     }
 

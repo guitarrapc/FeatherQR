@@ -11,9 +11,8 @@ internal static partial class PerspectiveGridSampler
         var a11 = Vector256.Create(transform.a11);
         var a12 = Vector256.Create(transform.a12);
         var a13 = Vector256.Create(transform.a13);
-        var zero = Vector256<int>.Zero;
-        var maxPx = Vector256.Create(width - 1);
-        var maxPy = Vector256.Create(height - 1);
+        var lastX = Vector256.Create((float)(width - 1));
+        var lastY = Vector256.Create((float)(height - 1));
         var widthVector = Vector256.Create(width);
 
         Span<int> indices = stackalloc int[8];
@@ -34,11 +33,9 @@ internal static partial class PerspectiveGridSampler
                 var x = (a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (a12 * gridX + rowNumeratorY) * reciprocal;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast, so both take the pixel containing the point.
-                var px = Vector256.ConvertToInt32(x);
-                var py = Vector256.ConvertToInt32(y);
-                px = Vector256.Max(Vector256.Min(px, maxPx), zero);
-                py = Vector256.Max(Vector256.Min(py, maxPy), zero);
+                // The pixel the scalar tier's PixelIndex.Clamp takes
+                var px = VectorCast.ToPixel(x, lastX);
+                var py = VectorCast.ToPixel(y, lastY);
 
                 var index = py * widthVector + px;
                 index.CopyTo(indices);

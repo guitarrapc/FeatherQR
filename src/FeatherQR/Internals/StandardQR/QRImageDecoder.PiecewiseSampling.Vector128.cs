@@ -13,7 +13,7 @@ internal static partial class QRImageDecoder
     /// for one compare and one store. ARM64, x64 without AVX2 and WebAssembly take it.
     /// </summary>
     /// <remarks>
-    /// The same float operations in the reference's order, and each coordinate to its pixel through <see cref="VectorCast.ToPixel"/>,
+    /// The same float operations in the reference's order, and each coordinate to its pixel through <see cref="VectorCast.ToPixel(System.Runtime.Intrinsics.Vector128{float}, System.Runtime.Intrinsics.Vector128{float})"/>,
     /// which lands where the reference's <see cref="PixelIndex.Clamp(float, int)"/> does for every float.
     /// </remarks>
     internal static void SampleGridPiecewiseVector128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)

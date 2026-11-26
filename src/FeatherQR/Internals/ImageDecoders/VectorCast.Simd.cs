@@ -32,6 +32,17 @@ internal static class VectorCast
         return Vector128.ConvertToUInt32(Vector128.Min(coordinate, last)).AsInt32();
     }
 
+    /// <inheritdoc cref="ToPixel(Vector128{float}, Vector128{float})"/>
+    /// <remarks>On x64, 256-bit vectors need AVX2, so the AVX2 check is the one a caller on them passes.</remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static Vector256<int> ToPixel(Vector256<float> coordinate, Vector256<float> last)
+    {
+        // As on SSE2: both edges clamped first, and the max's operand order sends NaN to 0
+        if (Avx2.IsSupported)
+            return Avx.ConvertToVector256Int32WithTruncation(Avx.Min(Avx.Max(coordinate, Vector256<float>.Zero), last));
+        return Vector256.ConvertToUInt32(Vector256.Min(coordinate, last)).AsInt32();
+    }
+
     /// <summary>
     /// Truncated toward zero, exact from -1 (exclusive) up to 2^31. Outside that range or at NaN the lane depends on the platform,
     /// for callers that do not read such lanes.

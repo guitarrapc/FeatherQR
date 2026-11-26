@@ -1149,14 +1149,12 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>Whether the module at grid point (<paramref name="u"/>, <paramref name="v"/>) through <paramref name="transform"/> is dark: interpolated against the grey midpoint where the image has grey levels, else the pixel against the threshold.</summary>
-    private static bool IsDarkAt(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in PerspectiveTransform transform, float u, float v)
+    internal static bool IsDarkAt(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in PerspectiveTransform transform, float u, float v)
     {
         transform.Transform(u, v, out var x, out var y);
         if (grey.IsEnabled)
             return LuminanceSampler.Bilinear(luminance, width, height, x, y) < grey.Midpoint;
-        var px = x < 0f ? 0 : x >= width ? width - 1 : (int)x;
-        var py = y < 0f ? 0 : y >= height ? height - 1 : (int)y;
-        return luminance[py * width + px] < threshold;
+        return luminance[PixelIndex.Clamp(y, height) * width + PixelIndex.Clamp(x, width)] < threshold;
     }
 
     /// <summary>
