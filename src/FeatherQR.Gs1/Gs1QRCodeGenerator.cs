@@ -148,11 +148,13 @@ public static class Gs1QRCodeGenerator
         {
             RequireNoFnc1(in options);
             var stemText = Gs1DigitalLink.ValidateStem(stem);
-            var bound = Gs1SymbolData.DigitalLinkBound(text.Length, stemText.Length);
+            var bound = Gs1SymbolData.UriBufferLength(text.Length, stemText.Length, Gs1SymbolData.StandardQrCapacity);
             char[]? rentedElement = null;
             char[]? rentedUri = null;
             Span<char> elementBuffer = Gs1SymbolData.StackBufferServes(text) ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedElement = ArrayPool<char>.Shared.Rent(text.Length));
             Span<char> uriBuffer = bound <= Gs1SymbolData.StackLimit ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedUri = ArrayPool<char>.Shared.Rent(bound));
+            // Exactly the capped length, so a URI past every symbol fails here whichever buffer holds it.
+            uriBuffer = uriBuffer.Slice(0, bound);
             try
             {
                 if (!Gs1SymbolData.TryGetDigitalLink(text, DateTime.UtcNow.Year, stemText, elementBuffer, uriBuffer, out var uri, out var error))
@@ -198,11 +200,13 @@ public static class Gs1QRCodeGenerator
         {
             RequireNoFnc1(in options);
             var stemText = Gs1DigitalLink.ValidateStem(stem);
-            var bound = Gs1SymbolData.DigitalLinkBound(text.Length, stemText.Length);
+            var bound = Gs1SymbolData.UriBufferLength(text.Length, stemText.Length, Gs1SymbolData.StandardQrCapacity);
             char[]? rentedElement = null;
             char[]? rentedUri = null;
             Span<char> elementBuffer = Gs1SymbolData.StackBufferServes(text) ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedElement = ArrayPool<char>.Shared.Rent(text.Length));
             Span<char> uriBuffer = bound <= Gs1SymbolData.StackLimit ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedUri = ArrayPool<char>.Shared.Rent(bound));
+            // Exactly the capped length, so a URI past every symbol fails here whichever buffer holds it.
+            uriBuffer = uriBuffer.Slice(0, bound);
             try
             {
                 if (!Gs1SymbolData.TryGetDigitalLink(text, DateTime.UtcNow.Year, stemText, elementBuffer, uriBuffer, out var uri, out var error))
@@ -241,11 +245,13 @@ public static class Gs1QRCodeGenerator
             size = default;
             RequireNoFnc1(in options);
             var stemText = Gs1DigitalLink.ValidateStem(stem);
-            var bound = Gs1SymbolData.DigitalLinkBound(text.Length, stemText.Length);
+            var bound = Gs1SymbolData.UriBufferLength(text.Length, stemText.Length, Gs1SymbolData.StandardQrCapacity);
             char[]? rentedElement = null;
             char[]? rentedUri = null;
             Span<char> elementBuffer = Gs1SymbolData.StackBufferServes(text) ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedElement = ArrayPool<char>.Shared.Rent(text.Length));
             Span<char> uriBuffer = bound <= Gs1SymbolData.StackLimit ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedUri = ArrayPool<char>.Shared.Rent(bound));
+            // Exactly the capped length, so a URI past every symbol fails here whichever buffer holds it.
+            uriBuffer = uriBuffer.Slice(0, bound);
             try
             {
                 if (!Gs1SymbolData.TryGetDigitalLink(text, DateTime.UtcNow.Year, stemText, elementBuffer, uriBuffer, out var uri, out _))
@@ -303,6 +309,8 @@ public static class Gs1QRCodeGenerator
     private static void ThrowForData(Gs1Error error, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
         CheckOptions(eccLevel, in options);
+        if (Gs1SymbolData.IsPastEverySymbol(error))
+            throw Gs1SymbolData.UriPastEverySymbol("a QR Code", Gs1SymbolData.StandardQrCapacity);
         throw new Gs1FormatException(error);
     }
 }

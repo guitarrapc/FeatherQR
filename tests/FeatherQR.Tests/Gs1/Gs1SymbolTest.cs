@@ -770,7 +770,7 @@ public class Gs1SymbolTest
     private static (bool Built, string Uri, Gs1Error Error) ResolveLink(string text, int year)
     {
         var stem = Gs1DigitalLink.ValidateStem(null);
-        var built = Gs1SymbolData.TryGetDigitalLink(text, year, stem, new char[Math.Max(text.Length, 1)], new char[Gs1SymbolData.DigitalLinkBound(text.Length, stem.Length)], out var uri, out var error);
+        var built = Gs1SymbolData.TryGetDigitalLink(text, year, stem, new char[Math.Max(text.Length, 1)], new char[Gs1SymbolData.UriBufferLength(text.Length, stem.Length, Gs1SymbolData.StandardQrCapacity)], out var uri, out var error);
         return (built, uri.ToString(), error);
     }
 
