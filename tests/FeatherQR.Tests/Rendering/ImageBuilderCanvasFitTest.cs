@@ -501,6 +501,78 @@ public class ImageBuilderCanvasFitTest
         await Assert.That((floor.Width, floor.Height)).IsEqualTo((185, 185));
     }
 
+    /// <summary>
+    /// Skia makes no raster surface over 2^31 - 1 bytes and returns none rather than throwing. Every raster output says so with the
+    /// layout's exception, through either way of sizing the image. Skia refuses before allocating, so the test takes no memory.
+    /// The SVG has no surface and is still written.
+    /// </summary>
+    [Test]
+    [Arguments("qr", false)]
+    [Arguments("qr", true)]
+    [Arguments("micro", false)]
+    [Arguments("rmqr", false)]
+    public async Task RasterOutputs_PastSkiasSurfaceLimit_ThrowInvalidOperation(string symbology, bool pinnedModuleSize)
+    {
+        var outputs = new (string Name, Action Run)[]
+        {
+            ("ToByteArray", () => Raster(symbology, pinnedModuleSize, b => b.ToByteArray(), b => b.ToByteArray(), b => b.ToByteArray())),
+            ("ToImage", () => Raster(symbology, pinnedModuleSize, b => b.ToImage().Dispose(), b => b.ToImage().Dispose(), b => b.ToImage().Dispose())),
+            ("ToBitmap", () => Raster(symbology, pinnedModuleSize, b => b.ToBitmap().Dispose(), b => b.ToBitmap().Dispose(), b => b.ToBitmap().Dispose())),
+            ("SaveTo(Stream)", () => Raster(symbology, pinnedModuleSize, b => b.SaveTo(Stream.Null), b => b.SaveTo(Stream.Null), b => b.SaveTo(Stream.Null))),
+            ("SaveTo(IBufferWriter)", () => Raster(symbology, pinnedModuleSize, b => b.SaveTo(new System.Buffers.ArrayBufferWriter<byte>()), b => b.SaveTo(new System.Buffers.ArrayBufferWriter<byte>()), b => b.SaveTo(new System.Buffers.ArrayBufferWriter<byte>()))),
+        };
+        foreach (var (name, run) in outputs)
+        {
+            var ex = await Assert.That(run).Throws<InvalidOperationException>().Because(name);
+            await Assert.That(ex!.Message).Contains("too large").Because(name);
+        }
+        var async = await Assert.That(async () => await RasterAsync(symbology, pinnedModuleSize)).Throws<InvalidOperationException>();
+        await Assert.That(async!.Message).Contains("too large");
+
+        if (!pinnedModuleSize)
+            await Assert.That(new QRCodeImageBuilder(Content).WithSize(100_000, 100_000).ToSvgString()).Contains("viewBox=\"0 0 100000 100000\"");
+    }
+
+    private static void Raster(string symbology, bool pinnedModuleSize, Action<QRCodeImageBuilder> qr, Action<MicroQRCodeImageBuilder> micro, Action<RmQRCodeImageBuilder> rmqr)
+    {
+        switch (symbology)
+        {
+            case "qr":
+                // At least 21 modules a side, so over 420,000 pixels
+                qr(pinnedModuleSize ? new QRCodeImageBuilder(Content).WithModulePixelSize(20_000) : new QRCodeImageBuilder(Content).WithSize(100_000, 100_000));
+                break;
+            case "micro":
+                micro(new MicroQRCodeImageBuilder("12345").WithSize(100_000, 100_000));
+                break;
+            default:
+                rmqr(new RmQRCodeImageBuilder("12345").WithSize(100_000, 100_000));
+                break;
+        }
+    }
+
+    private static Task RasterAsync(string symbology, bool pinnedModuleSize) => symbology switch
+    {
+        "qr" => (pinnedModuleSize ? new QRCodeImageBuilder(Content).WithModulePixelSize(20_000) : new QRCodeImageBuilder(Content).WithSize(100_000, 100_000)).SaveToAsync(Stream.Null),
+        "micro" => new MicroQRCodeImageBuilder("12345").WithSize(100_000, 100_000).SaveToAsync(Stream.Null),
+        _ => new RmQRCodeImageBuilder("12345").WithSize(100_000, 100_000).SaveToAsync(Stream.Null),
+    };
+
+    /// <summary>
+    /// WebP takes at most 16,383 pixels a side, and Skia's encoder returns nothing past that, as it does for a format it has no encoder for.
+    /// The message names both causes, so a wide image is not reported as a missing encoder alone.
+    /// </summary>
+    [Test]
+    public async Task WebP_PastItsSideLimit_SaysTheImageMayBeTooLarge()
+    {
+        var fits = new QRCodeImageBuilder(Content).WithFormat(SKEncodedImageFormat.Webp, 80).WithSize(16_383, 64).ToByteArray();
+        await Assert.That(fits.Length).IsGreaterThan(0);
+
+        var ex = await Assert.That(() => new QRCodeImageBuilder(Content).WithFormat(SKEncodedImageFormat.Webp, 80).WithSize(16_384, 64).ToByteArray())
+            .Throws<NotSupportedException>();
+        await Assert.That(ex!.Message).Contains("Webp");
+        await Assert.That(ex.Message).Contains("too large");
+    }
+
     /// <summary>A pinned module size decides the modules, so filling changes nothing beside it.</summary>
     [Test]
     public async Task WithFillCanvas_BesideAPinnedModuleSize_ChangesNothing()
