@@ -58,6 +58,27 @@ public class ErrorContractTest
         await Assert.That(error.Message).DoesNotContain("requestedVersion").Because(name);
     }
 
+    /// <summary>An undefined option value names the option member, as rMQR's height and fit strategy do, on every route to the version check.</summary>
+    public static IEnumerable<(string Name, Action Create)> UndefinedRmQRVersionCases()
+    {
+        var options = new RmQRCodeGeneratorOptions { Version = (RmQRVersion)99 };
+        yield return ("create", () => RmQRCodeGenerator.Create("1", RmQREccLevel.M, options));
+        yield return ("create single", () => RmQRCodeGenerator.Create("1", RmQREccLevel.M, options with { Segmentation = RmQRSegmentation.Single }));
+        yield return ("create destination", () => RmQRCodeGenerator.Create("1".AsSpan(), RmQREccLevel.M, new byte[10_000], options));
+        yield return ("create bytes", () => RmQRCodeGenerator.Create(new byte[] { 1 }, RmQREccLevel.M, options));
+        yield return ("size", () => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, options));
+    }
+
+    [Test]
+    [MethodDataSource(nameof(UndefinedRmQRVersionCases))]
+    public async Task UndefinedRmQRVersion_NamesTheOptionMember(string name, Action create)
+    {
+        var error = Catch(create);
+
+        await Assert.That(error?.GetType()).IsEqualTo(typeof(ArgumentOutOfRangeException)).Because(name);
+        await Assert.That(((ArgumentException)error!).ParamName).IsEqualTo("version").Because(name);
+    }
+
     public static IEnumerable<(string Name, Action Decode, string ParamName)> NonPositiveSizeCases()
     {
         var modules = new byte[100];

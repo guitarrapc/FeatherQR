@@ -281,7 +281,7 @@ Encoding:
 - Standard QR checks its arguments first. An undefined `QREccLevel`, an `EciMode` other than `Default`, `Iso8859_1` and `Utf8`, or a quiet zone above 10,000 modules throws `ArgumentOutOfRangeException`.
 - Micro QR writes some ISO-8859-1 text as UTF-8. This happens when the ISO-8859-1 bytes of the text would decode as UTF-8 or Shift_JIS. For example, 1.x wrote `Ã©` as bytes that decode as `é`. Such text needs more bytes and can stop fitting M4.
 - Under `Optimal`, content with a U+FEFF after the first character can get a smaller symbol. 1.2.0 fell back to one mode for it, or reported that it did not fit.
-- Content that does not fit the versions you allowed reports `ParamName` `options` in all three generators: a version, a version range or an rMQR height. Micro QR and rMQR used to report `requestedVersion` for a single version and nothing for a range. Content too long for every version reports no `ParamName`.
+- Content that does not fit the versions you allowed reports `ParamName` `options` in all three generators: a version, a version range or an rMQR height. Micro QR and rMQR used to report `requestedVersion` for a single version and nothing for a range. Content too long for every version reports no `ParamName`. An undefined `RmQRVersion` reports `version`, as an undefined height reports `height`, where it reported `requestedVersion`.
 
 Decoding:
 

@@ -174,7 +174,7 @@ internal static class RmQRVersionSelector
         if (requestedVersion is { } version)
         {
             if (!RmQRConstants.IsValidVersion(version))
-                throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Invalid rMQR version: {version}");
+                throw new ArgumentOutOfRangeException(VersionParamName, $"Invalid rMQR version: {version}");
             if (height is { } requiredHeight && RmQRConstants.GetHeight(version) != (int)requiredHeight)
                 throw new ArgumentException($"Requested rMQR version {version} is {RmQRConstants.GetHeight(version)} modules high, but height {requiredHeight} was requested. Specify one or the other, or make them agree.", nameof(height));
             if (!Fits(version, eccLevel, mode, dataLength))
@@ -207,6 +207,9 @@ internal static class RmQRVersionSelector
 
     /// <summary>The parameter a narrowed version's errors name: the options that pinned the version or the height.</summary>
     private const string OptionsParamName = "options";
+
+    /// <summary>The parameter an undefined version names: the option member, as an undefined height or fit strategy names its own.</summary>
+    private const string VersionParamName = "version";
 
     /// <summary>
     /// The actionable "content is too long" error, built off the success path: the applicable maximum in mode units, and which constraint produced it.
@@ -452,7 +455,7 @@ internal static class RmQRVersionSelector
         if (requestedVersion is { } version)
         {
             if (!RmQRConstants.IsValidVersion(version))
-                throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Invalid rMQR version: {version}");
+                throw new ArgumentOutOfRangeException(VersionParamName, $"Invalid rMQR version: {version}");
             if (height is { } requiredHeight && RmQRConstants.GetHeight(version) != (int)requiredHeight)
                 throw new ArgumentException($"Requested rMQR version {version} is {RmQRConstants.GetHeight(version)} modules high, but height {requiredHeight} was requested. Specify one or the other, or make them agree.", nameof(height));
         }
