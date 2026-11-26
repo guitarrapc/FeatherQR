@@ -67,6 +67,7 @@ public static class RmQRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level and corrections, and on success the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info)
     {
         ValidateMatrix(modules, width, height);
@@ -104,6 +105,7 @@ public static class RmQRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level and corrections, and on success the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
         ValidateMatrix(modules, width, height);
@@ -252,7 +254,7 @@ public static class RmQRCodeDecoder
     public static int GetMaxDecodedLength(RmQRVersion version)
     {
         if (!RmQRConstants.IsValidVersion(version))
-            throw new ArgumentOutOfRangeException(nameof(version), $"Invalid rMQR version: {version}");
+            throw new ArgumentOutOfRangeException(nameof(version), $"Version must be a defined RmQRVersion, but was {(int)version}.");
 
         return RmQRMatrixDecoder.GetMaxCharCount(version);
     }
@@ -316,6 +318,7 @@ public static class RmQRCodeDecoder
     /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int width, int height, out byte[] bytes, out RmQRCodeDecodeInfo info)
     {
         var maxBytes = RmQRMatrixDecoder.GetMaxCharCount(RmQRVersion.R17x139);
@@ -347,6 +350,7 @@ public static class RmQRCodeDecoder
     /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int width, int height, Span<byte> destination, out int bytesWritten, out RmQRCodeDecodeInfo info)
     {
         // No symbol holds more bytes than the largest version, so a longer destination needs no longer buffer.
@@ -436,9 +440,11 @@ public static class RmQRCodeDecoder
 
     private static void ValidateMatrix(ReadOnlySpan<byte> modules, int width, int height)
     {
+        if (width < 1 || height < 1)
+            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Matrix size must be positive: got {width} x {height}.");
         // long arithmetic: dimensions are caller-controlled and width × height can overflow int
-        if (width < 1 || height < 1 || modules.Length < (long)width * height)
-            throw new ArgumentException($"Module buffer too small: required {(long)Math.Max(width, 0) * Math.Max(height, 0)}, got {modules.Length}", nameof(modules));
+        if (modules.Length < (long)width * height)
+            throw new ArgumentException($"Module buffer too small: required {(long)width * height}, got {modules.Length}", nameof(modules));
     }
 
     private static bool TryDecodeCore(ReadOnlySpan<byte> core, int width, int height, out string text, out RmQRCodeDecodeInfo info)

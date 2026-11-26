@@ -263,6 +263,7 @@ The code in this section compiles without change, but the output is different or
   - An rMQR symbol can get a different shape.
   - To keep the 1.x output, set `Segmentation = QRSegmentation.Single` (or the Micro QR or rMQR equivalent), or call `.WithSegmentation(QRSegmentation.Single)` on a builder.
 - `EciMode.Iso8859_1` with a character above U+00FF throws `ArgumentException`. Standard QR used to write a look-alike character, `?` or the low byte. Use `EciMode.Utf8` or `EciMode.Default`.
+- Standard QR content that does not fit version 40 throws `ArgumentException`, as Micro QR and rMQR already did. It used to throw `InvalidOperationException`. Catch `ArgumentException`, or call `TryGetRequiredBufferSize` first, which returns `false` for such content.
 
 #### Decoding
 
@@ -280,6 +281,7 @@ Encoding:
 - Standard QR checks its arguments first. An undefined `QREccLevel`, an `EciMode` other than `Default`, `Iso8859_1` and `Utf8`, or a quiet zone above 10,000 modules throws `ArgumentOutOfRangeException`.
 - Micro QR writes some ISO-8859-1 text as UTF-8. This happens when the ISO-8859-1 bytes of the text would decode as UTF-8 or Shift_JIS. For example, 1.x wrote `Ã©` as bytes that decode as `é`. Such text needs more bytes and can stop fitting M4.
 - Under `Optimal`, content with a U+FEFF after the first character can get a smaller symbol. 1.2.0 fell back to one mode for it, or reported that it did not fit.
+- Content that does not fit the versions you allowed reports `ParamName` `options` in all three generators: a version, a version range or an rMQR height. Micro QR and rMQR used to report `requestedVersion` for a single version and nothing for a range. Content too long for every version reports no `ParamName`.
 
 Decoding:
 
@@ -295,6 +297,7 @@ Decoding:
   ```
 
 - `TryDecodeImage` with a width or height below one throws `ArgumentOutOfRangeException` naming `width` or `height`. It used to name `luminance`.
+- The matrix overloads of `TryDecode` and `TryDecodeBytes` do the same for a size below one, naming `size`, or `width` or `height` for rMQR. They used to report a buffer too small. The exception derives from `ArgumentException`, so an existing `catch` still takes it.
 
 Rendering:
 

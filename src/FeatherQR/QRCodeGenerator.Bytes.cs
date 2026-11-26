@@ -40,9 +40,8 @@ public static partial class QRCodeGenerator
     /// <param name="options">Version, quiet zone, mask, boost and segmentation settings. Omit for the defaults.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header.</param>
     /// <returns>The module matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit any version <see cref="QRCodeGeneratorOptions.Version"/> allows, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     [OverloadResolutionPriority(-1)]
     public static QRCodeData Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {
@@ -78,9 +77,8 @@ public static partial class QRCodeGenerator
     /// <param name="options">Version, quiet zone, mask, boost and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <param name="eciAssignment">The ECI assignment that describes the bytes, from 0 to 999999, or <c>null</c> for no ECI header. Size <paramref name="destination"/> with the same assignment.</param>
     /// <returns>The number of bytes written.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit any version <see cref="QRCodeGeneratorOptions.Version"/> allows, or when the options carry an <see cref="QRCodeGeneratorOptions.EciMode"/> other than <see cref="EciMode.Default"/> or another setting only text uses.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or segmentation, a quiet zone outside 0 to 10,000, or an assignment outside 0 to 999999.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     [OverloadResolutionPriority(-1)]
     public static int Create(ReadOnlySpan<byte> data, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default, int? eciAssignment = null)
     {

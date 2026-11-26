@@ -483,15 +483,15 @@ public class Fnc1EncodeTest
         // 7089 digits fill version 40-L exactly (23,648 bits), so only the indicator's 4 bits overflow it.
         var digits = new string('7', 7089);
         await Assert.That(QRCodeGenerator.Create(digits, QREccLevel.L, new QRCodeGeneratorOptions { QuietZoneSize = 0 }).Version).IsEqualTo(40);
-        await Assert.That(() => QRCodeGenerator.Create(digits, QREccLevel.L, First)).Throws<InvalidOperationException>();
-        await Assert.That(() => QRCodeGenerator.Create(digits, QREccLevel.L, FirstOptimal)).Throws<InvalidOperationException>();
+        await Assert.That(() => QRCodeGenerator.Create(digits, QREccLevel.L, First)).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => QRCodeGenerator.Create(digits, QREccLevel.L, FirstOptimal)).ThrowsExactly<ArgumentException>();
         await Assert.That(() => QRCodeGenerator.Create(new string('7', 41), QREccLevel.L, First with { Version = QRVersionRange.Exactly(1) })).Throws<ArgumentException>();
         await Assert.That(() => QRCodeGenerator.Create(new string('7', 41), QREccLevel.L, FirstOptimal with { Version = QRVersionRange.Exactly(1) })).Throws<ArgumentException>();
 
         // 4296 letters are 23,645 bits in one Alphanumeric run, 23,649 with the indicator, and no split is smaller than the one run.
         var letters = new string('A', 4296);
         await Assert.That(QRCodeGenerator.Create(letters, QREccLevel.L, new QRCodeGeneratorOptions { QuietZoneSize = 0 }).Version).IsEqualTo(40);
-        await Assert.That(() => QRCodeGenerator.Create(letters, QREccLevel.L, FirstOptimal)).Throws<InvalidOperationException>()
+        await Assert.That(() => QRCodeGenerator.Create(letters, QREccLevel.L, FirstOptimal)).ThrowsExactly<ArgumentException>()
             .Because("an unconstrained overflow is the same exception under Optimal as under Single");
     }
 

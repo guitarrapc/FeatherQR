@@ -226,13 +226,13 @@ public class KanjiEligibilityTest
     public async Task StandardQr_TooLongForVersion40_ReportsTheUnitsOfItsMode()
     {
         var text = Cells(0, 1818);
-        var kanji = await Assert.That(() => QRCodeGenerator.Create(text, QREccLevel.L, Kanji)).Throws<InvalidOperationException>();
+        var kanji = await Assert.That(() => QRCodeGenerator.Create(text, QREccLevel.L, Kanji)).ThrowsExactly<ArgumentException>();
         await Assert.That(kanji!.Message).Contains("Kanji");
         await Assert.That(kanji.Message).Contains("1818");
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(Cells(0, 1817), QREccLevel.L, out var size, Kanji)).IsTrue();
         await Assert.That(size.Version).IsEqualTo(40);
 
-        var utf8 = await Assert.That(() => QRCodeGenerator.Create(text, QREccLevel.L)).Throws<InvalidOperationException>();
+        var utf8 = await Assert.That(() => QRCodeGenerator.Create(text, QREccLevel.L)).ThrowsExactly<ArgumentException>();
         await Assert.That(utf8!.Message).DoesNotContain("Kanji");
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(Cells(0, 1817), QREccLevel.L, out _)).IsFalse();
     }

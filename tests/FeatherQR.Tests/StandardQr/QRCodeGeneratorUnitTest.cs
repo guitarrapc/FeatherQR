@@ -442,12 +442,12 @@ public class QRCodeGeneratorUnitTest
     {
         var tooLarge = new string('1', 7090); // V40-L max + 1
 
-        Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(tooLarge, QREccLevel.L));
+        Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(tooLarge, QREccLevel.L));
     }
 
     /// <summary>
-    /// Content past version 40 fails both overloads with the exception their documentation names: <see cref="InvalidOperationException"/>
-    /// when the range spans every version, however it is written, and <see cref="ArgumentException"/> itself when it is narrowed.
+    /// Content past version 40 fails both overloads with <see cref="ArgumentException"/> itself. It names no parameter when the range
+    /// spans every version, however it is written, and names <c>options</c> when the range is narrowed.
     /// </summary>
     [Test]
     [Arguments("Any", true)]
@@ -468,13 +468,16 @@ public class QRCodeGeneratorUnitTest
         };
         var tooLarge = new string('1', 7090); // V40-L max + 1
         var destination = new byte[200_000];
-        var expected = spansEveryVersion ? typeof(InvalidOperationException) : typeof(ArgumentException);
+        var paramName = spansEveryVersion ? null : "options";
 
-        await Assert.That(ThrownType(() => QRCodeGenerator.Create(tooLarge, QREccLevel.L, options))).IsEqualTo(expected);
-        await Assert.That(ThrownType(() => QRCodeGenerator.Create(tooLarge.AsSpan(), QREccLevel.L, destination, options))).IsEqualTo(expected);
+        foreach (var error in new[] { Thrown(() => QRCodeGenerator.Create(tooLarge, QREccLevel.L, options)), Thrown(() => QRCodeGenerator.Create(tooLarge.AsSpan(), QREccLevel.L, destination, options)) })
+        {
+            await Assert.That(error?.GetType()).IsEqualTo(typeof(ArgumentException));
+            await Assert.That(((ArgumentException)error!).ParamName).IsEqualTo(paramName);
+        }
     }
 
-    private static Type? ThrownType(Action action)
+    private static Exception? Thrown(Action action)
     {
         try
         {
@@ -483,7 +486,7 @@ public class QRCodeGeneratorUnitTest
         }
         catch (Exception ex)
         {
-            return ex.GetType();
+            return ex;
         }
     }
 

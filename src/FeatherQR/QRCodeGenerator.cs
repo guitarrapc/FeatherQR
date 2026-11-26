@@ -231,9 +231,8 @@ public static partial class QRCodeGenerator
     /// <param name="eccLevel">How much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit any version <see cref="QRCodeGeneratorOptions.Version"/> allows, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, or a quiet zone outside 0 to 10,000.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
     {
         // One compare on the field that packs the segmentation and the FNC1 mode, so Single
@@ -267,9 +266,8 @@ public static partial class QRCodeGenerator
     /// <param name="destination">Where to write the matrix. Needs <see cref="QRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize(ReadOnlySpan{char}, QREccLevel, out QRCodeCalculatedSize, in QRCodeGeneratorOptions)"/>.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <returns>The number of bytes written.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit any version <see cref="QRCodeGeneratorOptions.Version"/> allows, when the options contradict each other, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, or a quiet zone outside 0 to 10,000.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static int Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default)
     {
         if (!options.TakesSingleRoute)
@@ -952,11 +950,7 @@ public static partial class QRCodeGenerator
         if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8Bom, options.Version.Min, options.Version.Max, out var version))
         {
             if (options.Version.IsAny)
-            {
-                // Unconstrained overflow is InvalidOperationException on every released
-                // path. GetVersion recomputes only to throw that exact exception.
-                GetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8Bom);
-            }
+                throw ContentTooLong(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8Bom);
             throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, analysisResult), nameof(options));
         }
 
@@ -1303,9 +1297,30 @@ public static partial class QRCodeGenerator
         if (TryGetVersion(length, encoding, eccLevel, eciMode, utf8BOM, out var version))
             return version;
 
-        throw new InvalidOperationException($"Data too large for QR code (exceeds Version 40 capacity). " +
-            $"Required: {eciMode.GetStandardQrHeaderBits() + ModeIndicatorBits} header bits + {length} data units, " +
-            $"Mode: {encoding}, ECC: {eccLevel}, ECI: {eciMode.Describe()}");
+        throw ContentTooLong(length, encoding, eccLevel, eciMode, utf8BOM);
+    }
+
+    /// <summary>
+    /// Content that fits no version when no option narrowed the versions. No argument is wrong, so the error names no parameter.
+    /// </summary>
+    private static ArgumentException ContentTooLong(int length, EncodingMode encoding, QREccLevel eccLevel, EciMode eciMode, bool utf8BOM, int fnc1HeaderBits = 0)
+    {
+        // Failure path only: the longest content version 40 holds, by bisection over the fit the encode used. The fit is monotone in the length.
+        var max = 0;
+        var high = length;
+        while (max < high)
+        {
+            var mid = max + (high - max + 1) / 2;
+            if (TryGetVersionInRangeFnc1(mid, encoding, eccLevel, eciMode, utf8BOM, fnc1HeaderBits, QRVersionRange.MaxVersion, QRVersionRange.MaxVersion, out _))
+                max = mid;
+            else
+                high = mid - 1;
+        }
+
+        return new ArgumentException(
+            $"Content is too long for QR code: {length} data units in {encoding} mode (ECI: {eciMode.Describe()}{(fnc1HeaderBits > 0 ? $", FNC1: {fnc1HeaderBits} bits" : "")}), " +
+            $"but ECC level {eccLevel} fits at most {max} (version 40). " +
+            "Shorten the content, lower the ECC level, or split it across symbols with CreateStructuredAppend.");
     }
 
     /// <summary>
@@ -1808,7 +1823,7 @@ public static partial class QRCodeGenerator
     }
 
     /// <summary>
-    /// The canonical "does not fit" errors of the single-mode path, so turning segmentation on cannot reclassify an error: unconstrained overflow is <see cref="InvalidOperationException"/>, a constrained range is <see cref="ArgumentException"/>.
+    /// The canonical "does not fit" errors of the single-mode path, so turning segmentation on cannot reclassify an error. Both are <see cref="ArgumentException"/>: a narrowed range names <c>options</c>, the unconstrained overflow no parameter.
     /// </summary>
     private static void ThrowDoesNotFit(in TextAnalysisResult analysis, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
@@ -1819,7 +1834,7 @@ public static partial class QRCodeGenerator
         if (options.Fnc1.IsActive)
             ResolveVersionAndEccFnc1(in analysis, eccLevel, in options, options.Fnc1.StandardQrHeaderBits);
         else if (options.Version.IsAny)
-            GetVersion(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, false);
+            throw ContentTooLong(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, options.Utf8Bom);
         throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, in analysis, options.Fnc1.StandardQrHeaderBits), nameof(options));
     }
 

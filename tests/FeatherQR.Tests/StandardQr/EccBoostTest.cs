@@ -122,16 +122,18 @@ public class EccBoostTest
     public async Task Boost_ContentThatDoesNotFitAnyVersion_ReportsTheSameErrorAsWithoutBoost()
     {
         // 5000 alphanumeric characters exceed the version 40 L capacity (4296). The
-        // unconstrained overflow is InvalidOperationException on every existing path,
-        // and turning boost on must not reclassify it as an argument error.
+        // unconstrained overflow names no parameter on every path, and turning boost on
+        // must not reclassify it as an error of the options.
         var tooLong = new string('A', 5000);
 
-        var withoutBoost = Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(
+        var withoutBoost = Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(
             tooLong, QREccLevel.L, new QRCodeGeneratorOptions()));
-        var withBoost = Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(
+        var withBoost = Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(
             tooLong, QREccLevel.L, new QRCodeGeneratorOptions { BoostEccLevel = true }));
 
         await Assert.That(withBoost!.Message).IsEqualTo(withoutBoost!.Message);
+        await Assert.That(withBoost.ParamName).IsNull();
+        await Assert.That(withoutBoost.ParamName).IsNull();
     }
 
     [Test]

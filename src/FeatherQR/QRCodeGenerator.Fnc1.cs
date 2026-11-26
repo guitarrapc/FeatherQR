@@ -41,11 +41,7 @@ public static partial class QRCodeGenerator
         if (!TryGetVersionInRangeFnc1(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, options.Utf8Bom, fnc1HeaderBits, options.Version.Min, options.Version.Max, out var version))
         {
             if (options.Version.IsAny)
-            {
-                throw new InvalidOperationException($"Data too large for QR code (exceeds Version 40 capacity). " +
-                    $"Required: {analysis.EciMode.GetStandardQrHeaderBits() + fnc1HeaderBits + ModeIndicatorBits} header bits + {analysis.DataLength} data units, " +
-                    $"Mode: {analysis.EncodingMode}, ECC: {eccLevel}, ECI: {analysis.EciMode}, FNC1: {fnc1HeaderBits} bits");
-            }
+                throw ContentTooLong(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, options.Utf8Bom, fnc1HeaderBits);
             throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, in analysis, fnc1HeaderBits), nameof(options));
         }
 

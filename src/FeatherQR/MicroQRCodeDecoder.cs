@@ -63,10 +63,13 @@ public static class MicroQRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
     /// <returns><c>true</c> when the Micro QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="size"/> is not positive.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out MicroQRCodeDecodeInfo info)
     {
+        if (size < 1)
+            throw new ArgumentOutOfRangeException(nameof(size), $"Matrix size must be positive: got {size}.");
         // long arithmetic: size is caller-controlled and size² overflows int at 46341
-        if (size < 1 || modules.Length < (long)size * size)
+        if (modules.Length < (long)size * size)
             throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
 
         if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
@@ -102,10 +105,13 @@ public static class MicroQRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
     /// <returns><c>true</c> when the Micro QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="size"/> is not positive.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
+        if (size < 1)
+            throw new ArgumentOutOfRangeException(nameof(size), $"Matrix size must be positive: got {size}.");
         // long arithmetic: size is caller-controlled and size² overflows int at 46341
-        if (size < 1 || modules.Length < (long)size * size)
+        if (modules.Length < (long)size * size)
             throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
 
         if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
@@ -245,7 +251,7 @@ public static class MicroQRCodeDecoder
     public static int GetMaxDecodedLength(MicroQRVersion version)
     {
         if ((uint)((int)version - 1) > 3)
-            throw new ArgumentOutOfRangeException(nameof(version), $"Invalid Micro QR version: {version}");
+            throw new ArgumentOutOfRangeException(nameof(version), $"Version must be M1 to M4, but was {(int)version}.");
 
         return MicroQRMatrixDecoder.GetMaxCharCount(version);
     }
@@ -300,6 +306,7 @@ public static class MicroQRCodeDecoder
     /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, out string, out MicroQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the Micro QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="size"/> is not positive.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, out byte[] bytes, out MicroQRCodeDecodeInfo info)
     {
         var maxBytes = MicroQRMatrixDecoder.GetMaxCharCount(MicroQRVersion.M4);
@@ -330,6 +337,7 @@ public static class MicroQRCodeDecoder
     /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, Span{char}, out int, out MicroQRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the Micro QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="size"/> is not positive.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, Span<byte> destination, out int bytesWritten, out MicroQRCodeDecodeInfo info)
     {
         // No symbol holds more bytes than the largest version, so a longer destination needs no longer buffer.

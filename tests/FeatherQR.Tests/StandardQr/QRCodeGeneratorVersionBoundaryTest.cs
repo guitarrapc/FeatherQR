@@ -161,7 +161,7 @@ public class QRCodeGeneratorVersionBoundaryTest
         if (version < 40)
             await Assert.That(QRCodeGenerator.Create(new string('あ', capacity + 1), eccLevel, kanji).Version).IsEqualTo(version + 1);
         else
-            await Assert.That(() => QRCodeGenerator.Create(new string('あ', capacity + 1), eccLevel, kanji)).Throws<InvalidOperationException>();
+            await Assert.That(() => QRCodeGenerator.Create(new string('あ', capacity + 1), eccLevel, kanji)).ThrowsExactly<ArgumentException>();
     }
 
     /// <summary>
@@ -181,7 +181,7 @@ public class QRCodeGeneratorVersionBoundaryTest
 
         if (expectedNextVersion == -1)
         {
-            Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(plainText, eccLevel));
+            Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(plainText, eccLevel));
         }
         else
         {

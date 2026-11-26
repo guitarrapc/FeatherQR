@@ -205,6 +205,9 @@ internal static class RmQRVersionSelector
         throw NotFittingError(mode, dataLength, eciMode, eccLevel, requestedVersion, height);
     }
 
+    /// <summary>The parameter a narrowed version's errors name: the options that pinned the version or the height.</summary>
+    private const string OptionsParamName = "options";
+
     /// <summary>
     /// The actionable "content is too long" error, built off the success path: the applicable maximum in mode units, and which constraint produced it.
     /// </summary>
@@ -220,14 +223,14 @@ internal static class RmQRVersionSelector
                 return new ArgumentException(
                     $"Content does not fit rMQR {version} at ECC level {eccLevel}: the headers alone (ECI, FNC1, mode and count, {headerBits} bits) exceed its {capacityBits} data bits. " +
                     "Lower the ECC level, choose a larger version, or drop the ECI or FNC1 option.",
-                    nameof(requestedVersion));
+                    OptionsParamName);
             }
 
             return new ArgumentException(
                 $"Content is too long for rMQR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode, fnc1HeaderBits)} in {mode} mode, " +
                 $"but the maximum is {FormatDataLength(GetMaxDataLengthFnc1(version, eccLevel, mode, eciMode, fnc1HeaderBits), mode, fnc1HeaderBits)}{(fnc1HeaderBits > 0 ? " under FNC1" : "")}. " +
                 "Shorten the content, lower the ECC level, choose a larger version, or use Standard QR (QRCodeGenerator) for longer content.",
-                nameof(requestedVersion));
+                OptionsParamName);
         }
 
         // Most capacious candidate for the message. Failure path only, so the success path never pays for this scan.
@@ -253,7 +256,8 @@ internal static class RmQRVersionSelector
             $"but ECC level {eccLevel} fits at most {FormatDataLength(largestMax, mode, fnc1HeaderBits)} ({largest}){(fnc1HeaderBits > 0 ? " under FNC1" : "")}. " +
             (height is null
                 ? "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content."
-                : "Shorten the content, lower the ECC level, allow a taller symbol, or use Standard QR (QRCodeGenerator) for longer content."));
+                : "Shorten the content, lower the ECC level, allow a taller symbol, or use Standard QR (QRCodeGenerator) for longer content."),
+            height is null ? null : OptionsParamName);
     }
 
     // ---------------------------------------------------------------

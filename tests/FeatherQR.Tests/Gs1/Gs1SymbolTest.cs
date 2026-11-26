@@ -192,7 +192,7 @@ public class Gs1SymbolTest
         var long91 = "(91)" + new string('A', 90);
         var tooLong = string.Concat(Enumerable.Repeat(long91, 60));
         await Assert.That(Gs1ElementString.TryFromHri(tooLong, out _, out _)).IsTrue().Because("the premise: the data is valid, only too long");
-        await Assert.That(() => QRCodeGenerator.CreateGs1(tooLong, QREccLevel.L)).Throws<InvalidOperationException>();
+        await Assert.That(() => QRCodeGenerator.CreateGs1(tooLong, QREccLevel.L)).ThrowsExactly<ArgumentException>();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLong, QREccLevel.L, out _)).IsFalse();
     }
 

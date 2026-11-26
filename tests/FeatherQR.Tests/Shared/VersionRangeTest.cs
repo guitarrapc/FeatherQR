@@ -442,16 +442,18 @@ public class VersionRangeTest
     {
         var single = new MicroQRCodeGeneratorOptions { Version = range, AllowKanji = allowKanji };
         var optimal = single with { Segmentation = MicroQRSegmentation.Optimal };
+        // A narrowed range names the options that narrowed it. The whole range is the unconstrained one and names nothing.
+        var paramName = range.IsAny ? null : "options";
 
         foreach (var options in new[] { single, optimal })
         {
-            await AssertNotFitting(() => MicroQRCodeGenerator.Create(text.AsSpan(), ecc, options), message);
-            await AssertNotFitting(() => MicroQRCodeGenerator.Create(text.AsSpan(), ecc, new byte[10_000], options), message);
+            await AssertNotFitting(() => MicroQRCodeGenerator.Create(text.AsSpan(), ecc, options), paramName, message);
+            await AssertNotFitting(() => MicroQRCodeGenerator.Create(text.AsSpan(), ecc, new byte[10_000], options), paramName, message);
             await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(text.AsSpan(), ecc, out _, options)).IsFalse();
         }
     }
 
-    private static async Task AssertNotFitting(Action encode, string message)
+    private static async Task AssertNotFitting(Action encode, string? paramName, string message)
     {
         ArgumentException? error = null;
         try
@@ -465,8 +467,8 @@ public class VersionRangeTest
 
         await Assert.That(error).IsNotNull();
         await Assert.That(error!.GetType()).IsEqualTo(typeof(ArgumentException));
-        await Assert.That(error.ParamName).IsNull();
-        await Assert.That(error.Message).IsEqualTo(message);
+        await Assert.That(error.ParamName).IsEqualTo(paramName);
+        await Assert.That(error.Message).IsEqualTo(paramName is null ? message : $"{message} (Parameter '{paramName}')");
     }
 
     [Test]

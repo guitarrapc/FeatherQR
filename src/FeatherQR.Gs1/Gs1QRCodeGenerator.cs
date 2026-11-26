@@ -38,8 +38,7 @@ public static class Gs1QRCodeGenerator
         /// <param name="options">The settings of <c>Create</c>. Omit for the defaults. <see cref="QRCodeGeneratorOptions.Fnc1"/> is set here, so leave it at its default.</param>
         /// <returns>The module matrix.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data.</exception>
-        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is second position, and as <c>Create</c> throws for its options and for data that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the data does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is second position, and as <c>Create</c> throws for its options and for data that does not fit any version the range allows.</exception>
         public static QRCodeData CreateGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
         {
             var gs1Options = WithFirstPosition(in options);
@@ -67,8 +66,7 @@ public static class Gs1QRCodeGenerator
         /// <param name="options">The settings of <c>Create</c>. Size <paramref name="destination"/> with the same options.</param>
         /// <returns>The number of bytes written.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data.</exception>
-        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when <see cref="QRCodeGeneratorOptions.Fnc1"/> is second position, and as <c>Create</c> throws for its options and for data that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the data does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when <see cref="QRCodeGeneratorOptions.Fnc1"/> is second position, and as <c>Create</c> throws for its options and for data that does not fit any version the range allows.</exception>
         public static int CreateGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default)
         {
             var gs1Options = WithFirstPosition(in options);
@@ -145,8 +143,7 @@ public static class Gs1QRCodeGenerator
         /// <param name="stem">The URI's start, an <c>http</c> or <c>https</c> prefix with a host such as <c>https://brand.example.com</c>. <c>null</c> for the canonical <c>https://id.gs1.org</c>.</param>
         /// <returns>The module matrix.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data or is data a Digital Link URI cannot carry.</exception>
-        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, when <paramref name="stem"/> is not such a prefix, and as <c>Create</c> throws for its options and for a URI that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the URI does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, when <paramref name="stem"/> is not such a prefix, and as <c>Create</c> throws for its options and for a URI that does not fit any version the range allows.</exception>
         public static QRCodeData CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default, string? stem = null)
         {
             RequireNoFnc1(in options);
@@ -182,8 +179,7 @@ public static class Gs1QRCodeGenerator
         /// <param name="options">The settings of <c>Create</c>. <see cref="QRCodeGeneratorOptions.Fnc1"/> must stay at its default.</param>
         /// <returns>The module matrix.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data or is data a Digital Link URI cannot carry.</exception>
-        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, and as <c>Create</c> throws for its options and for a URI that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the URI does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, and as <c>Create</c> throws for its options and for a URI that does not fit any version the range allows.</exception>
         public static QRCodeData CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
             => QRCodeGenerator.CreateGs1DigitalLink(text, eccLevel, in options, null);
 
@@ -197,8 +193,7 @@ public static class Gs1QRCodeGenerator
         /// <param name="stem">The URI's start. <c>null</c> for the canonical <c>https://id.gs1.org</c>.</param>
         /// <returns>The number of bytes written.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data or is data a Digital Link URI cannot carry.</exception>
-        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, when <paramref name="stem"/> is not an <c>http</c> or <c>https</c> prefix with a host, and as <c>Create</c> throws for its options and for a URI that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the URI does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, when <paramref name="stem"/> is not an <c>http</c> or <c>https</c> prefix with a host, and as <c>Create</c> throws for its options and for a URI that does not fit any version the range allows.</exception>
         public static int CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default, string? stem = null)
         {
             RequireNoFnc1(in options);
