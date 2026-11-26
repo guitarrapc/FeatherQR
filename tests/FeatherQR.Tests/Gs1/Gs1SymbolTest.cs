@@ -192,7 +192,7 @@ public class Gs1SymbolTest
         var long91 = "(91)" + new string('A', 90);
         var tooLong = string.Concat(Enumerable.Repeat(long91, 60));
         await Assert.That(Gs1ElementString.TryFromHri(tooLong, out _, out _)).IsTrue().Because("the premise: the data is valid, only too long");
-        await Assert.That(() => QRCodeGenerator.CreateGs1(tooLong, QREccLevel.L)).Throws<InvalidOperationException>();
+        await Assert.That(() => QRCodeGenerator.CreateGs1(tooLong, QREccLevel.L)).ThrowsExactly<ArgumentException>();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1(tooLong, QREccLevel.L, out _)).IsFalse();
     }
 
@@ -770,7 +770,7 @@ public class Gs1SymbolTest
     private static (bool Built, string Uri, Gs1Error Error) ResolveLink(string text, int year)
     {
         var stem = Gs1DigitalLink.ValidateStem(null);
-        var built = Gs1SymbolData.TryGetDigitalLink(text, year, stem, new char[Math.Max(text.Length, 1)], new char[Gs1SymbolData.DigitalLinkBound(text.Length, stem.Length)], out var uri, out var error);
+        var built = Gs1SymbolData.TryGetDigitalLink(text, year, stem, new char[Math.Max(text.Length, 1)], new char[Gs1SymbolData.UriBufferLength(text.Length, stem.Length, Gs1SymbolData.StandardQrCapacity)], out var uri, out var error);
         return (built, uri.ToString(), error);
     }
 

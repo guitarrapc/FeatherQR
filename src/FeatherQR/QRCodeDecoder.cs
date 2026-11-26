@@ -65,10 +65,13 @@ public static class QRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>) and the FNC1 mode when it carries one (<see cref="QRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when the QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="size"/> is not positive.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out QRCodeDecodeInfo info)
     {
+        if (size < 1)
+            throw new ArgumentOutOfRangeException(nameof(size), $"Matrix size must be positive: got {size}.");
         // long arithmetic: size is caller-controlled and size² overflows int at 46341
-        if (size < 1 || modules.Length < (long)size * size)
+        if (modules.Length < (long)size * size)
             throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
 
         if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
@@ -104,10 +107,13 @@ public static class QRCodeDecoder
     /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>) and the FNC1 mode when it carries one (<see cref="QRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when the QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="size"/> is not positive.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
+        if (size < 1)
+            throw new ArgumentOutOfRangeException(nameof(size), $"Matrix size must be positive: got {size}.");
         // long arithmetic: size is caller-controlled and size² overflows int at 46341
-        if (size < 1 || modules.Length < (long)size * size)
+        if (modules.Length < (long)size * size)
             throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
 
         if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
@@ -254,7 +260,7 @@ public static class QRCodeDecoder
     public static int GetMaxDecodedLength(int version)
     {
         if (version is < 1 or > 40)
-            throw new ArgumentOutOfRangeException(nameof(version), $"Version must be 1-40, but was {version}");
+            throw new ArgumentOutOfRangeException(nameof(version), $"Version must be 1 to 40, but was {version}.");
 
         return QRMatrixDecoder.GetMaxCharCount(version);
     }
@@ -319,6 +325,7 @@ public static class QRCodeDecoder
     /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, out string, out QRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="size"/> is not positive.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, out byte[] bytes, out QRCodeDecodeInfo info)
     {
         var maxBytes = QRMatrixDecoder.GetMaxCharCount(40);
@@ -349,6 +356,7 @@ public static class QRCodeDecoder
     /// <param name="info">What the attempt to read the bytes found, in the fields <see cref="TryDecode(ReadOnlySpan{byte}, int, Span{char}, out int, out QRCodeDecodeInfo)"/> reports.</param>
     /// <returns><c>true</c> when the QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="size"/> is not positive.</exception>
     public static bool TryDecodeBytes(ReadOnlySpan<byte> modules, int size, Span<byte> destination, out int bytesWritten, out QRCodeDecodeInfo info)
     {
         // No symbol holds more bytes than the largest version, so a longer destination needs no longer buffer.

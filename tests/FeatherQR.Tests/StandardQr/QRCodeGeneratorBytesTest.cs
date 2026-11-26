@@ -282,11 +282,11 @@ public class QRCodeGeneratorBytesTest
         await Assert.That(bytes).IsEquivalentTo(digits, CollectionOrdering.Matching);
 
         var tooMany = Enumerable.Repeat((byte)'7', 7090).ToArray();
-        await Assert.That(() => QRCodeGenerator.Create(tooMany, QREccLevel.L)).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(() => QRCodeGenerator.Create(tooMany, QREccLevel.L)).ThrowsExactly<ArgumentException>();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(tooMany, QREccLevel.L, out _)).IsFalse();
     }
 
-    /// <summary>Payloads too long for any symbol fail the way text does: unconstrained overflow is an <see cref="InvalidOperationException"/>, a narrowed range an <see cref="ArgumentException"/>.</summary>
+    /// <summary>Payloads too long for any symbol fail the way text does, with an <see cref="ArgumentException"/> whether or not the range is narrowed.</summary>
     [Test]
     [Arguments(2954)]
     [Arguments(1_000_000)]
@@ -294,9 +294,9 @@ public class QRCodeGeneratorBytesTest
     {
         var payload = Filled(length);
 
-        await Assert.That(() => QRCodeGenerator.Create(payload, QREccLevel.L)).ThrowsExactly<InvalidOperationException>();
-        await Assert.That(() => QRCodeGenerator.Create(payload, QREccLevel.L, Optimal)).ThrowsExactly<InvalidOperationException>();
-        await Assert.That(() => QRCodeGenerator.Create(payload, QREccLevel.L, new byte[100], Single)).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(() => QRCodeGenerator.Create(payload, QREccLevel.L)).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => QRCodeGenerator.Create(payload, QREccLevel.L, Optimal)).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => QRCodeGenerator.Create(payload, QREccLevel.L, new byte[100], Single)).ThrowsExactly<ArgumentException>();
         await Assert.That(() => QRCodeGenerator.Create(payload, QREccLevel.L, Single with { Version = QRVersionRange.AtMost(10) })).ThrowsExactly<ArgumentException>();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(payload, QREccLevel.L, out _)).IsFalse();
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(payload, QREccLevel.L, out _, Optimal)).IsFalse();

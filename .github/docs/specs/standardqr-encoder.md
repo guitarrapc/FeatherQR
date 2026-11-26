@@ -436,7 +436,7 @@ The scan does not assume the fit predicate is monotone in the version, although 
 
 - The boost is off by default. A raised level rewrites the format information and can change the winning mask, so a default boost would silently change every existing symbol, while existing tests, golden pixels and playground permalinks all assume the requested level is the emitted level.
 - Sizing ignores the flag, as the API documents: the buffer size depends only on the version and the quiet zone, and the boost cannot change the version, so `TryGetRequiredBufferSize` gives the same answer either way.
-- The error contract is unchanged. Content that fits no version in the range fails with the same exception and message as without the boost: `InvalidOperationException` for the unconstrained overflow (the released contract) and `ArgumentException` for a constrained range. The boost must not reclassify an error.
+- The error contract is unchanged. Content that fits no version in the range fails with the same exception and message as without the boost: an `ArgumentException` naming no parameter for the unconstrained overflow, and one naming `options` for a constrained range. The boost must not reclassify an error.
 - The boost is Standard QR only. Micro QR ties its legal levels to the version (M1 has none, only M4 offers Q), so a boost there would interact with version selection instead of following it. rMQR has a single M→H step. Either can adopt the same contract later.
 
 `EccBoostTest` checks the headroom classes (boost to H, stop at an intermediate level, no headroom, already at H), version invariance, sizing indifference and error parity.

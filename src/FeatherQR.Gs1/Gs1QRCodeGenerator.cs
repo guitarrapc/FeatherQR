@@ -38,8 +38,7 @@ public static class Gs1QRCodeGenerator
         /// <param name="options">The settings of <c>Create</c>. Omit for the defaults. <see cref="QRCodeGeneratorOptions.Fnc1"/> is set here, so leave it at its default.</param>
         /// <returns>The module matrix.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data.</exception>
-        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is second position, and as <c>Create</c> throws for its options and for data that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the data does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is second position, and as <c>Create</c> throws for its options and for data that does not fit any version the range allows.</exception>
         public static QRCodeData CreateGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
         {
             var gs1Options = WithFirstPosition(in options);
@@ -67,8 +66,7 @@ public static class Gs1QRCodeGenerator
         /// <param name="options">The settings of <c>Create</c>. Size <paramref name="destination"/> with the same options.</param>
         /// <returns>The number of bytes written.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data.</exception>
-        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when <see cref="QRCodeGeneratorOptions.Fnc1"/> is second position, and as <c>Create</c> throws for its options and for data that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the data does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when <see cref="QRCodeGeneratorOptions.Fnc1"/> is second position, and as <c>Create</c> throws for its options and for data that does not fit any version the range allows.</exception>
         public static int CreateGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default)
         {
             var gs1Options = WithFirstPosition(in options);
@@ -145,17 +143,18 @@ public static class Gs1QRCodeGenerator
         /// <param name="stem">The URI's start, an <c>http</c> or <c>https</c> prefix with a host such as <c>https://brand.example.com</c>. <c>null</c> for the canonical <c>https://id.gs1.org</c>.</param>
         /// <returns>The module matrix.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data or is data a Digital Link URI cannot carry.</exception>
-        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, when <paramref name="stem"/> is not such a prefix, and as <c>Create</c> throws for its options and for a URI that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the URI does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, when <paramref name="stem"/> is not such a prefix, and as <c>Create</c> throws for its options and for a URI that does not fit any version the range allows.</exception>
         public static QRCodeData CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default, string? stem = null)
         {
             RequireNoFnc1(in options);
             var stemText = Gs1DigitalLink.ValidateStem(stem);
-            var bound = Gs1SymbolData.DigitalLinkBound(text.Length, stemText.Length);
+            var bound = Gs1SymbolData.UriBufferLength(text.Length, stemText.Length, Gs1SymbolData.StandardQrCapacity);
             char[]? rentedElement = null;
             char[]? rentedUri = null;
             Span<char> elementBuffer = Gs1SymbolData.StackBufferServes(text) ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedElement = ArrayPool<char>.Shared.Rent(text.Length));
             Span<char> uriBuffer = bound <= Gs1SymbolData.StackLimit ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedUri = ArrayPool<char>.Shared.Rent(bound));
+            // Exactly the capped length, so a URI past every symbol fails here whichever buffer holds it.
+            uriBuffer = uriBuffer.Slice(0, bound);
             try
             {
                 if (!Gs1SymbolData.TryGetDigitalLink(text, DateTime.UtcNow.Year, stemText, elementBuffer, uriBuffer, out var uri, out var error))
@@ -182,8 +181,7 @@ public static class Gs1QRCodeGenerator
         /// <param name="options">The settings of <c>Create</c>. <see cref="QRCodeGeneratorOptions.Fnc1"/> must stay at its default.</param>
         /// <returns>The module matrix.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data or is data a Digital Link URI cannot carry.</exception>
-        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, and as <c>Create</c> throws for its options and for a URI that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the URI does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, and as <c>Create</c> throws for its options and for a URI that does not fit any version the range allows.</exception>
         public static QRCodeData CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
             => QRCodeGenerator.CreateGs1DigitalLink(text, eccLevel, in options, null);
 
@@ -197,17 +195,18 @@ public static class Gs1QRCodeGenerator
         /// <param name="stem">The URI's start. <c>null</c> for the canonical <c>https://id.gs1.org</c>.</param>
         /// <returns>The number of bytes written.</returns>
         /// <exception cref="Gs1FormatException">Thrown when <paramref name="text"/> is not valid GS1 data or is data a Digital Link URI cannot carry.</exception>
-        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, when <paramref name="stem"/> is not an <c>http</c> or <c>https</c> prefix with a host, and as <c>Create</c> throws for its options and for a URI that does not fit a narrowed version range.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the URI does not fit version 40, as <c>Create</c> throws.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when <see cref="QRCodeGeneratorOptions.Fnc1"/> is set, when <paramref name="stem"/> is not an <c>http</c> or <c>https</c> prefix with a host, and as <c>Create</c> throws for its options and for a URI that does not fit any version the range allows.</exception>
         public static int CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default, string? stem = null)
         {
             RequireNoFnc1(in options);
             var stemText = Gs1DigitalLink.ValidateStem(stem);
-            var bound = Gs1SymbolData.DigitalLinkBound(text.Length, stemText.Length);
+            var bound = Gs1SymbolData.UriBufferLength(text.Length, stemText.Length, Gs1SymbolData.StandardQrCapacity);
             char[]? rentedElement = null;
             char[]? rentedUri = null;
             Span<char> elementBuffer = Gs1SymbolData.StackBufferServes(text) ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedElement = ArrayPool<char>.Shared.Rent(text.Length));
             Span<char> uriBuffer = bound <= Gs1SymbolData.StackLimit ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedUri = ArrayPool<char>.Shared.Rent(bound));
+            // Exactly the capped length, so a URI past every symbol fails here whichever buffer holds it.
+            uriBuffer = uriBuffer.Slice(0, bound);
             try
             {
                 if (!Gs1SymbolData.TryGetDigitalLink(text, DateTime.UtcNow.Year, stemText, elementBuffer, uriBuffer, out var uri, out var error))
@@ -246,11 +245,13 @@ public static class Gs1QRCodeGenerator
             size = default;
             RequireNoFnc1(in options);
             var stemText = Gs1DigitalLink.ValidateStem(stem);
-            var bound = Gs1SymbolData.DigitalLinkBound(text.Length, stemText.Length);
+            var bound = Gs1SymbolData.UriBufferLength(text.Length, stemText.Length, Gs1SymbolData.StandardQrCapacity);
             char[]? rentedElement = null;
             char[]? rentedUri = null;
             Span<char> elementBuffer = Gs1SymbolData.StackBufferServes(text) ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedElement = ArrayPool<char>.Shared.Rent(text.Length));
             Span<char> uriBuffer = bound <= Gs1SymbolData.StackLimit ? stackalloc char[Gs1SymbolData.StackLimit] : (rentedUri = ArrayPool<char>.Shared.Rent(bound));
+            // Exactly the capped length, so a URI past every symbol fails here whichever buffer holds it.
+            uriBuffer = uriBuffer.Slice(0, bound);
             try
             {
                 if (!Gs1SymbolData.TryGetDigitalLink(text, DateTime.UtcNow.Year, stemText, elementBuffer, uriBuffer, out var uri, out _))
@@ -308,6 +309,8 @@ public static class Gs1QRCodeGenerator
     private static void ThrowForData(Gs1Error error, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
         CheckOptions(eccLevel, in options);
+        if (Gs1SymbolData.IsPastEverySymbol(error))
+            throw Gs1SymbolData.UriPastEverySymbol("a QR Code", Gs1SymbolData.StandardQrCapacity);
         throw new Gs1FormatException(error);
     }
 }

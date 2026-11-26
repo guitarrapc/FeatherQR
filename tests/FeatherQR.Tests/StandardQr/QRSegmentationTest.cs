@@ -382,7 +382,7 @@ public class QRSegmentationTest
         // 8,000 characters exceed even the all-Numeric maximum (7,089), so no plan
         // exists. The error must be the single-mode path's exact exception type.
         var content = new string('1', 7000) + new string('x', 1000);
-        Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(content, QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal }));
+        Assert.Throws<ArgumentException>(() => QRCodeGenerator.Create(content, QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal }));
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal })).IsFalse();
     }
 

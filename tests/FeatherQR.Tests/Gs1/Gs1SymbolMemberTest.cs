@@ -377,6 +377,62 @@ public class Gs1SymbolMemberTest
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(hri, RmQREccLevel.M, out _, stem: stem)).IsFalse();
     }
 
+    // A URI longer than any symbol holds
+
+    /// <summary>
+    /// The URI buffer holds one character more than the symbol's capacity, so its length depends on the text only below that.
+    /// Three times a long text passes the int range, and the length still caps. rMQR's cap fits the stack buffer.
+    /// </summary>
+    [Test]
+    [Arguments(0, 18, Gs1SymbolData.StandardQrCapacity, 20)]
+    [Arguments(100, 18, Gs1SymbolData.StandardQrCapacity, 320)]
+    [Arguments(2_356, 18, Gs1SymbolData.StandardQrCapacity, 7_088)]
+    [Arguments(2_357, 18, Gs1SymbolData.StandardQrCapacity, 7_090)]
+    [Arguments(400_000_000, 18, Gs1SymbolData.StandardQrCapacity, 7_090)]
+    [Arguments(716_000_000, 18, Gs1SymbolData.StandardQrCapacity, 7_090)]
+    [Arguments(int.MaxValue, int.MaxValue, Gs1SymbolData.StandardQrCapacity, 7_090)]
+    [Arguments(716_000_000, 18, Gs1SymbolData.RmQrCapacity, 362)]
+    public async Task UriBufferLength_IsTheBound_CappedOnePastTheCapacity(int textLength, int stemLength, int capacity, int expected)
+    {
+        await Assert.That(Gs1SymbolData.UriBufferLength(textLength, stemLength, capacity)).IsEqualTo(expected);
+        await Assert.That(Gs1SymbolData.UriBufferLength(textLength, stemLength, Gs1SymbolData.RmQrCapacity)).IsLessThanOrEqualTo(Gs1SymbolData.StackLimit);
+    }
+
+    /// <summary>
+    /// A URI longer than the most a symbol holds fits no version, whatever the options narrow. Every Create form says so as
+    /// the core says content does not fit: an <see cref="ArgumentException"/> that names no parameter, after the options are checked.
+    /// The size forms answer <c>false</c>.
+    /// </summary>
+    [Test]
+    public async Task CreateGs1DigitalLink_AUriPastEveryVersion_DoesNotFit()
+    {
+        const string hri = "(01)09506000134352";
+        var qrStem = "https://brand.example.com/" + new string('a', Gs1SymbolData.StandardQrCapacity);
+        await Assert.That(Gs1ElementString.TryToDigitalLink("0109506000134352", out var qrUri, out var error, qrStem)).IsTrue().Because(error.ToString());
+        await Assert.That(qrUri.Length).IsGreaterThan(Gs1SymbolData.StandardQrCapacity).Because("the premise: no QR Code holds the URI");
+
+        var narrowed = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10) };
+        foreach (var options in new[] { default, narrowed })
+        {
+            var fromData = await Assert.That(() => QRCodeGenerator.CreateGs1DigitalLink(hri, QREccLevel.L, options, qrStem)).ThrowsExactly<ArgumentException>();
+            await Assert.That(fromData!.ParamName).IsNull();
+            await Assert.That(fromData.Message).Contains("7,089");
+            var fromDestination = await Assert.That(() => QRCodeGenerator.CreateGs1DigitalLink(hri, QREccLevel.L, new byte[40_000], options, qrStem)).ThrowsExactly<ArgumentException>();
+            await Assert.That((fromDestination!.ParamName, fromDestination.Message)).IsEqualTo((fromData.ParamName, fromData.Message));
+            await Assert.That(QRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(hri, QREccLevel.L, out _, options, qrStem)).IsFalse();
+        }
+        await Assert.That(() => QRCodeGenerator.CreateGs1DigitalLink(hri, (QREccLevel)9, default, qrStem)).ThrowsExactly<ArgumentOutOfRangeException>()
+            .Because("the options are checked before the data is found not to fit");
+
+        var rmqrStem = "https://brand.example.com/" + new string('a', Gs1SymbolData.RmQrCapacity);
+        var fromRmqr = await Assert.That(() => RmQRCodeGenerator.CreateGs1DigitalLink(hri, RmQREccLevel.M, default, rmqrStem)).ThrowsExactly<ArgumentException>();
+        await Assert.That(fromRmqr!.ParamName).IsNull();
+        await Assert.That(fromRmqr.Message).Contains("361");
+        var fromRmqrDestination = await Assert.That(() => RmQRCodeGenerator.CreateGs1DigitalLink(hri, RmQREccLevel.M, new byte[40_000], default, rmqrStem)).ThrowsExactly<ArgumentException>();
+        await Assert.That((fromRmqrDestination!.ParamName, fromRmqrDestination.Message)).IsEqualTo((fromRmqr.ParamName, fromRmqr.Message));
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeGs1DigitalLink(hri, RmQREccLevel.M, out _, default, rmqrStem)).IsFalse();
+    }
+
     // Text too long for any symbol
 
     /// <summary>The two capacities the size forms compare a text's length with are the core's: one digit more fits no symbol.</summary>

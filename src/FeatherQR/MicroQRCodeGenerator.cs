@@ -413,8 +413,8 @@ public static partial class MicroQRCodeGenerator
         return PrepareConfiguration(in analysis, eccLevel, version);
     }
 
-    /// <summary>The parameter name a pinned version's errors report. No parameter has this name, but callers may read it from the exception, so it stays.</summary>
-    private const string PinnedVersionParamName = "requestedVersion";
+    /// <summary>The parameter a narrowed version's errors name: the options that narrowed it.</summary>
+    private const string OptionsParamName = "options";
 
     /// <summary>
     /// The actionable "does not fit" error, built off the success path: which constraint binds (mode availability versus length) and what the applicable maximum is, among the versions <paramref name="range"/> allows.
@@ -429,13 +429,13 @@ public static partial class MicroQRCodeGenerator
         {
             var version = range.Min;
             if (!MicroQRConstants.IsModeSupported(version, mode))
-                return new ArgumentException($"Encoding mode {mode} is not available on Micro QR version {version} (M1: Numeric; M2: +Alphanumeric; M3/M4: {byteModes}).", PinnedVersionParamName);
+                return new ArgumentException($"Encoding mode {mode} is not available on Micro QR version {version} (M1: Numeric; M2: +Alphanumeric; M3/M4: {byteModes}).", OptionsParamName);
 
             return new ArgumentException(
                 $"Content is too long for Micro QR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
                 $"but the maximum is {FormatDataLength(GetMaxDataLength(version, eccLevel, mode), mode)}. " +
                 "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.",
-                PinnedVersionParamName);
+                OptionsParamName);
         }
 
         var bestMax = -1;
@@ -461,13 +461,15 @@ public static partial class MicroQRCodeGenerator
                 return new ArgumentException(
                     $"Encoding mode {mode} is not available at ECC level {eccLevel} on any Micro QR version in {range} " +
                     $"(modes: M1: Numeric; M2: +Alphanumeric; M3/M4: {byteModes}; levels: M1: ErrorDetectionOnly; M2/M3: L, M; M4: L, M, Q). " +
-                    "Widen the version range, choose another ECC level, or use Standard QR (QRCodeGenerator).");
+                    "Widen the version range, choose another ECC level, or use Standard QR (QRCodeGenerator).",
+                    OptionsParamName);
             }
 
             return new ArgumentException(
                 $"Content is too long for Micro QR {range} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
                 $"but the maximum in that range is {FormatDataLength(bestMax, mode)} ({bestVersion}). " +
-                "Shorten the content, lower the ECC level, widen the version range, or use Standard QR (QRCodeGenerator) for longer content.");
+                "Shorten the content, lower the ECC level, widen the version range, or use Standard QR (QRCodeGenerator) for longer content.",
+                OptionsParamName);
         }
 
         // No version supports this mode/ECC combination at any length, a constraint problem, not a length problem, so say which constraint binds.

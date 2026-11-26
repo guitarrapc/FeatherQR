@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 
 namespace FeatherQR.Gs1.Internals;
 
@@ -11,7 +12,7 @@ internal static class Gs1SymbolData
 {
     /// <summary>
     /// The length of each stack buffer, in characters. The element buffer serves (AI) text up to this length, and
-    /// the URI buffer a <see cref="DigitalLinkBound"/> up to it.
+    /// the URI buffer a <see cref="UriBufferLength"/> up to it.
     /// </summary>
     public const int StackLimit = 512;
 
@@ -43,11 +44,27 @@ internal static class Gs1SymbolData
     public static bool IsPastCapacity(ReadOnlySpan<char> text, int capacity) => text.Length > (IsAiText(text) ? 2L * capacity : capacity);
 
     /// <summary>
-    /// A length no Digital Link URI of a text exceeds under a stem, the bound <see cref="Gs1ElementString"/>
-    /// documents for <c>TryToDigitalLink</c>: the stem plus three times the element string plus two. The text's
-    /// length stands in for the element string's, which is never longer.
+    /// The length of the URI buffer for a text under a stem. It is the bound <see cref="Gs1ElementString"/> documents
+    /// for <c>TryToDigitalLink</c>, the stem plus three times the element string plus two, with the text's length
+    /// standing in for the element string's, which is never longer. The bound caps at one character past the
+    /// symbol's capacity, since no symbol holds a URI that fills that buffer.
     /// </summary>
-    public static int DigitalLinkBound(int textLength, int stemLength) => stemLength + 3 * textLength + 2;
+    /// <remarks>
+    /// The text's length does not bound the URI's from below: an AI repeated with the same value is one AI in the URI.
+    /// So the cap, not the text, keeps the buffer small, and the bound is computed in <see cref="long"/>, which three
+    /// times any text's length stays inside.
+    /// </remarks>
+    public static int UriBufferLength(int textLength, int stemLength, int capacity) => (int)Math.Min(stemLength + 3L * textLength + 2, capacity + 1L);
+
+    /// <summary>Whether <see cref="TryGetDigitalLink"/> failed because the URI, valid in itself, is longer than any symbol holds.</summary>
+    public static bool IsPastEverySymbol(in Gs1Error error) => error.Kind == Gs1ErrorKind.DestinationTooSmall;
+
+    /// <summary>
+    /// The error for a URI longer than the most a symbol holds. It fits no version whatever the options allow, so like
+    /// the core's error for content too long for every version it names no parameter.
+    /// </summary>
+    public static ArgumentException UriPastEverySymbol(string symbol, int capacity)
+        => new($"The Digital Link URI is longer than the {capacity.ToString("N0", CultureInfo.InvariantCulture)} characters {symbol} holds at most. Shorten the data or the stem.");
 
     /// <summary>
     /// The element string of the text after every check. (AI) text is built into <paramref name="buffer"/>,
@@ -71,8 +88,10 @@ internal static class Gs1SymbolData
 
     /// <summary>
     /// The Digital Link URI of the text's data under a stem already validated, written into
-    /// <paramref name="uriBuffer"/>, which must hold <see cref="DigitalLinkBound"/> characters. The data is checked
-    /// as <see cref="TryGetElementString"/> checks it, then against what a URI can carry.
+    /// <paramref name="uriBuffer"/>, which holds <see cref="UriBufferLength"/> characters. The data is checked
+    /// as <see cref="TryGetElementString"/> checks it, then against what a URI can carry. A URI that is valid but longer
+    /// than the buffer fails with <see cref="Gs1ErrorKind.DestinationTooSmall"/>, which <see cref="IsPastEverySymbol"/>
+    /// tells apart: no symbol holds it.
     /// </summary>
     public static bool TryGetDigitalLink(ReadOnlySpan<char> text, int year, ReadOnlySpan<char> stem, Span<char> elementBuffer, Span<char> uriBuffer, out ReadOnlySpan<char> uri, out Gs1Error error)
     {
@@ -82,7 +101,9 @@ internal static class Gs1SymbolData
 
         if (!Gs1DigitalLink.TryBuild(elementString, year, stem, uriBuffer, out var length, out error))
         {
-            Debug.Assert(error.Kind != Gs1ErrorKind.DestinationTooSmall, "the bound holds every URI of the text");
+            // The builder checks the data before it writes, so a short buffer is the last thing it reports.
+            if (IsPastEverySymbol(error))
+                return false;
             // The builder names a place in the element string. For (AI) text that is a string the caller never saw.
             if (IsAiText(text))
                 error = error.Kind == Gs1ErrorKind.MissingPrimaryKey ? new Gs1Error(error.Kind, 0, text.Length) : Gs1Hri.MapElement(text, error);
