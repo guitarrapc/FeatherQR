@@ -121,6 +121,47 @@ public class PixelCoordinateEdgeTest
         }
     }
 
+    /// <summary>The Standard QR timing check reads one point at a time and takes the same pixel as the grid.</summary>
+    [Test]
+    [MethodDataSource(nameof(Coordinates))]
+    public async Task StandardQRPointReader_ReadsTheEdgeColumn(float x, int column)
+    {
+        var luminance = DarkColumn(column);
+        var transform = PerspectiveTransform.FromCoefficients(0f, 0f, x, 0f, 0f, 1.5f, 0f, 0f, 1f);
+
+        await Assert.That(Internals.StandardQR.QRImageDecoder.IsDarkAt(luminance, Width, Height, 128, default, transform, 0.5f, 0.5f)).IsTrue().Because($"x = {x:R}");
+    }
+
+    /// <summary>The rMQR format and timing checks read one point at a time: NaN reads light, anything else the pixel the grid takes.</summary>
+    [Test]
+    [MethodDataSource(nameof(Coordinates))]
+    public async Task RmQRPointReader_ReadsTheEdgeColumn(float x, int column)
+    {
+        var luminance = DarkColumn(column);
+        foreach (var transform in new[]
+        {
+            PerspectiveTransform.FromCoefficients(0f, 0f, x, 0f, 0f, 1.5f, 0f, 0f, 1f),
+            PerspectiveTransform.FromCoefficients(0f, 0f, x * 2f, 0f, 0f, 3f, 0f, 0f, 2f),
+        })
+        {
+            var dark = RmQRImageDecoder.SampleDark(luminance, Width, Height, 128, transform, 0.5f, 0.5f);
+            await Assert.That(dark).IsEqualTo(!float.IsNaN(x)).Because($"x = {x:R}, a33 = {transform.a33}");
+        }
+    }
+
+    /// <summary>The Micro QR timing-line fit reads a point only inside the image: NaN, left of it and past its right edge are outside.</summary>
+    [Test]
+    [MethodDataSource(nameof(Coordinates))]
+    public async Task MicroQRPointReader_ReadsInsideTheImageOnly(float x, int column)
+    {
+        var luminance = DarkColumn(column);
+        var inside = MicroQRImageDecoder.IsDarkAt(luminance, Width, Height, 128, x, 1.5f, out var dark);
+
+        var expected = x >= 0f && x < Width;
+        await Assert.That(inside).IsEqualTo(expected).Because($"x = {x:R}");
+        await Assert.That(dark).IsEqualTo(expected).Because($"x = {x:R}");
+    }
+
     /// <summary>A lattice point at NaN is neither inside nor outside the image: it is skipped, not read, on every tier.</summary>
     [Test]
     public async Task SubFinderLattice_SkipsNaNPoints()

@@ -5,8 +5,8 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// <see cref="VectorCast.ToPixel"/> lands every lane on the pixel <see cref="PixelIndex.Clamp(float, int)"/> takes, for any float,
-/// which is what keeps the 128-bit samplers byte-identical to their scalar tiers. <see cref="VectorCast.ToInt32Native"/> truncates
+/// <c>VectorCast.ToPixel</c> lands every lane on the pixel <see cref="PixelIndex.Clamp(float, int)"/> takes, for any float, on 128 and 256 bits,
+/// which is what keeps the vector samplers byte-identical to their scalar tiers. <see cref="VectorCast.ToInt32Native"/> truncates
 /// exactly from -1 (exclusive) up to 2^31, the only lanes the sub-finder lattice reads.
 /// </summary>
 public class VectorCastParityTest
@@ -74,6 +74,43 @@ public class VectorCastParityTest
     }
 
     [Test]
+    public async Task ToPixel256_MatchesScalarClamp_OnTheEdgesAndRandomBitPatterns()
+    {
+        if (!Vector256.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector256 not accelerated on this machine");
+            return;
+        }
+
+        var mismatches = new List<string>();
+        foreach (var limit in Limits)
+        {
+            foreach (var value in Edges)
+            {
+                for (var lane = 0; lane < 8; lane++)
+                {
+                    var lanes = new[] { 3.7f, float.NaN, 2147483648f, -2.5f, float.NegativeInfinity, 4095.5f, -0.5f, 1e20f };
+                    lanes[lane] = value;
+                    ComparePixel256(lanes, limit, mismatches);
+                }
+            }
+        }
+        var random = new Random(20261126);
+        var four = new float[4];
+        var eight = new float[8];
+        for (var trial = 0; trial < 20_000; trial++)
+        {
+            RandomLanes(random, trial, four);
+            four.CopyTo(eight, 0);
+            RandomLanes(random, trial, four);
+            four.CopyTo(eight, 4);
+            ComparePixel256(eight, Limits[trial % Limits.Length], mismatches);
+        }
+
+        await Assert.That(mismatches).IsEmpty().Because(string.Join("; ", mismatches.Take(8)));
+    }
+
+    [Test]
     public async Task ToInt32Native_Truncates_InsideTheIntRange()
     {
         if (!Vector128.IsHardwareAccelerated)
@@ -114,6 +151,17 @@ public class VectorCastParityTest
     {
         var actual = VectorCast.ToPixel(Vector128.Create(lanes), Vector128.Create((float)(limit - 1)));
         for (var lane = 0; lane < 4; lane++)
+        {
+            var expected = PixelIndex.Clamp(lanes[lane], limit);
+            if (actual.GetElement(lane) != expected)
+                mismatches.Add($"{lanes[lane]:R} (0x{BitConverter.SingleToInt32Bits(lanes[lane]):X8}) in lane {lane}, limit {limit}: {actual.GetElement(lane)}, scalar {expected}");
+        }
+    }
+
+    private static void ComparePixel256(float[] lanes, int limit, List<string> mismatches)
+    {
+        var actual = VectorCast.ToPixel(Vector256.Create(lanes), Vector256.Create((float)(limit - 1)));
+        for (var lane = 0; lane < 8; lane++)
         {
             var expected = PixelIndex.Clamp(lanes[lane], limit);
             if (actual.GetElement(lane) != expected)

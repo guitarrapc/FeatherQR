@@ -1294,7 +1294,7 @@ internal static partial class RmQRImageDecoder
         }
     }
 
-    private static bool SampleDark(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, float gridX, float gridY)
+    internal static bool SampleDark(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, float gridX, float gridY)
     {
         float x, y;
         // An affine frame's denominator is exactly 1 at any grid point, and a division by 1 returns its dividend bit for bit
@@ -1309,17 +1309,7 @@ internal static partial class RmQRImageDecoder
         }
         if (float.IsNaN(x) || float.IsNaN(y))
             return false;
-        var px = (int)x;
-        var py = (int)y;
-        if (px < 0)
-            px = 0;
-        else if (px >= width)
-            px = width - 1;
-        if (py < 0)
-            py = 0;
-        else if (py >= height)
-            py = height - 1;
-        return luminance[py * width + px] < threshold;
+        return luminance[PixelIndex.Clamp(y, height) * width + PixelIndex.Clamp(x, width)] < threshold;
     }
 
     /// <summary>

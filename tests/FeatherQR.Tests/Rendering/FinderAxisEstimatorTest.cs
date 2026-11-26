@@ -54,8 +54,21 @@ public class FinderAxisEstimatorTest
     [Arguments(2)]
     [Arguments(3)]
     public async Task DarkLightDarkRun_PixelAlignedFinder_FindsTheRingEdges(int pixelsPerModule)
+        => await AssertRingEdges(pixelsPerModule, quietZone: 2);
+
+    /// <summary>
+    /// The finder's dark ring ends at the image edge on every side. The walk stops at the first step outside the image,
+    /// so the outer edge is the same toward the left and top edges as toward the right and bottom ones.
+    /// </summary>
+    [Test]
+    [Arguments(1)]
+    [Arguments(2)]
+    [Arguments(3)]
+    public async Task DarkLightDarkRun_RingAtTheImageEdge_FindsTheRingEdges(int pixelsPerModule)
+        => await AssertRingEdges(pixelsPerModule, quietZone: 0);
+
+    private static async Task AssertRingEdges(int pixelsPerModule, int quietZone)
     {
-        const int quietZone = 2;
         var side = (7 + 2 * quietZone) * pixelsPerModule;
         var luminance = new byte[side * side];
         for (var y = 0; y < side; y++)
