@@ -87,7 +87,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// <param name="eccLevel">How much damage the QR code should survive.</param>
     /// <param name="size">Image side length in pixels.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
-    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>, or cannot encode an image this large in it.</exception>
     public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, QREccLevel eccLevel = QREccLevel.M, int size = 512, int quality = 100)
     {
         return new QRCodeImageBuilder(content)
@@ -104,7 +104,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="size">Image side length in pixels.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
-    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>, or cannot encode an image this large in it.</exception>
     public static byte[] GetImageBytes(QRCodeData qrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100)
     {
         return new QRCodeImageBuilder(qrCodeData)
@@ -361,7 +361,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// <param name="eccLevel">How much damage the QR code should survive.</param>
     /// <param name="size">Image side length in pixels.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
-    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>, or cannot encode an image this large in it.</exception>
     public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, QREccLevel eccLevel = QREccLevel.M, int size = 512, int quality = 100)
     {
         new QRCodeImageBuilder(content)
@@ -379,7 +379,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// <param name="format">The format to encode as. Skia encodes PNG, JPEG and WebP.</param>
     /// <param name="size">Image side length in pixels.</param>
     /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
-    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for <paramref name="format"/>, or cannot encode an image this large in it.</exception>
     public static void WriteImage(QRCodeData qrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = 512, int quality = 100)
     {
         new QRCodeImageBuilder(qrCodeData)

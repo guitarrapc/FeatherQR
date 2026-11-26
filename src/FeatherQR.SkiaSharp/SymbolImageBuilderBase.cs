@@ -338,8 +338,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <param name="output">Where to write. Left open afterwards.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
-    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare, or the image is too large for Skia to allocate.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>, or cannot encode an image this large in it.</exception>
     public void SaveTo(Stream output)
     {
         if (output is null)
@@ -359,8 +359,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <param name="writer">Where to write.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <c>null</c>.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
-    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare, or the image is too large for Skia to allocate.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>, or cannot encode an image this large in it.</exception>
     public void SaveTo(IBufferWriter<byte> writer)
     {
         if (writer is null)
@@ -393,8 +393,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <returns>A task that completes once the image is written.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
-    /// <exception cref="InvalidOperationException">Faults the task when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
-    /// <exception cref="NotSupportedException">Faults the task when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>.</exception>
+    /// <exception cref="InvalidOperationException">Faults the task when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare, or the image is too large for Skia to allocate.</exception>
+    /// <exception cref="NotSupportedException">Faults the task when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>, or cannot encode an image this large in it.</exception>
     /// <exception cref="OperationCanceledException">Cancels the task when <paramref name="cancellationToken"/> is canceled.</exception>
     public Task SaveToAsync(Stream output, CancellationToken cancellationToken = default)
     {
@@ -497,8 +497,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <summary>
     /// Renders the symbol and returns the encoded image bytes.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
-    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare, or the image is too large for Skia to allocate.</exception>
+    /// <exception cref="NotSupportedException">Thrown when Skia has no encoder for the format given to <see cref="WithFormat(SKEncodedImageFormat, int)"/>, or cannot encode an image this large in it.</exception>
     public byte[] ToByteArray()
     {
         using var image = GenerateImage();
@@ -509,7 +509,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <summary>
     /// Renders the symbol as an <see cref="SKImage"/>, which the caller disposes.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare, or the image is too large for Skia to allocate.</exception>
     public SKImage ToImage()
     {
         return GenerateImage();
@@ -518,11 +518,11 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <summary>
     /// Renders the symbol as an <see cref="SKBitmap"/>, which the caller disposes.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare, or the image is too large for Skia to allocate.</exception>
     public SKBitmap ToBitmap()
     {
         using var image = GenerateImage();
-        return SKBitmap.FromImage(image);
+        return SKBitmap.FromImage(image) ?? throw TooLargeToAllocate(image.Info);
     }
 
     // ─── Shared pipeline ───
@@ -626,8 +626,14 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
         }
     }
 
+    // Skia returns nothing both for a format it has no encoder for and for an image past the encoder's limits.
     private SKData Encode(SKImage image)
-        => image.Encode(_format, _quality) ?? throw new NotSupportedException($"Skia has no encoder for {_format}.");
+        => image.Encode(_format, _quality)
+           ?? throw new NotSupportedException($"Skia could not encode the {image.Width}x{image.Height} image as {_format}: it has no encoder for the format, or the image is too large for it (WebP takes at most 16,383 pixels a side).");
+
+    // Skia returns nothing when it cannot allocate the pixels, and allocates no raster image over int.MaxValue bytes.
+    private static InvalidOperationException TooLargeToAllocate(SKImageInfo info)
+        => new($"An image of {info.Width}x{info.Height} pixels is too large for Skia to allocate: a raster image takes at most 2,147,483,647 bytes. Use a smaller size, or write SVG.");
 
     /// <summary>
     /// Encodes the image into a buffer of its size.
@@ -699,7 +705,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
             info = info.WithAlphaType(SKAlphaType.Opaque);
         }
 
-        using var surface = SKSurface.Create(info);
+        using var surface = SKSurface.Create(info) ?? throw TooLargeToAllocate(info);
         RenderContent(surface.Canvas, symbol, info, contentRect);
 
         return surface.Snapshot();
