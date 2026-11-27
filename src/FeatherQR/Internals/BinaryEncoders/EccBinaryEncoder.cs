@@ -8,7 +8,7 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// </summary>
 /// <remarks>
 /// This encoder implements the Reed-Solomon error correction algorithm as specified in ISO/IEC 18004 Section 8.5.
-/// The public entry point dispatches to the fastest kernel the runtime supports: GFNI (net10.0+), SSSE3 (net8.0+), NEON (net8.0+ ARM64), the NEON kernel on WebAssembly's swizzle (net8.0+), or a portable scalar kernel used on netstandard and pre-SSSE3 x86.
+/// The public entry point dispatches to the fastest kernel the runtime supports: on net10.0 GFNI, SSSE3, NEON on ARM64 or the NEON kernel on WebAssembly's swizzle, and a portable scalar kernel on netstandard and pre-SSSE3 x86.
 /// All kernels produce byte-identical output. See the kernel parity tests.
 /// </remarks>
 internal static partial class EccBinaryEncoder
@@ -121,13 +121,11 @@ internal static partial class EccBinaryEncoder
 #if NET8_0_OR_GREATER
         if (blocks > 1 && eccCount <= 32 && System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
         {
-#if NET10_0_OR_GREATER
             if (System.Runtime.Intrinsics.X86.Gfni.IsSupported)
             {
                 CalculateEccGfniGroup(data, ecc, eccCount, blocks, length);
                 return;
             }
-#endif
             CalculateEccSsse3Group(data, ecc, eccCount, blocks, length);
             return;
         }

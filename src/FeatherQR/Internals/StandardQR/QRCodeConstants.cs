@@ -5,11 +5,8 @@ namespace FeatherQR.Internals.StandardQR;
 internal static class QRCodeConstants
 {
     private static readonly Lazy<IReadOnlyList<AlignmentPattern>> alignmentPatternTable = new(() => CreateAlignmentPatternTable());
-    private static readonly Lazy<IReadOnlyList<VersionInfo>> capacityTable = new(() => CreateCapacityTable());
 
     public static IReadOnlyList<AlignmentPattern> AlignmentPatternTable => alignmentPatternTable.Value;
-    public static IReadOnlyList<ECCInfo> CapacityECCTable => EccInfoTable.Entries;
-    public static IReadOnlyList<VersionInfo> CapacityTable => capacityTable.Value;
 
     /// <summary>
     /// The ECC table in <c>[version - 1][L, M, Q, H]</c> order, the order <see cref="QREccLevel"/> numbers the levels, so <see cref="GetEccInfo"/> is an index.
@@ -26,6 +23,7 @@ internal static class QRCodeConstants
     // - Index calculation: (version-1) × 16 + eccLevel × 4 + encodingMode
     // - Example: Version 1, ECC-M, Alphanumeric = 0×16 + 1×4 + 1 = capacityBaseValues[5] = 20 characters
     // Based on ISO/IEC 18004 Table 7-11
+    // The encoder does not read it. It counts bits against the ECC table, and the tests check those counts against this table.
     private static readonly int[] capacityBaseValues = [
         // ECC Level L: Numeric, Alphanumeric, Byte, Kanji
         // ECC Level M: Numeric, Alphanumeric, Byte, Kanji
@@ -708,8 +706,6 @@ internal static class QRCodeConstants
         {
             var b = i * 6;
             table[i] = new ECCInfo(
-                version: i / 4 + 1,
-                errorCorrectionLevel: (QREccLevel)(i % 4),
                 totalDataCodewords: baseValues[b],
                 eccPerBlock: baseValues[b + 1],
                 blocksInGroup1: baseValues[b + 2],
@@ -720,53 +716,6 @@ internal static class QRCodeConstants
         return table;
     }
 
-    private static IReadOnlyList<VersionInfo> CreateCapacityTable()
-    {
-        var table = new List<VersionInfo>(40); // 40 versions
-        for (var i = 0; i < (16 * 40); i = i + 16)
-        {
-            table.Add(new VersionInfo(
-                (i + 16) / 16,
-                [
-                    new VersionInfoDetails(
-                            QREccLevel.L,
-                            new (){
-                                { EncodingMode.Numeric, CapacityBaseValues[i] },
-                                { EncodingMode.Alphanumeric, CapacityBaseValues[i+1] },
-                                { EncodingMode.Byte, CapacityBaseValues[i+2] },
-                        }
-                    ),
-                    new VersionInfoDetails(
-                            QREccLevel.M,
-                            new (){
-                                { EncodingMode.Numeric, CapacityBaseValues[i+4] },
-                                { EncodingMode.Alphanumeric, CapacityBaseValues[i+5] },
-                                { EncodingMode.Byte, CapacityBaseValues[i+6] },
-                            }
-                    ),
-                    new VersionInfoDetails(
-                            QREccLevel.Q,
-                            new (){
-                                { EncodingMode.Numeric, CapacityBaseValues[i+8] },
-                                { EncodingMode.Alphanumeric, CapacityBaseValues[i+9] },
-                                { EncodingMode.Byte, CapacityBaseValues[i+10] },
-                            }
-                    ),
-                    new VersionInfoDetails(
-                            QREccLevel.H,
-                            new (){
-                                { EncodingMode.Numeric, CapacityBaseValues[i+12] },
-                                { EncodingMode.Alphanumeric, CapacityBaseValues[i+13] },
-                                { EncodingMode.Byte, CapacityBaseValues[i+14] },
-                            }
-                    )
-                ]
-            ));
-        }
-
-        return table;
-    }
-
     /// <summary>
     /// Alignment pattern information for a specific QR code version.
     /// </summary>
@@ -774,46 +723,5 @@ internal static class QRCodeConstants
     {
         public int Version;
         public List<Point> PatternPositions;
-    }
-
-    /// <summary>
-    /// Version information container for QR code capacity data.
-    /// Contains all encoding mode capacities for each error correction level.
-    /// </summary>
-    public struct VersionInfo
-    {
-        public VersionInfo(int version, List<VersionInfoDetails> versionInfoDetails)
-        {
-            Version = version;
-            Details = versionInfoDetails;
-        }
-
-        /// <summary>QR code version (1-40).</summary>
-        public int Version { get; }
-
-        /// <summary>Capacity details for each error correction level (L, M, Q, H).</summary>
-        public List<VersionInfoDetails> Details { get; }
-    }
-
-    /// <summary>
-    /// Capacity information for a specific error correction level.
-    /// Maps encoding modes to their maximum character/byte capacity.
-    /// </summary>
-    public struct VersionInfoDetails
-    {
-        public VersionInfoDetails(QREccLevel errorCorrectionLevel, Dictionary<EncodingMode, int> capacityDict)
-        {
-            ErrorCorrectionLevel = errorCorrectionLevel;
-            CapacityDict = capacityDict;
-        }
-
-        /// <summary>Error correction level.</summary>
-        public QREccLevel ErrorCorrectionLevel { get; }
-
-        /// <summary>
-        /// Maximum capacity for each encoding mode.
-        /// Key: EncodingMode, Value: Maximum number of characters/bytes.
-        /// </summary>
-        public Dictionary<EncodingMode, int> CapacityDict { get; }
     }
 }

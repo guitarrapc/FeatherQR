@@ -54,61 +54,10 @@ public static class SymbolRenderer
         if (iconData is not null)
             ValidateIcon(data, iconData);
 
-        var shape = moduleShape ?? RectangleModuleShape.Default;
-
-        using var lightPaint = new SKPaint() { Color = backgroundColor, Style = SKPaintStyle.Fill };
-        canvas.DrawRect(area, lightPaint);
-
         // Fit: uniform module scale, symbol centered in the area.
         var symbolArea = GetSquareArea(area);
-
-        // No symbol fits, so the area keeps its background and nothing else is drawn, overlays sized in pixels included.
-        if (IsEmpty(symbolArea))
+        if (!DrawSymbol(canvas, area, symbolArea, new StandardQrMatrixView(data), new StandardQrFinders(data), codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape))
             return;
-
-        using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
-
-        // Apply gradient if specified. The shader wrapper must be disposed here.
-        // Disposing the paint alone leaves the SKShader to the finalizer.
-        using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
-        if (gradientShader is not null)
-        {
-            darkPaint.Shader = gradientShader;
-        }
-        else
-        {
-            darkPaint.Color = codeColor;
-        }
-
-        // Draw regular modules (exclude finder patterns when a shape draws them).
-        // Full-cell rectangles with antialiasing off touch exactly, so horizontal runs
-        // of dark modules collapse into single rects, far fewer native draw calls.
-        var finderShape = ResolveFinderShape(shape, moduleSizePercent, finderPatternShape);
-        var skipFinderPatterns = finderShape is not null;
-        if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
-        {
-            DrawModuleRuns(canvas, new StandardQrMatrixView(data), symbolArea, darkPaint, skipFinderPatterns);
-        }
-        else
-        {
-            DrawModules(canvas, new StandardQrMatrixView(data), symbolArea, darkPaint, shape, moduleSizePercent, skipFinderPatterns);
-        }
-
-        // Draw finder patterns. A shape draws the dark modules only and leaves the light ring
-        // undrawn, so the background beneath shows through at any alpha with no layer and no
-        // blend mode, which is what lets SKSvgCanvas write the same drawing a raster surface gets.
-        if (finderShape is not null)
-        {
-            // The finder's antialiasing follows the finder shape, not the module shape: a square
-            // finder beside round modules stays crisp, a round one beside square modules does not.
-            darkPaint.IsAntialias = finderShape.RequiresAntialiasing;
-
-            // total 3 finder patterns
-            for (var i = 0; i < 3; i++)
-            {
-                finderShape.Draw(canvas, GetFinderPatternRect(data, i, symbolArea), darkPaint);
-            }
-        }
 
         // Draw the icon if provided
         if (iconData?.Icon is not null)
@@ -152,45 +101,9 @@ public static class SymbolRenderer
     {
         ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
 
-        var shape = moduleShape ?? RectangleModuleShape.Default;
-
-        using var lightPaint = new SKPaint() { Color = backgroundColor, Style = SKPaintStyle.Fill };
-        canvas.DrawRect(area, lightPaint);
-
         // Fit: uniform module scale, symbol centered in the area.
-        var symbolArea = GetSquareArea(area);
-
-        // No symbol fits, so the area keeps its background and nothing else is drawn, overlays sized in pixels included.
-        if (IsEmpty(symbolArea))
-            return;
-
-        using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
-
-        // Apply gradient if specified. The shader wrapper must be disposed here.
-        // Disposing the paint alone leaves the SKShader to the finalizer.
-        using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
-        if (gradientShader is not null)
-        {
-            darkPaint.Shader = gradientShader;
-        }
-        else
-        {
-            darkPaint.Color = codeColor;
-        }
-
-        var finderShape = ResolveFinderShape(shape, moduleSizePercent, finderPatternShape);
         var view = new MicroQRMatrixView(data);
-        if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
-        {
-            DrawModuleRuns(canvas, view, symbolArea, darkPaint, finderShape is not null);
-        }
-        else
-        {
-            DrawModules(canvas, view, symbolArea, darkPaint, shape, moduleSizePercent, finderShape is not null);
-        }
-
-        if (finderShape is not null)
-            DrawSingleFinder(canvas, view, symbolArea, finderShape, darkPaint);
+        DrawSymbol(canvas, area, GetSquareArea(area), view, new TopLeftFinder<MicroQRMatrixView>(view), codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 
     /// <summary>
@@ -227,43 +140,9 @@ public static class SymbolRenderer
     {
         ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
 
-        var shape = moduleShape ?? RectangleModuleShape.Default;
-
-        using var lightPaint = new SKPaint() { Color = backgroundColor, Style = SKPaintStyle.Fill };
-        canvas.DrawRect(area, lightPaint);
-
         // Letterbox: uniform module scale, symbol centered in the area.
-        var symbolArea = GetLetterboxedArea(area, data.Width, data.Height);
-
-        // No symbol fits, so the area keeps its background and nothing else is drawn, overlays sized in pixels included.
-        if (IsEmpty(symbolArea))
-            return;
-
-        using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
-
-        using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
-        if (gradientShader is not null)
-        {
-            darkPaint.Shader = gradientShader;
-        }
-        else
-        {
-            darkPaint.Color = codeColor;
-        }
-
-        var finderShape = ResolveFinderShape(shape, moduleSizePercent, finderPatternShape);
         var view = new RmQRMatrixView(data);
-        if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
-        {
-            DrawModuleRuns(canvas, view, symbolArea, darkPaint, finderShape is not null);
-        }
-        else
-        {
-            DrawModules(canvas, view, symbolArea, darkPaint, shape, moduleSizePercent, finderShape is not null);
-        }
-
-        if (finderShape is not null)
-            DrawSingleFinder(canvas, view, symbolArea, finderShape, darkPaint);
+        DrawSymbol(canvas, area, GetLetterboxedArea(area, data.Width, data.Height), view, new TopLeftFinder<RmQRMatrixView>(view), codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 
     /// <summary>
@@ -574,25 +453,99 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// Draws the single top-left finder pattern that Micro QR and rMQR share, the way the Standard
-    /// QR path above does: dark modules only, the light ring left to the background beneath.
+    /// What every symbology draws alike: the background over <paramref name="area"/>, then the modules of <paramref name="view"/> in <paramref name="symbolArea"/>, then the finder patterns where <paramref name="finders"/> puts them when a shape draws them.
     /// </summary>
-    private static void DrawSingleFinder<TView>(SKCanvas canvas, TView data, SKRect area, FinderPatternShape finderShape, SKPaint darkPaint)
+    /// <returns>False when no symbol fits, and only the background was drawn.</returns>
+    private static bool DrawSymbol<TView, TFinders>(SKCanvas canvas, SKRect area, SKRect symbolArea, TView view, TFinders finders, SKColor codeColor, SKColor backgroundColor, ModuleShape? moduleShape, float moduleSizePercent, GradientOptions? gradientOptions, FinderPatternShape? finderPatternShape)
+        where TView : struct, IModuleMatrixView
+        where TFinders : struct, IFinderLayout
+    {
+        using var lightPaint = new SKPaint() { Color = backgroundColor, Style = SKPaintStyle.Fill };
+        canvas.DrawRect(area, lightPaint);
+
+        // No symbol fits, so the area keeps its background and nothing else is drawn, overlays sized in pixels included.
+        if (IsEmpty(symbolArea))
+            return false;
+
+        var shape = moduleShape ?? RectangleModuleShape.Default;
+        using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
+
+        // Apply gradient if specified. The shader wrapper must be disposed here.
+        // Disposing the paint alone leaves the SKShader to the finalizer.
+        using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
+        if (gradientShader is not null)
+        {
+            darkPaint.Shader = gradientShader;
+        }
+        else
+        {
+            darkPaint.Color = codeColor;
+        }
+
+        // Draw regular modules (exclude finder patterns when a shape draws them).
+        // Full-cell rectangles with antialiasing off touch exactly, so horizontal runs
+        // of dark modules collapse into single rects, far fewer native draw calls.
+        var finderShape = ResolveFinderShape(shape, moduleSizePercent, finderPatternShape);
+        var skipFinderPatterns = finderShape is not null;
+        if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
+        {
+            DrawModuleRuns(canvas, view, symbolArea, darkPaint, skipFinderPatterns);
+        }
+        else
+        {
+            DrawModules(canvas, view, symbolArea, darkPaint, shape, moduleSizePercent, skipFinderPatterns);
+        }
+
+        // Draw finder patterns. A shape draws the dark modules only and leaves the light ring
+        // undrawn, so the background beneath shows through at any alpha with no layer and no
+        // blend mode, which is what lets SKSvgCanvas write the same drawing a raster surface gets.
+        if (finderShape is not null)
+        {
+            // The finder's antialiasing follows the finder shape, not the module shape: a square
+            // finder beside round modules stays crisp, a round one beside square modules does not.
+            darkPaint.IsAntialias = finderShape.RequiresAntialiasing;
+            for (var i = 0; i < finders.Count; i++)
+            {
+                finderShape.Draw(canvas, finders.GetRect(i, symbolArea), darkPaint);
+            }
+        }
+        return true;
+    }
+
+    /// <summary>Where a symbology's finder patterns sit in its fitted area.</summary>
+    private interface IFinderLayout
+    {
+        int Count { get; }
+
+        SKRect GetRect(int index, SKRect symbolArea);
+    }
+
+    /// <summary>Standard QR's three finder patterns, where <see cref="GetFinderPatternRect"/> reports them.</summary>
+    private readonly struct StandardQrFinders(QRCodeData data) : IFinderLayout
+    {
+        public int Count => 3;
+
+        public SKRect GetRect(int index, SKRect symbolArea) => GetFinderPatternRect(data, index, symbolArea);
+    }
+
+    /// <summary>The single top-left finder pattern that Micro QR and rMQR share.</summary>
+    private readonly struct TopLeftFinder<TView>(TView view) : IFinderLayout
         where TView : struct, IModuleMatrixView
     {
-        var cellWidth = area.Width / data.Width;
-        var cellHeight = area.Height / data.Height;
-        var quietZoneX = (data.Width - data.CoreWidth) / 2f;
-        var quietZoneY = (data.Height - data.CoreHeight) / 2f;
-        var finderRect = SKRect.Create(
-            area.Left + quietZoneX * cellWidth,
-            area.Top + quietZoneY * cellHeight,
-            cellWidth * 7,
-            cellHeight * 7);
+        public int Count => 1;
 
-        // Follows the finder shape, not the module shape, as on Standard QR.
-        darkPaint.IsAntialias = finderShape.RequiresAntialiasing;
-        finderShape.Draw(canvas, finderRect, darkPaint);
+        public SKRect GetRect(int index, SKRect symbolArea)
+        {
+            var cellWidth = symbolArea.Width / view.Width;
+            var cellHeight = symbolArea.Height / view.Height;
+            var quietZoneX = (view.Width - view.CoreWidth) / 2f;
+            var quietZoneY = (view.Height - view.CoreHeight) / 2f;
+            return SKRect.Create(
+                symbolArea.Left + quietZoneX * cellWidth,
+                symbolArea.Top + quietZoneY * cellHeight,
+                cellWidth * 7,
+                cellHeight * 7);
+        }
     }
 
     /// <summary>

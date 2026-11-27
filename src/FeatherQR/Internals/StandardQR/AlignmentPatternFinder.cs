@@ -171,10 +171,9 @@ internal static partial class AlignmentPatternFinder
         var runIndex = -1; // -1: waiting for the first light run
         var currentDark = false;
 
-        for (var x = minX; x <= maxX + 1; x++)
+        for (var x = minX; x <= maxX; x++)
         {
-            // One virtual pixel past the window terminates a trailing light run
-            var dark = x <= maxX && luminance[y * width + x] < threshold;
+            var dark = luminance[y * width + x] < threshold;
 
             if (runIndex == -1)
             {

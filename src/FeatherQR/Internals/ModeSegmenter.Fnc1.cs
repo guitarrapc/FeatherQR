@@ -125,8 +125,8 @@ internal static partial class ModeSegmenter
         {
             var c = text[i];
             var cls = ClassOf(c);
-            // Byte continues at 8 bits or opens from the cheapest state. A byte order mark inside the text never opens a run.
-            b = c == ByteOrderMark && i > 0 ? b + 8 : Math.Min(b + 8, cheapest + openByte);
+            // Byte continues at 8 bits or opens from the cheapest state. The text holds no byte order mark: one-byte charsets take nothing past U+00FF.
+            b = Math.Min(b + 8, cheapest + openByte);
             if (cls == ClassOther && c != Fnc1FieldSeparator)
             {
                 // Only Byte encodes this character, so it alone stays reachable and every
@@ -234,9 +234,7 @@ internal static partial class ModeSegmenter
             var cls = ClassOf(c);
             var row = parents.Slice(i * Fnc1ParentBytesPerChar, Fnc1ParentBytesPerChar);
 
-            b = c == ByteOrderMark && i > 0
-                ? ContinueKey(row, Fnc1StateByte, b + (8 << 4))
-                : ChooseKey(row, Fnc1StateByte, b + (8 << 4), cheapest + openByte);
+            b = ChooseKey(row, Fnc1StateByte, b + (8 << 4), cheapest + openByte);
 
             if (cls == ClassOther && c != Fnc1FieldSeparator)
             {

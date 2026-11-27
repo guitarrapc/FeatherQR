@@ -12,24 +12,6 @@ internal static class MicroQRFormatInformationDecoder
 {
     private const int MaxCorrectableBits = 3;
 
-    // All 32 valid masked format patterns, index = symbolNumber(0-7) * 4 + mask(0-3).
-    // Built from the encoder's own GetFormatBits so both sides always agree.
-    private static readonly ushort[] candidates = BuildCandidates();
-
-    private static ushort[] BuildCandidates()
-    {
-        var table = new ushort[32];
-        for (var symbolNumber = 0; symbolNumber < 8; symbolNumber++)
-        {
-            MicroQRConstants.GetVersionAndEccFromSymbolNumber(symbolNumber, out var version, out var eccLevel);
-            for (var mask = 0; mask < 4; mask++)
-            {
-                table[symbolNumber * 4 + mask] = MicroQRConstants.GetFormatBits(version, eccLevel, mask);
-            }
-        }
-        return table;
-    }
-
     /// <summary>
     /// Decodes format information from the raw 15-bit copy.
     /// </summary>
@@ -78,9 +60,9 @@ internal static class MicroQRFormatInformationDecoder
     {
         var table = new byte[1 << 15];
         table.AsSpan().Fill(NoCandidate);
-        for (var i = 0; i < candidates.Length; i++)
+        for (var i = 0; i < MicroQRConstants.FormatWordCount; i++)
         {
-            var word = candidates[i];
+            var word = MicroQRConstants.GetFormatWord(i);
             table[word] = (byte)i;
             for (var a = 0; a < 15; a++)
             {
@@ -100,9 +82,9 @@ internal static class MicroQRFormatInformationDecoder
     {
         var best = 0;
         var bestDistance = int.MaxValue;
-        for (var i = 0; i < candidates.Length; i++)
+        for (var i = 0; i < MicroQRConstants.FormatWordCount; i++)
         {
-            var bits = PopCount((ushort)(raw ^ candidates[i]));
+            var bits = PopCount((ushort)(raw ^ MicroQRConstants.GetFormatWord(i)));
             if (bits < bestDistance)
             {
                 bestDistance = bits;

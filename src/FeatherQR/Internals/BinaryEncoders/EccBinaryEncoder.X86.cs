@@ -37,13 +37,11 @@ internal static partial class EccBinaryEncoder
     /// </summary>
     internal static void CalculateEccSimd(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
-#if NET10_0_OR_GREATER
         if (Gfni.IsSupported)
         {
             CalculateEccGfni(data, ecc, eccCount);
             return;
         }
-#endif
         // Covers all pre-GFNI x86, AVX2-only CPUs included: wider vectors are slower than
         // dual 128-bit registers for this kernel.
         CalculateEccSsse3(data, ecc, eccCount);
@@ -371,7 +369,6 @@ internal static partial class EccBinaryEncoder
             ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t, 16), genHi);
     }
 
-#if NET10_0_OR_GREATER
     // ---------------------------------------------------------------------------
     // GFNI kernel (gf2p8affineqb: whole-vector GF multiply in one instruction)
     // ---------------------------------------------------------------------------
@@ -815,7 +812,6 @@ internal static partial class EccBinaryEncoder
         var carry = Avx2.Permute2x128(reg, reg, 0x81);
         return Avx2.AlignRight(carry, reg, 1) ^ Gfni.V256.GaloisFieldAffineTransform(g0, m, 0);
     }
-#endif // NET10_0_OR_GREATER
 
     // ---------------------------------------------------------------------------
     // Lookup helpers
@@ -831,7 +827,6 @@ internal static partial class EccBinaryEncoder
          ^ Unsafe.Add(ref table, 512 + (nint)((x >> 16) & 0xFF))
          ^ Unsafe.Add(ref table, 768 + (nint)(x >> 24));
 
-#if NET10_0_OR_GREATER
     /// <summary>Same as <see cref="QuadLookup"/> against a byte-offset region of the fused blob.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint BlobQuadLookup(ref byte blob, nint regionOffset, uint x)
@@ -843,7 +838,6 @@ internal static partial class EccBinaryEncoder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong ReadMatrix(ref ulong matrices, uint factor)
         => Unsafe.Add(ref matrices, (nint)factor);
-#endif
 
     // ---------------------------------------------------------------------------
     // Table construction (all lazy, per eccCount)
@@ -1043,7 +1037,6 @@ internal static partial class EccBinaryEncoder
         return t;
     }
 
-#if NET10_0_OR_GREATER
     // Fused per-eccCount blob for the GFNI kernel: quad-factor tables, composed TU
     // tables and the padded generator behind a single pointer chase.
     private const nint BlobQf = 0;      // 4 × 256 uints (4096 bytes)
@@ -1138,6 +1131,5 @@ internal static partial class EccBinaryEncoder
         0x9E3CE6533973E7CF, 0x9F3EE25B2953A74F, 0x1E3D64D7B163C78F, 0x1F3F60DFA143870F,
         0xDEBCA791FDFBF7EF, 0xDFBEA399EDDBB76F, 0x5EBD251575EBD7AF, 0x5FBF211D65CB972F,
     ];
-#endif // NET10_0_OR_GREATER
 }
 #endif // NET8_0_OR_GREATER

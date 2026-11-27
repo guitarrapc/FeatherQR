@@ -384,7 +384,7 @@ public class StyledSymbolDecodabilityTest
     /// <para>
     /// The test above compares one alpha against another, which a document that lost its finder at
     /// both alphas satisfies just as well. This one is the positive claim behind it. It is what
-    /// fails for a renderer that skips <c>DrawSingleFinder</c> in SVG output only (Micro QR and
+    /// fails for a renderer that skips the single finder pattern in SVG output only (Micro QR and
     /// rMQR lose their finder, raster untouched), for a curved shape that skips the draw carrying
     /// its ring, and for a square shape that drops its four outer bands and keeps only the 3x3
     /// centre.

@@ -29,7 +29,7 @@ Reference tests: [QRBinaryEncoderUnitTest](../../../tests/FeatherQR.Tests/Standa
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| Table 7-11 | Data capacity per version / ECC level | [QRCodeConstants.capacityBaseValues](../../../src/FeatherQR/Internals/StandardQR/QRCodeConstants.cs). Practical capacities are documented in [Data Capacity Reference](../../../docs/data-capacity.md) |
+| Table 7-11 | Data capacity per version / ECC level | Computed from Table 9 by counting bits. The table itself is [QRCodeConstants.capacityBaseValues](../../../src/FeatherQR/Internals/StandardQR/QRCodeConstants.cs), which the tests check the counts against. Practical capacities are documented in [Data Capacity Reference](../../../docs/data-capacity.md) |
 | Table 9 | ECC characteristics (block counts, codewords per block), read by version and level as an index | [QRCodeConstants.capacityECCBaseValues, GetEccInfo](../../../src/FeatherQR/Internals/StandardQR/QRCodeConstants.cs). Order: [QRCodeConstantsEccInfoTest](../../../tests/FeatherQR.Tests/StandardQr/QRCodeConstantsEccInfoTest.cs) |
 | Table 1 | Remainder bits per version | [QRCodeConstants.remainderBits](../../../src/FeatherQR/Internals/StandardQR/QRCodeConstants.cs) |
 | Annex E | Alignment pattern center coordinates | [QRCodeConstants.alignmentPatternBaseValues](../../../src/FeatherQR/Internals/StandardQR/QRCodeConstants.cs) |

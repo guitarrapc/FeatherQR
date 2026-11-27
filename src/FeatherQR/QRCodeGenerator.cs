@@ -436,7 +436,7 @@ public static partial class QRCodeGenerator
         for (int i = 0, from = 0; i < count; from = chunkEnds[i], i++)
         {
             var chunk = textSpan.Slice(from, chunkEnds[i] - from);
-            analyses[i] = bytes ? AnalyzeBytes(chunk, charset) : TextAnalyzer.Analyze(chunk, charset);
+            analyses[i] = bytes ? TextAnalyzer.AnalyzeBytes(chunk, charset) : TextAnalyzer.Analyze(chunk, charset);
         }
 
         var bomWritten = options.Utf8Bom && charset == EciMode.Utf8 && analyses[0].EncodingMode == EncodingMode.Byte;

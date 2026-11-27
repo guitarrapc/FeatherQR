@@ -42,10 +42,10 @@ public class BinaryInterleaverParityTest
         // group, group 2 only.
         (int Version, ECCInfo EccInfo)[] patterns =
         [
-            (1, new ECCInfo(1, QREccLevel.M, 6, 2, 2, 3, 0, 0)),   // group 1 only, 2 blocks
-            (5, new ECCInfo(5, QREccLevel.H, 7, 2, 1, 3, 1, 4)),   // 1+1 blocks, cw2 = cw1 + 1
-            (5, new ECCInfo(5, QREccLevel.H, 12, 2, 2, 3, 2, 3)),  // cw2 == cw1 (no tail row)
-            (5, new ECCInfo(5, QREccLevel.H, 8, 2, 0, 0, 2, 4)),   // group 2 only
+            (1, new ECCInfo(6, 2, 2, 3, 0, 0)),   // group 1 only, 2 blocks
+            (5, new ECCInfo(7, 2, 1, 3, 1, 4)),   // 1+1 blocks, cw2 = cw1 + 1
+            (5, new ECCInfo(12, 2, 2, 3, 2, 3)),  // cw2 == cw1 (no tail row)
+            (5, new ECCInfo(8, 2, 0, 0, 2, 4)),   // group 2 only
         ];
 
         foreach (var (version, eccInfo) in patterns)

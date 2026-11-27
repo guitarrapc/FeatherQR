@@ -62,5 +62,5 @@ public class EccBinaryEncoderBlocksUnitTest
 
     // A block structure no symbol has. The entry reads the ECC count and the two groups only.
     private static ECCInfo Layout(int eccCount, int blocks1, int length1, int blocks2, int length2)
-        => new(0, QREccLevel.L, blocks1 * length1 + blocks2 * length2, eccCount, blocks1, length1, blocks2, length2);
+        => new(blocks1 * length1 + blocks2 * length2, eccCount, blocks1, length1, blocks2, length2);
 }

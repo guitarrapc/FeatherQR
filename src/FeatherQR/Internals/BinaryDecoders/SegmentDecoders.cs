@@ -83,8 +83,6 @@ internal static class SegmentDecoders
 
         while (count >= 3)
         {
-            if (totalBits - reader.BitPosition < 10)
-                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(10);
             if (value > 999)
                 return DecodeStatus.InvalidBitstream;
@@ -95,8 +93,6 @@ internal static class SegmentDecoders
         }
         if (count == 2)
         {
-            if (totalBits - reader.BitPosition < 7)
-                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(7);
             if (value > 99)
                 return DecodeStatus.InvalidBitstream;
@@ -105,8 +101,6 @@ internal static class SegmentDecoders
         }
         else if (count == 1)
         {
-            if (totalBits - reader.BitPosition < 4)
-                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(4);
             if (value > 9)
                 return DecodeStatus.InvalidBitstream;
@@ -129,8 +123,6 @@ internal static class SegmentDecoders
 
         while (count >= 2)
         {
-            if (totalBits - reader.BitPosition < 11)
-                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(11);
             if (value >= 45 * 45)
                 return DecodeStatus.InvalidBitstream;
@@ -140,8 +132,6 @@ internal static class SegmentDecoders
         }
         if (count == 1)
         {
-            if (totalBits - reader.BitPosition < 6)
-                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(6);
             if (value >= 45)
                 return DecodeStatus.InvalidBitstream;
@@ -721,4 +711,13 @@ internal static class SegmentDecoders
 
         return DecodeStatus.Success;
     }
+
+    /// <summary>The charset a Byte segment takes under ECI assignment <paramref name="assignment"/>, or <see cref="ByteSegmentCharset.Unspecified"/> when the decoder has none for it.</summary>
+    public static ByteSegmentCharset CharsetOfEci(int assignment) => assignment switch
+    {
+        1 or 3 or 27 => ByteSegmentCharset.Iso8859_1, // ISO-8859-1, its historical assignment 1, and US-ASCII, a subset of it
+        26 => ByteSegmentCharset.Utf8,
+        20 => ByteSegmentCharset.ShiftJis,
+        _ => ByteSegmentCharset.Unspecified,
+    };
 }

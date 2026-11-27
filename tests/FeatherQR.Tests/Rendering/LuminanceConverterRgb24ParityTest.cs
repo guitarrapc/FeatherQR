@@ -23,7 +23,7 @@ public class LuminanceConverterRgb24ParityTest
     {
         yield return ("scalar", LuminanceConverter.ConvertRgb24Scalar, 1);
         if (Avx2.IsSupported)
-            yield return ("AVX2", LuminanceConverter.ConvertRgb24Avx2, 1);
+            yield return ("AVX2", LuminanceConverter.ConvertRgb24Avx2, 8);
         if (Ssse3.IsSupported || AdvSimd.Arm64.IsSupported || PackedSimd.IsSupported)
             yield return ("128-bit", LuminanceConverter.ConvertRgb24Vector128, LuminanceConverter.Rgb24BlockPixels);
         if (Dp.IsSupported && AdvSimd.Arm64.IsSupported)

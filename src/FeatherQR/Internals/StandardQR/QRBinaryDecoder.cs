@@ -36,13 +36,6 @@ internal static class QRBinaryDecoder
     private const int ModeKanji = 0b1000;
     private const int ModeFnc1Second = 0b1001;
 
-    // ECI assignment numbers this decoder can map to a charset.
-    private const int EciIso8859_1a = 1;  // ISO-8859-1 (historical assignment)
-    private const int EciIso8859_1b = 3;  // ISO-8859-1
-    private const int EciShiftJis = 20;   // Shift_JIS
-    private const int EciUtf8 = 26;       // UTF-8
-    private const int EciAscii = 27;      // US-ASCII (subset of ISO-8859-1)
-
     /// <summary>
     /// Decodes the corrected data codewords into characters.
     /// </summary>
@@ -153,22 +146,9 @@ internal static class QRBinaryDecoder
                                     return DecodeStatus.UnsupportedContent;
                                 break;
                             }
-                            switch (eciValue)
-                            {
-                                case EciIso8859_1a:
-                                case EciIso8859_1b:
-                                case EciAscii:
-                                    charset = ByteSegmentCharset.Iso8859_1;
-                                    break;
-                                case EciUtf8:
-                                    charset = ByteSegmentCharset.Utf8;
-                                    break;
-                                case EciShiftJis:
-                                    charset = ByteSegmentCharset.ShiftJis;
-                                    break;
-                                default:
-                                    return DecodeStatus.UnsupportedContent;
-                            }
+                            charset = SegmentDecoders.CharsetOfEci(eciValue);
+                            if (charset == ByteSegmentCharset.Unspecified)
+                                return DecodeStatus.UnsupportedContent;
                             break;
                         }
                     case ModeKanji:

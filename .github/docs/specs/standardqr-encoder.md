@@ -173,7 +173,7 @@ The larger gain comes from the probes being independent instances of one program
 
 - Accelerated 256-bit vectors carry eight 32-bit costs.
 - ARM64 NEON carries eight saturating 16-bit costs, since every symbol's budget fits that representation.
-- Every other 128-bit target (x64 without AVX, and WebAssembly) carries the NEON form on portable vectors, with the saturating add that SSE2 or WebAssembly provides (2026-09-30).
+- Every other 128-bit target (x64 without AVX, and WebAssembly) runs the same 16-bit walk, with the saturating add that SSE2 or WebAssembly provides (2026-09-30). One implementation serves all three, its saturating add and its any-lane test folded to each target's instructions: on ARM64 NativeAOT it compiles to the former separate NEON walk instruction for instruction (2026-11-27).
 
 On those targets the lane walks win only on chunks averaging 40 characters on x64 and 80 on WebAssembly, where interpreted code needs the longer chunks and one flag gates both builds. With lanes, the planner alone took 0.31 to 0.53 of its scalar probes' time on default NativeAOT, 0.61 to 0.69 on WebAssembly AOT and 0.26 to 0.75 interpreted, and an Optimal set took 0.76 to 0.83, 0.91 to 0.92 and 0.70 to 0.95 on the same three.
 

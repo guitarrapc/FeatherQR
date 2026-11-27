@@ -225,6 +225,13 @@ internal static class MicroQRConstants
         0xE3, 0x34, 0xD4, 0x31, 0x8D, 0x3E, 0xBA, 0x3B, // M4-Q: 34E3 31D4 3E8D 3BBA
     ];
 
+    /// <summary>The number of format words: eight symbol numbers, four masks each.</summary>
+    public const int FormatWordCount = 32;
+
+    /// <summary>The format word at <paramref name="index"/>, symbol number · 4 + mask.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ushort GetFormatWord(int index) => BinaryPrimitives.ReadUInt16LittleEndian(formatWords.Slice(index * 2));
+
     /// <summary>
     /// Whether a 15-bit <paramref name="word"/> is exactly one of the 32 format words, and the version, level and mask it names.
     /// </summary>
@@ -237,6 +244,6 @@ internal static class MicroQRConstants
         var data = (word ^ 0x4445) >> 10;
         GetVersionAndEccFromSymbolNumber(data >> 2, out version, out eccLevel);
         maskPattern = data & 3;
-        return BinaryPrimitives.ReadUInt16LittleEndian(formatWords.Slice(data * 2)) == word;
+        return GetFormatWord(data) == word;
     }
 }

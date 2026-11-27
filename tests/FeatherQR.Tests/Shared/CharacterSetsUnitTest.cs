@@ -67,14 +67,10 @@ public class CharacterSetsUnitTest
     [Arguments('#', -1)]
     public async Task GetAlphanumericValueTest(char c, int expected)
     {
-        var success = CharacterSets.TryGetAlphanumericValue(c, out var result);
+        await Assert.That(CharacterSets.IsAlphanumeric(c)).IsEqualTo(expected != -1);
         if (expected == -1)
-        {
-            await Assert.That(success).IsFalse();
-        }
+            await Assert.That(() => CharacterSets.GetAlphanumericValue(c)).ThrowsExactly<ArgumentException>();
         else
-        {
-            await Assert.That(result).IsEquivalentTo(expected);
-        }
+            await Assert.That(CharacterSets.GetAlphanumericValue(c)).IsEqualTo(expected);
     }
 }

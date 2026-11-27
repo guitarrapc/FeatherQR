@@ -234,7 +234,6 @@ internal static class RmQRConstants
 
     /// <summary>
     /// Reed-Solomon block structure as the shared <see cref="ECCInfo"/> (group 1 = the shorter blocks, group 2 = blocks with one more data codeword, and every block has the same ECC codeword count).
-    /// <see cref="ECCInfo.Version"/> carries the <see cref="RmQRVersion"/> value and <see cref="ECCInfo.ErrorCorrectionLevel"/> the corresponding <see cref="QREccLevel"/> (M or H).
     /// </summary>
     public static ECCInfo GetEccInfo(RmQRVersion version, RmQREccLevel eccLevel)
     {
@@ -246,8 +245,6 @@ internal static class RmQRConstants
         var shortBlocks = blocks - longBlocks;
 
         return new ECCInfo(
-            (int)version,
-            eccLevel == RmQREccLevel.M ? QREccLevel.M : QREccLevel.H,
             data,
             eccPerBlock,
             shortBlocks,

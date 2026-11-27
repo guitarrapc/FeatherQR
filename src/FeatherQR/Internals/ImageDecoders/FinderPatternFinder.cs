@@ -1214,7 +1214,7 @@ internal static partial class FinderPatternFinder
                 ref readonly var a = ref candidates[i];
                 for (var j = i + 1; j < candidates.Length - 1; j++)
                 {
-                    if ((candidates[j].ModuleSize - a.ModuleSize) / a.ModuleSize > Math.Min(bound, bestScore + SelectionTieTolerance))
+                    if ((candidates[j].ModuleSize - a.ModuleSize) / a.ModuleSize > bestScore + SelectionTieTolerance)
                         break;
 
                     ref readonly var b = ref candidates[j];
@@ -1223,7 +1223,7 @@ internal static partial class FinderPatternFinder
                     {
                         ref readonly var c = ref candidates[k];
                         var sizeSpread = (c.ModuleSize - a.ModuleSize) / a.ModuleSize;
-                        if (sizeSpread > Math.Min(bound, bestScore + SelectionTieTolerance))
+                        if (sizeSpread > bestScore + SelectionTieTolerance)
                             break;
 
                         var skew = RightIsoscelesSkew(ab, DistanceSquared(a, c), DistanceSquared(b, c));

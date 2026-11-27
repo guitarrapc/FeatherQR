@@ -1,7 +1,4 @@
 using System.Buffers;
-#if NET5_0_OR_GREATER
-using System.Text;
-#endif
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using FeatherQR.Internals;
@@ -53,8 +50,8 @@ public static partial class QRCodeGenerator
         Span<char> buffer = data.Length <= StackWidenedBytes ? stackalloc char[StackWidenedBytes] : (rented = ArrayPool<char>.Shared.Rent(data.Length));
         try
         {
-            var widened = Widen(data, buffer);
-            var analysis = AnalyzeBytes(widened, charset);
+            var widened = TextAnalyzer.WidenBytes(data, buffer);
+            var analysis = TextAnalyzer.AnalyzeBytes(widened, charset);
             return CreateFromBytesAnalysis(widened, eccLevel, in analysis, in options);
         }
         finally
@@ -90,8 +87,8 @@ public static partial class QRCodeGenerator
         Span<char> buffer = data.Length <= StackWidenedBytes ? stackalloc char[StackWidenedBytes] : (rented = ArrayPool<char>.Shared.Rent(data.Length));
         try
         {
-            var widened = Widen(data, buffer);
-            var analysis = AnalyzeBytes(widened, charset);
+            var widened = TextAnalyzer.WidenBytes(data, buffer);
+            var analysis = TextAnalyzer.AnalyzeBytes(widened, charset);
             if (options.Segmentation != QRSegmentation.Single)
                 return CreateOptimalTo(widened, eccLevel, destination, in analysis, in options);
 
@@ -131,8 +128,8 @@ public static partial class QRCodeGenerator
         Span<char> buffer = data.Length <= StackWidenedBytes ? stackalloc char[StackWidenedBytes] : (rented = ArrayPool<char>.Shared.Rent(data.Length));
         try
         {
-            var widened = Widen(data, buffer);
-            var analysis = AnalyzeBytes(widened, charset);
+            var widened = TextAnalyzer.WidenBytes(data, buffer);
+            var analysis = TextAnalyzer.AnalyzeBytes(widened, charset);
             if (!TryResolveVersion(widened, eccLevel, in analysis, in options, options.Segmentation != QRSegmentation.Single, out var version))
                 return false;
 
@@ -176,8 +173,8 @@ public static partial class QRCodeGenerator
         Span<char> buffer = data.Length <= StackWidenedBytes ? stackalloc char[StackWidenedBytes] : (rented = ArrayPool<char>.Shared.Rent(data.Length));
         try
         {
-            var widened = Widen(data, buffer);
-            var wholeText = AnalyzeBytes(widened, charset);
+            var widened = TextAnalyzer.WidenBytes(data, buffer);
+            var wholeText = TextAnalyzer.AnalyzeBytes(widened, charset);
             return CreateStructuredAppend(widened, eccLevel, in wholeText, in options, planTogether: true, bytes: true);
         }
         finally
@@ -221,21 +218,4 @@ public static partial class QRCodeGenerator
     /// <summary>The failure of a payload longer than any symbol holds, in the mode its bytes take, which <see cref="ThrowDoesNotFit"/> describes as the text calls do.</summary>
     private static void ThrowBytesDoNotFit(ref byte first, int length, EciMode charset, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
         => ThrowDoesNotFit(new TextAnalysisResult(TextAnalyzer.ModeOfBytes(ref first, length), charset, length), eccLevel, in options);
-
-    /// <summary>The bytes one to a char, U+0000 to U+00FF, which every writer turns back into the same bytes.</summary>
-    private static ReadOnlySpan<char> Widen(ReadOnlySpan<byte> data, Span<char> buffer)
-    {
-        var widened = buffer.Slice(0, data.Length);
-#if NET5_0_OR_GREATER
-        Encoding.Latin1.GetChars(data, widened);
-#else
-        for (var i = 0; i < data.Length; i++)
-            widened[i] = (char)data[i];
-#endif
-        return widened;
-    }
-
-    /// <summary>The analysis of widened bytes. The mode is the one text of the same characters takes, and the charset is the bytes' own.</summary>
-    private static TextAnalysisResult AnalyzeBytes(ReadOnlySpan<char> widened, EciMode charset)
-        => TextAnalyzer.Analyze(widened, EciMode.Default) with { EciMode = charset };
 }

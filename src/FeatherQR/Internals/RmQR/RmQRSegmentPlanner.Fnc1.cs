@@ -13,11 +13,7 @@ internal static partial class RmQRSegmentPlanner
     // The scan caches costs per width triple. It omits the floor run, whose ordinary packed table is incompatible with FNC1.
     // A retained predecessor table is reusable only if its last run priced the accepted candidate.
     // A cached earlier cost or an unpriced requested version requires a fresh plan-building run.
-    /// <summary><see cref="SelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, out bool, out bool)"/> under FNC1, throwing what <see cref="RmQRVersionSelector.SelectFnc1"/> throws when nothing fits.</summary>
-    public static RmQRVersion SelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, out bool useSegments)
-        => SelectVersionFnc1(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, default, out useSegments, out _, out _, out _);
-
-    /// <summary>The same, keeping the last cost run's predecessors in <paramref name="table"/>, which holds the plan where <paramref name="tableHoldsPlan"/> says so.</summary>
+    /// <summary><see cref="SelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, Span{byte}, out bool, out bool, out bool, out int, out int)"/> under FNC1, throwing what <see cref="RmQRVersionSelector.SelectFnc1"/> throws when nothing fits. The last cost run's predecessors are kept in <paramref name="table"/>, which holds the plan where <paramref name="tableHoldsPlan"/> says so.</summary>
     public static RmQRVersion SelectVersionFnc1(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Fnc1Mode fnc1, Span<byte> table, out bool useSegments, out bool tableHoldsPlan, out int tableFinalState, out int tablePlannedBits)
     {
         if (TrySelectVersionFnc1(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, fnc1, table, out var version, out useSegments, out tableHoldsPlan, out tableFinalState, out tablePlannedBits))

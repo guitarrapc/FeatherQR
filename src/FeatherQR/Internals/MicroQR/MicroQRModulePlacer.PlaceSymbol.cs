@@ -259,7 +259,7 @@ internal static partial class MicroQRModulePlacer
         // outside the data-region mask, so the fused apply cannot flip them.
         // Row 8 holds its bits in descending order, so the bit-reversed byte of
         // (formatBits >> 7), shifted to bit 1, goes in as one masked insert.
-        var formatBits = _formatBitsTable[(MicroQRConstants.GetSymbolNumber(version, eccLevel) << 2) | mask];
+        var formatBits = MicroQRConstants.GetFormatWord((MicroQRConstants.GetSymbolNumber(version, eccLevel) << 2) | mask);
         rows[8] = (rows[8] & ~0x1FEul) | ((ulong)_reverseByte[(formatBits >> 7) & 0xFF] << 1);
         for (var row = 7; row >= 1; row--)
         {
@@ -364,25 +364,6 @@ internal static partial class MicroQRModulePlacer
     // Static tables (all built by ordinary code from the reference
     // implementations in MicroQRModulePlacer.cs, NativeAOT/trimming-safe)
     // ---------------------------------------------------------------
-
-    /// <summary>
-    /// All 32 masked format words, index = symbolNumber(0-7) * 4 + mask(0-3), built from <see cref="MicroQRConstants.GetFormatBits"/> (the same shape as the decoder-side candidate table) so the per-symbol BCH remainder loop never runs during placement.
-    /// </summary>
-    private static readonly ushort[] _formatBitsTable = BuildFormatBitsTable();
-
-    private static ushort[] BuildFormatBitsTable()
-    {
-        var table = new ushort[32];
-        for (var symbolNumber = 0; symbolNumber < 8; symbolNumber++)
-        {
-            MicroQRConstants.GetVersionAndEccFromSymbolNumber(symbolNumber, out var version, out var eccLevel);
-            for (var mask = 0; mask < 4; mask++)
-            {
-                table[symbolNumber * 4 + mask] = MicroQRConstants.GetFormatBits(version, eccLevel, mask);
-            }
-        }
-        return table;
-    }
 
     /// <summary>Bit-reversed bytes, for the row-8 format information insert.</summary>
     private static readonly byte[] _reverseByte = BuildReverseByte();

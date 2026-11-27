@@ -198,7 +198,7 @@ internal static partial class RmQRBinaryEncoder
             }
             else
             {
-                PutAlphanumeric(ref dest, ref acc, ref accBits, ref bytePos, ref pending, AlnumValues[c & 0x7F]);
+                PutAlphanumeric(ref dest, ref acc, ref accBits, ref bytePos, ref pending, CharacterSets.AlphanumericByteValues[c & 0x7F]);
             }
         }
         if (pending >= 0)

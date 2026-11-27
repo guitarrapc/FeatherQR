@@ -1,7 +1,4 @@
 using System.Buffers;
-#if NET5_0_OR_GREATER
-using System.Text;
-#endif
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using FeatherQR.Internals;
@@ -47,8 +44,8 @@ public static partial class RmQRCodeGenerator
             ThrowBytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, charset, eccLevel, in options);
 
         Span<char> buffer = stackalloc char[MaxSymbolBytes];
-        var widened = Widen(data, buffer);
-        var analysis = AnalyzeBytes(widened, charset);
+        var widened = TextAnalyzer.WidenBytes(data, buffer);
+        var analysis = TextAnalyzer.AnalyzeBytes(widened, charset);
         if (options.Segmentation != RmQRSegmentation.Single)
             return CreateOptimal(widened, eccLevel, in analysis, options.Version, options.FitStrategy, options.Height, options.QuietZoneSize, fnc1: default);
 
@@ -93,8 +90,8 @@ public static partial class RmQRCodeGenerator
             ThrowBytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, charset, eccLevel, in options);
 
         Span<char> buffer = stackalloc char[MaxSymbolBytes];
-        var widened = Widen(data, buffer);
-        var analysis = AnalyzeBytes(widened, charset);
+        var widened = TextAnalyzer.WidenBytes(data, buffer);
+        var analysis = TextAnalyzer.AnalyzeBytes(widened, charset);
         var quietZoneSize = options.QuietZoneSize;
         if (options.Segmentation != RmQRSegmentation.Single)
             return CreateOptimalTo(widened, eccLevel, in analysis, destination, options.Version, options.FitStrategy, options.Height, quietZoneSize, fnc1: default);
@@ -149,8 +146,8 @@ public static partial class RmQRCodeGenerator
         else
         {
             Span<char> buffer = stackalloc char[MaxSymbolBytes];
-            var widened = Widen(data, buffer);
-            var analysis = AnalyzeBytes(widened, charset);
+            var widened = TextAnalyzer.WidenBytes(data, buffer);
+            var analysis = TextAnalyzer.AnalyzeBytes(widened, charset);
             fits = options.Segmentation != RmQRSegmentation.Single
                 ? TryPlanOptimalVersion(widened, eccLevel, in analysis, options.Version, options.FitStrategy, options.Height, fnc1: default, out version)
                 : RmQRVersionSelector.TrySelect(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, options.Version, options.FitStrategy, options.Height, out version);
@@ -190,21 +187,4 @@ public static partial class RmQRCodeGenerator
         _ = PrepareConfiguration(new TextAnalysisResult(TextAnalyzer.ModeOfBytes(ref first, length), charset, length), eccLevel, options.Version, options.FitStrategy, options.Height);
         throw new InvalidOperationException($"No rMQR version holds {length} bytes, so the selector refuses them first.");
     }
-
-    /// <summary>The bytes one to a char, U+0000 to U+00FF, which every writer turns back into the same bytes.</summary>
-    private static ReadOnlySpan<char> Widen(ReadOnlySpan<byte> data, Span<char> buffer)
-    {
-        var widened = buffer.Slice(0, data.Length);
-#if NET5_0_OR_GREATER
-        Encoding.Latin1.GetChars(data, widened);
-#else
-        for (var i = 0; i < data.Length; i++)
-            widened[i] = (char)data[i];
-#endif
-        return widened;
-    }
-
-    /// <summary>The analysis of widened bytes. The mode is the one text of the same characters takes, and the charset is the bytes' own.</summary>
-    private static TextAnalysisResult AnalyzeBytes(ReadOnlySpan<char> widened, EciMode charset)
-        => TextAnalyzer.Analyze(widened, EciMode.Default) with { EciMode = charset };
 }

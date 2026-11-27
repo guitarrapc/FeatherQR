@@ -11,7 +11,7 @@ public class BinaryInterleaverUnitTest
     internal async Task InterleaveCodewords_TwoBlocks_CorrectOrder()
     {
         var version = 1;
-        var eccInfo = new ECCInfo(version, QREccLevel.M, 6, 2, 2, 3, 0, 0);
+        var eccInfo = new ECCInfo(6, 2, 2, 3, 0, 0);
 
         // data: Block1 (D1,D2,D3) + Block2 (D4,D5,D6)
         byte[] allData = [0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6];
@@ -42,7 +42,7 @@ public class BinaryInterleaverUnitTest
     {
         var version = 5;
         // Arrange - Group 1 (3 bytes), Group 2 (4 bytes)
-        var eccInfo = new ECCInfo(version, QREccLevel.H, 7, 2, 1, 3, 1, 4);
+        var eccInfo = new ECCInfo(7, 2, 1, 3, 1, 4);
 
         // data: Group1 Block0 (3 bytes) + Group2 Block0 (4 bytes)
         byte[] allData = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07];
