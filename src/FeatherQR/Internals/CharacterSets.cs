@@ -361,7 +361,7 @@ internal static class CharacterSets
     /// <summary>
     /// The alphanumeric values of ASCII 0-127 as bytes, 0 outside the alphabet, for writers whose caller validated it: indexed by c &amp; 0x7F, so the access needs no bounds check.
     /// </summary>
-    /// <remarks>Unsigned rather than <see cref="AlphanumericValues"/>, because a signed load is a byte longer and needs one more instruction to widen.</remarks>
+    /// <remarks>Unsigned rather than <see cref="AlphanumericValues"/>, because sign-extending the loads made the callers' code longer.</remarks>
     internal static ReadOnlySpan<byte> AlphanumericByteValues =>
     [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

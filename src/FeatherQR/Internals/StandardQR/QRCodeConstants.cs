@@ -23,7 +23,7 @@ internal static class QRCodeConstants
     // - Index calculation: (version-1) × 16 + eccLevel × 4 + encodingMode
     // - Example: Version 1, ECC-M, Alphanumeric = 0×16 + 1×4 + 1 = capacityBaseValues[5] = 20 characters
     // Based on ISO/IEC 18004 Table 7-11
-    // The encoder does not read it. It counts bits against the ECC table, and the tests check those counts against this table.
+    // The encoder does not read it. It counts bits against the ECC table, and the Kanji tests check that count against this table's Kanji column.
     private static readonly int[] capacityBaseValues = [
         // ECC Level L: Numeric, Alphanumeric, Byte, Kanji
         // ECC Level M: Numeric, Alphanumeric, Byte, Kanji
