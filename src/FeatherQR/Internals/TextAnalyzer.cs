@@ -1,9 +1,6 @@
-#if NET5_0_OR_GREATER
-#define SIMD_SUPPORTED
-using System.Runtime.Intrinsics.X86;
-#endif
 #if NET8_0_OR_GREATER
 using System.Buffers;
+using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.Wasm;
 #endif
@@ -46,7 +43,7 @@ internal static partial class TextAnalyzer
             return new TextAnalysisResult(EncodingMode.Byte, actualEciMode, 0);
         }
 
-#if SIMD_SUPPORTED
+#if NET8_0_OR_GREATER
         if (Avx2.IsSupported)
         {
             return AnalyzeAvx2(text, requestedEciMode);
@@ -103,6 +100,23 @@ internal static partial class TextAnalyzer
             ? ResolveKanji(text, in analysis, planKanji)
             : analysis;
     }
+
+    /// <summary>The bytes one to a char, U+0000 to U+00FF, which every writer turns back into the same bytes.</summary>
+    public static ReadOnlySpan<char> WidenBytes(ReadOnlySpan<byte> data, Span<char> buffer)
+    {
+        var widened = buffer.Slice(0, data.Length);
+#if NET5_0_OR_GREATER
+        System.Text.Encoding.Latin1.GetChars(data, widened);
+#else
+        for (var i = 0; i < data.Length; i++)
+            widened[i] = (char)data[i];
+#endif
+        return widened;
+    }
+
+    /// <summary>The analysis of widened bytes. The mode is the one text of the same characters takes, and the charset is the bytes' own, under which every writer narrows a char back to its byte.</summary>
+    public static TextAnalysisResult AnalyzeBytes(ReadOnlySpan<char> widened, EciMode charset)
+        => Analyze(widened, EciMode.Default) with { EciMode = charset };
 
     /// <summary>
     /// The mode <see cref="Analyze(ReadOnlySpan{char}, EciMode)"/> gives these bytes widened one to a char.

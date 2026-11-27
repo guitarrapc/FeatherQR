@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="QRCodeConstants.GetEccInfo"/> is an index into a table built in <c>[version - 1][L, M, Q, H]</c> order. These hold the
-/// index to that order: a lookup returns its own version and level, its codewords fill the version's data modules exactly,
+/// index to that order: a version's levels hold less data from L to H, their codewords fill the version's data modules exactly,
 /// and a version outside the table fails as an argument error rather than as an index out of range.
 /// </summary>
 public class QRCodeConstantsEccInfoTest
@@ -18,11 +18,13 @@ public class QRCodeConstantsEccInfoTest
             // The placement layout counts the modules data can take, independently of the ECC table: every level of a
             // version fills them with the same number of codewords, only the split between data and ECC changes.
             var codewords = ModulePlacer.GetLayout(version).FreeModules / 8;
+            var previousData = int.MaxValue;
             foreach (var level in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
             {
                 var info = QRCodeConstants.GetEccInfo(version, level);
-                await Assert.That(info.Version).IsEqualTo(version);
-                await Assert.That(info.ErrorCorrectionLevel).IsEqualTo(level);
+                // Each level holds less data than the one below it, so levels read out of order break this
+                await Assert.That(info.TotalDataCodewords).IsLessThan(previousData).Because($"version {version}-{level}");
+                previousData = info.TotalDataCodewords;
                 var blocks = info.BlocksInGroup1 + info.BlocksInGroup2;
                 await Assert.That(info.BlocksInGroup1 * info.CodewordsInGroup1 + info.BlocksInGroup2 * info.CodewordsInGroup2).IsEqualTo(info.TotalDataCodewords);
                 await Assert.That(info.TotalDataCodewords + blocks * info.ECCPerBlock).IsEqualTo(codewords).Because($"version {version}-{level}");

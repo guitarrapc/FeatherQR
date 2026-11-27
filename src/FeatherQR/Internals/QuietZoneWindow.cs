@@ -1,4 +1,4 @@
-#if !NET10_0_OR_GREATER
+#if !NET8_0_OR_GREATER
 using System.Buffers.Binary;
 #endif
 using System.Diagnostics;
@@ -75,9 +75,9 @@ internal static partial class QuietZoneWindow
     /// <remarks>
     /// .NET 10 on x64 writes a clear of a constant 8 or 16 bytes as one store whichever form its profile saw run, unless the method it is
     /// inlined into has used up its inline budget (see <c>ClearByStores</c>). 32-bit x86 on .NET 10 calls
-    /// <c>SpanHelpers.ClearWithoutReferences</c> for it. .NET 8 leaves the form the profile did not see as a call, so a process that
-    /// encodes with the default quiet zones and then with one of 5 to 8 pays a call a row. The builds before .NET 10 write 8-byte stores
-    /// instead, which .NET 8 inlines in either form.
+    /// <c>SpanHelpers.ClearWithoutReferences</c> for it. The netstandard builds, which runtimes before .NET 10 load, write 8-byte stores
+    /// instead: .NET 8 leaves the clear form its profile did not see as a call, so a process that encodes with the default quiet zones
+    /// and then with one of 5 to 8 would pay a call a row, and it inlines the stores in either form.
     /// <para>
     /// A gap of 17 to 32 bytes, quiet zones 9 to 16, is two 16-byte stores, one ending where the gap ends and one starting where it starts,
     /// and a gap of 33 to 64 bytes, quiet zones 17 to 32, four, two from each end, so nothing in front of the gap is zeroed. A clear of
@@ -93,7 +93,7 @@ internal static partial class QuietZoneWindow
     {
         if (gap <= 8)
         {
-#if NET10_0_OR_GREATER
+#if NET8_0_OR_GREATER
             target.Slice(gapEnd - 8, 8).Clear();
 #else
             BinaryPrimitives.WriteUInt64LittleEndian(target.Slice(gapEnd - 8), 0);
@@ -101,7 +101,7 @@ internal static partial class QuietZoneWindow
         }
         else if (gap <= 16)
         {
-#if NET10_0_OR_GREATER
+#if NET8_0_OR_GREATER
             target.Slice(gapEnd - 16, 16).Clear();
 #else
             BinaryPrimitives.WriteUInt64LittleEndian(target.Slice(gapEnd - 16), 0);

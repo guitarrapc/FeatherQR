@@ -190,7 +190,7 @@ internal static partial class RmQRBinaryEncoder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void WriteNumeric(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> digits, bool vectorized)
     {
-        Debug.Assert(AllNumeric(digits), "caller must validate the numeric alphabet");
+        Debug.Assert(CharacterSets.AreAllNumeric(digits), "caller must validate the numeric alphabet");
 
         ref var c = ref MemoryMarshal.GetReference(digits);
         var length = digits.Length;
@@ -223,13 +223,13 @@ internal static partial class RmQRBinaryEncoder
         // 9 digits -> one 30-bit append. The SWAR load at i+6 reads chars i+6..i+9, so a 10th char must exist: i + 9 < length.
         for (; i + 9 < length; i += 9)
         {
-            var g = (SwarGroup(ref c, i) << 20) | (SwarGroup(ref c, i + 3) << 10) | SwarGroup(ref c, i + 6);
+            var g = (CharacterSets.NumericGroup(ref c, i) << 20) | (CharacterSets.NumericGroup(ref c, i + 3) << 10) | CharacterSets.NumericGroup(ref c, i + 6);
             Append(ref dest, ref acc, ref accBits, ref bytePos, g, 30);
         }
         // 3 digits per append while a 4th readable char exists
         for (; i + 3 < length; i += 3)
         {
-            Append(ref dest, ref acc, ref accBits, ref bytePos, SwarGroup(ref c, i), 10);
+            Append(ref dest, ref acc, ref accBits, ref bytePos, CharacterSets.NumericGroup(ref c, i), 10);
         }
         // scalar tail: 0-3 digits left, no headroom for an 8-byte load. The per-digit '0' offsets fold into one subtract (5328 = '0' * 111, 528 = '0' * 11).
         if (i + 2 < length)
@@ -254,7 +254,7 @@ internal static partial class RmQRBinaryEncoder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void WriteAlphanumeric(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> chars, bool vectorized)
     {
-        Debug.Assert(AllAlphanumeric(chars), "caller must validate the alphanumeric alphabet");
+        Debug.Assert(CharacterSets.AreAllAlphanumeric(chars), "caller must validate the alphanumeric alphabet");
 
         var i = 0;
 
@@ -294,18 +294,18 @@ internal static partial class RmQRBinaryEncoder
 
         for (; i + 3 < chars.Length; i += 4)
         {
-            var p0 = AlnumValues[chars[i] & 0x7F] * 45 + AlnumValues[chars[i + 1] & 0x7F];
-            var p1 = AlnumValues[chars[i + 2] & 0x7F] * 45 + AlnumValues[chars[i + 3] & 0x7F];
+            var p0 = CharacterSets.AlphanumericByteValues[chars[i] & 0x7F] * 45 + CharacterSets.AlphanumericByteValues[chars[i + 1] & 0x7F];
+            var p1 = CharacterSets.AlphanumericByteValues[chars[i + 2] & 0x7F] * 45 + CharacterSets.AlphanumericByteValues[chars[i + 3] & 0x7F];
             Append(ref dest, ref acc, ref accBits, ref bytePos, (p0 << 11) | p1, 22);
         }
         if (i + 1 < chars.Length)
         {
-            Append(ref dest, ref acc, ref accBits, ref bytePos, AlnumValues[chars[i] & 0x7F] * 45 + AlnumValues[chars[i + 1] & 0x7F], 11);
+            Append(ref dest, ref acc, ref accBits, ref bytePos, CharacterSets.AlphanumericByteValues[chars[i] & 0x7F] * 45 + CharacterSets.AlphanumericByteValues[chars[i + 1] & 0x7F], 11);
             i += 2;
         }
         if (i < chars.Length)
         {
-            Append(ref dest, ref acc, ref accBits, ref bytePos, AlnumValues[chars[i] & 0x7F], 6);
+            Append(ref dest, ref acc, ref accBits, ref bytePos, CharacterSets.AlphanumericByteValues[chars[i] & 0x7F], 6);
         }
     }
 
@@ -452,72 +452,10 @@ internal static partial class RmQRBinaryEncoder
     // Group / value helpers
     // ---------------------------------------------------------------
 
-    // One ulong holds four 16-bit UTF-16 lanes, so a single 64-bit multiply turns a 3-digit group into its value.
-    //
-    //   chunk = 4 chars, unaligned 8-byte read. "1234" lays out little-endian as
-    //           lanes  '1' | '2' | '3' | '4'
-    //   chunk - SwarDigitBias   subtracts '0' from every lane:
-    //           lanes   1  |  2  |  3  |  4
-    //   * SwarGroupMagic (100<<32 | 10<<16 | 1): the partial products
-    //           d0*100<<32, d1*10<<32, d2*1<<32
-    //   all land in bit window [32..47], so that window holds d0*100 + d1*10 + d2.
-    //   The group value is <= 999 < 2^10 (mask 0x3FF). Lower lanes cannot carry into the window, and every product of the 4th lane lands at bit 48+ or overflows out of the 64-bit register, so its value never matters.
-    //
-    // Only 3 digits contribute, but the 8-byte load spans 4 chars, so callers must guarantee one readable char beyond each group (see the loop guards above).
-    private const ulong SwarDigitBias = 0x0030_0030_0030_0030UL;
-    private const ulong SwarGroupMagic = (100UL << 32) | (10UL << 16) | 1UL;
-
 #if NET8_0_OR_GREATER
     // pmaddwd(1024,1) over the biased 16-bit groups leaves 5328 * 1025 in each 32-bit half.
     private const ulong SimdNumericBiasPair = (5328UL * 1025UL) | ((5328UL * 1025UL) << 32);
 #endif
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int SwarGroup(ref char c, int i)
-    {
-        if (BitConverter.IsLittleEndian)
-        {
-            var chunk = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref c, i)));
-            return (int)(((chunk - SwarDigitBias) * SwarGroupMagic) >> 32) & 0x3FF;
-        }
-
-        // Big-endian runtimes: the little-endian lane layout above does not hold and a whole-ulong byte reversal would also swap the bytes INSIDE each 16-bit char lane, so fall back to scalar group math. IsLittleEndian is a JIT-time constant, so this branch vanishes from little-endian codegen.
-        return Unsafe.Add(ref c, i) * 100 + Unsafe.Add(ref c, i + 1) * 10 + Unsafe.Add(ref c, i + 2) - 5328; // folded bias: 5328 = '0' * 111
-    }
-
-    // A table of its own rather than CharacterSets.GetAlphanumericValue, which checks and throws per char. QR alphanumeric values are 0-44, so byte entries suffice.
-    // Invalid slots hold 0 and are never read because the caller validates the alphabet.
-    // Lookups index as AlnumValues[c & 0x7F]: the mask keeps any UTF-16 char inside 0-127, so the access needs no bounds check.
-    private static ReadOnlySpan<byte> AlnumValues =>
-    [
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        36, 0, 0, 0, 37, 38, 0, 0, 0, 0, 39, 40, 0, 41, 42, 43,
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 44, 0, 0, 0, 0, 0,
-        0, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-        25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    ];
-
-    // Debug-only contract checks (evaluated solely inside Debug.Assert).
-    private static bool AllNumeric(ReadOnlySpan<char> chars)
-    {
-        foreach (var c in chars)
-        {
-            if (!CharacterSets.IsNumeric(c)) return false;
-        }
-        return true;
-    }
-
-    private static bool AllAlphanumeric(ReadOnlySpan<char> chars)
-    {
-        foreach (var c in chars)
-        {
-            if (!CharacterSets.IsAlphanumeric(c)) return false;
-        }
-        return true;
-    }
 
     // ---------------------------------------------------------------
     // Writer: 64-bit MSB-first accumulator. A 32-bit big-endian word is stored once 32+ bits are pending, so 0..32 bits stay pending between appends.

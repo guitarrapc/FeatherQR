@@ -1,6 +1,3 @@
-#if NET5_0_OR_GREATER
-using System.Text;
-#endif
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using FeatherQR.Internals;
@@ -42,8 +39,8 @@ public static partial class MicroQRCodeGenerator
             throw BytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, eccLevel, options.Version);
 
         Span<char> buffer = stackalloc char[MicroQRSegmentPlanner.MaxPlannableChars];
-        var widened = Widen(data, buffer);
-        var analysis = AnalyzeBytes(widened);
+        var widened = TextAnalyzer.WidenBytes(data, buffer);
+        var analysis = TextAnalyzer.AnalyzeBytes(widened, EciMode.Default);
         if (!TrySelectBytesVersion(widened, eccLevel, in analysis, in options, out var version, out var useSegments))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
         Span<ModeSegment> plan = useSegments ? stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars] : default;
@@ -84,8 +81,8 @@ public static partial class MicroQRCodeGenerator
             throw BytesDoNotFit(ref MemoryMarshal.GetReference(data), data.Length, eccLevel, options.Version);
 
         Span<char> buffer = stackalloc char[MicroQRSegmentPlanner.MaxPlannableChars];
-        var widened = Widen(data, buffer);
-        var analysis = AnalyzeBytes(widened);
+        var widened = TextAnalyzer.WidenBytes(data, buffer);
+        var analysis = TextAnalyzer.AnalyzeBytes(widened, EciMode.Default);
         if (!TrySelectBytesVersion(widened, eccLevel, in analysis, in options, out var version, out var useSegments))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
         Span<ModeSegment> plan = useSegments ? stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars] : default;
@@ -134,8 +131,8 @@ public static partial class MicroQRCodeGenerator
         }
 
         Span<char> buffer = stackalloc char[MicroQRSegmentPlanner.MaxPlannableChars];
-        var widened = Widen(data, buffer);
-        var analysis = AnalyzeBytes(widened);
+        var widened = TextAnalyzer.WidenBytes(data, buffer);
+        var analysis = TextAnalyzer.AnalyzeBytes(widened, EciMode.Default);
         if (!TrySelectBytesVersion(widened, eccLevel, in analysis, in options, out var version, out var useSegments))
             return false;
         Span<ModeSegment> plan = useSegments ? stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars] : default;
@@ -196,21 +193,4 @@ public static partial class MicroQRCodeGenerator
         _ = TrySelectVersionInRange(in analysis, eccLevel, range, out _);
         return NotFittingError(analysis.EncodingMode, length, eccLevel, range);
     }
-
-    /// <summary>The bytes one to a char, U+0000 to U+00FF, which every writer turns back into the same bytes.</summary>
-    private static ReadOnlySpan<char> Widen(ReadOnlySpan<byte> data, Span<char> buffer)
-    {
-        var widened = buffer.Slice(0, data.Length);
-#if NET5_0_OR_GREATER
-        Encoding.Latin1.GetChars(data, widened);
-#else
-        for (var i = 0; i < data.Length; i++)
-            widened[i] = (char)data[i];
-#endif
-        return widened;
-    }
-
-    /// <summary>The analysis of widened bytes. The mode is the one text of the same characters takes, and the charset is the default, under which every writer narrows a char back to its byte.</summary>
-    private static TextAnalysisResult AnalyzeBytes(ReadOnlySpan<char> widened)
-        => TextAnalyzer.Analyze(widened, EciMode.Default) with { EciMode = EciMode.Default };
 }

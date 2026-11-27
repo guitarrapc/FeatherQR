@@ -173,8 +173,8 @@ internal static partial class StructuredAppendPlanner
         if (AdvSimd.Arm64.IsSupported && BudgetsFit16(budgets, charset))
         {
             return charset == EciMode.Utf8
-                ? WalkLanesNeon<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)
-                : WalkLanesNeon<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
+                ? WalkLanesVector128<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)
+                : WalkLanesVector128<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
         }
         // Without 256-bit vectors the 32-bit walk hands budgets that fit 16 bits to the portable 16-bit lanes. This dispatch keeps its size, at which it is inlined.
         return charset == EciMode.Utf8
@@ -182,7 +182,7 @@ internal static partial class StructuredAppendPlanner
             : WalkLanes<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
     }
 
-    /// <summary><see cref="WalkLanes"/> in the portable 16-bit lanes, entered directly by its parity test: the dispatch takes it only without 256-bit vectors and NEON.</summary>
+    /// <summary><see cref="WalkLanes"/> in the 16-bit lanes, entered directly by its parity test: the dispatch takes it on ARM64 and where 256-bit vectors are not accelerated.</summary>
     internal static bool WalkLanesVector128(ReadOnlySpan<char> text, EciMode charset, int version, ReadOnlySpan<int> budgets, int limit, int placed, int start, Span<int> counts, Span<int> laneEnds, out int apartSteps)
         => charset == EciMode.Utf8
             ? WalkLanesVector128<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)

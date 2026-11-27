@@ -1,5 +1,6 @@
 using System.Buffers;
 using FeatherQR.Internals.BinaryDecoders;
+using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR;
@@ -178,11 +179,7 @@ public static class RmQRCodeDecoder
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
-        if (width < 1 || height < 1)
-            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Image size must be positive: got {width} x {height}.");
-        // long arithmetic: dimensions are caller-controlled and width·height can overflow int
-        if (luminance.Length < (long)width * height)
-            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
+        ImageDimensions.ThrowIfLuminanceDoesNotFit(luminance, width, height);
 
         return RmQRImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == DecodeStatus.Success;
     }
@@ -207,7 +204,7 @@ public static class RmQRCodeDecoder
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static RmQRCodeDecodeResult[] DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height)
     {
-        ThrowIfLuminanceDoesNotFit(luminance, width, height);
+        ImageDimensions.ThrowIfLuminanceDoesNotFit(luminance, width, height);
         return RmQRImageDecoder.DecodeSymbols(luminance, width, height);
     }
 
@@ -232,17 +229,8 @@ public static class RmQRCodeDecoder
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<RmQRCodeDecodeResult> destination)
     {
-        ThrowIfLuminanceDoesNotFit(luminance, width, height);
+        ImageDimensions.ThrowIfLuminanceDoesNotFit(luminance, width, height);
         return RmQRImageDecoder.DecodeSymbols(luminance, width, height, destination);
-    }
-
-    private static void ThrowIfLuminanceDoesNotFit(ReadOnlySpan<byte> luminance, int width, int height)
-    {
-        if (width < 1 || height < 1)
-            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Image size must be positive: got {width} x {height}.");
-        // long arithmetic: dimensions are caller-controlled and width·height can overflow int
-        if (luminance.Length < (long)width * height)
-            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
     }
 
     /// <summary>

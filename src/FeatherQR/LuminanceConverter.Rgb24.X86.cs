@@ -32,7 +32,7 @@ public static partial class LuminanceConverter
 
     /// <summary>
     /// Converts three-byte pixels with AVX2. <paramref name="bgr"/> selects the channel order.
-    /// Rows under eight pixels take the per-pixel formula.
+    /// Requires <paramref name="width"/> ≥ 8. The caller keeps narrower rows scalar.
     /// </summary>
     internal static void ConvertRgb24Avx2(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgr)
     {
@@ -46,8 +46,6 @@ public static partial class LuminanceConverter
 
         nint blockEnd = width & ~(BlockPixels - 1);
         nint octetEnd = width & ~7;
-        nint redOffset = bgr ? 2 : 0;
-        nint blueOffset = bgr ? 0 : 2;
 
         for (var y = 0; y < height; y++)
         {
@@ -71,14 +69,8 @@ public static partial class LuminanceConverter
             // Row remainder: 8-pixel groups, then one group that ends at the row's last pixel and redoes a few pixels with the same values.
             for (; x < octetEnd; x += 8)
                 StoreOctet(ref dest, x, Luma(LoadOctet24(ref Unsafe.Add(ref row, x * 3)), shuffle, weights, ones), shift: true);
-            if (x < width && width >= 8)
-            {
+            if (x < width)
                 StoreOctet(ref dest, width - 8, Luma(LoadOctet24(ref Unsafe.Add(ref row, (nint)(width - 8) * 3)), shuffle, weights, ones), shift: true);
-                x = width;
-            }
-
-            for (; x < width; x++)
-                Unsafe.Add(ref dest, x) = Luma(ref Unsafe.Add(ref row, x * 3), redOffset, 1, blueOffset, hasAlpha: false, premultiplied: false);
         }
     }
 

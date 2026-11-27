@@ -20,4 +20,14 @@ internal static class ImageDimensions
         pixelCount = (int)count;
         return true;
     }
+
+    /// <summary>Throws when the image size is not positive or <paramref name="luminance"/> is shorter than it. The decoders' parameters share these names, which the exceptions carry.</summary>
+    internal static void ThrowIfLuminanceDoesNotFit(ReadOnlySpan<byte> luminance, int width, int height)
+    {
+        if (width < 1 || height < 1)
+            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Image size must be positive: got {width} x {height}.");
+        // long arithmetic: dimensions are caller-controlled and width·height can overflow int
+        if (luminance.Length < (long)width * height)
+            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
+    }
 }

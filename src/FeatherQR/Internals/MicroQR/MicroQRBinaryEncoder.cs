@@ -199,14 +199,14 @@ internal static partial class MicroQRBinaryEncoder
     ///              ->  [group0: 10 bits][group1: 10 bits][group2: 10 bits]
     ///              ->  (123 &lt;&lt; 20) | (456 &lt;&lt; 10) | 789
     /// </code>
-    /// Group values come from <see cref="SwarGroup"/>, whose 8-byte load covers 4 chars for a 3-digit group, so every SWAR grain needs one readable char beyond it (hence the i+9 / i+3 guards). Tails without that headroom use scalar group math with the '0' bias folded into one constant.
+    /// Group values come from <see cref="CharacterSets.NumericGroup"/>, whose 8-byte load covers 4 chars for a 3-digit group, so every SWAR grain needs one readable char beyond it (hence the i+9 / i+3 guards). Tails without that headroom use scalar group math with the '0' bias folded into one constant.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteNumericData(ref ulong hi, ref ulong lo, ref int pos, ReadOnlySpan<char> digits)
     {
         // contract: digits must be '0'-'9' only (validated upstream). SWAR/scalar
         // group math produces a wrong, but memory-safe, stream otherwise.
-        Debug.Assert(AllNumeric(digits), "caller must validate the numeric alphabet");
+        Debug.Assert(CharacterSets.AreAllNumeric(digits), "caller must validate the numeric alphabet");
 
         ref var c = ref MemoryMarshal.GetReference(digits);
         var length = digits.Length;
@@ -215,13 +215,13 @@ internal static partial class MicroQRBinaryEncoder
         // i+6..i+9, so a 10th char must exist: i + 9 < length
         for (; i + 9 < length; i += 9)
         {
-            var g = (SwarGroup(ref c, i) << 20) | (SwarGroup(ref c, i + 3) << 10) | SwarGroup(ref c, i + 6);
+            var g = (CharacterSets.NumericGroup(ref c, i) << 20) | (CharacterSets.NumericGroup(ref c, i + 3) << 10) | CharacterSets.NumericGroup(ref c, i + 6);
             Append(ref hi, ref lo, ref pos, g, 30);
         }
         // 3 digits per append while a 4th readable char exists
         for (; i + 3 < length; i += 3)
         {
-            Append(ref hi, ref lo, ref pos, SwarGroup(ref c, i), 10);
+            Append(ref hi, ref lo, ref pos, CharacterSets.NumericGroup(ref c, i), 10);
         }
         // scalar tail: 0-3 digits left, no headroom for an 8-byte load
         if (i + 2 < length)
@@ -241,60 +241,6 @@ internal static partial class MicroQRBinaryEncoder
         }
     }
 
-    // Debug-only contract checks (evaluated solely inside Debug.Assert).
-    private static bool AllNumeric(ReadOnlySpan<char> chars)
-    {
-        foreach (var c in chars)
-        {
-            if (!CharacterSets.IsNumeric(c)) return false;
-        }
-        return true;
-    }
-
-    private static bool AllAlphanumeric(ReadOnlySpan<char> chars)
-    {
-        foreach (var c in chars)
-        {
-            if (!CharacterSets.IsAlphanumeric(c)) return false;
-        }
-        return true;
-    }
-
-    // One ulong holds four 16-bit UTF-16 lanes, so a single 64-bit multiply turns a
-    // 3-digit group into its value.
-    //
-    //   chunk = 4 chars, unaligned 8-byte read. "1234" lays out little-endian as
-    //           lanes  '1' | '2' | '3' | '4'
-    //   chunk - SwarDigitBias   subtracts '0' from every lane:
-    //           lanes   1  |  2  |  3  |  4
-    //   * SwarGroupMagic (100<<32 | 10<<16 | 1): the partial products
-    //           d0*100<<32, d1*10<<32, d2*1<<32
-    //   all land in bit window [32..47], so that window holds d0*100 + d1*10 + d2.
-    //   The group value is <= 999 < 2^10 (mask 0x3FF). Lower lanes cannot carry
-    //   into the window, and every product of the 4th lane lands at bit 48+ or
-    //   overflows out of the 64-bit register, so its value never matters.
-    //
-    // Only 3 digits contribute, but the 8-byte load spans 4 chars, so callers must
-    // guarantee one readable char beyond each group.
-    private const ulong SwarDigitBias = 0x0030_0030_0030_0030UL;
-    private const ulong SwarGroupMagic = (100UL << 32) | (10UL << 16) | 1UL;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int SwarGroup(ref char c, int i)
-    {
-        if (BitConverter.IsLittleEndian)
-        {
-            var chunk = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref c, i)));
-            return (int)(((chunk - SwarDigitBias) * SwarGroupMagic) >> 32) & 0x3FF;
-        }
-
-        // Big-endian runtimes: the lane layout above does not hold, and reversing the
-        // whole ulong would also swap the bytes inside each 16-bit lane, so the group
-        // math is scalar. IsLittleEndian is a JIT-time constant, so this branch
-        // vanishes from little-endian code.
-        return Unsafe.Add(ref c, i) * 100 + Unsafe.Add(ref c, i + 1) * 10 + Unsafe.Add(ref c, i + 2) - 5328; // folded bias: 5328 = '0' * 111
-    }
-
 #if NET8_0_OR_GREATER
     /// <summary>
     /// Compacts four little-endian 16-bit char lanes (high bytes zero, verified by the caller's validity mask) to their four low bytes: <c>chunk | chunk &gt;&gt; 8</c> yields bytes <c>[c0 c1 c1 c2 c2 c3 c3 0]</c> (LSB first). Bytes 0-1 and 4-5 are the contiguous pairs.
@@ -306,23 +252,6 @@ internal static partial class MicroQRBinaryEncoder
         return (uint)((r & 0xFFFF) | ((r >> 16) & 0xFFFF0000));
     }
 #endif
-
-    // A table of its own rather than CharacterSets.GetAlphanumericValue, which checks
-    // and throws per char. QR alphanumeric values are 0-44, so byte entries suffice.
-    // Invalid slots hold 0 and are never read, because the caller validates the
-    // alphabet. Lookups index as AlnumValues[c & 0x7F]: the mask keeps any UTF-16
-    // char inside 0-127, so the access needs no bounds check.
-    private static ReadOnlySpan<byte> AlnumValues =>
-    [
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        36, 0, 0, 0, 37, 38, 0, 0, 0, 0, 39, 40, 0, 41, 42, 43,
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 44, 0, 0, 0, 0, 0,
-        0, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-        25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    ];
 
     /// <summary>
     /// Alphanumeric segment: 11 bits per pair (value0 * 45 + value1), 6 bits for a trailing odd character (ISO/IEC 18004 7.4.4).
@@ -340,24 +269,24 @@ internal static partial class MicroQRBinaryEncoder
         // contract: the & 0x7F mask below guarantees MEMORY safety for any input,
         // but it does not sanitize: out-of-alphabet chars silently encode wrong
         // values. Alphabet validation is the caller's job (internal-only method).
-        Debug.Assert(AllAlphanumeric(chars), "caller must validate the alphanumeric alphabet");
+        Debug.Assert(CharacterSets.AreAllAlphanumeric(chars), "caller must validate the alphanumeric alphabet");
 
         var i = 0;
         for (; i + 3 < chars.Length; i += 4)
         {
-            var p0 = AlnumValues[chars[i] & 0x7F] * 45 + AlnumValues[chars[i + 1] & 0x7F];
-            var p1 = AlnumValues[chars[i + 2] & 0x7F] * 45 + AlnumValues[chars[i + 3] & 0x7F];
+            var p0 = CharacterSets.AlphanumericByteValues[chars[i] & 0x7F] * 45 + CharacterSets.AlphanumericByteValues[chars[i + 1] & 0x7F];
+            var p1 = CharacterSets.AlphanumericByteValues[chars[i + 2] & 0x7F] * 45 + CharacterSets.AlphanumericByteValues[chars[i + 3] & 0x7F];
             Append(ref hi, ref lo, ref pos, (p0 << 11) | p1, 22);
         }
         if (i + 1 < chars.Length)
         {
-            var v = AlnumValues[chars[i] & 0x7F] * 45 + AlnumValues[chars[i + 1] & 0x7F];
+            var v = CharacterSets.AlphanumericByteValues[chars[i] & 0x7F] * 45 + CharacterSets.AlphanumericByteValues[chars[i + 1] & 0x7F];
             Append(ref hi, ref lo, ref pos, v, 11);
             i += 2;
         }
         if (i < chars.Length)
         {
-            Append(ref hi, ref lo, ref pos, AlnumValues[chars[i] & 0x7F], 6);
+            Append(ref hi, ref lo, ref pos, CharacterSets.AlphanumericByteValues[chars[i] & 0x7F], 6);
         }
     }
 

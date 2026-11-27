@@ -61,11 +61,8 @@ internal static partial class RmQRSegmentPlanner
     /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit. When <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="RmQRSegmentation.Single"/>.
     /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, RmQRVersion, RmQREccLevel, Span{ModeSegment}, out int)"/> and written with no ECI header.
     /// Throws exactly what <see cref="RmQRVersionSelector"/> throws.
+    /// The last cost run's predecessors are kept in <paramref name="table"/>, which holds the plan where <paramref name="tableHoldsPlan"/> says so.
     /// </summary>
-    public static RmQRVersion SelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out bool useSegments, out bool kanjiPlan)
-        => SelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, default, out useSegments, out kanjiPlan, out _, out _, out _);
-
-    /// <summary>The same, keeping the last cost run's predecessors in <paramref name="table"/>, which holds the plan where <paramref name="tableHoldsPlan"/> says so.</summary>
     public static RmQRVersion SelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<byte> table, out bool useSegments, out bool kanjiPlan, out bool tableHoldsPlan, out int tableFinalState, out int tablePlannedBits)
     {
         if (TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, table, out var version, out useSegments, out kanjiPlan, out tableHoldsPlan, out tableFinalState, out tablePlannedBits))
@@ -77,7 +74,7 @@ internal static partial class RmQRSegmentPlanner
     }
 
     /// <summary>
-    /// <see cref="SelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, out bool, out bool)"/> without the capacity throw. Argument errors still throw, in the same order and with the same messages.
+    /// <see cref="SelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, Span{byte}, out bool, out bool, out bool, out int, out int)"/> without the capacity throw. Argument errors still throw, in the same order and with the same messages.
     /// </summary>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan)
         => TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, default, out selected, out useSegments, out kanjiPlan, out _, out _, out _);
@@ -464,10 +461,6 @@ internal static partial class RmQRSegmentPlanner
     /// <summary>Payload bits of <paramref name="unitCount"/> units in <paramref name="mode"/> (ISO/IEC 23941 7.4).</summary>
     public static int PayloadBits(EncodingMode mode, int unitCount)
         => ModeSegmenter.PayloadBits(mode, unitCount);
-
-    /// <summary>Encoded byte count of a Byte-mode run, i.e. the value its count indicator carries.</summary>
-    public static int ByteUnitCount(ReadOnlySpan<char> text, EciMode charset)
-        => ModeSegmenter.ByteUnitCount(text, charset);
 
     /// <summary>
     /// Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the minimal payload bits (no ECI prefix) at explicit count indicator widths, which is the value the version scan compares against a data capacity.

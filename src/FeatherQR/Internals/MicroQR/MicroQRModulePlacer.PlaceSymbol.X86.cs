@@ -63,7 +63,7 @@ internal static partial class MicroQRModulePlacer
 
         var mask = forcedMask >= 0 ? forcedMask : SelectMaskFromEdges(colDark, rowDark, size);
 
-        var formatBits = _formatBitsTable[(MicroQRConstants.GetSymbolNumber(version, eccLevel) << 2) | mask];
+        var formatBits = MicroQRConstants.GetFormatWord((MicroQRConstants.GetSymbolNumber(version, eccLevel) << 2) | mask);
         rows[8] = (rows[8] & ~0x1FEul) | ((ulong)_reverseByte[(formatBits >> 7) & 0xFF] << 1);
         for (var row = 7; row >= 1; row--)
         {

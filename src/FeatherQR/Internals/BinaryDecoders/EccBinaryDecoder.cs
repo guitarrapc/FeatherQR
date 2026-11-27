@@ -15,7 +15,7 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// </code>
 /// Corrects up to ⌊eccCount/2⌋ byte errors per block, in place.
 /// <para>
-/// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the verification pass) has four tiers: a GFNI kernel on net10.0+ x64 (see EccBinaryDecoder.X86.cs), an AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs), a 128-bit kernel on x64 without GFNI and on WebAssembly (see EccBinaryDecoder.Vector128.cs), and a scalar log-domain path with four interleaved Horner chains everywhere else.
+/// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the verification pass) has four tiers: a GFNI kernel on net10.0 x64 (see EccBinaryDecoder.X86.cs), an AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs), a 128-bit kernel on x64 without GFNI and on WebAssembly (see EccBinaryDecoder.Vector128.cs), and a scalar log-domain path with four interleaved Horner chains everywhere else.
 /// All four produce byte-identical output. See the decoder kernel parity tests.
 /// Berlekamp-Massey, Chien and Forney stay scalar on every target.
 /// </para>
@@ -140,13 +140,13 @@ internal static partial class EccBinaryDecoder
             if (value != 0)
                 continue;
 
-            if (errorCount == errorCountEstimate)
-                return false; // more roots than deg(Λ), inconsistent, uncorrectable
-
             errorIndexes[errorCount] = length - 1 - p;
             errorLocators[errorCount] = GaloisField.Exp[p % 255];
             errorLocatorInverses[errorCount] = xInverse;
             errorCount++;
+            // Λ has degree at most L and Λ(0) = 1, and the points α^-p are distinct below 255, so there is no root past the L-th
+            if (errorCount == errorCountEstimate)
+                break;
         }
 
         // Every root of Λ must lie inside the codeword. A deficit means errors
@@ -227,13 +227,11 @@ internal static partial class EccBinaryDecoder
     /// </remarks>
     private static bool ComputeSyndromes(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)
     {
-#if NET10_0_OR_GREATER
+#if NET8_0_OR_GREATER
         if (System.Runtime.Intrinsics.X86.Gfni.V256.IsSupported)
         {
             return ComputeSyndromesGfni(codeword, eccCount, syndromes);
         }
-#endif
-#if NET8_0_OR_GREATER
         // The property, not a second copy of the condition: the parity tests skip on
         // IsAdvSimdTierSupported, so a gate that drifted from it would let them compare
         // the scalar tier against itself.

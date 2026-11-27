@@ -1,3 +1,5 @@
+using FeatherQR.Internals.ImageDecoders;
+
 namespace FeatherQR;
 
 /// <summary>
@@ -27,7 +29,7 @@ public static class SymbolDecoder
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static SymbolDecodeResult[] DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height)
     {
-        ThrowIfLuminanceDoesNotFit(luminance, width, height);
+        ImageDimensions.ThrowIfLuminanceDoesNotFit(luminance, width, height);
         return MixedImageDecoder.DecodeSymbols(luminance, width, height);
     }
 
@@ -52,16 +54,7 @@ public static class SymbolDecoder
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is not positive.</exception>
     public static int DecodeImageSymbols(ReadOnlySpan<byte> luminance, int width, int height, Span<SymbolDecodeResult> destination)
     {
-        ThrowIfLuminanceDoesNotFit(luminance, width, height);
+        ImageDimensions.ThrowIfLuminanceDoesNotFit(luminance, width, height);
         return MixedImageDecoder.DecodeSymbols(luminance, width, height, destination);
-    }
-
-    private static void ThrowIfLuminanceDoesNotFit(ReadOnlySpan<byte> luminance, int width, int height)
-    {
-        if (width < 1 || height < 1)
-            throw new ArgumentOutOfRangeException(width < 1 ? nameof(width) : nameof(height), $"Image size must be positive: got {width} x {height}.");
-        // long arithmetic: dimensions are caller-controlled and width·height can overflow int
-        if (luminance.Length < (long)width * height)
-            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
     }
 }

@@ -206,7 +206,7 @@ public class ModeSegmenterFnc1ParityTest
 
                 {
                     // No Byte run opens at a U+FEFF past the first character: the decoder would take it for a byte order mark.
-                    if (from != StateByte && i > 0 && c == (char)0xFEFF)
+                    if (from != StateByte && i > 0 && charset == EciMode.Utf8 && c == (char)0xFEFF)
                         continue;
                     var cost = from == StateByte ? basis + byteBits : basis + modeIndicatorBits + cciByte + byteBits;
                     Relax(cur, curOpened, parents, i, StateByte, cost, from, opened: from != StateByte);

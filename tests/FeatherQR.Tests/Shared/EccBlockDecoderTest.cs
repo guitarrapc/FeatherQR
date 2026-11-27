@@ -30,10 +30,10 @@ public class EccBlockDecoderTest
                 structures[$"rMQR {version}-{level}"] = RmQRConstants.GetEccInfo(version, level);
 
         // Outside the capacity tables: equal block lengths across groups, one block per group, group 2 only.
-        structures["group 1 only"] = new ECCInfo(1, QREccLevel.M, 6, 2, 2, 3, 0, 0);
-        structures["1 + 1 blocks"] = new ECCInfo(5, QREccLevel.H, 7, 2, 1, 3, 1, 4);
-        structures["equal lengths"] = new ECCInfo(5, QREccLevel.H, 12, 2, 2, 3, 2, 3);
-        structures["group 2 only"] = new ECCInfo(5, QREccLevel.H, 8, 2, 0, 0, 2, 4);
+        structures["group 1 only"] = new ECCInfo(6, 2, 2, 3, 0, 0);
+        structures["1 + 1 blocks"] = new ECCInfo(7, 2, 1, 3, 1, 4);
+        structures["equal lengths"] = new ECCInfo(12, 2, 2, 3, 2, 3);
+        structures["group 2 only"] = new ECCInfo(8, 2, 0, 0, 2, 4);
         return structures;
     }
 

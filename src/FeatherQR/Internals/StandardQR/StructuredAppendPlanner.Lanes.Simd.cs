@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.Wasm;
 using System.Runtime.Intrinsics.X86;
 
@@ -11,9 +12,16 @@ namespace FeatherQR.Internals.StandardQR;
 internal static partial class StructuredAppendPlanner
 {
     /// <summary>
-    /// The ARM64 walk on portable vectors, eight unsigned 16-bit costs a vector, for the targets with neither accelerated 256-bit vectors nor
-    /// NEON: x64 without AVX and WebAssembly. Its saturating add is SSE2's paddusw and WebAssembly's i16x8.add_sat_u.
+    /// The eight-budget walk on 128-bit vectors, eight unsigned 16-bit costs a vector: NEON on ARM64, and the targets with no accelerated 256-bit vectors, x64 without AVX and WebAssembly.
+    /// Its saturating add is NEON's uqadd, SSE2's paddusw and WebAssembly's i16x8.add_sat_u.
     /// </summary>
+    /// <remarks>
+    /// A Standard QR symbol holds at most 23,648 data bits. Costs below a real budget are
+    /// therefore exact in 16 bits. Saturating addition keeps every unreachable or overlarge
+    /// cost above that budget instead of wrapping it into a cheaper plan. The all-ones value
+    /// is unreachable. Text offsets stay 32-bit, since the whole set can exceed 65,535 characters.
+    /// Keeping the native vectors in locals avoids materializing each state on the stack.
+    /// </remarks>
     private static bool WalkLanesVector128<TWidth>(ReadOnlySpan<char> text, EciMode charset, int version, ReadOnlySpan<int> budgets, int limit, int placed, int start, Span<int> counts, Span<int> laneEnds, out int apartSteps)
         where TWidth : ICharWidth
     {
@@ -76,7 +84,7 @@ internal static partial class StructuredAppendPlanner
                     nb = TWidth.Utf8
                         ? AddSaturate16(ch == ModeSegmenter.ByteOrderMark && position > start ? b : Vector128.Min(b, AddSaturate16(cheapest, vOpenByte)), Costs16(8 * LaneByteCost(text, position, charset)))
                         : Vector128.Min(AddSaturate16(b, eight), AddSaturate16(cheapest, vOpenByte8));
-                    if (Vector128.GreaterThan(nb, vBudget) == Vector128<ushort>.Zero)
+                    if (!AnyOver16(Vector128.GreaterThan(nb, vBudget)))
                     {
                         // Only Byte is reachable now, and every further character outside the alphabet extends its run: one add and the budget test.
                         n0 = n1 = n2 = a0 = a1 = unreachable;
@@ -89,7 +97,7 @@ internal static partial class StructuredAppendPlanner
                             if (ModeSegmenter.ClassOf(ch) != ModeSegmenter.ClassOther)
                                 break;
                             nb = TWidth.Utf8 ? AddSaturate16(b, Costs16(8 * LaneByteCost(text, position, charset))) : AddSaturate16(b, eight);
-                            if (Vector128.GreaterThan(nb, vBudget) != Vector128<ushort>.Zero)
+                            if (AnyOver16(Vector128.GreaterThan(nb, vBudget)))
                                 break; // some lane closes here: the step above takes it
                             b = nb;
                             step++;
@@ -178,7 +186,7 @@ internal static partial class StructuredAppendPlanner
                 Debug.Assert(stop == length - Math.Max(Math.Max(Math.Max(s0, s1), Math.Max(s2, s3)), Math.Max(Math.Max(s4, s5), Math.Max(s6, s7))));
             }
 
-            if (over == Vector128<ushort>.Zero)
+            if (!AnyOver16(over))
             {
                 n0 = nn0;
                 n1 = nn1;
@@ -355,12 +363,38 @@ internal static partial class StructuredAppendPlanner
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<ushort> AddSaturate16(Vector128<ushort> left, Vector128<ushort> right)
     {
+        if (AdvSimd.Arm64.IsSupported)
+            return AdvSimd.AddSaturate(left, right);
         if (Sse2.IsSupported)
             return Sse2.AddSaturate(left, right);
         if (PackedSimd.IsSupported)
             return PackedSimd.AddSaturate(left, right);
         var sum = left + right;
         return sum | Vector128.LessThan(sum, left);
+    }
+
+    /// <summary>Whether any lane of a comparison mask is set. NEON tests it with one max across the lanes.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool AnyOver16(Vector128<ushort> mask)
+        => AdvSimd.Arm64.IsSupported ? AdvSimd.Arm64.MaxAcross(mask).ToScalar() != 0 : mask != Vector128<ushort>.Zero;
+
+    // Keep this copy of ModeSegmenter.ByteCost inline in the 16-bit walk: a call in the UTF-8 loop makes the JIT spill live vector state around each character cost.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int LaneByteCost(ReadOnlySpan<char> text, int index, EciMode charset)
+    {
+        if (charset != EciMode.Utf8)
+            return 1;
+
+        var c = text[index];
+        if (c < 0x80)
+            return 1;
+        if (c < 0x800)
+            return 2;
+        if (char.IsHighSurrogate(c))
+            return index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]) ? 4 : 3;
+        if (char.IsLowSurrogate(c))
+            return index > 0 && char.IsHighSurrogate(text[index - 1]) ? 0 : 3;
+        return 3;
     }
 }
 #endif

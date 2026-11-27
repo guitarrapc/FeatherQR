@@ -359,12 +359,69 @@ internal static class CharacterSets
     internal static ReadOnlySpan<sbyte> AlphanumericValues => alphanumericLookup;
 
     /// <summary>
-    /// Validates if text can be encoded in ISO-8859-1.
-    /// ISO-8859-1 supports U+0000 to U+00FF only.
+    /// The alphanumeric values of ASCII 0-127 as bytes, 0 outside the alphabet, for writers whose caller validated it: indexed by c &amp; 0x7F, so the access needs no bounds check.
     /// </summary>
-    /// <param name="text">The string to check for ISO-8859-1-only characters.</param>
+    /// <remarks>Unsigned rather than <see cref="AlphanumericValues"/>, because sign-extending the loads made the callers' code longer.</remarks>
+    internal static ReadOnlySpan<byte> AlphanumericByteValues =>
+    [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        36, 0, 0, 0, 37, 38, 0, 0, 0, 0, 39, 40, 0, 41, 42, 43,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 44, 0, 0, 0, 0, 0,
+        0, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+
+    /// <summary>Whether every char is a digit, for the writers' debug checks.</summary>
+    internal static bool AreAllNumeric(ReadOnlySpan<char> chars)
+    {
+        foreach (var c in chars)
+        {
+            if (!IsNumeric(c))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>Whether every char is in the alphanumeric alphabet, for the writers' debug checks.</summary>
+    internal static bool AreAllAlphanumeric(ReadOnlySpan<char> chars)
+    {
+        foreach (var c in chars)
+        {
+            if (!IsAlphanumeric(c))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>The value of the three digits from char <paramref name="i"/> on, 0-999. The char after them must be readable.</summary>
+    /// <remarks>
+    /// One ulong holds four 16-bit UTF-16 lanes, so a single 64-bit multiply turns a 3-digit group into its value.
+    ///
+    ///   chunk = 4 chars, unaligned 8-byte read. "1234" lays out little-endian as
+    ///           lanes  '1' | '2' | '3' | '4'
+    ///   chunk - 0x0030_0030_0030_0030 subtracts '0' from every lane:
+    ///           lanes   1  |  2  |  3  |  4
+    ///   * (100 &lt;&lt; 32 | 10 &lt;&lt; 16 | 1): the partial products
+    ///           d0*100&lt;&lt;32, d1*10&lt;&lt;32, d2*1&lt;&lt;32
+    ///   all land in bit window [32..47], so that window holds d0*100 + d1*10 + d2.
+    ///   The group value is &lt;= 999 &lt; 2^10 (mask 0x3FF). Lower lanes cannot carry into the window, and every product of the 4th lane lands at bit 48+ or overflows out of the 64-bit register, so its value never matters.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsValidISO88591(string text) => IsValidISO88591(text.AsSpan());
+    internal static int NumericGroup(ref char c, int i)
+    {
+        if (BitConverter.IsLittleEndian)
+        {
+            var chunk = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref c, i)));
+            return (int)(((chunk - 0x0030_0030_0030_0030UL) * ((100UL << 32) | (10UL << 16) | 1UL)) >> 32) & 0x3FF;
+        }
+
+        // Big-endian runtimes: the lane layout above does not hold, and reversing the whole ulong would also swap the bytes inside each 16-bit lane, so the group math is scalar.
+        // IsLittleEndian is a JIT-time constant, so this branch vanishes from little-endian code.
+        return Unsafe.Add(ref c, i) * 100 + Unsafe.Add(ref c, i + 1) * 10 + Unsafe.Add(ref c, i + 2) - 5328; // folded bias: 5328 = '0' * 111
+    }
 
     /// <summary>
     /// Validates if text can be encoded in ISO-8859-1.
@@ -420,27 +477,5 @@ internal static class CharacterSets
             throw new ArgumentException($"Character '{c}' is not alphanumeric.", nameof(c));
 
         return value;
-    }
-
-    /// <summary>
-    /// Tries to get the encoding value for an alphanumeric character.
-    /// </summary>
-    /// <param name="c">Character to encode.</param>
-    /// <param name="value">Encoding value (0-44) if successful.</param>
-    /// <returns>True if character is alphanumeric.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryGetAlphanumericValue(char c, out int value)
-    {
-        if (c < alphanumericLookup.Length)
-        {
-            var lookup = alphanumericLookup[c];
-            if (lookup >= 0)
-            {
-                value = lookup;
-                return true;
-            }
-        }
-        value = -1;
-        return false;
     }
 }

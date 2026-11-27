@@ -5,7 +5,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The portable 16-bit lane walk against the scalar walk, entered directly: the dispatch takes it only without 256-bit vectors and NEON,
+/// The portable 16-bit lane walk against the scalar walk, entered directly: the dispatch takes it on ARM64 and where 256-bit vectors are not accelerated,
 /// so this is where an x64 machine with AVX2 runs it at all. Its parity walk takes the NEON walk test's inputs (resets, saturation, runs of marks, the scalar finish);
 /// its step, tail and let-through tests share the lane walk test's helpers.
 /// </summary>

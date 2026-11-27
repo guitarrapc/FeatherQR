@@ -370,22 +370,9 @@ internal ref partial struct QRBinaryEncoder
             writer.Write(digits[i] - '0', 4);
     }
 
-    /// <summary>
-    /// Three digits from one 8-byte load of four chars (the fourth must exist): with each char's '0' removed, the multiply by
-    /// (100 &lt;&lt; 32 | 10 &lt;&lt; 16 | 1) lands d0 * 100 + d1 * 10 + d2 in bits 32-47, and no lower product carries into them.
-    /// </summary>
+    /// <summary><see cref="CharacterSets.NumericGroup"/> widened for the 50-bit write. The fourth char must exist.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ulong NumericGroup(ref char c, int i)
-    {
-        if (BitConverter.IsLittleEndian)
-        {
-            var chunk = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref c, i)));
-            return (((chunk - 0x0030_0030_0030_0030UL) * ((100UL << 32) | (10UL << 16) | 1UL)) >> 32) & 0x3FF;
-        }
-
-        // A big-endian runtime lays the chars out the other way within the word, so the group is taken char by char there.
-        return (ulong)(Unsafe.Add(ref c, i) * 100 + Unsafe.Add(ref c, i + 1) * 10 + Unsafe.Add(ref c, i + 2) - 5328);
-    }
+    private static ulong NumericGroup(ref char c, int i) => (uint)CharacterSets.NumericGroup(ref c, i);
 
     /// <summary>
     /// Encodes alphanumeric data (0-9, A-Z, space, $, %, *, +, -, ., /, :): two characters in 11 bits (first * 45 + second), a last odd
