@@ -701,8 +701,9 @@ public static partial class MicroQRCodeGenerator
     /// Allocation-free: all intermediates are stackalloc.
     /// </summary>
     // Called on .NET 10, where the JIT would inline it into the span Create when the inline budget allows, and the encode is
-    // slower inlined than called. .NET 8 inlines it into CreateCore, where inlined is no slower.
-#if NET10_0_OR_GREATER
+    // slower inlined than called. The netstandard builds leave the attribute out: .NET 8 inlines it into CreateCore, where
+    // inlined is no slower.
+#if NET8_0_OR_GREATER
     [MethodImpl(MethodImplOptions.NoInlining)]
 #endif
     private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in MicroQRConfiguration config, Span<byte> core, int size, int stride, int maskPattern)

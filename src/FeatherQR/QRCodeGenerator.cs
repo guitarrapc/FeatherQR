@@ -1085,7 +1085,7 @@ public static partial class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteQRMatrix(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> interleavedData, QREccLevel eccLevel, int maskPattern)
     {
-        // On .NET 8 and later with AVX2, from version 12, automatic selection takes the interleaved stream into its own bit planes and writes every module, the version information included and the format modules light.
+        // With AVX2, from version 12, automatic selection takes the interleaved stream into its own bit planes and writes every module, the version information included and the format modules light.
         // Otherwise the template copy paints every function module and zeros the rest, and the data placement writes only the stream bits.
         int maskVersion;
         if (maskPattern != AutomaticMask || !ModulePlacer.TryMaskCodeFromStream(buffer, version, interleavedData, eccLevel, out maskVersion))

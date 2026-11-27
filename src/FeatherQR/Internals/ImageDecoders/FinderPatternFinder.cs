@@ -53,7 +53,7 @@ internal enum FinderRowKernel
 /// <para>
 /// The scan strides over rows. The band of rows showing the 1:1:3:1:1 signature is 3 modules tall for an axis-aligned symbol, and narrower under rotation, where the ratios drift off-centre (see CandidateRowStride). The module size is unknown before detection, but the worst case, a version-40 symbol filling the frame, bounds it from below. So a stride of 3·height/(4·177) hits the band of every supported axis-aligned symbol.
 /// When TryFind's stride pass cannot select a consistent triple, or selects a poor one with once-seen candidates left out, the rows it skipped are scanned as a complementary pass, together exactly one full-image sweep, so its striding cannot lose a symbol a full scan would find. That fallback, not the stride arithmetic, is what makes TryFind safe under rotation too.
-/// On net8.0+ each row is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any 128-bit acceleration) and walked run-by-run via trailing-zero counts instead of pixel-by-pixel.
+/// Outside the netstandard builds each row is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any 128-bit acceleration) and walked run-by-run via trailing-zero counts instead of pixel-by-pixel.
 /// With 128-bit vectors or wider, rows of 32 to 4,095 pixels go to the edge-list kernel instead (FinderPatternFinder.RowEdges.cs): every edge of the row at once, and the windows classified many a step without a branch.
 /// </para>
 /// </remarks>

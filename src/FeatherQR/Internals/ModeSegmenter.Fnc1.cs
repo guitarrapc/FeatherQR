@@ -64,7 +64,7 @@ internal static partial class ModeSegmenter
 
     /// <summary>The cheapest sixths of a bit any mode gives each character under FNC1: a separator costs an Alphanumeric character, a literal percent the lesser of two of them and one byte.</summary>
     /// <remarks>
-    /// The FNC1 prices differ from <see cref="CheapestSixths"/>'s in two characters, which no class pass of its own could price faster than the plain bound and two counts, both vectorised on .NET 8 and later.
+    /// The FNC1 prices differ from <see cref="CheapestSixths"/>'s in two characters, which no class pass of its own could price faster than the plain bound and two counts, both vectorised outside the netstandard builds.
     /// A literal percent is 48 where the plain alphabet gives 33, and the separator is 33 where a byte gives 48, both one byte under every charset.
     /// </remarks>
     public static int CheapestSixthsFnc1(ReadOnlySpan<char> text, EciMode charset)

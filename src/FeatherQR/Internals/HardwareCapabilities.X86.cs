@@ -5,7 +5,7 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// Runtime CPU properties that the <c>IsSupported</c> flags of the hardware intrinsic classes do not express. net8.0+ only, since the netstandard builds have no hardware intrinsics to ask.
+/// Runtime CPU properties that the <c>IsSupported</c> flags of the hardware intrinsic classes do not express. The netstandard builds leave it out, since they have no hardware intrinsics to ask.
 /// </summary>
 internal static class HardwareCapabilities
 {

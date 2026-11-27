@@ -14,7 +14,7 @@ namespace FeatherQR.Internals;
 /// All three pack through it, the Micro QR and rMQR models with <see cref="Pack"/> and Standard QR's <see cref="QRCodeData"/> with <see cref="PackZeroOrOne"/>. The Micro QR and rMQR models also unpack through it, and <see cref="QRCodeData"/> unpacks through its placer's bit expansion.
 /// </summary>
 /// <remarks>
-/// Both directions run 16 (Vector128) / 32 (Vector256) modules per step on .NET 8+, with a SWAR / unrolled scalar tail, and a portable scalar path on netstandard. Pack is a non-zero compare, a lane reversal within each byte group (pshufb / tbl / WebAssembly swizzle) and a move-mask. Unpack is a per-lane byte broadcast, a bit mask and a compare.
+/// Both directions run 16 (Vector128) / 32 (Vector256) modules per step, with a SWAR / unrolled scalar tail, and a portable scalar path in the netstandard builds. Pack is a non-zero compare, a lane reversal within each byte group (pshufb / tbl / WebAssembly swizzle) and a move-mask. Unpack is a per-lane byte broadcast, a bit mask and a compare.
 /// Kept behind byte parity with a naive reference by <c>ModuleBitPackerParityTest</c>.
 /// </remarks>
 internal static class ModuleBitPacker
