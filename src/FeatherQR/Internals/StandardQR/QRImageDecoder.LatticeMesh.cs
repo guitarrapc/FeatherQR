@@ -19,11 +19,10 @@ internal static partial class QRImageDecoder
         meshSize = 0;
         searchedNodes = 0;
         foundNodes = 0;
-        var version = (dimension - 17) / 4;
-        // Below version 7 the lattice is the three finders and one pattern, which the four-point transform already anchors on
-        if (version < 7)
+        if (dimension < LatticeMeshFromDimension)
             return false;
 
+        var version = (dimension - 17) / 4;
         var baseValues = QRCodeConstants.AlignmentPatternBaseValues.Slice((version - 1) * 7, 7);
         var count = 0;
         for (var i = 0; i < 7; i++)

@@ -520,13 +520,14 @@ internal static partial class QRImageDecoder
     {
         charsWritten = 0;
         info = NotDetectedInfo;
+        // Ahead of the buffers, because the stack is zeroed and most symbols are drawn larger
+        if (topLeft.ModuleSize >= ModuleBoundaryReader.MaxModuleSize)
+            return DecodeStatus.NotDetected;
+
         Span<int> columns = stackalloc int[MaxBoundaries];
         Span<int> rows = stackalloc int[MaxBoundaries];
-        if (topLeft.ModuleSize >= ModuleBoundaryReader.MaxModuleSize
-            || !TryReadModuleBoundaries(image.Luminance, image.Width, image.Height, image.Threshold, topLeft, topRight, bottomLeft, columns, rows, out var frame, out var dimension))
-        {
+        if (!TryReadModuleBoundaries(image.Luminance, image.Width, image.Height, image.Threshold, topLeft, topRight, bottomLeft, columns, rows, out var frame, out var dimension))
             return DecodeStatus.NotDetected;
-        }
 
         modules.Reserve(dimension);
         var grid = modules.First(dimension);
@@ -708,6 +709,10 @@ internal static partial class QRImageDecoder
     {
         charsWritten = 0;
         info = NotDetectedInfo;
+        // Ahead of the buffers, because the stack is zeroed and version 1 reaches here on every read
+        if (dimension < LatticeMeshFromDimension)
+            return DecodeStatus.NotDetected;
+
         Span<float> gridCoords = stackalloc float[MaxMeshNodes];
         Span<float> nodeXs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
         Span<float> nodeYs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
@@ -1230,6 +1235,9 @@ internal static partial class QRImageDecoder
 
     // Alignment lattice: at most 7 coordinates per axis (ISO/IEC 18004 Annex E)
     private const int MaxMeshNodes = 7;
+
+    /// <summary>The dimension of version 7. Below it the lattice is the three finders and one pattern, which the four-point transform already anchors on.</summary>
+    private const int LatticeMeshFromDimension = 17 + 4 * 7;
 
     /// <summary>
     /// The geometry a mesh-sampled decode is reported with: the three finder centres plus the mesh's bottom-right lattice node as the fourth correspondence.
