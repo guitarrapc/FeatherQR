@@ -7,8 +7,8 @@ namespace FeatherQR.Tests;
 /// Watches the rents and returns of <see cref="ArrayPool{T}.Shared"/> for bytes on the thread that created it, through the pool's event source.
 /// </summary>
 /// <remarks>
-/// The pool's thread slot holds one array a size. A second array of a size rented while the first is out comes from the per-core stacks every thread shares,
-/// where a thread renting beside this one can take it and the rent allocates. <see cref="MostOutOfOneSize"/> is the most arrays of one length this thread had out at once.
+/// The pool's thread slot holds one array a size. A second array of a size rented while the first is out comes from the per-core stacks every thread shares.
+/// Those are empty while other threads hold the arrays they had, and the rent then allocates. <see cref="MostOutOfOneSize"/> is the most arrays of one length this thread had out at once.
 /// Arrays are told apart by length, since every array of a bucket has the bucket's length, and the event names no bucket for an array the pool allocates.
 /// The event source calls the listener on the thread that rents or returns, so rents on other threads are left out by their thread id.
 /// </remarks>

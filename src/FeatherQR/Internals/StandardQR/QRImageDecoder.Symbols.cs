@@ -17,22 +17,6 @@ internal static partial class QRImageDecoder
     /// <summary>How many times the passes are run over one image at most.</summary>
     private const int MaxSymbolRounds = 2;
 
-    /// <summary>The longest module workspace a scan rents: three grids of version 40.</summary>
-    private const int MaxModuleWorkspaceLength = 3 * 177 * 177;
-
-    private static int CandidateListBytes => MaxSymbolCandidates * Unsafe.SizeOf<FinderPattern>();
-
-    /// <summary>
-    /// The buffers of one call's passes as one array: the readings' candidate list, then room for a reading of <paramref name="pixelCount"/> pixels.
-    /// </summary>
-    /// <remarks>
-    /// The pool's thread slot holds one array a size, and a second array of that size would come from the per-core stacks every thread shares, where a thread decoding beside this one can take it and the rent allocates.
-    /// Two arrays here would share a size on images of up to 65,536 pixels, and so would one shorter than a module workspace, which is out at the same time.
-    /// The list is bytes too: a pool of candidates would be one more pool in every build, and the pools the one-symbol call rents from would be laid out around it.
-    /// </remarks>
-    private static byte[] RentPassBuffers(int pixelCount)
-        => ArrayPool<byte>.Shared.Rent((int)Math.Min(Math.Max((long)CandidateListBytes + pixelCount, MaxModuleWorkspaceLength + 1), int.MaxValue));
-
     /// <summary>What one call of <see cref="DecodeSymbols(ReadOnlySpan{byte}, int, int, Span{QRCodeDecodeResult}, CancellationToken)"/> carries through its passes.</summary>
     private ref struct SymbolSearch
     {
@@ -62,12 +46,6 @@ internal static partial class QRImageDecoder
 
         /// <summary>Where the first round's full-size readings keep their strided rows' hits for the read that follows this one (<see cref="SharedRowHits"/>). Empty when nothing is handed on.</summary>
         public SharedRowHits Shared;
-
-        /// <summary>The candidate list every reading fills in turn.</summary>
-        public Span<FinderPattern> Candidates;
-
-        /// <summary>Room for the inverted image and the reduced ones, as many bytes as the image has pixels.</summary>
-        public Span<byte> Buffer;
 
         public readonly bool IsFull => Growing is null && Count == Symbols.Length;
 
@@ -189,9 +167,8 @@ internal static partial class QRImageDecoder
         // The version is not known before a symbol reads, so the text buffer is the largest symbol's
         var maxChars = QRMatrixDecoder.GetMaxCharCount(40);
         var rentedChars = ArrayPool<char>.Shared.Rent(maxChars);
-        var rentedPasses = RentPassBuffers(pixelCount);
         Span<FinderPattern> left = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var search = new SymbolSearch { Symbols = symbols, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left, Candidates = MemoryMarshal.Cast<byte, FinderPattern>(rentedPasses.AsSpan(0, CandidateListBytes)), Buffer = rentedPasses.AsSpan(CandidateListBytes, pixelCount) };
+        var search = new SymbolSearch { Symbols = symbols, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left };
         try
         {
             for (var round = 0; round < MaxSymbolRounds; round++)
@@ -209,7 +186,6 @@ internal static partial class QRImageDecoder
         {
             growing = search.Growing;
             ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
-            ArrayPool<byte>.Shared.Return(rentedPasses, clearArray: false);
         }
     }
 
@@ -286,9 +262,8 @@ internal static partial class QRImageDecoder
 
         var maxChars = QRMatrixDecoder.GetMaxCharCount(40);
         var rentedChars = ArrayPool<char>.Shared.Rent(maxChars);
-        var rentedPasses = RentPassBuffers(pixelCount);
         Span<FinderPattern> left = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var search = new SymbolSearch { Symbols = symbols, Count = seeded, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left, Shared = shared, Candidates = MemoryMarshal.Cast<byte, FinderPattern>(rentedPasses.AsSpan(0, CandidateListBytes)), Buffer = rentedPasses.AsSpan(CandidateListBytes, pixelCount) };
+        var search = new SymbolSearch { Symbols = symbols, Count = seeded, Growing = growing, Token = cancellationToken, Chars = rentedChars.AsSpan(0, maxChars), Left = left, Shared = shared };
         try
         {
             for (var round = 0; round < MaxSymbolRounds; round++)
@@ -307,7 +282,6 @@ internal static partial class QRImageDecoder
         {
             growing = search.Growing;
             ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
-            ArrayPool<byte>.Shared.Return(rentedPasses, clearArray: false);
         }
     }
 
@@ -324,24 +298,32 @@ internal static partial class QRImageDecoder
 
         // Read before the later passes overwrite the histogram, as the one-symbol passes do
         var searchReduced = !RegionalRetry.HoldsOnlyExtremes(histogram);
-        var buffer = search.Buffer;
-        DecodeSymbolsAfterPositive(ref search, luminance, histogram, width, height, scale: 1, buffer, search.Round == 0 ? SharedRowHits.Negative : -1);
-
-        var above = luminance;
-        for (var scale = 2; searchReduced && !search.IsFull && Math.Min(width, height) / 2 >= ImageDecodePasses.MinimumReducedSide; scale *= 2)
+        var rented = ArrayPool<byte>.Shared.Rent(luminance.Length);
+        try
         {
-            int levelWidth = width / 2, levelHeight = height / 2;
-            var level = buffer.Slice(0, levelWidth * levelHeight);
-            LuminanceHalver.Halve(above, width, height, level);
+            var buffer = rented.AsSpan(0, luminance.Length);
+            DecodeSymbolsAfterPositive(ref search, luminance, histogram, width, height, scale: 1, buffer, search.Round == 0 ? SharedRowHits.Negative : -1);
 
-            Binarizer.FillHistogram(level, histogram);
-            DecodeSymbolsOfReading(ref search, level, default, negative: false, histogram, levelWidth, levelHeight, scale, reading: -1);
-            if (!search.IsFull)
-                DecodeSymbolsAfterPositive(ref search, level, histogram, levelWidth, levelHeight, scale, buffer.Slice(level.Length, level.Length), firstReading: -1);
+            var above = luminance;
+            for (var scale = 2; searchReduced && !search.IsFull && Math.Min(width, height) / 2 >= ImageDecodePasses.MinimumReducedSide; scale *= 2)
+            {
+                int levelWidth = width / 2, levelHeight = height / 2;
+                var level = buffer.Slice(0, levelWidth * levelHeight);
+                LuminanceHalver.Halve(above, width, height, level);
 
-            above = level;
-            width = levelWidth;
-            height = levelHeight;
+                Binarizer.FillHistogram(level, histogram);
+                DecodeSymbolsOfReading(ref search, level, default, negative: false, histogram, levelWidth, levelHeight, scale, reading: -1);
+                if (!search.IsFull)
+                    DecodeSymbolsAfterPositive(ref search, level, histogram, levelWidth, levelHeight, scale, buffer.Slice(level.Length, level.Length), firstReading: -1);
+
+                above = level;
+                width = levelWidth;
+                height = levelHeight;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
     }
 
@@ -356,24 +338,32 @@ internal static partial class QRImageDecoder
 
         // Read before the later passes overwrite the histogram, as the one-symbol passes do
         var searchReduced = !RegionalRetry.HoldsOnlyExtremes(histogram);
-        var buffer = search.Buffer;
-        DecodeSymbolsAfterPositive(ref search, luminance, histogram, width, height, scale: 1, buffer, search.Round == 0 ? SharedRowHits.Negative : -1);
-
-        var above = luminance;
-        for (var scale = 2; searchReduced && !search.IsFull && Math.Min(width, height) / 2 >= ImageDecodePasses.MinimumReducedSide; scale *= 2)
+        var rented = ArrayPool<byte>.Shared.Rent(luminance.Length);
+        try
         {
-            int levelWidth = width / 2, levelHeight = height / 2;
-            var level = buffer.Slice(0, levelWidth * levelHeight);
-            LuminanceHalver.Halve(above, width, height, level);
+            var buffer = rented.AsSpan(0, luminance.Length);
+            DecodeSymbolsAfterPositive(ref search, luminance, histogram, width, height, scale: 1, buffer, search.Round == 0 ? SharedRowHits.Negative : -1);
 
-            Binarizer.FillHistogram(level, histogram);
-            DecodeSymbolsOfReading(ref search, level, default, negative: false, histogram, levelWidth, levelHeight, scale, reading: -1);
-            if (!search.IsFull)
-                DecodeSymbolsAfterPositive(ref search, level, histogram, levelWidth, levelHeight, scale, buffer.Slice(level.Length, level.Length), firstReading: -1);
+            var above = luminance;
+            for (var scale = 2; searchReduced && !search.IsFull && Math.Min(width, height) / 2 >= ImageDecodePasses.MinimumReducedSide; scale *= 2)
+            {
+                int levelWidth = width / 2, levelHeight = height / 2;
+                var level = buffer.Slice(0, levelWidth * levelHeight);
+                LuminanceHalver.Halve(above, width, height, level);
 
-            above = level;
-            width = levelWidth;
-            height = levelHeight;
+                Binarizer.FillHistogram(level, histogram);
+                DecodeSymbolsOfReading(ref search, level, default, negative: false, histogram, levelWidth, levelHeight, scale, reading: -1);
+                if (!search.IsFull)
+                    DecodeSymbolsAfterPositive(ref search, level, histogram, levelWidth, levelHeight, scale, buffer.Slice(level.Length, level.Length), firstReading: -1);
+
+                above = level;
+                width = levelWidth;
+                height = levelHeight;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
     }
 
@@ -447,61 +437,70 @@ internal static partial class QRImageDecoder
     {
         var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
 
-        // The list has its whole room from the start, since the rows between can bring more finders than the strided scan found, and a full list drops them
-        var candidates = search.Candidates;
-        int candidateCount;
-        var stride = FinderPatternFinder.RowStride(height);
-        if (search.Shared.TryBuffers(reading, FinderPatternFinder.StridedRowCount(height, stride), out var hits, out var rowEnds))
-        {
-            FinderPatternFinder.FindCandidatesKeepingRowHits(luminance, width, height, threshold, grey, candidates, out candidateCount, hits, rowEnds, stride, given: default);
-            search.Shared.Keep(reading, stride);
-        }
-        else
-        {
-            candidateCount = FinderPatternFinder.FindCandidatesStrided(luminance, width, height, threshold, candidates, grey);
-        }
-        RemoveCandidatesOfSymbols(candidates, ref candidateCount, search.Read, scale);
-
-        var image = new ImageView(luminance, source, negative, width, height, threshold, grey);
-        var everyRowScanned = false;
-        var modules = new ModuleWorkspace();
+        // The list is rented as bytes: a pool of candidates would be one more pool in every build, and the pools the one-symbol call rents from would be laid out around it.
+        // It has its whole room from the start, since the rows between can bring more finders than the strided scan found, and a full list drops them
+        var rented = ArrayPool<byte>.Shared.Rent(MaxSymbolCandidates * Unsafe.SizeOf<FinderPattern>());
         try
         {
-            while (!search.IsFull)
+            var candidates = MemoryMarshal.Cast<byte, FinderPattern>(rented.AsSpan()).Slice(0, MaxSymbolCandidates);
+            int candidateCount;
+            var stride = FinderPatternFinder.RowStride(height);
+            if (search.Shared.TryBuffers(reading, FinderPatternFinder.StridedRowCount(height, stride), out var hits, out var rowEnds))
             {
-                // Every reading enters this loop once at least, so an image where nothing reads still sees the token
-                search.Token.ThrowIfCancellationRequested();
-                var status = DecodeNextSymbol(image, candidates, ref candidateCount, ref everyRowScanned, search.Read, scale, ref modules, search.Chars, out var charsWritten, out var info, out var tried);
-                if (status == DecodeStatus.Success)
+                FinderPatternFinder.FindCandidatesKeepingRowHits(luminance, width, height, threshold, grey, candidates, out candidateCount, hits, rowEnds, stride, given: default);
+                search.Shared.Keep(reading, stride);
+            }
+            else
+            {
+                candidateCount = FinderPatternFinder.FindCandidatesStrided(luminance, width, height, threshold, candidates, grey);
+            }
+            RemoveCandidatesOfSymbols(candidates, ref candidateCount, search.Read, scale);
+
+            var image = new ImageView(luminance, source, negative, width, height, threshold, grey);
+            var everyRowScanned = false;
+            var modules = new ModuleWorkspace();
+            try
+            {
+                while (!search.IsFull)
                 {
-                    var read = scale == 1 ? info : info.WithCorners(SymbolGeometry.Scaled(info.Corners, scale));
-                    // The read's finders are inside its outline. Were none removed, the next selection would be this one again
-                    var before = candidateCount;
-                    RemoveCandidatesInside(candidates, ref candidateCount, read.Corners, scale);
-                    if (!IsReadAlready(search.Read, read.Corners))
-                        search.Add(new QRCodeDecodeResult(search.Chars.Slice(0, charsWritten).ToString(), read));
-                    if (candidateCount == before)
+                    // Every reading enters this loop once at least, so an image where nothing reads still sees the token
+                    search.Token.ThrowIfCancellationRequested();
+                    var status = DecodeNextSymbol(image, candidates, ref candidateCount, ref everyRowScanned, search.Read, scale, ref modules, search.Chars, out var charsWritten, out var info, out var tried);
+                    if (status == DecodeStatus.Success)
+                    {
+                        var read = scale == 1 ? info : info.WithCorners(SymbolGeometry.Scaled(info.Corners, scale));
+                        // The read's finders are inside its outline. Were none removed, the next selection would be this one again
+                        var before = candidateCount;
+                        RemoveCandidatesInside(candidates, ref candidateCount, read.Corners, scale);
+                        if (!IsReadAlready(search.Read, read.Corners))
+                            search.Add(new QRCodeDecodeResult(search.Chars.Slice(0, charsWritten).ToString(), read));
+                        if (candidateCount == before)
+                            break;
+                        continue;
+                    }
+
+                    // A symbol whose content does not decode stays unread, and its finders leave the list so that the others can be reached
+                    if (IsContentVerdict(status) && RemoveCandidates(candidates, ref candidateCount, tried))
+                        continue;
+
+                    // The stages gave up on the head of the list
+                    var head = Math.Min(candidateCount, FinderPatternFinder.MaxFinderCandidates);
+                    if (head >= 3 && !KeepAsLeft(search.Left, ref search.LeftCount, candidates.Slice(0, head), scale))
+                        search.LeftOut = true;
+                    if (candidateCount == head)
                         break;
-                    continue;
+                    candidates.Slice(head, candidateCount - head).CopyTo(candidates);
+                    candidateCount -= head;
                 }
-
-                // A symbol whose content does not decode stays unread, and its finders leave the list so that the others can be reached
-                if (IsContentVerdict(status) && RemoveCandidates(candidates, ref candidateCount, tried))
-                    continue;
-
-                // The stages gave up on the head of the list
-                var head = Math.Min(candidateCount, FinderPatternFinder.MaxFinderCandidates);
-                if (head >= 3 && !KeepAsLeft(search.Left, ref search.LeftCount, candidates.Slice(0, head), scale))
-                    search.LeftOut = true;
-                if (candidateCount == head)
-                    break;
-                candidates.Slice(head, candidateCount - head).CopyTo(candidates);
-                candidateCount -= head;
+            }
+            finally
+            {
+                modules.Dispose();
             }
         }
         finally
         {
-            modules.Dispose();
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
     }
 

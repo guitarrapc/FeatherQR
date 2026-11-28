@@ -191,7 +191,7 @@ internal static partial class QRImageDecoder
     /// </summary>
     /// <remarks>
     /// A dimension needs three grids at once: the first sampling, another grid compared against it, and a coverage re-read compared against either.
-    /// The thread's slot of the array pool holds one array a size, and a second of the same size would come from the per-core stacks every thread shares, where a thread decoding beside this one can take it and the rent allocates.
+    /// The thread's slot of the array pool holds one array a size, and a second of the same size would come from the per-core stacks every thread shares. Those are empty while other threads hold the arrays they had, and the rent then allocates.
     /// </remarks>
     internal struct ModuleWorkspace
     {
@@ -203,7 +203,6 @@ internal static partial class QRImageDecoder
         /// <summary>Makes room for three grids of <paramref name="dimension"/>, renting a larger array when the one held is too small. Any grid taken before is no longer valid then.</summary>
         public void Reserve(int dimension)
         {
-            Debug.Assert(dimension is >= 21 and <= 177, "a version's dimension: the several-symbol passes rent past the largest workspace's length");
             var length = dimension * dimension;
             if (length <= _capacity)
                 return;

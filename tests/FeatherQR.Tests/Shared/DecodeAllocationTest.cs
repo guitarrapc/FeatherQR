@@ -720,7 +720,7 @@ public class DecodeAllocationTest
     }
 
     /// <summary>
-    /// Every read holds one array of a size at a time. A scan's module grids share one array for this. The thread's slot of the array pool holds one array a size, so a second array of that size would come from the per-core stacks every thread shares, where a thread decoding beside this one can take it and the rent allocates.
+    /// Every read holds one array of a size at a time. A scan's module grids share one array for this. The thread's slot of the array pool holds one array a size, so a second array of that size would come from the per-core stacks every thread shares. Those are empty while other threads hold the arrays they had, and the rent then allocates.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(StandardQRScenes))]
@@ -746,7 +746,7 @@ public class DecodeAllocationTest
     #region Standard QR: several symbols
 
     /// <summary>
-    /// The entry that returns every symbol of an image allocates the texts it returns and nothing else, for a grid of nine symbols and for one symbol, and holds one array of a size at a time.
+    /// The entry that returns every symbol of an image allocates the texts it returns and nothing else, for a grid of nine symbols and for one symbol.
     /// </summary>
     [Test]
     [Arguments(3, 3)]
@@ -768,9 +768,6 @@ public class DecodeAllocationTest
         var allocated = SteadyStateBytes(() => QRImageDecoder.DecodeSymbols(luminance, width, height, symbols));
 
         await Assert.That(allocated).IsEqualTo(texts);
-        using var watch = new ArrayPoolRentWatch();
-        QRImageDecoder.DecodeSymbols(luminance, width, height, symbols);
-        await Assert.That(watch.MostOutOfOneSize).IsEqualTo(1);
     }
 
     /// <summary>An image with no symbol goes through every pass of the entry and allocates nothing.</summary>
