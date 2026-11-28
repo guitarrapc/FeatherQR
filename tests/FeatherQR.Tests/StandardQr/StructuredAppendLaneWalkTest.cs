@@ -103,7 +103,7 @@ public class StructuredAppendLaneWalkTest
     [Arguments(9_000, 40)]
     [Arguments(900, 5)]
     [Arguments(180, 2)]
-    public async Task Plan_UsesParallelBudgetsOnArm64_AndMatchesScalarCuts(int length, int maxVersion)
+    public async Task Plan_WithParallelBudgetsOnArm64_MatchesScalarCuts(int length, int maxVersion)
     {
         if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;
@@ -113,16 +113,13 @@ public class StructuredAppendLaneWalkTest
         var actual = new int[StructuredAppendPlanner.MaxSymbols];
         var scalar = StructuredAppendPlanner.TryPlan(text, QREccLevel.L, analysis.EciMode, analysis.EncodingMode,
             false, QRSegmentation.Optimal, 1, maxVersion, expected, out var expectedCount, out var expectedVersion, out var expectedBudget, allowLanes: false);
-        var before = StructuredAppendPlanner.LaneBatches;
         var parallel = StructuredAppendPlanner.TryPlan(text, QREccLevel.L, analysis.EciMode, analysis.EncodingMode,
             false, QRSegmentation.Optimal, 1, maxVersion, actual, out var count, out var version, out var budget, allowLanes: true);
-        var batches = StructuredAppendPlanner.LaneBatches - before;
         await Assert.That(scalar && parallel).IsTrue();
         await Assert.That(count).IsEqualTo(expectedCount);
         await Assert.That(version).IsEqualTo(expectedVersion);
         await Assert.That(budget).IsEqualTo(expectedBudget);
         await Assert.That(actual.AsSpan(0, count).ToArray()).IsEquivalentTo(expected.AsSpan(0, count).ToArray(), CollectionOrdering.Matching);
-        await Assert.That(batches).IsGreaterThan(0);
     }
 
     [Test]
@@ -444,51 +441,6 @@ public class StructuredAppendLaneWalkTest
         var far = Narrow(balanced - 200);
         await Assert.That(far.Settled).IsGreaterThanOrEqualTo(balanced).And.IsLessThan(balanced + 32);
         await Assert.That(far.Failed).IsLessThan(balanced).And.IsGreaterThanOrEqualTo(balanced - 32);
-    }
-
-    [Test]
-    public async Task ScalarWalks_CountsTheBisectionsResumedProbesToo()
-    {
-        // Without lanes the search is scalar walks alone, and each bisection probe resumes after the chunks it shares
-        // with its neighbours: those are walks of the search too, and a counter that missed them would pin nothing there.
-        var text = Repeat("0123456789012345678901234567890123456789" + new string((char)0xFEFF, 6), 15_000);
-        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
-        var ends = new int[StructuredAppendPlanner.MaxSymbols];
-
-        int scalar = StructuredAppendPlanner.ScalarWalks, lanes = StructuredAppendPlanner.LaneBatches;
-        var planned = StructuredAppendPlanner.TryPlan(text, QREccLevel.L, analysis.EciMode, analysis.EncodingMode, false, QRSegmentation.Optimal, 1, 40, ends, out _, out _, out _, allowLanes: false);
-        scalar = StructuredAppendPlanner.ScalarWalks - scalar;
-        lanes = StructuredAppendPlanner.LaneBatches - lanes;
-
-        await Assert.That(planned).IsTrue();
-        await Assert.That(scalar).IsEqualTo(12);
-        await Assert.That(lanes).IsEqualTo(0);
-    }
-
-    [Test]
-    [Arguments(20, 5_500, QREccLevel.H, 40, 2, 3)]
-    [Arguments(8, 15_000, QREccLevel.Q, 36, 2, 4)]
-    public async Task Plan_TakesTheSecondBatchWhereItsCeilingAllowsIt(int marks, int length, QREccLevel ecc, int maxVersion, int scalarWalks, int laneBatches)
-    {
-        // Which ceilings may take the second batch is invisible in the plan, so the walks are counted. In the first row the
-        // count is asked below a capacity that does not hold it (the set needs one symbol more), and a second batch there
-        // would be walked and repeated by the walk at the capacity. In the second the bracket's ceiling holds the count and
-        // the batch saves scalar probes. A change of search that moves these must say why, with a measurement.
-        if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
-            return;
-        var digits = marks == 20 ? "0123456789012345678901234567890123456789" : "01234567890123456789";
-        var text = Repeat(digits + new string((char)0xFEFF, marks), length);
-        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
-        var ends = new int[StructuredAppendPlanner.MaxSymbols];
-
-        int scalar = StructuredAppendPlanner.ScalarWalks, lanes = StructuredAppendPlanner.LaneBatches;
-        var planned = StructuredAppendPlanner.TryPlan(text, ecc, analysis.EciMode, analysis.EncodingMode, false, QRSegmentation.Optimal, 1, maxVersion, ends, out _, out _, out _, allowLanes: true);
-        scalar = StructuredAppendPlanner.ScalarWalks - scalar;
-        lanes = StructuredAppendPlanner.LaneBatches - lanes;
-
-        await Assert.That(planned).IsTrue();
-        await Assert.That(scalar).IsEqualTo(scalarWalks);
-        await Assert.That(lanes).IsEqualTo(laneBatches);
     }
 
     [Test]

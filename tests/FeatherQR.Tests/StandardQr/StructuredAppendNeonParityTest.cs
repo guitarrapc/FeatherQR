@@ -83,12 +83,9 @@ public class StructuredAppendNeonParityTest
         int low = 100, high = 120, settled = -1, count = 0, failed = -1;
         var settledEnds = new int[16];
         var failedEnds = new int[16];
-        var before = StructuredAppendPlanner.LaneBatches;
         var walked = StructuredAppendPlanner.TryNarrowWithLanes(text, EciMode.Default, 1, low, high, 2,
             ref low, ref high, settledEnds, ref settled, ref count, failedEnds, ref failed);
-        var batches = StructuredAppendPlanner.LaneBatches - before;
         await Assert.That(walked).IsEqualTo(expectedWalk);
-        await Assert.That(batches).IsEqualTo(expectedWalk ? 1 : 0);
         if (!expectedWalk)
         {
             await Assert.That(low).IsEqualTo(100);

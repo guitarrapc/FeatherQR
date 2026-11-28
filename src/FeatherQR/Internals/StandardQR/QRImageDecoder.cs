@@ -203,11 +203,12 @@ internal static partial class QRImageDecoder
         /// <summary>Makes room for three grids of <paramref name="dimension"/>, renting a larger array when the one held is too small. Any grid taken before is no longer valid then.</summary>
         public void Reserve(int dimension)
         {
+            Debug.Assert(dimension is >= 21 and <= 177, "a version's dimension: the several-symbol passes rent past the largest workspace's length");
             var length = dimension * dimension;
             if (length <= _capacity)
                 return;
             Dispose();
-            _rented = RentModules(3 * length);
+            _rented = ArrayPool<byte>.Shared.Rent(3 * length);
             _capacity = length;
         }
 
@@ -230,7 +231,7 @@ internal static partial class QRImageDecoder
         {
             if (_rented is null)
                 return;
-            ReturnModules(_rented);
+            ArrayPool<byte>.Shared.Return(_rented, clearArray: false);
             _rented = null;
             _capacity = 0;
         }
@@ -841,26 +842,6 @@ internal static partial class QRImageDecoder
     /// A level takes one only once an attempt has not settled: either rule reports a settled attempt that follows unsettled ones as it is, and on the WebAssembly interpreter every result operation is a call.
     /// </summary>
     private static SearchResult<QRCodeDecodeInfo> NewResult() => new(Reporting, NotDetectedInfo);
-
-    /// <summary>
-    /// The module buffers this thread has out, and the most it has had out at once since a test last cleared <see cref="ModuleBuffersPeak"/>.
-    /// No decode reads them, but tests that pin how many a scan holds do. One increment and one decrement a buffer.
-    /// </summary>
-    [ThreadStatic]
-    internal static int ModuleBuffersOut, ModuleBuffersPeak;
-
-    private static byte[] RentModules(int length)
-    {
-        if (++ModuleBuffersOut > ModuleBuffersPeak)
-            ModuleBuffersPeak = ModuleBuffersOut;
-        return ArrayPool<byte>.Shared.Rent(length);
-    }
-
-    private static void ReturnModules(byte[] rented)
-    {
-        ModuleBuffersOut--;
-        ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-    }
 
     /// <summary>BCH(18,6) version information codewords of versions 7-40, indexed by version − 7.</summary>
     private static readonly uint[] VersionCodewords = CreateVersionCodewords();

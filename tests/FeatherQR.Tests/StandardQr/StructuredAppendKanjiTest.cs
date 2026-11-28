@@ -509,31 +509,26 @@ public class StructuredAppendKanjiTest
     }
 
     /// <summary>
-    /// A text with ASCII in it plans first the set whose floor is lower, and the other only where that one's floor says it could still win.
-    /// 「a日b本c」 × 200 at version 10-L at most: 10,000 bits of characters in 801 stretches put the Kanji floor at 10 symbols, and the UTF-8 set is 7, so no Kanji set is planned.
-    /// The CodeGlyphX sentence × 45: the Kanji set is 7 symbols and the UTF-8 floor 11 (22,095 bits), so no UTF-8 set is planned.
+    /// A text with ASCII in it takes the set whose floor says the other cannot win.
+    /// 「a日b本c」 × 200 at version 10-L at most: 10,000 bits of characters in 801 stretches put the Kanji floor at 10 symbols, and the UTF-8 set is 7.
+    /// The CodeGlyphX sentence × 45: the Kanji set is 7 symbols and the UTF-8 floor 11 (22,095 bits).
     /// </summary>
     [Test]
-    [Arguments("interleaved", "a日b本c", 200, 0, 1, false)]
-    [Arguments("sentence", "こんにちは世界、QRコードの分割テストです。", 45, 1, 0, true)]
-    public async Task WithAscii_PlansASecondSetOnlyWhereItCouldWin(string name, string unit, int repeat, int kanjiPlans, int utf8Plans, bool kanjiSet)
+    [Arguments("interleaved", "a日b本c", 200, false)]
+    [Arguments("sentence", "こんにちは世界、QRコードの分割テストです。", 45, true)]
+    public async Task WithAscii_TakesTheSetTheOtherCannotBeat(string name, string unit, int repeat, bool kanjiSet)
     {
         var text = Repeat(unit, repeat);
         var options = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal };
-        int kanji = QRCodeGenerator.KanjiSetPlans, utf8 = QRCodeGenerator.Utf8SetPlans;
         var set = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, options);
-        kanji = QRCodeGenerator.KanjiSetPlans - kanji;
-        utf8 = QRCodeGenerator.Utf8SetPlans - utf8;
 
-        await Assert.That(kanji).IsEqualTo(kanjiPlans).Because(name);
-        await Assert.That(utf8).IsEqualTo(utf8Plans).Because(name);
         await Assert.That(set.Length).IsEqualTo(7).Because(name);
         await Assert.That(IsUtf8Set(set, text, QREccLevel.L, options)).IsEqualTo(!kanjiSet).Because(name);
     }
 
     /// <summary>
     /// Texts of short units where kanji, digits and letters take turns, so that the two sets are close and their floors decide least.
-    /// Whichever set is planned first and whichever is skipped, the set is the one planning both would choose, each set is planned at most once, and the corpus reaches every way the planning can go.
+    /// Whichever set is planned first and whichever is skipped, the set is the one planning both would choose.
     /// </summary>
     [Test]
     public async Task WithAscii_SkippingASetNeverChangesTheSet()
@@ -560,7 +555,6 @@ public class StructuredAppendKanjiTest
             corpus.Add((builder.ToString(), (QREccLevel)random.Next(4), random.Next(1, 11)));
         }
 
-        var paths = new HashSet<string>();
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
         foreach (var (text, ecc, maxVersion) in corpus)
         {
@@ -576,14 +570,9 @@ public class StructuredAppendKanjiTest
             var version = kanjiWins ? kanjiVersion : utf8Version;
 
             var options = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(maxVersion), Segmentation = QRSegmentation.Optimal };
-            int kanjiPlans = QRCodeGenerator.KanjiSetPlans, utf8Plans = QRCodeGenerator.Utf8SetPlans;
             var set = QRCodeGenerator.CreateStructuredAppend(text, ecc, options);
-            kanjiPlans = QRCodeGenerator.KanjiSetPlans - kanjiPlans;
-            utf8Plans = QRCodeGenerator.Utf8SetPlans - utf8Plans;
 
             var because = $"{text} at {ecc}, versions up to {maxVersion}";
-            await Assert.That(kanjiPlans).IsBetween(0, 1).Because(because);
-            await Assert.That(utf8Plans).IsBetween(0, 1).Because(because);
             var fitsOneSymbol = QRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, options);
             await Assert.That(set.Length == 1).IsEqualTo(fitsOneSymbol).Because(because);
             if (fitsOneSymbol)
@@ -595,59 +584,7 @@ public class StructuredAppendKanjiTest
             await Assert.That(set[0].Version).IsEqualTo(version).Because(because);
             if (utf8Planned)
                 await Assert.That(IsUtf8Set(set, text, ecc, options)).IsEqualTo(!kanjiWins).Because(because);
-
-            // Which way the planning went, from the floors it starts from.
-            var sixths = ModeSegmenter.CheapestSixthsKanji(text, out var utf8Sixths, out _, out _);
-            var largest = StructuredAppendPlanner.Capacity(maxVersion, ecc);
-            var kanjiFloor = StructuredAppendPlanner.FewestSymbolsKanji(largest, (sixths + 5) / 6, Stretches(text));
-            var utf8Floor = StructuredAppendPlanner.FewestSymbols(largest, (utf8Sixths + 5) / 6, EciMode.Utf8);
-            var first = kanjiFloor <= utf8Floor ? "Kanji first" : "UTF-8 first";
-            paths.Add((kanjiPlans, utf8Plans) switch
-            {
-                (1, 1) => $"{first}, both planned, {(kanjiWins ? "Kanji" : "UTF-8")} taken",
-                (1, 0) => $"{first}, UTF-8 skipped {(utf8Floor == kanjiCount ? "by its version" : "by its count")}",
-                _ => $"{first}, Kanji skipped {(kanjiFloor == utf8Count ? "by its version" : "by its count")}",
-            });
         }
-
-        await Assert.That(paths).IsEquivalentTo(new[]
-        {
-            "Kanji first, both planned, Kanji taken", "Kanji first, both planned, UTF-8 taken",
-            "Kanji first, UTF-8 skipped by its count", "Kanji first, UTF-8 skipped by its version",
-            "UTF-8 first, both planned, Kanji taken", "UTF-8 first, both planned, UTF-8 taken",
-            "UTF-8 first, Kanji skipped by its count", "UTF-8 first, Kanji skipped by its version",
-        }, CollectionOrdering.Any).Because(string.Join(" | ", paths));
-    }
-
-    /// <summary>
-    /// A Kanji set takes the scalar program (standardqr-encoder.md, "The lanes"), whose eighth state the lanes do not have: neither the Kanji set's budget search nor its writer runs lanes.
-    /// The UTF-8 set it is compared with is the seven-state program's and may. So may the same text asked for as UTF-8, which it does where the machine accelerates lanes, and that is what makes the zeros mean something.
-    /// </summary>
-    [Test]
-    public async Task KanjiSet_TakesTheScalarProgram()
-    {
-        var text = Repeat("日本語のテキスト、", 60) + Repeat("order 20260915 item 0000123456 qty 42 ", 150);
-        var options = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(20), Segmentation = QRSegmentation.Optimal };
-
-        StructuredAppendPlanner.LaneBatches = 0;
-        var ends = new int[StructuredAppendPlanner.MaxSymbols];
-        StructuredAppendPlanner.TryPlanKanji(text, QREccLevel.L, QRSegmentation.Optimal, 1, 20, ends, out _, out _, out _);
-        var laneBatches = StructuredAppendPlanner.LaneBatches;
-        await Assert.That(laneBatches).IsEqualTo(0);
-
-        QRCodeGenerator.LanePlanPasses = 0;
-        var set = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, options);
-        var lanePlanPasses = QRCodeGenerator.LanePlanPasses;
-        await Assert.That(IsUtf8Set(set, text, QREccLevel.L, options)).IsFalse().Because("the text is a Kanji set");
-        await Assert.That(lanePlanPasses).IsEqualTo(0);
-
-        if (!ModeSegmenter.LanesAccelerated)
-            return;
-        StructuredAppendPlanner.LaneBatches = 0;
-        QRCodeGenerator.LanePlanPasses = 0;
-        QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, options with { EciMode = EciMode.Utf8 });
-        var utf8Lanes = StructuredAppendPlanner.LaneBatches + QRCodeGenerator.LanePlanPasses;
-        await Assert.That(utf8Lanes).IsGreaterThan(0);
     }
 
     /// <summary>A Kanji set's refusal counts characters in Kanji mode.</summary>

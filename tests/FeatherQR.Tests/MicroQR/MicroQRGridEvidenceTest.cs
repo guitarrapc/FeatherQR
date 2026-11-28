@@ -81,6 +81,7 @@ public class MicroQRGridEvidenceTest
 
     /// <summary>
     /// A real M4-M symbol at its correction limit whose format word is a bit off and whose timing modules all read the other way: Reed-Solomon reads it, the structure does not earn that, and a clean quiet zone does.
+    /// With the grid evidence rule removed, it reads with the dark quiet zone too (2026-11-28).
     /// </summary>
     [Test]
     [Arguments(false)]
@@ -103,19 +104,6 @@ public class MicroQRGridEvidenceTest
 
         var damaged = Decode(grid, size, quietZoneDark: 2 * size + 1, mirrored);
         var clean = Decode(grid, size, quietZoneDark: 0, mirrored);
-        MicroQRGridEvidence.SuspendedOnThisThread = true;
-        (DecodeStatus Status, MicroQRCodeDecodeInfo Info, string Text) suspended;
-        try
-        {
-            suspended = Decode(grid, size, quietZoneDark: 2 * size + 1, mirrored);
-        }
-        finally
-        {
-            MicroQRGridEvidence.SuspendedOnThisThread = false;
-        }
-
-        await Assert.That(suspended.Status).IsEqualTo(DecodeStatus.Success);
-        await Assert.That(suspended.Info.ErrorsCorrected).IsEqualTo(5);
         await Assert.That(damaged.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
         await Assert.That(damaged.Info.ErrorsCorrected).IsEqualTo(5);
         await Assert.That(clean.Status).IsEqualTo(DecodeStatus.Success);

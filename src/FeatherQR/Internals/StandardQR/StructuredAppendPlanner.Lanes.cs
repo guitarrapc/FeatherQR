@@ -167,7 +167,6 @@ internal static partial class StructuredAppendPlanner
     /// </summary>
     internal static bool WalkLanes(ReadOnlySpan<char> text, EciMode charset, int version, ReadOnlySpan<int> budgets, int limit, int placed, int start, Span<int> counts, Span<int> laneEnds, out int apartSteps)
     {
-        LaneBatches++;
         // The search supplies QR capacities. Keep the 32-bit reference for direct walks
         // outside the 16-bit cost domain, including budgets smaller than the set headers.
         if (AdvSimd.Arm64.IsSupported && BudgetsFit16(budgets, charset))
