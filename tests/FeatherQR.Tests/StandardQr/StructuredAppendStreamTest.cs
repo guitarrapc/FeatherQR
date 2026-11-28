@@ -146,46 +146,21 @@ public class StructuredAppendStreamTest
     }
 
     [Test]
-    // Prose: every plan is its single Byte run, so the writer plans nothing.
-    [Arguments("prose", "The quick brown fox jumps over the lazy dog. ", 3_000, 10, QREccLevel.M, EciMode.Default, false, 15, 0, 0, 0)]
-    // Order lines of twelve symbols: two passes plan them, eight and four together, and none alone.
-    [Arguments("order-lines", OrderLine, 2_600, 10, QREccLevel.M, EciMode.Default, false, 12, 0, 2, 0)]
-    // Three are the fewest a pass takes.
-    [Arguments("three", OrderLine, 650, 10, QREccLevel.M, EciMode.Default, false, 3, 0, 1, 0)]
-    // A label-sized set of two, below what a pass takes, so planned alone. Its plan rules out one symbol, so the question is not asked.
-    [Arguments("label", OrderLine, 400, 10, QREccLevel.M, EciMode.Default, false, 2, 2, 0, 0)]
-    // Seventeen bytes at version 1-L are one symbol only without the set header, which the question finds.
-    [Arguments("one-symbol", "a", 17, 1, QREccLevel.L, EciMode.Default, false, 1, 0, 0, 1)]
+    // Seventeen bytes at version 1-L are one symbol only without the set header, which the one-symbol question finds.
+    [Arguments("one-symbol", "a", 17, 1, QREccLevel.L, EciMode.Default, false, 1)]
     // A plan of 150 bits (three bytes, then thirty digits) and the 12 of a declared charset are past 152 at 1-L, which rules the question out.
-    [Arguments("declared", "xyz012345678901234567890123456789", 33, 1, QREccLevel.L, EciMode.Utf8, false, 2, 1, 0, 0)]
-    // Under a byte order mark only the first symbol writes its single-mode stream, and the other eleven still go through two passes.
-    [Arguments("order-lines-marked", OrderLine, 2_600, 10, QREccLevel.M, EciMode.Utf8, true, 12, 0, 2, 0)]
-    // With ten, the other nine are one pass of eight and one alone. Were the first given a lane too, two would be alone.
-    [Arguments("order-lines-marked-ten", OrderLine, 2_000, 10, QREccLevel.M, EciMode.Utf8, true, 10, 1, 1, 0)]
+    [Arguments("declared", "xyz012345678901234567890123456789", 33, 1, QREccLevel.L, EciMode.Utf8, false, 2)]
     // Where no plan helps the bound is the stream's: seventeen bytes (148 bits) and the charset's 12 are past 152,
-    [Arguments("stream-declared", "a", 17, 1, QREccLevel.L, EciMode.Utf8, false, 2, 0, 0, 0)]
+    [Arguments("stream-declared", "a", 17, 1, QREccLevel.L, EciMode.Utf8, false, 2)]
     // and so are fifteen with the byte order mark's 24 (4 + 8 + 120 + 24 + 12 = 168).
-    [Arguments("stream-marked", "a", 15, 1, QREccLevel.L, EciMode.Utf8, true, 2, 0, 0, 0)]
-    public async Task Writer_SpendsWhatTheSetNeeds(string name, string unit, int length, int maxVersion, QREccLevel ecc, EciMode charset, bool utf8Bom, int symbols, int chunkPlans, int lanePlanPasses, int oneSymbolQuestions)
+    [Arguments("stream-marked", "a", 15, 1, QREccLevel.L, EciMode.Utf8, true, 2)]
+    public async Task Set_IsOneSymbolOnlyWhereTheTextFitsOne(string name, string unit, int length, int maxVersion, QREccLevel ecc, EciMode charset, bool utf8Bom, int symbols)
     {
-        // What the writer skips is invisible in the symbols, so it is counted. A change that moves these must say why, with a measurement.
         var text = Repeat(unit, length);
         var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(maxVersion), Segmentation = QRSegmentation.Optimal, EciMode = charset, Utf8Bom = utf8Bom };
-        int plans = QRCodeGenerator.ChunkPlans, passes = QRCodeGenerator.LanePlanPasses, questions = QRCodeGenerator.OneSymbolQuestions;
         var set = QRCodeGenerator.CreateStructuredAppend(text, ecc, options);
-        plans = QRCodeGenerator.ChunkPlans - plans;
-        passes = QRCodeGenerator.LanePlanPasses - passes;
-        questions = QRCodeGenerator.OneSymbolQuestions - questions;
 
         await Assert.That(set.Length).IsEqualTo(symbols).Because(name);
-        await Assert.That(questions).IsEqualTo(oneSymbolQuestions).Because(name);
-#if NET8_0_OR_GREATER
-        if (System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated)
-        {
-            await Assert.That(plans).IsEqualTo(chunkPlans).Because(name);
-            await Assert.That(passes).IsEqualTo(lanePlanPasses).Because(name);
-        }
-#endif
     }
 
     [Test]

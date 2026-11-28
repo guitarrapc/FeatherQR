@@ -22,10 +22,6 @@ internal static class MicroQRGridEvidence
     /// <summary>Passed for a quiet zone not read: it earns nothing.</summary>
     public const int QuietZoneUnread = -1;
 
-    /// <summary>Set by a test around a decode on its own thread, to see what the decode reads without the rule: the premise of a test that the rule refuses an image.</summary>
-    [ThreadStatic]
-    internal static bool SuspendedOnThisThread;
-
     private const int UnitsPerBit = 256;
     private const int MaxTimingModules = 2 * (17 - 8);
     private const int MaxQuietZoneModules = 2 * 17 + 1;

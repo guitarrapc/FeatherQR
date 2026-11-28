@@ -38,12 +38,6 @@ internal static partial class StructuredAppendPlanner
     private const char ByteOrderMark = ModeSegmenter.ByteOrderMark;
 
     /// <summary>
-    /// The walks taken on this thread, scalar and eight budgets at once: what the search spends, which no plan shows, for tests that pin where it spends it. One increment a walk of thousands of steps.
-    /// </summary>
-    [ThreadStatic]
-    internal static int ScalarWalks, LaneBatches;
-
-    /// <summary>
     /// Plans the split. <paramref name="chunkEnds"/> receives the end offset of each chunk (at least <see cref="MaxSymbols"/> entries). <paramref name="chunkCount"/> is 1 when the text fits one symbol within the range even with the set header every chunk is priced with, in which case nothing else is planned. Whether the text fits one symbol without that header, which is what makes it not a set, is the caller's to ask, the way <c>Create</c> asks it, of a text this splits or refuses.
     /// Returns <c>false</c> when the text needs more than sixteen symbols at <paramref name="maxVersion"/>, or some single character cannot fit a symbol there.
     /// </summary>
@@ -545,7 +539,6 @@ internal static partial class StructuredAppendPlanner
     /// <summary>The walk resumed: <paramref name="count"/> chunks are already in <paramref name="chunkEnds"/> and the next starts at <paramref name="start"/>.</summary>
     private static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds, int count, int start, bool kanji)
     {
-        ScalarWalks++;
         while (start < text.Length)
         {
             if (count == limit)

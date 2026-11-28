@@ -375,12 +375,6 @@ public static partial class QRCodeGenerator
         => CreateStructuredAppend(textSpan, eccLevel, in options, planTogether: true);
 
     /// <summary>
-    /// What a set spends on this thread beside the planner's walks (<c>StructuredAppendPlanner.ScalarWalks</c>): the chunks the writer plans one by one, its passes that plan up to eight together, the one-symbol questions, and for a Kanji-eligible text the Kanji and UTF-8 sets planned to be weighed. No set shows them, but tests that pin where the work goes read them. One increment a plan or a question.
-    /// </summary>
-    [ThreadStatic]
-    internal static int ChunkPlans, LanePlanPasses, OneSymbolQuestions, KanjiSetPlans, Utf8SetPlans;
-
-    /// <summary>
     /// <see cref="CreateStructuredAppend(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> with the choice of planning the symbols of the set together left to the caller. The set is the same either way, which is what <c>StructuredAppendWriterPlanTest</c> holds it to.
     /// </summary>
     internal static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options, bool planTogether)
@@ -497,7 +491,6 @@ public static partial class QRCodeGenerator
                     {
                         rentedLaneTable ??= ArrayPool<byte>.Shared.Rent(longestChunk * ModeSegmenter.LaneTableBytesPerChar);
                         QRSegmentPlanner.PlanChunks(textSpan, laneStarts.Slice(0, lanes), laneLengths.Slice(0, lanes), charset, version, rentedLaneTable, laneBits, laneStates);
-                        LanePlanPasses++;
                         lanesToWrite = lanes;
                     }
                     else
@@ -552,7 +545,6 @@ public static partial class QRCodeGenerator
 
         if ((planned && count == 1) || !mayBeOneSymbol)
             return planned;
-        OneSymbolQuestions++;
         if (!TryResolveVersion(text, eccLevel, in wholeText, in options, options.Segmentation != QRSegmentation.Single, out _))
             return planned;
 
@@ -637,13 +629,11 @@ public static partial class QRCodeGenerator
 
     private static bool PlanKanjiSet(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options, Span<int> chunkEnds, out int count, out int version, out bool mayBeOneSymbol)
     {
-        KanjiSetPlans++;
         return StructuredAppendPlanner.TryPlanKanji(text, eccLevel, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out count, out version, out _, out mayBeOneSymbol);
     }
 
     private static bool PlanUtf8Set(ReadOnlySpan<char> text, QREccLevel eccLevel, in TextAnalysisResult wholeText, in QRCodeGeneratorOptions options, Span<int> chunkEnds, out int count, out int version, out bool oneRunPlans, out bool mayBeOneSymbol)
     {
-        Utf8SetPlans++;
         return StructuredAppendPlanner.TryPlan(text, eccLevel, wholeText.EciMode, wholeText.EncodingMode, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out count, out version, out _, out oneRunPlans, out mayBeOneSymbol, allowLanes: true);
     }
 
@@ -694,7 +684,6 @@ public static partial class QRCodeGenerator
                 var header = new QRStructuredAppend(i, count, parity);
                 if (segmentation == QRSegmentation.Optimal)
                 {
-                    ChunkPlans++;
                     if (!QRSegmentPlanner.TryBuildKanjiPlan(chunk, version, level, plan, out var segmentCount, out var planBits) || planBits + StructuredAppendPlanner.HeaderBits > capacity)
                         throw new InvalidOperationException($"A Structured Append chunk of {chunk.Length} characters does not fit version {version} at ECC level {level} after planning.");
                     var planned = new QRConfiguration(version, level, EncodingMode.Kanji, EciMode.Default, false, eccInfo, chunk.Length, header);
@@ -866,8 +855,6 @@ public static partial class QRCodeGenerator
         if (TakesPlan(in analysis, segmentation, bomApplies, oneRunPlans))
         {
             int segmentCount, planBits;
-            if (laneTable.IsEmpty)
-                ChunkPlans++;
 #if NET8_0_OR_GREATER
             var built = laneTable.IsEmpty
                 ? QRSegmentPlanner.TryBuildPlan(chunk, charset, version, eccLevel, plan, out segmentCount, out planBits)

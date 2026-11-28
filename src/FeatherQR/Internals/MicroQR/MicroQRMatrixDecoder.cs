@@ -111,7 +111,7 @@ internal static class MicroQRMatrixDecoder
         }
 
         decidedByModules = false;
-        if (sampled && !MicroQRGridEvidence.SuspendedOnThisThread && !Earns(pixels, modules, size, version, eccLevel, formatDistance, errorsCorrected, luminance, width, height, threshold, quietZone))
+        if (sampled && !Earns(pixels, modules, size, version, eccLevel, formatDistance, errorsCorrected, luminance, width, height, threshold, quietZone))
         {
             info = new MicroQRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
             return DecodeStatus.DataUncorrectable;

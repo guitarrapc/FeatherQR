@@ -230,9 +230,8 @@ These test sets were sized against faults planted in the lanes, the walk and the
 
 The test also checks what the plan does not show:
 
-- where each batch from the floor lands against the scalar search's answer (the second batch below either ceiling, at three budgets and at four, and only once).
+- where each batch from the floor lands against the scalar search's answer.
 - the reach `KeptOffBits` gives that batch.
-- the walks one plan takes per call site, which the planner counts per thread for this purpose.
 
 
 The search does not walk the answer again. The probe that last lowers the ceiling walked at the final budget, so its split is handed back, kept aside because a later failing probe overwrites the caller's buffer. The text is walked a final time only when no walk ran at the final budget, which happens when the capacity itself was the answer. The same test file requires the returned split to be the walk at the returned budget, across pinned versions that put the answer at the top of the bracket.
@@ -255,7 +254,7 @@ Only symbols that need a plan get a lane, in order, eight per pass. A digit chun
 
 NEON keeps 32-bit keys, because the cost times eight cannot fit the budget walker's 16-bit representation. Groups with too little useful work relative to their longest chunk use scalar planning, so a vector pass is not spent mostly on padding. The parent layout and tie-break are shared, so plans and emitted modules are identical across backends. `ModeSegmenterLaneParityTest` compares costs, final states and reconstructed runs against an independent all-states reference, including every UTF-16 classification value, uneven groups, surrogate boundaries and U+FEFF.
 
-None of the three changes what is written, so the writer counts, per thread, the chunks it plans alone and the passes that plan chunks together. `StructuredAppendStreamTest` checks both counts on prose (neither), twelve symbols of order lines (two passes), three symbols (one pass, the fewest a pass takes) and a label of two (two planned alone).
+None of the three changes what is written. `StructuredAppendWriterPlanTest` requires the same modules whether the chunks are planned together or one by one.
 
 The program records only what the walk back needs. Three of a character's six predecessors are fixed by the packing groups (Numeric0 comes from Numeric2, Numeric2 from Numeric1, and Alnum0 from Alnum1), so the table holds the other three in two bytes per character instead of seven, and the stack holds a table of 256 characters instead of 73.
 

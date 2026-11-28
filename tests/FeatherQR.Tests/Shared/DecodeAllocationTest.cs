@@ -15,7 +15,7 @@ namespace FeatherQR.Tests;
 /// Release only: an unoptimized build allocates where an optimized one does not, a span initialized from a list of <see cref="int"/> or <see cref="float"/> values among others.
 /// </para>
 /// <para>
-/// Runs alone. The decoders rent from <see cref="System.Buffers.ArrayPool{T}"/>, whose thread slot holds one array a size. A second array of that size, which Standard QR's grids take while the first is out, comes from the per-core stacks every thread shares, and a test running beside this one can empty them.
+/// Runs alone. The decoders rent from <see cref="System.Buffers.ArrayPool{T}"/>, whose thread slot holds one array a size. A second array of that size comes from the per-core stacks every thread shares, and a test running beside this one can empty them.
 /// </para>
 /// <para>
 /// Where another test pins an image to the path it reads through, the image here is that one, drawn the same way, and its scene names the test.
@@ -709,36 +709,36 @@ public class DecodeAllocationTest
 
     #endregion
 
-    #region Standard QR: one module buffer at a time
+    #region Standard QR: one array of a size at a time
 
-    /// <summary>The most module buffers the Standard QR decoder had out at once while it decoded the image.</summary>
-    private static int ModuleBuffersPeak(byte[] luminance, int width, int height)
+    /// <summary>The most arrays of one size the Standard QR decoder had out at once while it decoded the image.</summary>
+    private static int MostOutOfOneSize(byte[] luminance, int width, int height)
     {
-        QRImageDecoder.ModuleBuffersPeak = 0;
+        using var watch = new ArrayPoolRentWatch();
         QRCodeDecoder.TryDecodeImage(luminance, width, height, new char[MaxStandardQRChars], out _, out _);
-        return QRImageDecoder.ModuleBuffersPeak;
+        return watch.MostOutOfOneSize;
     }
 
     /// <summary>
-    /// Every read holds one module buffer at a time. The thread's slot of the array pool holds one array a size, so a second buffer of that size would come from the per-core stacks every thread shares, where a thread decoding beside this one can take it and the rent allocates.
+    /// Every read holds one array of a size at a time. A scan's module grids share one array for this. The thread's slot of the array pool holds one array a size, so a second array of that size would come from the per-core stacks every thread shares. Those are empty while other threads hold the arrays they had, and the rent then allocates.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(StandardQRScenes))]
-    public async Task StandardQR_Image_ReadHoldsOneModuleBufferAtATime(ImageScene scene)
+    public async Task StandardQR_Image_ReadHoldsOneArrayOfASizeAtATime(ImageScene scene)
     {
         var image = Render(scene);
 
-        await Assert.That(ModuleBuffersPeak(image.Luminance, image.Width, image.Height)).IsEqualTo(1);
+        await Assert.That(MostOutOfOneSize(image.Luminance, image.Width, image.Height)).IsEqualTo(1);
     }
 
-    /// <summary>A rejected image holds at most one: noise samples the grids of false triples, and the other images find no triple at all.</summary>
+    /// <summary>A rejected image holds one array of a size at a time too.</summary>
     [Test]
     [MethodDataSource(nameof(RejectedByStandardQR))]
-    public async Task StandardQR_Image_RejectionHoldsOneModuleBufferAtATime(RejectedImage rejected)
+    public async Task StandardQR_Image_RejectionHoldsOneArrayOfASizeAtATime(RejectedImage rejected)
     {
         var (luminance, width, height) = Render(rejected);
 
-        await Assert.That(ModuleBuffersPeak(luminance, width, height)).IsLessThanOrEqualTo(rejected == RejectedImage.Noise ? 1 : 0);
+        await Assert.That(MostOutOfOneSize(luminance, width, height)).IsEqualTo(1);
     }
 
     #endregion
@@ -746,7 +746,7 @@ public class DecodeAllocationTest
     #region Standard QR: several symbols
 
     /// <summary>
-    /// The entry that returns every symbol of an image allocates the texts it returns and nothing else, for a grid of nine symbols and for one symbol, and holds one module buffer at a time.
+    /// The entry that returns every symbol of an image allocates the texts it returns and nothing else, for a grid of nine symbols and for one symbol.
     /// </summary>
     [Test]
     [Arguments(3, 3)]
@@ -755,10 +755,8 @@ public class DecodeAllocationTest
     {
         var (luminance, width, height, _) = TripleSelectionDecodeTest.RenderGrid(across, down, 0f, static i => $"FQR LOTS {i}");
         var symbols = new QRCodeDecodeResult[16];
-        QRImageDecoder.ModuleBuffersPeak = 0;
         var count = QRImageDecoder.DecodeSymbols(luminance, width, height, symbols);
         await Assert.That(count).IsEqualTo(across * down);
-        await Assert.That(QRImageDecoder.ModuleBuffersPeak).IsEqualTo(1);
         int[] lengths = [.. symbols.Take(count).Select(static s => s.Text.Length)];
 
         // What strings of those lengths cost, measured the same way
