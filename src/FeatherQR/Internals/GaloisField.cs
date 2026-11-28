@@ -123,8 +123,8 @@ internal static class GaloisField
         var expSpan = expTable.AsSpan();
         var logSpan = logTable.AsSpan();
 
-        // Adding 255 keeps the exponent from going negative.
-        return expSpan[(logSpan[a] + 255 - logSpan[b]) % 255];
+        // Adding 255 keeps the exponent from going negative. The exp table repeats past 255, so no % 255.
+        return expSpan[logSpan[a] + 255 - logSpan[b]];
     }
 
     private static void InitializeTables()

@@ -9,8 +9,9 @@ internal static class LuminanceSampler
     /// </summary>
     public static float Bilinear(ReadOnlySpan<byte> luminance, int width, int height, float x, float y)
     {
-        x -= 0.5f;
-        y -= 0.5f;
+        // Clamped as floats first: past ±2^31 the integer floor saturates, and the right or bottom neighbour would wrap to the far edge.
+        x = Math.Max(Math.Min(x - 0.5f, width - 1f), 0f);
+        y = Math.Max(Math.Min(y - 0.5f, height - 1f), 0f);
         var x0 = (int)Math.Floor(x);
         var y0 = (int)Math.Floor(y);
         var fx = x - x0;

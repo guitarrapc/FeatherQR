@@ -259,16 +259,8 @@ public class ModeSegmenterFnc1ParityTest
             if ((entry & Opened) != 0 || from == StateStart)
             {
                 var modeIndex = state <= StateNumeric2 ? 0 : state <= StateSeparator1 ? 1 : 2;
-                var units = end - i;
-                if (modeIndex == 1)
-                {
-                    foreach (var c in text.AsSpan(i, end - i))
-                    {
-                        if (c == '%')
-                            units++;
-                    }
-                }
-                plan[count++] = new ModeSegment(modeIndex, i, end - i, units);
+                // The unit count is the run's length. The planners count an Alphanumeric run's percents and a Byte run's bytes themselves.
+                plan[count++] = new ModeSegment(modeIndex, i, end - i, end - i);
                 end = i;
             }
             state = from;

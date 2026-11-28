@@ -540,6 +540,13 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
         SymbolRenderer.Render(canvas, contentRect, (QRCodeData)symbol, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
     }
 
+    private protected override void ValidateRender(object symbol)
+    {
+        base.ValidateRender(symbol);
+        if (_iconData is not null)
+            SymbolRenderer.ValidateIcon((QRCodeData)symbol, _iconData);
+    }
+
     private protected override SymbolImageBuilderBase<QRCodeImageBuilder> CopyForLaterRender(List<IDisposable> owned)
     {
         var copy = (QRCodeImageBuilder)base.CopyForLaterRender(owned);

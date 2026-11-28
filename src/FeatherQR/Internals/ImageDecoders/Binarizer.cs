@@ -77,9 +77,9 @@ internal static partial class Binarizer
             }
         }
 
-        var threshold = Math.Min(bestThreshold, 255);
-        grey = GreyLevels.FromHistogram(histogram, threshold);
-        return (byte)threshold;
+        // At t = 255 the background holds every pixel and the loop stops, so the threshold is at most 255.
+        grey = GreyLevels.FromHistogram(histogram, bestThreshold);
+        return (byte)bestThreshold;
     }
 
     /// <summary>Bins in a luminance histogram, and what a caller that keeps one between two calls allocates.</summary>

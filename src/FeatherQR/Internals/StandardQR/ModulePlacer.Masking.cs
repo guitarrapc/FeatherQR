@@ -117,7 +117,6 @@ internal static partial class ModulePlacer
         // The unblocked rows are bit slices of the blocked bitmask. A padded copy keeps every 8-byte slice read inside it.
         Span<byte> padded = stackalloc byte[blockedMask.Length + 32];
         blockedMask.CopyTo(padded);
-        padded.Slice(blockedMask.Length).Clear();
 
         var tplBase = patternIndex * 12;
         if (size <= 64)
@@ -192,7 +191,6 @@ internal static partial class ModulePlacer
 
         // Each allowed row (~blocked) is a contiguous bit slice of the blocked bitmask. A padded copy makes the two 8-byte slice reads always legal.
         Span<byte> padded = stackalloc byte[blockedMask.Length + 16];
-        padded.Clear();
         blockedMask.CopyTo(padded);
         var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
         for (var y = 0; y < size; y++)
@@ -480,7 +478,6 @@ internal static partial class ModulePlacer
 
             // Padded copy so the four 8-byte slice reads per row never overrun.
             Span<byte> padded = stackalloc byte[blockedMask.Length + 32];
-            padded.Clear();
             blockedMask.CopyTo(padded);
             var rowMask = Row192.MaskLow(size);
             for (var y = 0; y < size; y++)

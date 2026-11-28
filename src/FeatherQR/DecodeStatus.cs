@@ -21,7 +21,7 @@ public enum DecodeStatus
     InvalidBitstream,
 
     /// <summary>
-    /// The bitstream declares an unsupported character set. See <see cref="UnmappedCharacter"/> for an unmapped character within a supported set.
+    /// The bitstream declares an unsupported character set, an ECI number past the last assignment, or, read as bytes, data under two assignments. See <see cref="UnmappedCharacter"/> for an unmapped character within a supported set.
     /// </summary>
     UnsupportedContent,
 

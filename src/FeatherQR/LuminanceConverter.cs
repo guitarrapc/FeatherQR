@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using FeatherQR.Internals.ImageDecoders;
@@ -29,7 +30,7 @@ public static partial class LuminanceConverter
     /// <param name="height">Image height in pixels.</param>
     /// <param name="rowBytes">The stride: the bytes from the start of one row to the start of the next. At least <paramref name="width"/> × bytes per pixel, and more where the source pads its rows. The padding is never read.</param>
     /// <param name="layout">Channel order and depth of <paramref name="pixels"/>: one byte a pixel for <see cref="PixelLayout.Gray8"/>, three for <see cref="PixelLayout.Rgb24"/> and <see cref="PixelLayout.Bgr24"/>, four for the others.</param>
-    /// <param name="premultipliedAlpha">Whether the color channels are already multiplied by alpha, as many drawing surfaces and GPU textures hold them. A browser canvas's image data is straight. Ignored for layouts without alpha.</param>
+    /// <param name="premultipliedAlpha">Whether the color channels are already multiplied by alpha, as many drawing surfaces and GPU textures hold them. A browser canvas's image data is straight. A channel above its alpha is read as white. Ignored for layouts without alpha.</param>
     /// <param name="luminance">Destination, at least width × height bytes. Each pixel's ITU-R BT.601 luminance, the pixel composited against white first where its alpha is below 255.</param>
     /// <remarks>A zero width or height converts nothing and does not touch either buffer.</remarks>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="layout"/> is not a defined value, a dimension is negative, or <paramref name="rowBytes"/> is negative, or shorter than one row when there is a row to read.</exception>
@@ -103,14 +104,14 @@ public static partial class LuminanceConverter
     /// Every tier walks by <c>ref</c> from a single <c>GetReference</c> and so carries no bounds check of its own, the scalar tier included.
     /// A caller that hands over a short destination would otherwise corrupt whatever follows it (in practice a pooled rental) instead of throwing.
     /// </remarks>
-    internal static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, bool forceScalar = false)
+    internal static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)
     {
         ValidateExtents(pixels, luminance, width, height, rowBytes, bytesPerPixel: 4);
 #if NET8_0_OR_GREATER
         // One predicate, shared with the parity tests. Written as a second copy of this
         // condition it would be free to drift, and a drifted copy makes every pinned
         // "vector" assertion silently compare the scalar tier against itself.
-        if (!forceScalar && IsVectorTierTaken(width, redOffset, greenOffset, blueOffset))
+        if (IsVectorTierTaken(width, redOffset, greenOffset, blueOffset))
         {
             if (IsAvx2TierSupported)
             {
@@ -230,9 +231,8 @@ public static partial class LuminanceConverter
     {
         if (tier == ConvertTier.Scalar)
         {
-            // Through ConvertRgba, not straight to ConvertRgbaScalar: a private copy of
-            // the validation here would leave the shipping call with no test.
-            ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied, forceScalar: true);
+            ValidateExtents(pixels, luminance, width, height, rowBytes, bytesPerPixel: 4);
+            ConvertRgbaScalar(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
             return;
         }
         if (!IsVectorTierTaken(width, redOffset, greenOffset, blueOffset))
@@ -259,18 +259,16 @@ public static partial class LuminanceConverter
     /// </remarks>
     private static void ConvertRgbaScalar(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)
     {
-        // Constant offsets per layout. The general arm keeps arbitrary offsets working
-        // for any caller the switch above does not anticipate.
-        if (greenOffset == 1 && redOffset == 2 && blueOffset == 0 && alphaOffset == 3)
+        // Constant offsets per layout. Convert passes only these four, red and blue at 0 and 2 either way round, alpha at 3 or none.
+        Debug.Assert(greenOffset == 1 && (redOffset, blueOffset) is (0, 2) or (2, 0) && alphaOffset is 3 or -1, "only the four layouts Convert passes reach here");
+        if (redOffset == 2 && alphaOffset == 3)
             Rows(pixels, luminance, width, height, rowBytes, 2, 1, 0, true, premultiplied);
-        else if (greenOffset == 1 && redOffset == 0 && blueOffset == 2 && alphaOffset == 3)
+        else if (alphaOffset == 3)
             Rows(pixels, luminance, width, height, rowBytes, 0, 1, 2, true, premultiplied);
-        else if (greenOffset == 1 && redOffset == 0 && blueOffset == 2 && alphaOffset < 0)
+        else if (redOffset == 0)
             Rows(pixels, luminance, width, height, rowBytes, 0, 1, 2, false, premultiplied);
-        else if (greenOffset == 1 && redOffset == 2 && blueOffset == 0 && alphaOffset < 0)
-            Rows(pixels, luminance, width, height, rowBytes, 2, 1, 0, false, premultiplied);
         else
-            RowsGeneral(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
+            Rows(pixels, luminance, width, height, rowBytes, 2, 1, 0, false, premultiplied);
     }
 
     /// <summary>Inlined at each call site so the offsets and the alpha flag are constants.</summary>
@@ -315,64 +313,17 @@ public static partial class LuminanceConverter
                 // Composite against white (the quiet zone color)
                 if (premultiplied)
                 {
-                    // Premultiplied channels already carry c·a/255
-                    var white = 255 - a;
-                    r += white;
-                    g += white;
-                    b += white;
+                    // Premultiplied channels already carry c·a/255, so white adds 255 − a to each channel and, as the weights sum to 256, to the luma.
+                    // A channel above its alpha takes the sum past 255, which stops at white.
+                    return (byte)Math.Min(((77 * r + 150 * g + 29 * b) >> 8) + 255 - a, 255);
                 }
-                else
-                {
-                    r = (r * a + 255 * (255 - a)) / 255;
-                    g = (g * a + 255 * (255 - a)) / 255;
-                    b = (b * a + 255 * (255 - a)) / 255;
-                }
+
+                r = (r * a + 255 * (255 - a)) / 255;
+                g = (g * a + 255 * (255 - a)) / 255;
+                b = (b * a + 255 * (255 - a)) / 255;
             }
         }
 
         return (byte)((77 * r + 150 * g + 29 * b) >> 8);
-    }
-
-    /// <summary>Arbitrary channel offsets. The straightforward loop, kept for completeness.</summary>
-    private static void RowsGeneral(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)
-    {
-        for (var y = 0; y < height; y++)
-        {
-            var row = pixels.Slice(y * rowBytes, width * 4);
-            var dest = luminance.Slice(y * width, width);
-            for (var x = 0; x < width; x++)
-            {
-                var p = x * 4;
-                int r = row[p + redOffset];
-                int g = row[p + greenOffset];
-                int b = row[p + blueOffset];
-
-                if (alphaOffset >= 0)
-                {
-                    int a = row[p + alphaOffset];
-                    if (a != 255)
-                    {
-                        // Composite against white (the quiet zone color)
-                        if (premultiplied)
-                        {
-                            // Premultiplied channels already carry c·a/255
-                            var white = 255 - a;
-                            r += white;
-                            g += white;
-                            b += white;
-                        }
-                        else
-                        {
-                            r = (r * a + 255 * (255 - a)) / 255;
-                            g = (g * a + 255 * (255 - a)) / 255;
-                            b = (b * a + 255 * (255 - a)) / 255;
-                        }
-                    }
-                }
-
-                // ITU-R BT.601 integer luma
-                dest[x] = (byte)((77 * r + 150 * g + 29 * b) >> 8);
-            }
-        }
     }
 }

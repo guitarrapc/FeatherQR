@@ -223,7 +223,6 @@ internal static class ModuleBoundaryReader
         }
 
         Span<bool> edge = stackalloc bool[8];
-        edge.Clear();
         for (var line = fromLine; line < toLine; line++)
         {
             if (crossBoundaries[line] == Unknown || crossBoundaries[line + 1] == Unknown)

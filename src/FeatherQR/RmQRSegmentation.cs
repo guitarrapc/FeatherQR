@@ -14,7 +14,7 @@ public enum RmQRSegmentation
     /// Kanji plans require the charset to be left to the library and carry no ECI header.
     /// Can encode content that exceeds single-mode capacity. U+FEFF inside UTF-8 content is preserved.
     /// <para/>
-    /// The search prices candidate versions. It allocates nothing, and content no split can help is ruled out before it starts. <see cref="Single"/> skips it.
+    /// The search prices candidate versions. It allocates nothing for typical content and rents a pooled buffer for long FNC1 content, and content no split can help is ruled out before it starts. <see cref="Single"/> skips it.
     /// Fewer core modules is not the same as a smaller image: <see cref="RmQRFitStrategy"/> ranks by core modules while the quiet zone adds to each dimension, so a flatter symbol can render onto a larger grid.
     /// Size buffers with the same segmentation you encode with.
     /// </remarks>

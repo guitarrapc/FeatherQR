@@ -31,7 +31,7 @@ public readonly record struct QRCodeDecodeInfo
     // Not an int?: its 8 bytes would grow the result arrays the text calls allocate. Zero is none, so a default info reports none.
     private readonly int _eciAssignmentPlusOne;
 
-    /// <summary>The same result with the symbol's image position attached. The image decoders call this on success.</summary>
+    /// <summary>The same result with the symbol's image position attached, which the image decoders give whether or not the symbol read.</summary>
     internal QRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, MaskPattern, ErrorsCorrected, corners, StructuredAppend, Fnc1, EciAssignment);
 
     /// <summary>Decode result status. <see cref="DecodeStatus.Success"/> when decoding succeeded.</summary>

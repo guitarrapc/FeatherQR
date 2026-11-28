@@ -33,14 +33,17 @@ internal static partial class AlignmentPatternFinder
     /// <param name="centerY">Found center y.</param>
     /// <returns>True when a cross-checked alignment pattern was found in the window. The one nearest the prediction is returned.</returns>
     public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, out float centerX, out float centerY)
-        => TryFindCore(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowanceModules, forceScalar: false, out centerX, out centerY);
+        => TryFindCore<DispatchedRowScan>(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowanceModules, out centerX, out centerY);
 
     /// <summary>Scalar-scan entry for kernel parity tests. It behaves as <see cref="TryFind"/> does.</summary>
+    /// <remarks>The row scan is a type argument, so <see cref="TryFind"/> carries no branch for this entry.</remarks>
     internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, out float centerX, out float centerY)
-        => TryFindCore(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowanceModules, forceScalar: true, out centerX, out centerY);
+        => TryFindCore<ScalarRowScan>(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowanceModules, out centerX, out centerY);
 
-    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, bool forceScalar, out float centerX, out float centerY)
+    private static bool TryFindCore<TScan>(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, out float centerX, out float centerY)
+        where TScan : struct, IRowScan
     {
+        var scan = default(TScan);
         centerX = 0;
         centerY = 0;
 
@@ -65,9 +68,9 @@ internal static partial class AlignmentPatternFinder
                 break;
 
             if (midY + offset <= maxY)
-                ScanRow(luminance, width, height, threshold, midY + offset, minX, maxX, expected, axisX, axisY, forceScalar, ref best);
+                scan.ScanRow(luminance, width, height, threshold, midY + offset, minX, maxX, expected, axisX, axisY, ref best);
             if (offset != 0 && midY - offset >= minY)
-                ScanRow(luminance, width, height, threshold, midY - offset, minX, maxX, expected, axisX, axisY, forceScalar, ref best);
+                scan.ScanRow(luminance, width, height, threshold, midY - offset, minX, maxX, expected, axisX, axisY, ref best);
         }
 
         if (!best.Found)
@@ -149,25 +152,38 @@ internal static partial class AlignmentPatternFinder
         }
     }
 
-    private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, bool forceScalar, ref NearestHit best)
+    private interface IRowScan
     {
-#if NET8_0_OR_GREATER
-        // SIMD path: classify pixels into a dark bitmask with vector compares (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then walk RUNS via tzcnt instead of pixels. Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
-        if (!forceScalar && Vector128.IsHardwareAccelerated && maxX - minX + 1 >= 16)
+        void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, ref NearestHit best);
+    }
+
+    /// <summary>The shipped row scan: the vector mask walk where a row holds a block, the scalar walk elsewhere.</summary>
+    private readonly struct DispatchedRowScan : IRowScan
+    {
+        public void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, ref NearestHit best)
         {
-            ScanRowMask(luminance, width, height, threshold, y, minX, maxX, expected, axisX, axisY, ref best);
-            return;
-        }
+#if NET8_0_OR_GREATER
+            // SIMD path: classify pixels into a dark bitmask with vector compares (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then walk RUNS via tzcnt instead of pixels. Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
+            if (Vector128.IsHardwareAccelerated && maxX - minX + 1 >= 16)
+            {
+                ScanRowMask(luminance, width, height, threshold, y, minX, maxX, expected, axisX, axisY, ref best);
+                return;
+            }
 #endif
-        _ = forceScalar;
-        ScanRowScalar(luminance, width, height, threshold, y, minX, maxX, expected, axisX, axisY, ref best);
+            ScanRowScalar(luminance, width, height, threshold, y, minX, maxX, expected, axisX, axisY, ref best);
+        }
+    }
+
+    private readonly struct ScalarRowScan : IRowScan
+    {
+        public void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, ref NearestHit best)
+            => ScanRowScalar(luminance, width, height, threshold, y, minX, maxX, expected, axisX, axisY, ref best);
     }
 
     private static void ScanRowScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, ref NearestHit best)
     {
         // Track the last three completed runs as [light, dark, light]. A window is evaluated whenever a light run completes (light → dark transition).
         Span<int> runs = stackalloc int[3];
-        runs.Clear();
         var runIndex = -1; // -1: waiting for the first light run
         var currentDark = false;
 

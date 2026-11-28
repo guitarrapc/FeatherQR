@@ -19,7 +19,6 @@ internal static partial class AlignmentPatternFinder
     {
         var length = maxX - minX + 1;
         Span<ulong> mask = stackalloc ulong[((length + 63) >> 6) + 1];
-        mask.Clear();
 
         // Build the dark bitmask (bit i = pixel minX+i is dark).
         // threshold == 0 means nothing is dark, so the compare loops can skip.

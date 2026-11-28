@@ -34,10 +34,6 @@ internal static partial class QRImageDecoder
 
         Span<float> offsetXs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
         Span<float> offsetYs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
-        Span<bool> found = stackalloc bool[MaxMeshNodes * MaxMeshNodes];
-        offsetXs.Clear();
-        offsetYs.Clear();
-        found.Clear();
 
         var level = grey.EdgeLevel(threshold);
         MeasureCornerNode(luminance, width, height, level, frame, dimension, gridCoords[0], gridCoords[0], frame.TopLeft, 3.5f, 3.5f, ref offsetXs[0], ref offsetYs[0]);
@@ -49,12 +45,12 @@ internal static partial class QRImageDecoder
             var top = k;
             offsetXs[top] = offsetXs[top - 1];
             offsetYs[top] = offsetYs[top - 1];
-            found[top] = TryLocateNode(luminance, width, height, threshold, grey, frame, dimension, gridCoords[k], gridCoords[0], ref offsetXs[top], ref offsetYs[top]);
+            _ = TryLocateNode(luminance, width, height, threshold, grey, frame, dimension, gridCoords[k], gridCoords[0], ref offsetXs[top], ref offsetYs[top]);
 
             var left = k * count;
             offsetXs[left] = offsetXs[left - count];
             offsetYs[left] = offsetYs[left - count];
-            found[left] = TryLocateNode(luminance, width, height, threshold, grey, frame, dimension, gridCoords[0], gridCoords[k], ref offsetXs[left], ref offsetYs[left]);
+            _ = TryLocateNode(luminance, width, height, threshold, grey, frame, dimension, gridCoords[0], gridCoords[k], ref offsetXs[left], ref offsetYs[left]);
         }
 
         for (var j = 1; j < count; j++)
@@ -64,9 +60,9 @@ internal static partial class QRImageDecoder
                 var node = j * count + i;
                 offsetXs[node] = offsetXs[node - 1] + offsetXs[node - count] - offsetXs[node - count - 1];
                 offsetYs[node] = offsetYs[node - 1] + offsetYs[node - count] - offsetYs[node - count - 1];
-                found[node] = TryLocateNode(luminance, width, height, threshold, grey, frame, dimension, gridCoords[i], gridCoords[j], ref offsetXs[node], ref offsetYs[node]);
+                var found = TryLocateNode(luminance, width, height, threshold, grey, frame, dimension, gridCoords[i], gridCoords[j], ref offsetXs[node], ref offsetYs[node]);
                 searchedNodes++;
-                if (found[node])
+                if (found)
                     foundNodes++;
             }
         }

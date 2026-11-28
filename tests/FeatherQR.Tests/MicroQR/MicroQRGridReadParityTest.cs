@@ -106,7 +106,7 @@ public class MicroQRGridReadParityTest
 #endif
     }
 
-    /// <summary>The format table against the nearest-candidate search it replaced, for every 16-bit word, the distance included.</summary>
+    /// <summary>The format table against the nearest-candidate search it replaced, for every 16-bit word, the distance included. A word past 15 bits is refused.</summary>
     [Test]
     public async Task FormatTable_MatchesTheSearch_EveryWord()
     {
@@ -134,7 +134,8 @@ public class MicroQRGridReadParityTest
                     best = i;
                 }
             }
-            var wantOk = bestDistance <= 3;
+            // A word past 15 bits is no copy the matrix decoder reads, and is refused whatever its distance.
+            var wantOk = raw < 0x8000 && bestDistance <= 3;
             MicroQRConstants.GetVersionAndEccFromSymbolNumber(best >> 2, out var wantVersion, out var wantLevel);
 
             var gotOk = MicroQRFormatInformationDecoder.TryDecode((ushort)raw, out var gotVersion, out var gotLevel, out var gotMask, out var gotDistance);
@@ -148,8 +149,8 @@ public class MicroQRGridReadParityTest
         }
 
         await Assert.That(mismatches).IsEqualTo(0).Because(first);
-        // 32 balls of 576 words in 15 bits, and the 32 × 105 words at distance 3 once bit 15 is set
-        await Assert.That(accepted).IsEqualTo(32 * 576 + 32 * 121);
+        // 32 balls of 576 words in 15 bits
+        await Assert.That(accepted).IsEqualTo(32 * 576);
     }
 
     private readonly record struct Outcome(DecodeStatus Status, MicroQRCodeDecodeInfo Info, int CharsWritten, string Destination);

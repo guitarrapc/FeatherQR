@@ -206,6 +206,43 @@ public class QRCodeImageBuilderSvgTest
         await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(stream.ToArray(), CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// A setting refused when the symbol is drawn is refused before the document starts.
+    /// A buffer writer cannot take back what it was handed, and a stream would hold half a document.
+    /// </summary>
+    [Test]
+    public async Task SaveToSvg_RefusedRender_WritesNothing()
+    {
+        using var logo = new SKBitmap(16, 16);
+        logo.Erase(SKColors.Red);
+        var undefinedDirection = new GradientOptions([SKColors.Blue, SKColors.Purple], GradientDirection.LeftToRight) with { Direction = (GradientDirection)99 };
+        Action<IBufferWriter<byte>>[] refusedToWriter =
+        [
+            w => new QRCodeImageBuilder(TestContent).WithErrorCorrection(QREccLevel.H).WithIcon(IconData.FromImageByModules(logo, iconSizeModules: 60, iconBorderModules: 1, maxCoreOccupancyPercent: 100)).SaveToSvg(w),
+            w => new QRCodeImageBuilder(TestContent).WithGradient(undefinedDirection).SaveToSvg(w),
+            w => new MicroQRCodeImageBuilder("12345").WithGradient(undefinedDirection).SaveToSvg(w),
+            w => new RmQRCodeImageBuilder("12345").WithGradient(undefinedDirection).SaveToSvg(w),
+        ];
+        Action<Stream>[] refusedToStream =
+        [
+            s => new QRCodeImageBuilder(TestContent).WithErrorCorrection(QREccLevel.H).WithIcon(IconData.FromImageByModules(logo, iconSizeModules: 60, iconBorderModules: 1, maxCoreOccupancyPercent: 100)).SaveToSvg(s),
+            s => new QRCodeImageBuilder(TestContent).WithGradient(undefinedDirection).SaveToSvg(s),
+        ];
+
+        for (var i = 0; i < refusedToWriter.Length; i++)
+        {
+            var writer = new ArrayBufferWriter<byte>();
+            await Assert.That(() => refusedToWriter[i](writer)).ThrowsException();
+            await Assert.That(writer.WrittenCount).IsEqualTo(0).Because($"buffer writer case {i}");
+        }
+        for (var i = 0; i < refusedToStream.Length; i++)
+        {
+            using var stream = new MemoryStream();
+            await Assert.That(() => refusedToStream[i](stream)).ThrowsException();
+            await Assert.That(stream.Length).IsEqualTo(0).Because($"stream case {i}");
+        }
+    }
+
     [Test]
     public void SaveToSvg_BufferWriter_Null_Throws()
     {

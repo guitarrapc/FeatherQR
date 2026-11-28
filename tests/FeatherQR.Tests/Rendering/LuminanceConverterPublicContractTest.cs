@@ -45,7 +45,7 @@ public class LuminanceConverterPublicContractTest
                 b = (b * a + 255 * (255 - a)) / 255;
             }
         }
-        return (byte)((77 * r + 150 * g + 29 * b) / 256);
+        return (byte)Math.Min((77 * r + 150 * g + 29 * b) / 256, 255);
     }
 
     private static void WritePixel(Span<byte> pixel, PixelLayout layout, byte r, byte g, byte b, byte a)
@@ -231,6 +231,28 @@ public class LuminanceConverterPublicContractTest
             await Assert.That(premultiplied).IsEqualTo(DocumentedLuma(100, 15, 45, 128, premultiplied: true)).Because($"{layout}");
             await Assert.That(straight).IsEqualTo(DocumentedLuma(100, 15, 45, 128, premultiplied: false)).Because($"{layout}");
             await Assert.That(premultiplied).IsNotEqualTo(straight).Because($"{layout}");
+        }
+    }
+
+    /// <summary>
+    /// A channel above its alpha is not premultiplied data, but nothing refuses it.
+    /// Its composite passes 255, and the luminance stops there instead of wrapping to black.
+    /// Width 64 takes the vector tier on a machine that has one, width 1 the scalar tier.
+    /// </summary>
+    [Test]
+    [Arguments(1)]
+    [Arguments(64)]
+    public async Task PremultipliedChannelAboveAlpha_SaturatesAtWhite(int width)
+    {
+        foreach (var layout in AlphaLayouts)
+        {
+            var pixels = new byte[width * 4];
+            for (var x = 0; x < width; x++)
+                WritePixel(pixels.AsSpan(x * 4), layout, 255, 255, 255, (byte)(254 - x % 3));
+            var luminance = new byte[width];
+            LuminanceConverter.Convert(pixels, width, 1, width * 4, layout, premultipliedAlpha: true, luminance);
+
+            await Assert.That(luminance.All(l => l == 255)).IsTrue().Because($"{layout} width {width}: {string.Join(",", luminance.Take(8))}");
         }
     }
 

@@ -29,6 +29,11 @@ public class LuminanceSamplerTest
     [Arguments(2.9f, 1.9f, 250f)]
     [Arguments(40f, 40f, 250f)]
     [Arguments(1.5f, -7f, 100f)]
+    [Arguments(3e9f, 0.5f, 200f)]
+    [Arguments(0.5f, 3e9f, 50f)]
+    [Arguments(-3e9f, 1.5f, 50f)]
+    [Arguments(float.PositiveInfinity, float.PositiveInfinity, 250f)]
+    [Arguments(float.NegativeInfinity, 0.5f, 0f)]
     public async Task Bilinear_PastTheOuterCentres_TakesTheEdge(float x, float y, float expected)
         => await Assert.That(LuminanceSampler.Bilinear(Image, 3, 2, x, y)).IsEqualTo(expected).Within(1e-4f);
 

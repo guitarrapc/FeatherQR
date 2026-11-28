@@ -209,6 +209,12 @@ public static class SymbolRenderer
         // Written as a negated range so that NaN, which is neither below 0 nor above 1, is refused as well.
         if (moduleSizePercent is not (>= 0f and <= 1.0f))
             throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
+        ValidateGradient(gradientOptions);
+    }
+
+    /// <summary>Refuses a gradient direction outside the enum, which a <c>with</c> expression can set.</summary>
+    internal static void ValidateGradient(GradientOptions? gradientOptions)
+    {
         // Nothing upstream checks Direction: the constructor validates only the colours and their stops.
         if (gradientOptions is not null && !IsDefinedDirection(gradientOptions.Direction))
             throw new ArgumentOutOfRangeException(nameof(gradientOptions), $"Direction {gradientOptions.Direction} is not a valid gradient direction.");

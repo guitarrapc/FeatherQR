@@ -473,33 +473,30 @@ internal static partial class FinderPatternFinder
 
         // Every selection runs on a copy: TrySelectBestThree compacts and sorts in place, and the list has to stay intact for the rescan and for the caller's triples after this one
         Span<FinderPattern> scratch = stackalloc FinderPattern[MaxCandidates];
-        if (stride > 1)
+        candidates.Slice(0, candidateCount).CopyTo(scratch);
+        // A stride can hit a real finder's band once while a false candidate is confirmed, so a poor triple with candidates left out is not an answer yet.
+        var strideSelected = TrySelectBestThree(scratch.Slice(0, candidateCount), patterns, out var unconfirmedLeftOut);
+        if (strideSelected && !unconfirmedLeftOut)
         {
+            everyRowScanned = false;
+            return true;
+        }
+
+        // Only the rows the stride pass skipped, keeping its candidates: one full sweep in total, so the stride loses no symbol a full scan finds.
+        ScanSkippedRows(luminance, width, height, threshold, grey, kernel, edges, candidates, ref candidateCount);
+
+        if (strideSelected)
+        {
+            // A keystoned real triple scores poorly too, and the rows that confirm its finders confirm false candidates inside the symbol with them, over less of their height. The sweep's triple has to be confirmed over as much.
+            var strideHeight = ConfirmedHeight(candidates.Slice(0, candidateCount), patterns);
+            Span<FinderPattern> swept = stackalloc FinderPattern[3];
             candidates.Slice(0, candidateCount).CopyTo(scratch);
-            // A stride can hit a real finder's band once while a false candidate is confirmed, so a poor triple with candidates left out is not an answer yet.
-            var strideSelected = TrySelectBestThree(scratch.Slice(0, candidateCount), patterns, out var unconfirmedLeftOut);
-            if (strideSelected && !unconfirmedLeftOut)
+            if (TrySelectBestThree(scratch.Slice(0, candidateCount), swept)
+                && ConfirmedHeight(swept, swept) >= strideHeight)
             {
-                everyRowScanned = false;
-                return true;
+                swept.CopyTo(patterns);
             }
-
-            // Only the rows the stride pass skipped, keeping its candidates: one full sweep in total, so the stride loses no symbol a full scan finds.
-            ScanSkippedRows(luminance, width, height, threshold, grey, kernel, edges, candidates, ref candidateCount);
-
-            if (strideSelected)
-            {
-                // A keystoned real triple scores poorly too, and the rows that confirm its finders confirm false candidates inside the symbol with them, over less of their height. The sweep's triple has to be confirmed over as much.
-                var strideHeight = ConfirmedHeight(candidates.Slice(0, candidateCount), patterns);
-                Span<FinderPattern> swept = stackalloc FinderPattern[3];
-                candidates.Slice(0, candidateCount).CopyTo(scratch);
-                if (TrySelectBestThree(scratch.Slice(0, candidateCount), swept)
-                    && ConfirmedHeight(swept, swept) >= strideHeight)
-                {
-                    swept.CopyTo(patterns);
-                }
-                return true;
-            }
+            return true;
         }
 
         candidates.Slice(0, candidateCount).CopyTo(scratch);
