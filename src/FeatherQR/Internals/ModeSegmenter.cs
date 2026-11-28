@@ -849,7 +849,7 @@ internal static partial class ModeSegmenter
     {
         foreach (var segment in segments)
         {
-            if (segment.ModeIndex == 2 && segment.Start > 0 && text[segment.Start] == '﻿')
+            if (segment.ModeIndex == 2 && segment.Start > 0 && text[segment.Start] == ByteOrderMark)
                 return true;
         }
         return false;
@@ -971,7 +971,7 @@ internal static partial class ModeSegmenter
             {
                 sixths += SixthsPerKanji;
                 utf8 += c < 0x800 ? 2 * SixthsPerByte : 3 * SixthsPerByte; // an eligible text has no surrogate
-                if (i == 0 || !previousWasCell)
+                if (!previousWasCell)
                     cellRuns++;
                 previousWasCell = true;
             }

@@ -544,7 +544,6 @@ internal static partial class ModulePlacer
         // As in ApplyMaskPatternScalar: the unblocked rows are bit slices of a padded copy of the blocked bitmask.
         Span<byte> padded = stackalloc byte[blockedMask.Length + 32];
         blockedMask.CopyTo(padded);
-        padded.Slice(blockedMask.Length).Clear();
 
         var tplBase = patternIndex * 12;
         if (size <= 64)

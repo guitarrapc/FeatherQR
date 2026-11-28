@@ -488,7 +488,7 @@ internal static partial class ModeSegmenter
         return cheapest >> 4;
     }
 
-    /// <summary>The plan of <see cref="ComputeCostsFnc1"/>'s table as runs, with the unit counts the FNC1 writer needs.</summary>
+    /// <summary>The plan of <see cref="ComputeCostsFnc1"/>'s table as runs. Each run's unit count is its character count, which the planners replace with what the count indicator carries.</summary>
     public static bool ReconstructFnc1(ReadOnlySpan<char> text, ReadOnlySpan<byte> parents, int finalState, Span<ModeSegment> segments, out int segmentCount)
     {
         segmentCount = 0;
@@ -508,9 +508,7 @@ internal static partial class ModeSegmenter
                 if (count >= segments.Length)
                     return false;
                 var modeIndex = Fnc1ModeOf(state);
-                var chars = text.Slice(i, end - i);
-                var units = modeIndex == 1 ? AlphanumericUnitsFnc1(chars) : chars.Length;
-                segments[count++] = new ModeSegment(modeIndex, i, end - i, units);
+                segments[count++] = new ModeSegment(modeIndex, i, end - i, end - i);
                 end = i;
             }
             state = parent;

@@ -57,7 +57,7 @@ public static partial class LuminanceConverter
         var v1 = Spread24Vector128(Vector128.LoadUnsafe(ref p, 12), front);
         var v2 = Spread24Vector128(Vector128.LoadUnsafe(ref p, 24), front);
         var v3 = Spread24Vector128(Vector128.LoadUnsafe(ref p, 32), back);
-        StoreBlockVector128(ref dest, x, LumaVector128(v0, weights), LumaVector128(v1, weights), LumaVector128(v2, weights), LumaVector128(v3, weights), wrap: false);
+        StoreBlockVector128(ref dest, x, LumaVector128(v0, weights), LumaVector128(v1, weights), LumaVector128(v2, weights), LumaVector128(v3, weights), saturate: false);
     }
 
     /// <summary>Four three-byte pixels to four lanes. Every index is under 16, so the three instructions pick the same bytes.</summary>

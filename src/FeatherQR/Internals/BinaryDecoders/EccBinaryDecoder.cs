@@ -65,8 +65,6 @@ internal static partial class EccBinaryDecoder
         Span<byte> lambda = stackalloc byte[MaxEccPerBlock + 1];
         Span<byte> prev = stackalloc byte[MaxEccPerBlock + 1]; // B(x): copy of Λ at the last length change
         Span<byte> temp = stackalloc byte[MaxEccPerBlock + 1];
-        lambda.Clear();
-        prev.Clear();
         lambda[0] = 1;
         prev[0] = 1;
         var errorCountEstimate = 0; // L: current LFSR length

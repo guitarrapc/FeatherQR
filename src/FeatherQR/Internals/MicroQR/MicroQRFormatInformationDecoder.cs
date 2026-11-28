@@ -10,8 +10,6 @@ namespace FeatherQR.Internals.MicroQR;
 /// </remarks>
 internal static class MicroQRFormatInformationDecoder
 {
-    private const int MaxCorrectableBits = 3;
-
     /// <summary>
     /// Decodes format information from the raw 15-bit copy.
     /// </summary>
@@ -26,33 +24,28 @@ internal static class MicroQRFormatInformationDecoder
     /// <summary>As <see cref="TryDecode(ushort, out MicroQRVersion, out MicroQREccLevel, out int)"/>, with the number of bits the copy differs from the candidate it decoded to.</summary>
     public static bool TryDecode(ushort raw, out MicroQRVersion version, out MicroQREccLevel eccLevel, out int maskPattern, out int distance)
     {
-        // Every copy the matrix decoder reads is 15 bits, and a wider word takes the search
-        if (raw < nearest.Length)
+        // Every copy the matrix decoder reads is 15 bits. A wider word is no copy.
+        var entry = raw < nearest.Length ? nearest[raw] : NoCandidate;
+        if (entry == NoCandidate)
         {
-            var entry = nearest[raw];
-            if (entry == NoCandidate)
-            {
-                version = default;
-                eccLevel = default;
-                maskPattern = -1;
-                distance = -1;
-                return false;
-            }
-
-            MicroQRConstants.GetVersionAndEccFromSymbolNumber((entry & 31) >> 2, out version, out eccLevel);
-            maskPattern = entry & 3;
-            distance = entry >> 5;
-            return true;
+            version = default;
+            eccLevel = default;
+            maskPattern = -1;
+            distance = -1;
+            return false;
         }
 
-        return TryDecodeBySearch(raw, out version, out eccLevel, out maskPattern, out distance);
+        MicroQRConstants.GetVersionAndEccFromSymbolNumber((entry & 31) >> 2, out version, out eccLevel);
+        maskPattern = entry & 3;
+        distance = entry >> 5;
+        return true;
     }
 
     private const byte NoCandidate = 0xFF;
 
     /// <summary>
-    /// The candidate within <see cref="MaxCorrectableBits"/> of each 15-bit word in the low 5 bits and its distance above them, or <see cref="NoCandidate"/>.
-    /// The words within three bits of the 32 candidates are 576 each and never shared, since the candidates lie at least seven apart, so marking them gives what the search finds.
+    /// The candidate within three bits of each 15-bit word in the low 5 bits and its distance above them, or <see cref="NoCandidate"/>.
+    /// The words within three bits of the 32 candidates are 576 each and never shared, since the candidates lie at least seven apart, so marking them gives the nearest candidate a search would find.
     /// </summary>
     private static readonly byte[] nearest = BuildNearest();
 
@@ -76,46 +69,5 @@ internal static class MicroQRFormatInformationDecoder
             }
         }
         return table;
-    }
-
-    private static bool TryDecodeBySearch(ushort raw, out MicroQRVersion version, out MicroQREccLevel eccLevel, out int maskPattern, out int distance)
-    {
-        var best = 0;
-        var bestDistance = int.MaxValue;
-        for (var i = 0; i < MicroQRConstants.FormatWordCount; i++)
-        {
-            var bits = PopCount((ushort)(raw ^ MicroQRConstants.GetFormatWord(i)));
-            if (bits < bestDistance)
-            {
-                bestDistance = bits;
-                best = i;
-                if (bits == 0)
-                    break;
-            }
-        }
-
-        if (bestDistance > MaxCorrectableBits)
-        {
-            version = default;
-            eccLevel = default;
-            maskPattern = -1;
-            distance = -1;
-            return false;
-        }
-
-        MicroQRConstants.GetVersionAndEccFromSymbolNumber(best >> 2, out version, out eccLevel);
-        maskPattern = best & 3;
-        distance = bestDistance;
-        return true;
-    }
-
-    private static int PopCount(ushort value)
-    {
-        // 16-bit SWAR popcount (netstandard2.0 has no BitOperations.PopCount)
-        var v = (uint)value;
-        v -= (v >> 1) & 0x5555;
-        v = (v & 0x3333) + ((v >> 2) & 0x3333);
-        v = (v + (v >> 4)) & 0x0F0F;
-        return (int)((v * 0x0101) >> 8 & 0x1F);
     }
 }

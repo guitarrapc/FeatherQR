@@ -2,7 +2,7 @@ namespace FeatherQR.Gs1;
 
 /// <summary>
 /// Thrown by the generator entry points (<c>CreateGs1</c>, <c>CreateGs1DigitalLink</c>) when the data is not valid
-/// GS1 data, or is data a Digital Link URI cannot carry. Nothing on <see cref="Gs1ElementString"/> throws for its input.
+/// GS1 data, or is data a Digital Link URI cannot carry. Nothing on <see cref="Gs1ElementString"/> throws for its data.
 /// </summary>
 /// <remarks>
 /// A <see cref="FormatException"/>, as <see cref="UriFormatException"/> is, so an existing

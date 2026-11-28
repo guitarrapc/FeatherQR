@@ -15,7 +15,7 @@ namespace FeatherQR;
 // Every product fits 16 bits (150 · 255 = 38,250) and the sum is at most 65,280, the exactness argument of the other tiers.
 // The alpha handling is the ARM64 tier's: rows converted optimistically while the pixels are ANDed into an accumulator, a row with alpha
 // classified block by block (opaque, all 0 or 255, or partial), the exact composite 255 − ceil((255 − c)·a / 255) in 16-bit lanes, and
-// premultiplied alpha as 256 · (255 − a) added to the sum, which the final narrowing wraps as the scalar byte cast does.
+// premultiplied alpha as 256 · (255 − a) added to the sum, which the final narrowing saturates at 255 as the scalar formula does.
 public static partial class LuminanceConverter
 {
     /// <summary>Pixels per iteration of the 128-bit loops (four 128-bit loads).</summary>
@@ -175,11 +175,11 @@ public static partial class LuminanceConverter
         var v1 = Vector128.LoadUnsafe(ref p, 4);
         var v2 = Vector128.LoadUnsafe(ref p, 8);
         var v3 = Vector128.LoadUnsafe(ref p, 12);
-        StoreBlockVector128(ref dest, x, LumaVector128(v0, weights), LumaVector128(v1, weights), LumaVector128(v2, weights), LumaVector128(v3, weights), wrap: false);
+        StoreBlockVector128(ref dest, x, LumaVector128(v0, weights), LumaVector128(v1, weights), LumaVector128(v2, weights), LumaVector128(v3, weights), saturate: false);
         return (v0 & v1) & (v2 & v3);
     }
 
-    /// <summary>16 premultiplied pixels: the sum plus 256 · (255 − a), whose shift can pass 255 where a channel exceeds its alpha.</summary>
+    /// <summary>16 premultiplied pixels: the sum plus 256 · (255 − a), whose shift passes 255 where a channel exceeds its alpha and saturates when stored.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void PremultipliedBlockVector128(ref byte row, ref byte dest, nint x, Vector128<uint> weights)
     {
@@ -188,7 +188,7 @@ public static partial class LuminanceConverter
             PremultipliedLumaVector128(Vector128.LoadUnsafe(ref p), weights),
             PremultipliedLumaVector128(Vector128.LoadUnsafe(ref p, 4), weights),
             PremultipliedLumaVector128(Vector128.LoadUnsafe(ref p, 8), weights),
-            PremultipliedLumaVector128(Vector128.LoadUnsafe(ref p, 12), weights), wrap: true);
+            PremultipliedLumaVector128(Vector128.LoadUnsafe(ref p, 12), weights), saturate: true);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -214,7 +214,7 @@ public static partial class LuminanceConverter
 
         if (((v0 & v1) & (v2 & v3) & alphaMask) == alphaMask || TryWhitenVector128(ref v0, ref v1, ref v2, ref v3))
         {
-            StoreBlockVector128(ref dest, x, LumaVector128(v0, weights), LumaVector128(v1, weights), LumaVector128(v2, weights), LumaVector128(v3, weights), wrap: false);
+            StoreBlockVector128(ref dest, x, LumaVector128(v0, weights), LumaVector128(v1, weights), LumaVector128(v2, weights), LumaVector128(v3, weights), saturate: false);
             return false;
         }
 
@@ -293,7 +293,7 @@ public static partial class LuminanceConverter
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CompositeCoreVector128(ref byte dest, nint x, Vector128<uint> v0, Vector128<uint> v1, Vector128<uint> v2, Vector128<uint> v3, Vector128<uint> weights)
-        => StoreBlockVector128(ref dest, x, CompositeLumaVector128(v0, weights), CompositeLumaVector128(v1, weights), CompositeLumaVector128(v2, weights), CompositeLumaVector128(v3, weights), wrap: false);
+        => StoreBlockVector128(ref dest, x, CompositeLumaVector128(v0, weights), CompositeLumaVector128(v1, weights), CompositeLumaVector128(v2, weights), CompositeLumaVector128(v3, weights), saturate: false);
 
     /// <summary>
     /// Four straight-alpha pixels composited against white, then weighted: each channel 255 − ceil((255 − c)·a / 255), equal to the
@@ -324,11 +324,11 @@ public static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// Shifts four dword sums (16 pixels) down by 8 and stores their low bytes. The shifted sums are at most 510, so the signed packs are
-    /// exact. With <paramref name="wrap"/> each is first cut to its low byte, as the scalar byte cast does with a premultiplied sum above 255.
+    /// Shifts four dword sums (16 pixels) down by 8 and stores them as bytes. The shifted sums are at most 510, so the signed packs are
+    /// exact, and the unsigned packs stop a premultiplied sum above 255 at 255. The portable narrowing truncates, so <paramref name="saturate"/> clamps first there.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void StoreBlockVector128(ref byte dest, nint x, Vector128<uint> s0, Vector128<uint> s1, Vector128<uint> s2, Vector128<uint> s3, bool wrap)
+    private static void StoreBlockVector128(ref byte dest, nint x, Vector128<uint> s0, Vector128<uint> s1, Vector128<uint> s2, Vector128<uint> s3, bool saturate)
     {
         var t0 = (s0 >> 8).AsInt32();
         var t1 = (s1 >> 8).AsInt32();
@@ -337,29 +337,27 @@ public static partial class LuminanceConverter
         Vector128<byte> bytes;
         if (Sse2.IsSupported)
         {
-            var lo = Sse2.PackSignedSaturate(t0, t1);
-            var hi = Sse2.PackSignedSaturate(t2, t3);
-            if (wrap)
-            {
-                lo &= Vector128.Create((short)0xFF);
-                hi &= Vector128.Create((short)0xFF);
-            }
-            bytes = Sse2.PackUnsignedSaturate(lo, hi);
+            bytes = Sse2.PackUnsignedSaturate(Sse2.PackSignedSaturate(t0, t1), Sse2.PackSignedSaturate(t2, t3));
         }
         else if (PackedSimd.IsSupported)
         {
-            var lo = PackedSimd.ConvertNarrowingSaturateSigned(t0, t1);
-            var hi = PackedSimd.ConvertNarrowingSaturateSigned(t2, t3);
-            if (wrap)
-            {
-                lo &= Vector128.Create((short)0xFF);
-                hi &= Vector128.Create((short)0xFF);
-            }
-            bytes = PackedSimd.ConvertNarrowingSaturateUnsigned(lo, hi);
+            bytes = PackedSimd.ConvertNarrowingSaturateUnsigned(PackedSimd.ConvertNarrowingSaturateSigned(t0, t1), PackedSimd.ConvertNarrowingSaturateSigned(t2, t3));
         }
         else
         {
-            bytes = Vector128.Narrow(Vector128.Narrow(t0.AsUInt32(), t1.AsUInt32()), Vector128.Narrow(t2.AsUInt32(), t3.AsUInt32()));
+            var u0 = t0.AsUInt32();
+            var u1 = t1.AsUInt32();
+            var u2 = t2.AsUInt32();
+            var u3 = t3.AsUInt32();
+            if (saturate)
+            {
+                var white = Vector128.Create(255u);
+                u0 = Vector128.Min(u0, white);
+                u1 = Vector128.Min(u1, white);
+                u2 = Vector128.Min(u2, white);
+                u3 = Vector128.Min(u3, white);
+            }
+            bytes = Vector128.Narrow(Vector128.Narrow(u0, u1), Vector128.Narrow(u2, u3));
         }
         bytes.StoreUnsafe(ref Unsafe.Add(ref dest, x));
     }

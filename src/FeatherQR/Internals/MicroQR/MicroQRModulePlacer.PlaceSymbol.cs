@@ -172,7 +172,6 @@ internal static partial class MicroQRModulePlacer
     private static void PackStream(Span<ulong> stream, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount)
     {
         Span<byte> tmp = stackalloc byte[24];
-        tmp.Clear();
         var fullDataBytes = dataBitCount >> 3;
         dataCodewords.Slice(0, fullDataBytes).CopyTo(tmp);
         if ((dataBitCount & 7) != 0)

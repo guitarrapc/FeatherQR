@@ -39,8 +39,7 @@ internal static partial class TextAnalyzer
         // a segment of zero bytes is valid, and a number or a string of no character is not.
         if (text.IsEmpty)
         {
-            var actualEciMode = requestedEciMode == EciMode.Default ? EciMode.Default : requestedEciMode;
-            return new TextAnalysisResult(EncodingMode.Byte, actualEciMode, 0);
+            return new TextAnalysisResult(EncodingMode.Byte, requestedEciMode, 0);
         }
 
 #if NET8_0_OR_GREATER
@@ -55,7 +54,6 @@ internal static partial class TextAnalyzer
             return AnalyzeSse2(text, requestedEciMode);
         }
 
-#if NET8_0_OR_GREATER
         // From 8 chars, the NEON path's smallest block (16 chars a step, 8-char remainder blocks)
         if (AdvSimd.Arm64.IsSupported && text.Length >= 8)
         {
@@ -68,7 +66,6 @@ internal static partial class TextAnalyzer
         {
             return AnalyzeVector128(text, requestedEciMode);
         }
-#endif
 #endif
 
         // Scalar fallback for .NET Standard or short text

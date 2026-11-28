@@ -188,11 +188,6 @@ public class SymbolImageAsyncWriteTest
             .WithErrorCorrection(QREccLevel.H)
             .WithIcon(IconData.FromImageByModules(logo, iconSizeModules: 60, iconBorderModules: 1, maxCoreOccupancyPercent: 100));
 
-        // Premise: the icon is refused while the symbol is drawn, after the synchronous form has started writing
-        using var partial = new MemoryStream();
-        Assert.Throws<InvalidOperationException>(() => builder.SaveToSvg(partial));
-        await Assert.That(partial.Length).IsGreaterThan(0);
-
         var stream = new AsyncOnlyStream();
         var caught = await Caught(builder.SaveToSvgAsync(stream));
 

@@ -16,8 +16,7 @@ internal ref partial struct QRBinaryEncoder
     {
         if (eci != EciMode.Default)
         {
-            _writer.Write((int)EncodingMode.ECI, 4);
-            _writer.Write((int)eci, 8);
+            WriteEci(eci);
         }
         WriteFnc1(fnc1);
         _writer.Write((int)encoding, 4);
@@ -100,8 +99,7 @@ internal ref partial struct QRBinaryEncoder
 
         if (eci != EciMode.Default)
         {
-            _writer.Write((int)EncodingMode.ECI, 4);
-            _writer.Write((int)eci, 8);
+            WriteEci(eci);
         }
         WriteFnc1(fnc1);
 

@@ -188,7 +188,8 @@ public static partial class LuminanceConverter
         => Avx2.MultiplyAddAdjacent(Avx2.MultiplyAddAdjacent(Avx2.Shuffle(v, shuffle), weights), ones);
 
     /// <summary>
-    /// Premultiplied luminance, already shifted and masked to a byte per dword: (S + 256 · (255 − a)) &gt;&gt; 8, with the scalar cast reproduced by the 8-bit mask.
+    /// Premultiplied luminance, already shifted: (S + 256 · (255 − a)) &gt;&gt; 8 per dword, at most 510.
+    /// A channel above its alpha passes 255, and the unsigned saturating packs that store it stop there, as the scalar formula does.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector256<int> PremultipliedLuma(Vector256<byte> v, Vector256<byte> shuffle, Vector256<sbyte> weights, Vector256<short> ones)
@@ -197,7 +198,7 @@ public static partial class LuminanceConverter
         var alphaShifted = Avx2.And(Avx2.ShiftRightLogical(v.AsUInt32(), 16), Vector256.Create(0xFF00u));
         var white = Avx2.Subtract(Vector256.Create(0xFF00u), alphaShifted);
         var sums = Avx2.Add(Luma(v, shuffle, weights, ones).AsUInt32(), white);
-        return Avx2.And(Avx2.ShiftRightLogical(sums, 8), Vector256.Create(0xFFu)).AsInt32();
+        return Avx2.ShiftRightLogical(sums, 8).AsInt32();
     }
 
     /// <summary>
@@ -265,17 +266,13 @@ public static partial class LuminanceConverter
                 {
                     if (premultiplied)
                     {
-                        var white = 255 - a;
-                        r += white;
-                        g += white;
-                        b += white;
+                        Unsafe.Add(ref dest, x) = (byte)Math.Min(((77 * r + 150 * g + 29 * b) >> 8) + 255 - a, 255);
+                        continue;
                     }
-                    else
-                    {
-                        r = (r * a + 255 * (255 - a)) / 255;
-                        g = (g * a + 255 * (255 - a)) / 255;
-                        b = (b * a + 255 * (255 - a)) / 255;
-                    }
+
+                    r = (r * a + 255 * (255 - a)) / 255;
+                    g = (g * a + 255 * (255 - a)) / 255;
+                    b = (b * a + 255 * (255 - a)) / 255;
                 }
             }
 

@@ -6,7 +6,7 @@ namespace FeatherQR.Gs1;
 /// Conversions between a GS1 element string (AI values with the group separator U+001D after each
 /// variable-length value another follows), its (AI) text and a GS1 Digital Link URI, and the checks the GS1
 /// General Specifications define on the data. Every member takes a <see cref="ReadOnlySpan{T}"/> of
-/// <see cref="char"/>, so a <see cref="string"/> converts without an overload, and none throws for its input.
+/// <see cref="char"/>, so a <see cref="string"/> converts without an overload, and none throws for its data. Only a Digital Link stem that is not an http or https prefix is refused with an <see cref="ArgumentException"/>.
 /// </summary>
 /// <remarks>
 /// <para>

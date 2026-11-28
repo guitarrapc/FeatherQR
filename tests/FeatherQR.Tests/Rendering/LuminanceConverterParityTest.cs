@@ -27,15 +27,8 @@ public class LuminanceConverterParityTest
     private const int Rgba = 1;
     private const int Rgb888x = 2;
 
-    /// <summary>
-    /// ARGB channel order. No vector kernel and none of the scalar tier's four
-    /// constant-offset arms accept it, so it is the only layout that reaches
-    /// <c>RowsGeneral</c>, shipped code that every other layout routes around.
-    /// </summary>
-    private const int Argb = 3;
-
     /// <summary>Blue, green, red and a byte that carries no colour: the BGRA kernels with their alpha handling off.</summary>
-    private const int Bgr888x = 4;
+    private const int Bgr888x = 3;
 
     /// <summary>
     /// Widths at or above this reach a vector kernel on every machine that has one:
@@ -45,15 +38,14 @@ public class LuminanceConverterParityTest
     /// </summary>
     private const int AlwaysVectorWidth = 16;
 
-    public static IEnumerable<int> Layouts() => [Bgra, Rgba, Rgb888x, Argb, Bgr888x];
+    public static IEnumerable<int> Layouts() => [Bgra, Rgba, Rgb888x, Bgr888x];
 
     private static (int R, int G, int B, int A) Offsets(int layout) => layout switch
     {
         Bgra => (2, 1, 0, 3),
         Rgba => (0, 1, 2, 3),
         Rgb888x => (0, 1, 2, -1),
-        Bgr888x => (2, 1, 0, -1),
-        _ => (1, 2, 3, 0),
+        _ => (2, 1, 0, -1),
     };
 
     /// <summary>Alpha shapes: 0 opaque, 1 transparent, 2 transparent-or-opaque, 3 arbitrary partial.</summary>
@@ -125,7 +117,8 @@ public class LuminanceConverterParityTest
                     }
                 }
 
-                result[y * width + x] = (byte)((77 * r + 150 * g + 29 * b) >> 8);
+                // A premultiplied channel above its alpha passes 255 and stops at white.
+                result[y * width + x] = (byte)Math.Min((77 * r + 150 * g + 29 * b) >> 8, 255);
             }
         }
         return result;

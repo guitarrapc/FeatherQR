@@ -97,7 +97,6 @@ internal static class MicroQRMatrixDecoder
         // Single block [data | ecc]. The M1/M3 half codeword occupies a full byte
         // with a zero low nibble (the same byte value Reed-Solomon was computed over).
         Span<byte> block = stackalloc byte[MaxTotalCodewords].Slice(0, dataCodewords + eccCodewords);
-        block.Clear();
 
         ExtractCodewords(pixels, modules, size, maskPattern, dataBitCount, dataCodewords, block);
 

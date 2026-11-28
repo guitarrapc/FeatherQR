@@ -58,6 +58,12 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     private protected abstract void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect);
 
     /// <summary>
+    /// Refuses what <see cref="RenderSymbol"/> would refuse, before an output is created.
+    /// An SVG canvas writes the document's start as it is created, so a refusal while drawing would leave part of it in the caller's stream or buffer writer.
+    /// </summary>
+    private protected virtual void ValidateRender(object symbol) => SymbolRenderer.ValidateGradient(_gradientOptions);
+
+    /// <summary>
     /// Symbology-specific part of the crispEdges decision (e.g.
     /// Standard QR must keep antialiasing for custom finder shapes and drawn icon overlays).
     /// </summary>
@@ -455,7 +461,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <para>
     /// Renders exactly as <see cref="SaveToSvg(Stream)"/>.
     /// The document is rendered whole into a pooled buffer, then written through the stream's asynchronous writes alone, so a stream that refuses synchronous writes, such as a server's response body, takes it.
-    /// Nothing reaches the stream when the render fails, where the synchronous form has already written part of the document. The stream is not flushed.
+    /// Nothing reaches the stream when the render fails. The synchronous form refuses the settings before it writes, but a shape of your own that throws while drawing leaves part of the document there. The stream is not flushed.
     /// </para>
     /// <para>
     /// Called on a thread with a synchronization context, such as a UI thread, or under a task scheduler of the caller's own, the call renders on the thread pool, so the caller can await it where it is.
@@ -538,6 +544,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     private void RenderSvg(Stream output)
     {
         var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
+        ValidateRender(symbol);
         var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, GetDefaultCanvasSize(matrixWidth, matrixHeight), _fillCanvas);
 
         var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
@@ -688,6 +695,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     private SKImage GenerateImage()
     {
         var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
+        ValidateRender(symbol);
 
         var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, GetDefaultCanvasSize(matrixWidth, matrixHeight), _fillCanvas);
 

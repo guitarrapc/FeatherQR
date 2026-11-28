@@ -174,7 +174,7 @@ public static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// Premultiplied sum S + 256 · (255 − a), so the shared &gt;&gt; 8 yields (S &gt;&gt; 8) + (255 − a) and the narrowing reproduces the scalar byte cast.
+    /// Premultiplied sum S + 256 · (255 − a), so the shared &gt;&gt; 8 yields (S &gt;&gt; 8) + (255 − a) and the saturating narrowing stops a channel above its alpha at 255, as the scalar formula does.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<uint> PremultipliedLumaAdvSimd(Vector128<byte> v, Vector128<byte> weights)
@@ -330,13 +330,13 @@ public static partial class LuminanceConverter
         return AdvSimd.ShiftRightLogical(u, 8);
     }
 
-    /// <summary>Narrows four dword sums (16 pixels) to 16 luminance bytes and stores them.</summary>
+    /// <summary>Narrows four dword sums (16 pixels) to 16 luminance bytes and stores them. The last narrowing saturates, which only a premultiplied sum above 255 needs.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void StoreBlockAdvSimd(ref byte dest, nint x, Vector128<uint> s0, Vector128<uint> s1, Vector128<uint> s2, Vector128<uint> s3)
     {
         var lo = AdvSimd.ShiftRightLogicalNarrowingUpper(AdvSimd.ShiftRightLogicalNarrowingLower(s0, 8), s1, 8);
         var hi = AdvSimd.ShiftRightLogicalNarrowingUpper(AdvSimd.ShiftRightLogicalNarrowingLower(s2, 8), s3, 8);
-        AdvSimd.ExtractNarrowingUpper(AdvSimd.ExtractNarrowingLower(lo), hi)
+        AdvSimd.ExtractNarrowingSaturateUpper(AdvSimd.ExtractNarrowingSaturateLower(lo), hi)
             .StoreUnsafe(ref Unsafe.Add(ref dest, x));
     }
 }
